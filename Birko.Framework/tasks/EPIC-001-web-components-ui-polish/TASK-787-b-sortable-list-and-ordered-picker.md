@@ -66,6 +66,26 @@ its option list, so it loses the author's order and hides a pick during a search
       **in each layout**; in `grid`, include a drag across rows. Mutation-prove the order assertion.
 - [ ] CHANGELOG entry and package version bump. Docs: the component reference.
 
+## Decisions (2026-10-29, the user, on a clickable preview)
+
+Preview: https://claude.ai/artifact/THgTdfDKxaNjfZn8qHMhEK (version 2 carries all of these).
+
+1. **Keyboard: pick up, move, drop.** Space or Enter on the handle picks the row up; arrows move it (↑/↓ by a row of
+   tiles in `grid`); Space drops, Escape puts it back, Tab away drops it where it is. One `change` event, on the drop.
+   Chosen over "arrows move at once": screen readers keep the arrow keys in browse mode, and a stray arrow moved a row
+   with no undo.
+2. **The whole row drags; `handle-only` when rows hold controls.** By default a press anywhere on a row drags it,
+   except on its own buttons, links and fields. With `handle-only` only the handle does.
+3. **`max` is hard.** At the limit a pick is refused with a notice ("The grid shows 5. Remove one to add another.").
+   Only a list that is already over it (the limit lowered after picking) shows the extra rows below a line, with a
+   notice; nothing is dropped silently. **A long list scrolls** inside a max height, auto-scrolling while a row is
+   dragged near its top or bottom edge, and a keyboard move scrolls the row into view.
+4. **The picker keeps its Add button**, the same height as its search input.
+5. **`inline` ships** (CSS only).
+6. **Name: `b-sortable-picker`**, not `b-ordered-picker`.
+7. **Touch (proposed with 2, not yet confirmed):** a row drags after a 0.35 s press and hold, so a swipe still scrolls
+   the page; the handle drags at once.
+
 ## Out of scope
 
 - Replacing the drag and drop inside `b-kanban`, `b-table`, `b-gallery`, `b-tabs` or `b-tree-menu`.
