@@ -103,3 +103,8 @@ morph), so a click ran its handler many times; and × changed only the attribute
 Pre-existing, so every selectable list page in every consumer degraded with use. Birko.Web `a4bb32c`, Playground
 `1927205`: one AbortController per wiring, ticks set from the selection. bulk-bar-smoke 44/44 (5 rounds of real
 clicks; red before). Awaiting the user's re-test of section C.
+
+## Human test, round 2 (2026-10-29, the user)
+
+Section C (Playground, desktop) passed on Birko.Web a4bb32c: × clears the ticks, the count follows them, no lag.
+Phone (D) and Symbio (E) still to run.
