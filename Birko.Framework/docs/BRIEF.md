@@ -97,3 +97,10 @@ partial cs/sk bundles (21 strings each) are almost all screen-reader labels. Off
 whether to start it or file it:
 
 > fiel as a task
+
+### 2026-10-29 — became TASK-783 (Birko.Xaml gallery: presentable, built by CI, linked)
+
+> can we update the desktop app that it looks better for birko.xaml. some ci for buildin git on commit and add link into wiki and the  https://birko-framework.github.io/ page
+
+Picked from previews: a ribbon layout like the web Playground; CI builds for Windows x64, Linux x64 and macOS (Apple
+Silicon), plus screenshots.
