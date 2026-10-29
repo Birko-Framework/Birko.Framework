@@ -40,6 +40,17 @@ its option list, so it loses the author's order and hides a pick during a search
   - an optional per-row Remove;
   - it emits one `change` event with the new order (ids), and the consumer owns the data;
   - pointer events, so touch works.
+- [ ] **Layouts** (asked by the user, 2026-10-29), one attribute, e.g. `layout="list" | "grid"`:
+  - `list`: one item per line, full width. The default, for text rows such as blocks and a product list.
+  - `grid`: items wrap into tiles, for image-like rows such as Gallery images and product cards. Tile size comes from a
+    token or attribute (e.g. `item-min-width`), and the grid reflows to the container's width.
+  - Drag and drop works in **two dimensions** in `grid`: the drop indicator shows the target slot between tiles, not
+    just above or below.
+  - Keyboard moves follow reading order in both layouts: ←/→ move one place in `grid`, and ↑/↓ move one row of tiles
+    there.
+  - Consider a third, `inline` (chips that wrap, for short labels such as tags). Add it if it costs only CSS; otherwise
+    record why not.
+  - The same `change` event and order semantics in every layout. The layout is presentation only.
 - [ ] **Accessibility.** The handle has an accessible name naming the row. A move is announced through a live region,
       e.g. "Moved Shaggy fur to position 1 of 3". Focus stays on the moved row.
 - [ ] **`b-ordered-picker`** (name to be confirmed), search plus a `b-sortable-list` of what is chosen:
@@ -51,8 +62,8 @@ its option list, so it loses the author's order and hides a pick during a search
   - its value is the ordered id array, as a form-associated element if STORY-023's pattern allows.
 - [ ] **Visual polish.** Rows follow the design tokens (`--b-*`): a hover state, a lifted dragging row, a drop gap, an
       empty state, a compact size, and a dark theme.
-- [ ] Playground pages for both, plus smokes. Assert the order after a drag, after keyboard moves and after a search.
-      Mutation-prove the order assertion.
+- [ ] Playground pages for both, plus smokes. Assert the order after a drag, after keyboard moves and after a search,
+      **in each layout**; in `grid`, include a drag across rows. Mutation-prove the order assertion.
 - [ ] CHANGELOG entry and package version bump. Docs: the component reference.
 
 ## Out of scope
@@ -66,3 +77,5 @@ its option list, so it loses the author's order and hides a pick during a search
 2. Playground ordered picker: search, pick three, reorder, then search for something else. The chosen list keeps its
    labels and order.
 3. On a touch device or touch emulation, drag still works.
+4. Switch the Playground list to `grid`: tiles wrap with the container's width, and a tile can be dragged into the
+   previous row.
