@@ -107,3 +107,7 @@ footer in one, back after); with the move removed: 19/20.
 
 Playground steps (modal, Show a toast, Retry, Escape, no modal) passed, including the top-centre placement. The
 Symbio step is pending its re-walk.
+
+## Released (2026-10-29)
+
+Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** human test step 3 in Symbio (the Event list block's refusal toast, on top and clear of the modal footer), once Symbio builds on v0.1.22.

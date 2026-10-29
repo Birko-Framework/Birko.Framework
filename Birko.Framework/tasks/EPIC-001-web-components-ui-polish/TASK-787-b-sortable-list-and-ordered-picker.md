@@ -148,3 +148,7 @@ judge; a check on a real touch device is still open.
 
 At a 390px phone frame in Chrome: the sortable list in grid (two tiles a row, no sideways scroll) and the picker
 (results inside the card, Add as tall as the search) passed.
+
+## Released (2026-10-29)
+
+Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** the touch hold (decision 7) on a real touch device; adoption in Symbio is Symbio TASK-1006.

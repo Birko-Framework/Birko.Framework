@@ -114,3 +114,7 @@ Phone (D) and Symbio (E) still to run.
 Section D passed at a 390px phone frame in Chrome on Birko.Web a4bb32c: two rows ticked (one line, nothing
 overlapping), the whole page with Select all (two rows, nothing cut off), the footer (24 items on one line, 8 / page).
 Symbio (E) still to run.
+
+## Released (2026-10-29)
+
+Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** human test step 3 in Symbio (Products, select, Add to categories), once Symbio has the new bwc.dataTable.* keys.
