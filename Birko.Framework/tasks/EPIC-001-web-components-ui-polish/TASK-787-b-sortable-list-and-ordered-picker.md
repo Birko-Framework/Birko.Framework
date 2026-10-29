@@ -86,6 +86,12 @@ Preview: https://claude.ai/artifact/THgTdfDKxaNjfZn8qHMhEK (version 2 carries al
 7. **Touch (proposed with 2, built, not yet confirmed by the user):** a row drags after a 0.35 s press and hold, so a
    swipe still scrolls the page; the handle drags at once. Human test step 3 is where it gets confirmed or changed.
 
+8. **Where the picker's messages show is the consumer's** (asked by the user after the build, approved 2026-10-29):
+   each fires a cancelable `notice` `{ kind, text, item? }`; untaken, `notify="toast"` sends `duplicate` / `max` to the toast,
+   else they show under the search. `over` is a state: it stays inline under `notify="toast"`, and fires
+   `over-cleared` when it ends. sortable-smoke 60/60; mutation-proven (a taken notice still shown: 58/60;
+   `notify` ignored: 58/60).
+
 ## Resolution (2026-10-29)
 
 Birko.Web `700dd50` (joins v0.1.22 with TASK-786; not pushed or tagged), Playground `8b5e578`.

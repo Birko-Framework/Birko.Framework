@@ -87,6 +87,14 @@ modal stays open; Escape closes the modal and the toast is on `<body>` 60 ms lat
 verify.mjs 0 failing (three runs in a row), entry-points 409/409, keyboard-check 222/222, device-fix 140/140. tsc:
 the one error is in `sync-interrupt-smoke.ts`, a file this change does not touch.
 
+## Follow-up (2026-10-29): placement in a modal
+
+Symbio re-walked TASK-731 on v0.1.22: the toast is on top, but at a 1280 px window a bottom-right toast covered the
+modal footer's Create / Cancel until dismissed. **Decided by the user** (approved 2026-10-29): while a modal is open a
+bottom-corner toast shows at the **top centre** (not top right, where a wide modal's Close sits), and goes back to its
+corner when the modal closes. toast-modal-smoke 20/20 (adds: bottom right with no modal, top centre and clear of the
+footer in one, back after); with the move removed: 19/20.
+
 ## Human test plan
 
 1. Playground: Gallery → Layout → Modal → Open modal, then **Show a toast** in its footer (added for this test). The
