@@ -108,3 +108,9 @@ clicks; red before). Awaiting the user's re-test of section C.
 
 Section C (Playground, desktop) passed on Birko.Web a4bb32c: × clears the ticks, the count follows them, no lag.
 Phone (D) and Symbio (E) still to run.
+
+## Human test, phone (2026-10-29, the user)
+
+Section D passed at a 390px phone frame in Chrome on Birko.Web a4bb32c: two rows ticked (one line, nothing
+overlapping), the whole page with Select all (two rows, nothing cut off), the footer (24 items on one line, 8 / page).
+Symbio (E) still to run.

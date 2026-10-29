@@ -143,3 +143,8 @@ Screenshots of every layout, the limit line, the picker and the empty state, in 
 
 Playground steps passed. Touch (decision 7, step 3): "looks ok" in desktop emulation, which the user found hard to
 judge; a check on a real touch device is still open.
+
+## Human test, phone (2026-10-29, the user)
+
+At a 390px phone frame in Chrome: the sortable list in grid (two tiles a row, no sideways scroll) and the picker
+(results inside the card, Add as tall as the search) passed.
