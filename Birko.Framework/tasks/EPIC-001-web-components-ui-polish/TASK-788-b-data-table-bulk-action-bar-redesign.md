@@ -1,7 +1,7 @@
 ---
 id: TASK-788
 parent: EPIC-001
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-10-29
@@ -33,7 +33,7 @@ products (publish, unpublish, add to categories, remove from categories) and oth
 
 ## Acceptance criteria
 
-- [ ] **Placement decided and built, with a clickable preview first.** Options to weigh:
+- [x] **Placement decided and built, with a clickable preview first.** Options to weigh:
   - a sticky bar at the **top** of the table that replaces the toolbar or header while rows are selected (the Gmail
     and Google Drive pattern);
   - a floating bar anchored to the bottom of the **viewport**, centred (the Notion and Linear pattern);
@@ -41,22 +41,48 @@ products (publish, unpublish, add to categories, remove from categories) and oth
 
   It is always visible while rows are selected, whatever the scroll position, and does not cover the last rows or the
   pagination.
-- [ ] **Look:**
+- [x] **Look:**
   - a clear selection-mode state: an accent background or border, and the count prominent ("12 selected");
   - **Clear selection** (×) on the bar;
   - "Select all N matching" when the whole page is selected and more rows exist, *if* the table's data source can
     support it. Otherwise record why not; Symbio's bulk endpoints take id lists.
   - buttons in the `b-button` style, with an optional icon, a primary variant and a danger variant.
-- [ ] **Many actions:** past a breakpoint or count, extra actions go into a "More" overflow menu. Mobile width works.
-- [ ] **Accessibility:**
+- [x] **Many actions:** past a breakpoint or count, extra actions go into a "More" overflow menu. Mobile width works.
+- [x] **Accessibility:**
   - the bar is a labelled region (toolbar role);
   - the count change is announced in a polite live region;
   - keyboard: Tab reaches the bar's actions, and Escape clears the selection.
-- [ ] **Compatible:** `bulkActions` (`{ id, label, icon?, variant?, confirm?, confirmMessage? }`) and the `bulk-action`
+- [x] **Compatible:** `bulkActions` (`{ id, label, icon?, variant?, confirm?, confirmMessage? }`) and the `bulk-action`
       event keep working. New options are additive.
-- [ ] Tokens, dark theme, Playground page and smoke. The smoke covers selection, clear, overflow, and the bar visible
+- [x] Tokens, dark theme, Playground page and smoke. The smoke covers selection, clear, overflow, and the bar visible
       after scrolling.
-- [ ] CHANGELOG entry and package version bump.
+- [x] CHANGELOG entry and package version bump.
+
+## Decisions (2026-10-29, the user, on a clickable preview)
+
+Preview: https://claude.ai/artifact/8Rq7YCNv6cKhjrhgSqHdgb
+
+1. **Placement: B, floating**, chosen over C (the footer, restyled) for the look; built anchored to the table, not the
+   window: just above the sticky footer, centred on the table, so it never covers the pagination or leaves the table.
+2. **"Select all N matching": yes, opt-in** (`selectAllMatching`). Client-paged it selects every id; server-paged it is
+   a flag and `bulk-action` carries `allMatching` with `filters` and `params`. Off by default, so Symbio (id lists) is unchanged.
+3. **As many actions as fit**, measured; the rest in More; `danger` always last.
+4. **`b-confirm-dialog` replaces `window.confirm()`.**
+5. **`variant: 'primary'`** on a bulk action, new and additive.
+6. **Phone width, from the user walking it in Chrome at 390px:** no overlap of More and ×; with "Select all" or long
+   translations the bar wraps to two rows; the footer is inset like the cells; "24 items" stays on one line.
+
+## Resolution (2026-10-29)
+
+Birko.Web `2804501` (joins unpushed v0.1.22), Playground `7a3ef7b`. Playground `bulk-bar-smoke` 41/41 in Chromium and
+Firefox; planted defects each fail it (no fit, unescaped labels, `window.confirm`, no Escape, no allMatching flag, the bar
+in the footer, no wrap, a fixed room, the page-size option). Walked in Chrome at a 390px phone frame, with Slovak labels.
+verify.mjs 0 failing; device-fix 140/140, keyboard 222/222, entry-points 427/427, locale-keys 22/22, a11y-name 43.
+Also fixed on the way: labels were inserted as raw HTML; `b-pagination`'s page-size box was empty for a size not in its
+defaults; `undo-delete-smoke` missed the toast container inside another suite's open modal (since TASK-786).
+
+**Symbio:** `.bulk-btn[data-bulk]` still selects an inline action; one in More is `[hidden]`. Told symbio-9e the commit
+and the new `bwc.dataTable.*` keys.
 
 ## Out of scope
 
