@@ -82,6 +82,8 @@ public class ProviderOptionsTests
     [InlineData("scope", "email profile")]
     [InlineData("metadata", "http://idp.test/.well-known/openid-configuration")]
     [InlineData("redirect", "/relative")]
+    [InlineData("redirect", "file:///relative")]
+    [InlineData("redirect", "ftp://app.test/cb")]
     [InlineData("client", "")]
     [InlineData("nonce-param", "")]
     public void Options_that_cannot_work_are_refused(string what, string value)

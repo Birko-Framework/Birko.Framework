@@ -75,8 +75,10 @@ public sealed class OpenIdProviderOptions
         if (!Uri.TryCreate(MetadataAddress, UriKind.Absolute, out var metadata) || metadata.Scheme != Uri.UriSchemeHttps)
             throw new ArgumentException("MetadataAddress must be an absolute https URL.", nameof(MetadataAddress));
         if (string.IsNullOrWhiteSpace(ClientId)) throw new ArgumentException("A client id is required.", nameof(ClientId));
-        if (!Uri.TryCreate(RedirectUri, UriKind.Absolute, out _))
-            throw new ArgumentException("RedirectUri must be an absolute URL.", nameof(RedirectUri));
+        // On Linux "/callback" parses as an absolute file:/// URI, so the scheme is what refuses a relative path.
+        if (!Uri.TryCreate(RedirectUri, UriKind.Absolute, out var redirect)
+            || (redirect.Scheme != Uri.UriSchemeHttps && redirect.Scheme != Uri.UriSchemeHttp))
+            throw new ArgumentException("RedirectUri must be an absolute http(s) URL.", nameof(RedirectUri));
         if (!(Scope ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("openid", StringComparer.Ordinal))
             throw new ArgumentException("Scope must include openid, or the provider returns no id_token.", nameof(Scope));
         var reserved = AuthorizationParameters.Keys.FirstOrDefault(k => ReservedAuthorizationParameters.Contains(k, StringComparer.Ordinal));
