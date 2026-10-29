@@ -138,3 +138,8 @@ Screenshots of every layout, the limit line, the picker and the empty state, in 
 3. On a touch device or touch emulation, drag still works.
 4. Switch the Playground list to `grid`: tiles wrap with the container's width, and a tile can be dragged into the
    previous row.
+
+## Human test, round 1 (2026-10-29, the user)
+
+Playground steps passed. Touch (decision 7, step 3): "looks ok" in desktop emulation, which the user found hard to
+judge; a check on a real touch device is still open.

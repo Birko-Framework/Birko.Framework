@@ -102,3 +102,8 @@ footer in one, back after); with the move removed: 19/20.
 2. Its action button (if any) works while the modal stays open.
 3. In Symbio: Presentation → Pages → a page → add an Event list block, switch off "Only events that have not started
    yet", choose no type or venue, save. The refusal toast is readable on top of the block modal.
+
+## Human test, round 1 (2026-10-29, the user)
+
+Playground steps (modal, Show a toast, Retry, Escape, no modal) passed, including the top-centre placement. The
+Symbio step is pending its re-walk.

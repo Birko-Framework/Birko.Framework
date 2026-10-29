@@ -94,3 +94,12 @@ and the new `bwc.dataTable.*` keys.
 1. Playground: select rows and scroll. The bar stays in view and the count is prominent; × clears the selection.
 2. Give the bar six or more actions: the extra ones overflow into More, and it works at phone width.
 3. In Symbio: Products → select products → Add to categories. The bar reads as the obvious next step.
+
+## Human test, round 1 (2026-10-29, the user)
+
+**Failed, fixed:** ticking 2 rows, × , then another row: the 2 stayed ticked on screen, and the table grew laggy.
+Each re-render added another set of listeners to the checkboxes, row menus and editable cells b-table keeps (the
+morph), so a click ran its handler many times; and × changed only the attribute of a box the user had clicked.
+Pre-existing, so every selectable list page in every consumer degraded with use. Birko.Web `a4bb32c`, Playground
+`1927205`: one AbortController per wiring, ticks set from the selection. bulk-bar-smoke 44/44 (5 rounds of real
+clicks; red before). Awaiting the user's re-test of section C.
