@@ -2,7 +2,7 @@
 id: TASK-783
 parent: null
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-29
@@ -62,3 +62,13 @@ Screenshots.cs, Program `--screenshots`, Avalonia.Headless + Skia packages, work
 win-x64 single file start and render; the CI screenshot renders the same. Wiki `6068ab2`, landing page `21fc94f`
 (and `d45d0ba`, the User interface section that the previous request had left unpushed). macOS and Linux builds are
 built and packaged by CI but not started by hand — human test step 1.
+
+## Human test round 1 (2026-10-29, the user) — closed
+
+All eight steps passed on the Windows download (x64, started from the release). Step 6 was first reported failing: the
+user had pressed the keys on the header ribbon, which deliberately ignores Ctrl+F1 and Alt; on the Chrome section's
+demo ribbon both work. The step's wording ("the header ribbon does not") invited exactly that reading — a future plan
+should say which ribbon to look at first.
+
+The macOS and Linux builds are built and packaged by CI (run 40839669956) but were not started by hand; a report from
+either platform reopens this as a bug.
