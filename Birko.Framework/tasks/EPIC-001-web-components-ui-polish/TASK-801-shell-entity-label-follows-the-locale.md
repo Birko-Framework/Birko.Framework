@@ -84,9 +84,9 @@ skill template (`entityLabel` as a getter), merge the Playground and gameshow br
 
 **Released 2026-10-30:** Birko.Web **v0.3.0**, merge e9abc61 on main, tagged and pushed with v0.2.1 (TASK-802), which the
 branch took in first (merge 3dcaa69; locale-switch-check 47/47, Shell tsc clean). Playground merged (f75f578; the
- fixture now shows itself above the gallery, as it was only defined and the human test could not see it).
-gameshow-app  merged into  (e50f66d, not pushed).  skill template writes
- as a getter over . Worktrees removed.
+`/?crud=1` fixture now shows itself above the gallery, as it was only defined and the human test could not see it).
+gameshow-app `task/birko-v0.3.0` merged into `dev` (e50f66d, not pushed). The `new-birko-web-page` skill template writes
+`entityLabel` as a getter over `bws.customer.entity`. Worktrees removed.
 
 The push landed before the human test: the merge, tag and push command the user stopped had already completed. Symbio
 was told at once; it merged TASK-1010 and TASK-966 (sweep 67f2b7f6) into its local main, tsc 0 errors on v0.3.0.

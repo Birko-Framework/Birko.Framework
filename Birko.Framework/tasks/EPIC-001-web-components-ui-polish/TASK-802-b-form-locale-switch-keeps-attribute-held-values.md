@@ -60,5 +60,5 @@ out of the new check; not this task.
 
 **Human test:**
 1. Playground: PASS (the user, 2026-10-30): Blue and the ticked box stay through SK and back.
-2. Symbio: PASS:  3/3 on v0.2.1 (ProductGrid keeps  and its
-   categories), the 31 block-editor specs green. Symbio uses no  field, so the gap noted above is not filed.
+2. Symbio: PASS: `presentation-block-locale.spec.ts` 3/3 on v0.2.1 (ProductGrid keeps `filterMode` and its
+   categories), the 31 block-editor specs green. Symbio uses no `radio` field, so the gap noted above is not filed.
