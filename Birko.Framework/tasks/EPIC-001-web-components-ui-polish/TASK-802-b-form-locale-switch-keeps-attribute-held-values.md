@@ -55,3 +55,10 @@ alone is not written, so the one being typed in keeps its caret.
 
 **Not covered, found on the way:** a `radio` field is absent from `getValues()` altogether (before any switch). Left
 out of the new check; not this task.
+
+**Released 2026-10-30:** Birko.Web **v0.2.1** (2bddcec), tagged and pushed.
+
+**Human test:**
+1. Playground: PASS (the user, 2026-10-30): Blue and the ticked box stay through SK and back.
+2. Symbio: PASS:  3/3 on v0.2.1 (ProductGrid keeps  and its
+   categories), the 31 block-editor specs green. Symbio uses no  field, so the gap noted above is not filed.

@@ -51,7 +51,9 @@ import { apiClient } from '../../app/api';
 import { t } from 'birko-web-core';
 
 export class CustomerPage extends BaseCrudPage<Customer> {
-  protected entityLabel = 'Customer';  // used by t() auto-interpolation of {entity}
+  // A getter, so the heading, modal titles and {entity} in toasts follow a locale switch. A field
+  // (`protected entityLabel = '…'`) does not compile since Birko.Web v0.3.0 (TS2610).
+  protected override get entityLabel(): string { return t('bws.customer.entity', {}, 'Customer'); }
   protected idField = 'id';
 
   protected getColumns(): TableColumn[] {
@@ -145,12 +147,13 @@ Add the `bws.*` keys used above:
   "bws.module.customer": "Customers",
   "bws.module.customer.list": "All customers",
   "bws.module.customer.new": "New {entity}",
+  "bws.customer.entity": "Customer",
   "bws.customer.name": "Name",
   "bws.customer.email": "Email"
 }
 ```
 
-Note the `{entity}` placeholder — `BAppShell.t()` auto-interpolates with `this.entityLabel`, so `"Nový {entity}"` produces `"Nový Customer"` in Slovak.
+Note the `{entity}` placeholder — `BAppShell.t()` auto-interpolates with `this.entityLabel`, so with `"bws.customer.entity": "Zákazník"` in sk.json `"Nový {entity}"` produces `"Nový Zákazník"`, and a locale switch relabels it.
 
 ### 6. Permissions — backend-side
 

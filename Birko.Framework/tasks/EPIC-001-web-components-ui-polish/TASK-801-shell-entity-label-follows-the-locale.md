@@ -1,7 +1,7 @@
 ---
 id: TASK-801
 parent: EPIC-001
-status: in-progress
+status: verify
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -49,7 +49,7 @@ rather than translating.
 2. Symbio walk (TASK-966): Communication → Notifications, switch to Slovak. The h1, an open create or edit modal's
    title and an `{entity}` toast are in Slovak.
 
-## Resolution (2026-10-30, in progress on branches)
+## Resolution (2026-10-30)
 
 Developed on branch `task/TASK-801` in worktrees (`C:\Source\Birko\Web.TASK-801`,
 `C:\Source\Birko\Consumers\Birko.Web.Playground.TASK-801`). Symbio builds against the `C:\Source\Birko\Web` checkout,
@@ -81,3 +81,18 @@ overrides go; type-checked against the branch with no entityLabel errors, and bu
 `task/TASK-966` 67f2b7f6, type-checked clean against the branch. Waiting on Symbio's "go" (its TASK-1010 gate run builds
 from `C:\Source\Birko\Web`). Then: merge to main, tag v0.3.0, push (the user's word), update the `new-birko-web-page`
 skill template (`entityLabel` as a getter), merge the Playground and gameshow branches, and tell Symbio.
+
+**Released 2026-10-30:** Birko.Web **v0.3.0**, merge e9abc61 on main, tagged and pushed with v0.2.1 (TASK-802), which the
+branch took in first (merge 3dcaa69; locale-switch-check 47/47, Shell tsc clean). Playground merged (f75f578; the
+ fixture now shows itself above the gallery, as it was only defined and the human test could not see it).
+gameshow-app  merged into  (e50f66d, not pushed).  skill template writes
+ as a getter over . Worktrees removed.
+
+The push landed before the human test: the merge, tag and push command the user stopped had already completed. Symbio
+was told at once; it merged TASK-1010 and TASK-966 (sweep 67f2b7f6) into its local main, tsc 0 errors on v0.3.0.
+
+**Human test:**
+1. Playground: PASS (the user, 2026-10-30): heading "Device" → "Zariadenie"; an open New modal's title follows
+   the switch and the modal stays open.
+2. Symbio: its locale specs 4/4 on v0.3.0: the Notifications heading reads "Notifikácie" after the switch, and
+   putting the field form back fails the spec. Symbio's full gates were running; its main is pushed once green.
