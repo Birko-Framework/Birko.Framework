@@ -1,0 +1,57 @@
+# Birko.Web ↔ Birko.Xaml parity list gate (TASK-796, FEATURE-021).
+#
+# Birko.Xaml.Avalonia/PARITY.md has one row per Birko.Web component and Birko.Web.Shell file. ParityListTests
+# checks it against the web files, and SKIPS when no Birko\Web checkout sits beside the framework, which is the case
+# in build-and-test.yml — so without this job a missing row is never caught in CI, and a skip reads as green. Here the
+# Web repo is checked out and BIRKO_REQUIRE_LIVE turns a missing checkout into a failure. (ParityCounterpartTests
+# needs no web checkout and already runs in build-and-test.yml; it runs here too, being in the same filter.)
+#
+# A new component lands in the OTHER repo and does not trigger this workflow; run it by hand (workflow_dispatch)
+# after a web-side change, as the head of PARITY.md says.
+
+name: xaml-web-parity
+
+on:
+  push:
+    paths:
+      - 'Birko.Xaml.Avalonia/**'
+      - 'Birko.Xaml.Core/**'
+      - 'Birko.Xaml.Shell/**'
+      - 'tests/Birko.Xaml.Avalonia.Tests/**'
+      - '.github/workflows/xaml-web-parity.yml'
+  pull_request:
+    paths:
+      - 'Birko.Xaml.Avalonia/**'
+      - 'Birko.Xaml.Core/**'
+      - 'Birko.Xaml.Shell/**'
+      - 'tests/Birko.Xaml.Avalonia.Tests/**'
+      - '.github/workflows/xaml-web-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the framework (the list and its tests)
+        uses: actions/checkout@v4
+        with:
+          path: birko/Framework
+
+      - name: Check out Birko.Web (the components and shell files)
+        uses: actions/checkout@v4
+        with:
+          repository: Birko-Framework/Birko.Web
+          path: birko/Web
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Every web component and shell file has a valid row
+        env:
+          BIRKO_SRC: ${{ github.workspace }}/birko/Framework
+          BIRKO_REQUIRE_LIVE: '1'
+        run: >-
+          dotnet test birko/Framework/tests/Birko.Xaml.Avalonia.Tests --nologo
+          --filter "FullyQualifiedName~Parity" --logger "console;verbosity=normal"

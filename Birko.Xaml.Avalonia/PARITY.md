@@ -11,6 +11,10 @@ One row per web component (`## Components`) and one per Birko.Web.Shell source f
 - a `skipped` row gives no reason in its Note.
 
 Without the web checkout the test skips and says so; with `BIRKO_REQUIRE_LIVE` set it fails instead.
+In CI the `xaml-web-parity` workflow checks out Birko.Web beside the framework, so there it never skips. It runs on
+changes to Birko.Xaml and its tests; **a change on the web side does not trigger it** — after adding or removing a
+web component or shell file, run it by hand (Actions → xaml-web-parity → Run workflow, or
+`gh workflow run xaml-web-parity.yml`).
 
 A new web component therefore fails the desktop test suite until it has a row. Decide its status, and if it is
 `missing`, its port is separate work (a feature or a task), not part of adding the row.
