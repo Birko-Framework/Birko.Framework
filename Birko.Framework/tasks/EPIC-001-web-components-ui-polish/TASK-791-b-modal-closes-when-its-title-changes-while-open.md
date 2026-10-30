@@ -1,7 +1,7 @@
 ---
 id: TASK-791
 parent: EPIC-001
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -48,3 +48,15 @@ dialog shown modally, or have b-modal render the state it is in. Check b-drawer,
 Playground: open the Modal card's modal, type into a field, trigger a title change (a button or a locale switch);
 the modal stays open with the text and focus kept, and Escape still closes it. Symbio: open the blocks editor's
 Add Block modal and switch the locale; it stays open (Symbio TASK-1010).
+
+## Resolution (2026-10-30, started at the user's word via the Symbio session)
+
+- **Fix, in the morph (Birko.Web.Core `_morphNode`):** an attribute the fresh render lacks is removed, except `open`
+  on a `<dialog>`, which `show()` / `showModal()` own. No framework render controls a dialog's `open` (grepped:
+  Components, Shell). One fix covers b-modal, b-drawer (modal and not), b-confirm-dialog and consumers' own dialogs.
+- **Red, measured:** after a `title` / `size` / `message` change the dialog had `open === false` yet still matched
+  `:modal`: half-closed, the page behind still inert. Focus left the typed field.
+- **Proof:** `locale-switch-check.mjs`, TASK-791 half: b-modal (title, size), b-drawer modal and non-modal (title),
+  b-confirm-dialog (title, message): stays open, modal where it should be, the same `<dialog>`, focus kept in the
+  field, the new title shown, `close()` still closes. 15/26 before the fix (with TASK-790), 30/30 after.
+- Committed in Birko.Web 4ce1bdc (version 0.1.23, not yet tagged or pushed) and Playground c3f1ad0 (with TASK-790).

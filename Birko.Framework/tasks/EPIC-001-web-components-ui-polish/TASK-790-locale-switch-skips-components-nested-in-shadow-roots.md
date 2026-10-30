@@ -1,7 +1,7 @@
 ---
 id: TASK-790
 parent: EPIC-001
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -53,3 +53,23 @@ handle labels, b-sortable-picker's defaults).
 Playground: open a card with a nested component (e.g. the sortable picker inside a modal), switch the locale, check
 every text changed and the controls still work once per click. Symbio: Presentation → Pages → a page, switch to
 Slovak; the blocks editor, its open modal, buttons and form labels all switch (Symbio TASK-1010).
+
+## Resolution (2026-10-30, started at the user's word via the Symbio session)
+
+- **Why the skip existed, measured.** Added in Birko.Web 17228fa (2026-03-26), when `update()` replaced innerHTML and
+  `listen()` did not exist. The remaining hazard, listeners added per render, was measured with a new Playground check,
+  `rerender-leak-check.mjs` (soft-updates each of the gallery's 309 live components three times, tracks every listener
+  on a connected node). It found three real leaks, all pre-existing and reachable by any re-render: **b-chart** (a bar
+  click fired `point-click` once per earlier render), **b-time** and **b-datetime-picker** (hour / minute fields). Fixed
+  with `this.listen()`; red → green. An apparent b-ribbon leak was the tracker counting detached nodes, excluded.
+- **Fix:** `onGlobalChange` soft-updates every live instance, **deepest shadow depth first**, skipping one a host's
+  re-render already removed. Host-last matters: b-ribbon's roving `tabindex` on its fields' inner inputs is set in its
+  `onUpdated()`; the mutation (host first) loses it on the real ribbon.
+- **Guidance, no new API:** Core README (`label()` section) says to wire with `this.listen()` and to rebuild a
+  `t()`-built `b-form` schema from `onI18nChange()`, keeping values (`getValues` / `setSchema` / `setValues`).
+  Components CLAUDE.md gets a MANDATORY rule for `this.listen()` in `onUpdated()`, enforced by the leak check.
+- **Proof:** `locale-switch-check.mjs` (own page: it switches the global locale). Fixtures at shadow depth 0 / 1 / 2
+  (the third a b-qty-stepper), real sk.json keys: depth 1 and 2 were English before the fix (red), Slovak after;
+  onUpdated order inner → outer; host-set state kept; the ribbon's tabindex kept over en → sk → en; a nested listener
+  fires once after two switches. Mutation (host-first sort): 4 checks fail.
+- Committed in Birko.Web 4ce1bdc (version 0.1.23, not yet tagged or pushed) and Playground c3f1ad0 (with TASK-791).
