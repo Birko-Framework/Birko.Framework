@@ -3,7 +3,7 @@ id: FEATURE-021
 created: 2026-10-30
 owner: both
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: idea
+status: done
 ---
 
 # Birko.Web ↔ Birko.Xaml — a parity list, kept honest by a test

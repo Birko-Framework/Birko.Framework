@@ -50,3 +50,8 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-30 — D11 approved → changed at the list review (TASK-793, František Bereň): chat moves from skipped to
   missing, because it may be wanted later for a desktop version of the agent chat. Eight components stay skipped.
   Built before the change was recorded, and confirmed in the same review, so the implementing task closes on it.
+- 2026-10-30 — review: Gate A passed — TASK-793–796 done and on main; D1–D13 built (D11 in its changed form). No spec
+  surface (the feature adds a Markdown list, tests and a CI workflow; no production code), confirmed at review.
+  Gate B passed — TASK-793, TASK-794 and TASK-796 plans run and passed (František Bereň, and the agent for the
+  automated steps), TASK-795 N/A with its coverage in `ParityCounterpartTests`. CI: `xaml-web-parity` green on GitHub.
+- 2026-10-30 — FEATURE-021 signed off by František Bereň (maintainer) after review.
