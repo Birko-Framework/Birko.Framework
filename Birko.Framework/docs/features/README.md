@@ -49,7 +49,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-018](FEATURE-018-birko-web-core-runtime/) | Birko.Web.Core — the browser-side runtime | building | 1/0/0/0/0 | 6/7 | n/a (already ships) | [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) |
 | [FEATURE-019](FEATURE-019-office-like-ribbon/) | An Office-like ribbon (`b-ribbon`) | done | 12/1/0/0/0 | 31/31 | built (live preview, not kept) | [STORY-067](../../tasks/EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/STORY.md) (EPIC-001) |
 | [FEATURE-020](FEATURE-020-xaml-diff-and-parity-controls/) | Birko.Xaml — JSON/XML comparison, diff viewer, tag input, accordion look | done | 6/3/2/1/0 | 8/8 | skipped (port of settled web behaviour) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
-| [FEATURE-021](FEATURE-021-web-xaml-parity-list/) | Birko.Web ↔ Birko.Xaml — a parity list, kept honest by a test | building | 13/0/0/0/0 | 2/4 | skipped (a list and a check) | [STORY-069](../../tasks/EPIC-015-birko-xaml-ui-framework/STORY-069-web-xaml-parity-list/STORY.md) (EPIC-015) |
+| [FEATURE-021](FEATURE-021-web-xaml-parity-list/) | Birko.Web ↔ Birko.Xaml — a parity list, kept honest by a test | **review** | 12/1/0/0/0 | 4/4 | skipped (a list and a check) | [STORY-069](../../tasks/EPIC-015-birko-xaml-ui-framework/STORY-069-web-xaml-parity-list/STORY.md) (EPIC-015) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.

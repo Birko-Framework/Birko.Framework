@@ -35,9 +35,9 @@ skip that is not written down cannot be told apart from something forgotten.
    components (one row each) and the web application shell (one row per source file).
 2. **A check that keeps the list honest**: it reads the web library and fails when a web piece has no row, when a row
    names a web piece that no longer exists, or when a row claims a desktop control that is not there.
-3. The list starts from the 2026-10-30 survey. Nine components are skipped as not needed on the desktop: the guided
-   tour, chat, image gallery, segmented control, button group, toolbar, empty state, loading skeleton and the
-   "data is stale" banner.
+3. The list starts from the 2026-10-30 survey. Eight components are skipped as not needed on the desktop: the guided
+   tour, image gallery, segmented control, button group, toolbar, empty state, loading skeleton and the "data is
+   stale" banner. Chat stays missing: a desktop agent chat may want it later (D11, changed at the list review).
 
 Porting the components that stay "missing" is **not** part of this feature: the list makes them visible, and each port
 is decided on its own later.

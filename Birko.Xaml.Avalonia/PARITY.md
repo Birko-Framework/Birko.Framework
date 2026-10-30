@@ -101,7 +101,7 @@ Words outside backticks are not. By status:
 | `b-button-group` | skipped | | a `StackPanel` of buttons does the same |
 | `b-card` | themed | `BCard` | a `ContentControl` theme |
 | `b-carousel` | needs-theme | `Carousel` | |
-| `b-chat` | skipped | | a messaging surface, of little use in a desktop back-office app |
+| `b-chat` | missing | | may come later, e.g. for a desktop version of the agent chat |
 | `b-confirm-dialog` | built | `DialogService.ConfirmAsync` | |
 | `b-drawer` | built | `Drawer` | |
 | `b-dropdown-menu` | themed | `MenuFlyoutPresenter` and `MenuItem` | the look of a `MenuFlyout` |

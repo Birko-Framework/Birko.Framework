@@ -3,7 +3,7 @@ id: TASK-793
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-30
@@ -49,8 +49,11 @@ the 2026-10-30 survey (see the feature's idea.md) had to be done by hand.
 
 ## Human test plan
 
-- [ ] 1. Read the list: every status matches what you know of the desktop library (no `built` for something that is only a form field, no `missing` for something you have used).
-- [ ] 2. The nine skipped components each carry a reason you agree with.
+- [x] 1. Read the list: every status matches what you know of the desktop library (no `built` for something that is only a form field, no `missing` for something you have used).
+  - **Passed 2026-10-30:** František Bereň read the whole list (shown in the session); nothing changed but chat (step 2).
+- [x] 2. The nine skipped components each carry a reason you agree with.
+  - **Passed 2026-10-30:** eight agreed; chat changed from skipped to missing ("may come later, e.g. for a desktop
+    version of the agent chat") — FEATURE-021 D11 changed; the list and the docs updated in the same commit.
 - [x] 3. In the Birko\Web checkout, add an empty `b-foo.ts` under `Birko.Web.Components/src/data`; run `dotnet test --nologo` in `tests/Birko.Xaml.Avalonia.Tests`: it fails and names `b-foo`. Remove the file: it passes.
   - **Passed 2026-10-30:** run by the agent, an automated check rather than a judgement: with `b-foo.ts` the live test failed with `b-foo exists on the web but has no row`; removed, it passed.
 
@@ -89,3 +92,6 @@ the 2026-10-30 survey (see the feature's idea.md) had to be done by hand.
   found; security — not applicable (test-only code and a Markdown file); comments — the new doc comments describe
   what the code does and point at `DiffVectors` rather than restating it. `ci: main RED — diff-parity failure at
   efb186e7` (unrelated to this diff; relevant to TASK-796, which models its job on that workflow).
+- 2026-10-30 — Human test plan run by František Bereň on the list as shown in the session: "only chat maybe we add later when we woudl liek to do for examle desktp version of agent chat".
+  `b-chat` moved to `missing` with that reason (D11 changed); the other eight skips and every other row stand.
+  Parity tests re-run green. Closed (verify → done).

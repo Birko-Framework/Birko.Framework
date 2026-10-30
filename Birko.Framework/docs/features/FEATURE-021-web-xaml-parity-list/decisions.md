@@ -21,7 +21,7 @@ created: 2026-10-30
 | D8 | The check fails when a row claims a desktop control or Birko look that cannot be found | approved | Chosen in the grill: the list must not claim a port that is not there | 2026-10-30 | František Bereň (maintainer) | TASK-795 |
 | D9 | The check fails when a skipped row gives no reason | approved | Offered in the grill and not selected — recorded so the verdict is explicit rather than silently dropped | 2026-10-30 | František Bereň (maintainer) | TASK-793 |
 | D10 | When the web library is not checked out beside the framework, the check skips and says so; with the "require live" switch set it fails instead | approved | The same rule as the shared diff examples (FEATURE-020 D5), so a developer without the web checkout is not blocked | 2026-10-30 | František Bereň (maintainer) | TASK-793 |
-| D11 | Skipped as not needed on the desktop: the guided tour, chat, image gallery, segmented control, button group, toolbar, empty state, loading skeleton and "data is stale" banner | approved | Chosen in the grill: web-app patterns of little use on the desktop, or easily composed from built-in desktop controls | 2026-10-30 | František Bereň (maintainer) | TASK-793 |
+| D11 | Skipped as not needed on the desktop: the guided tour, image gallery, segmented control, button group, toolbar, empty state, loading skeleton and "data is stale" banner. Chat is not skipped: it stays missing | changed | Chosen in the grill: web-app patterns of little use on the desktop, or easily composed from built-in desktop controls. Changed at the list review: chat may be wanted later, for example for a desktop version of the agent chat | 2026-10-30 | František Bereň (maintainer) | TASK-793 |
 | D12 | Porting the components the list marks missing is not part of this feature; each port is decided on its own | approved | The feature makes the gaps visible; a port is separate scope with its own look and behaviour to settle | 2026-10-30 | František Bereň (maintainer) | TASK-793 |
 | D13 | A build-server job of its own checks out the web library and runs the check with the "require live" switch, whenever the list or the check changes, and on demand | approved | Chosen over adding it to the diff examples' job and over local-only: without the web checkout the check skips, and a skip reads as green | 2026-10-30 | František Bereň (maintainer) | TASK-796 |
 
@@ -47,3 +47,6 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-10-30 — tasks renumbered TASK-789–792 → TASK-793–796 (the maintainer's call): a parallel session filed
   EPIC-001 tasks under TASK-789, TASK-790 and TASK-791. Commits made before the renumber carry the old ids in their
   subjects (d803c4f2 … 741c0614); history is not rewritten.
+- 2026-10-30 — D11 approved → changed at the list review (TASK-793, František Bereň): chat moves from skipped to
+  missing, because it may be wanted later for a desktop version of the agent chat. Eight components stay skipped.
+  Built before the change was recorded, and confirmed in the same review, so the implementing task closes on it.

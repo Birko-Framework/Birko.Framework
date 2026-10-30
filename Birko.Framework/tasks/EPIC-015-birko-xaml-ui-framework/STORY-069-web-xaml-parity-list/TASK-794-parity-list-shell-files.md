@@ -3,7 +3,7 @@ id: TASK-794
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-30
@@ -38,7 +38,8 @@ row, skip reason, unknown status, duplicate).
 
 ## Human test plan
 
-- [ ] 1. Read the Shell section: each mapping matches the desktop shell (list/detail/split pages, ribbon/mobile/sidebar shells).
+- [x] 1. Read the Shell section: each mapping matches the desktop shell (list/detail/split pages, ribbon/mobile/sidebar shells).
+  - **Passed 2026-10-30:** František Bereň read the Shell section in the same review; no change asked for.
 - [x] 2. Add an empty `Birko.Web.Shell/src/pages/base-foo-page.ts` in the Birko\Web checkout: the test fails naming it; remove it: it passes.
   - **Passed 2026-10-30:** run by the agent (an automated check): the Shell case failed with `pages/base-foo-page exists on the web but has no row`; removed, it passed.
 
@@ -65,3 +66,5 @@ row, skip reason, unknown status, duplicate).
   Avalonia parity tests 11/11.
 - Gate (inline passes): conventions, intent (all three criteria), correctness — no blocker; security n/a (test code,
   Markdown); comments — the two new doc comments state what the methods return.
+- 2026-10-30 — Human test plan passed in the same review as TASK-793 (only chat was changed). `auth/auth-session`
+  was offered as a skip candidate and not taken up, so it stays `missing`. Closed (verify → done).
