@@ -1,7 +1,7 @@
 ---
 id: TASK-791
 parent: EPIC-001
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -61,4 +61,6 @@ Add Block modal and switch the locale; it stays open (Symbio TASK-1010).
   field, the new title shown, `close()` still closes. 15/26 before the fix (with TASK-790), 30/30 after.
 - Committed in Birko.Web dc59ddd (released as v0.1.23, pushed and tagged 2026-10-30) and Playground 653375c (with TASK-790).
 
-**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** B (open modal, title changed from the console: stays open, new title, Escape / x close) **ok**. The Symbio walk pending.
+**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** B (open modal, title changed from the console: stays open, new title, Escape / x close) **ok**.
+
+**Symbio walk (2026-10-30, Symbio TASK-1010 on v0.1.23):** the block editor's modal stays open through a locale switch that changes its title, and an unsaved edit is kept. **PASS.** Closed by the user 2026-10-30.
