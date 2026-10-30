@@ -104,3 +104,17 @@ whether to start it or file it:
 
 Picked from previews: a ribbon layout like the web Playground; CI builds for Windows x64, Linux x64 and macOS (Apple
 Silicon), plus screenshots.
+
+### 2026-10-30 — became FEATURE-021 (Birko.Web ↔ Birko.Xaml parity list, kept by a test)
+
+> what components from birko.web aremissing in xaml? we shoudl keep them synced some of them are system build so its or when thety are skipped
+
+Answered with a survey of every `b-*` component (built as a XAML control, a themed Avalonia control, a form field only,
+an Avalonia control without a Birko theme, or missing), and offered a parity list plus a test that fails on a new web
+component without a row. Then:
+
+> start the feature with the parity list and test
+
+Grill answers in the session's picker: a Markdown table the test reads; the test fails on a web piece with no row, on a
+row whose web piece is gone, and on a row naming a desktop control that does not exist; Birko.Web.Shell is covered too,
+one row per file; tour, chat, gallery, segmented, button-group, toolbar, empty, skeleton and stale-banner are skipped.
