@@ -42,6 +42,12 @@ Nothing is announced, and there is no drop indicator in `b-sortable-list`'s styl
 
 1. Do the ▲ / number / ▼ controls go, or stay behind an option? What happens to the `sort` and `sort-order` events
    (keep emitting, deprecate, remove — Symbio is the known consumer)?
+   **Consumer usage (Symbio session, 2026-10-30):** four sortable trees, all `sortable: canUpdate`.
+   `presentation/categories/categories-page.ts:185-197`, `presentation/navigation/navigation-page.ts:202-214` and
+   `products/categories/categories-page.ts:183-195` listen to `sort`, `sort-order` **and** `reorder`;
+   `presentation/pages/pages-page.ts:314` to `reorder` only (`building/structure-page.ts` is not sortable). So
+   removing `sort` / `sort-order` breaks three Symbio pages; deprecating them (still emitted, e.g. alongside `reorder`)
+   lets Symbio move all four trees to `reorder` in Symbio TASK-1012. Symbio's specs do not click `.sort-btn`.
 2. Reparenting: allowed by keyboard too (e.g. →/← to indent / outdent) or only by drag? Any veto hook (a cancelable
    `reorder`, or a `canDrop(source, target, position)` callback) for trees where some nodes may not hold children?
 3. Whole row drags or handle only (tree rows are also click-to-select and expand toggles — likely handle-only, or a
