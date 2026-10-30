@@ -72,4 +72,4 @@ Slovak; the blocks editor, its open modal, buttons and form labels all switch (S
   (the third a b-qty-stepper), real sk.json keys: depth 1 and 2 were English before the fix (red), Slovak after;
   onUpdated order inner → outer; host-set state kept; the ribbon's tabindex kept over en → sk → en; a nested listener
   fires once after two switches. Mutation (host-first sort): 4 checks fail.
-- Committed in Birko.Web 4ce1bdc (version 0.1.23, not yet tagged or pushed) and Playground c3f1ad0 (with TASK-791).
+- Committed in Birko.Web dc59ddd (version 0.1.23, not yet tagged or pushed) and Playground 653375c (with TASK-791).
