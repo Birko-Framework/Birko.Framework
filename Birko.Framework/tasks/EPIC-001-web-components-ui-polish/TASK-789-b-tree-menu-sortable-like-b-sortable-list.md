@@ -125,3 +125,28 @@ Preview: https://claude.ai/artifact/2HBM1ZaboG4F1TrpKb6XgW
 3. Touch (emulation now, a real device when one is to hand): hold a row and drag; a quick swipe scrolls instead.
 4. `sortControls` on: ▲ / ▼ and the number still work and show their titles in Slovak after a switch.
 5. Symbio (TASK-1012): Presentation → Pages, reorder and reparent a page by drag and by keyboard; the order is saved.
+
+## Resolution (2026-10-30, on branches, not merged)
+
+Worktrees: `C:\Source\Birko\Web.TASK-789` and `C:\Source\Birko\Consumers\Birko.Web.Playground.TASK-789`, branch
+`task/TASK-789` in both. `C:\Source\Birko\Web` stays on main: Symbio's dev server watches it (a gate run built a
+half-done step 1 for about 30 s before the work moved to the worktree; Symbio restarted it).
+
+- Birko.Web `b27f527` (step 1): `pointer-drag.ts` `PointerDrag`; b-sortable-list rewired with no behaviour change
+  (sortable-drag-check 13/13, sortable-smoke 60/60, verify.mjs 0 failing).
+- Birko.Web `ee9861d` (**v0.4.0**): b-tree-menu as decided; en.json `bwc.treeMenu.*` (20 keys); API.md,
+  ACCESSIBILITY.md, Components CLAUDE.md, CHANGELOG (BREAKING: the arrows need `sortControls: true`), versions.
+- Playground `e5f95d5`, `c126371`: `tree-sort-smoke` 27/27; `tree-drag-check.mjs` 17/17 (a separate file rather than an
+  extension of sortable-drag-check, as plan step 7 said); a "Tree menu, sortable" card with handle-only and
+  sort-controls selectors; sk.json `bwc.treeMenu.*`.
+- Mutations, each caught: no copy before a move (the consumer's array reorders), no subtree exclusion and no subtree
+  guard (a page error), Escape propagating, no focusout drop, a wrong keyboard neighbour, handleOnly ignored, the grip
+  click selecting, no touch hold, the arrows shown by default. A row-click guard for the grip was dead code (the grip's
+  own handler stops the click) and was removed.
+- Gate on the branch: verify.mjs 0 failing, keyboard-check 222/222, rerender-leak PASS, entry-points 427/427,
+  locale-keys 23/23, a11y-name 43, a11y-description PASS, locale-switch 47/47, Components tsc clean.
+- Plan deviation: a refused spot (inside the dragged node's own subtree) is simply not a target, with no indicator and
+  no announcement, rather than "announced once" as plan step 2 said.
+
+Pending: the human test; then, after telling Symbio (it asked to hear before v0.4.0 reaches Web main), merge, tag
+v0.4.0 and push with the user's word, and Symbio TASK-1012.
