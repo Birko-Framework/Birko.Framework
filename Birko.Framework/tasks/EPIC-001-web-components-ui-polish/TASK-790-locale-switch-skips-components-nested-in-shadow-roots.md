@@ -73,3 +73,5 @@ Slovak; the blocks editor, its open modal, buttons and form labels all switch (S
   onUpdated order inner → outer; host-set state kept; the ribbon's tabindex kept over en → sk → en; a nested listener
   fires once after two switches. Mutation (host-first sort): 4 checks fail.
 - Committed in Birko.Web dc59ddd (released as v0.1.23, pushed and tagged 2026-10-30) and Playground 653375c (with TASK-791).
+
+**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** A (locale switch: Slovak labels on the carousel and stepper, read in DevTools as they are aria-labels; ribbon Tab order; back to English) **ok**. C (time / datetime fields) and the Symbio walk pending.

@@ -60,3 +60,5 @@ Add Block modal and switch the locale; it stays open (Symbio TASK-1010).
   b-confirm-dialog (title, message): stays open, modal where it should be, the same `<dialog>`, focus kept in the
   field, the new title shown, `close()` still closes. 15/26 before the fix (with TASK-790), 30/30 after.
 - Committed in Birko.Web dc59ddd (released as v0.1.23, pushed and tagged 2026-10-30) and Playground 653375c (with TASK-790).
+
+**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** B (open modal, title changed from the console: stays open, new title, Escape / x close) **ok**. The Symbio walk pending.
