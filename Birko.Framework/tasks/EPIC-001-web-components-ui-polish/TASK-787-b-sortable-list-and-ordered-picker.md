@@ -152,3 +152,5 @@ At a 390px phone frame in Chrome: the sortable list in grid (two tiles a row, no
 ## Released (2026-10-29)
 
 Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** the touch hold (decision 7) on a real touch device; adoption in Symbio is Symbio TASK-1006.
+
+**Adopted in Symbio, walk PASS (2026-10-30)**, Symbio TASK-1006 (main 7428df17), reported by the Symbio session: the page editor's block list (b-sortable-list, list), ProductGrid's manual products (b-sortable-picker, max = the grid's limit), Gallery images (grid, removable, handle-only, tiles with four b-inputs). Consumer notes offered for API.md, not yet written: (1) a list whose children the host page also re-renders must sit outside the page's morph (Symbio: a `data-morph="skip"` host it fills itself); (2) in Playwright a row's text is the slotted item's, so read b-sortable-item's label/meta attributes; a drag inside a modal needs the rows scrolled into view first or the press becomes a text selection. Still open: the touch hold on a real device.
