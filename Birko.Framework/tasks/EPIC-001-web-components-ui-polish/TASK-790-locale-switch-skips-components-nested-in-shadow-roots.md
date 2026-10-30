@@ -74,4 +74,4 @@ Slovak; the blocks editor, its open modal, buttons and form labels all switch (S
   fires once after two switches. Mutation (host-first sort): 4 checks fail.
 - Committed in Birko.Web dc59ddd (released as v0.1.23, pushed and tagged 2026-10-30) and Playground 653375c (with TASK-791).
 
-**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** A (locale switch: Slovak labels on the carousel and stepper, read in DevTools as they are aria-labels; ribbon Tab order; back to English) **ok**. C (time / datetime fields) and the Symbio walk pending.
+**Human test, Playground (2026-10-30, the user, v0.1.23 in Chrome):** A (locale switch: Slovak labels on the carousel and stepper, read in DevTools as they are aria-labels; ribbon Tab order; back to English) **ok**. C (b-time and b-datetime-picker hour / minute fields after several switches: typed values and the wheel step once) **ok**. The Symbio walk pending.
