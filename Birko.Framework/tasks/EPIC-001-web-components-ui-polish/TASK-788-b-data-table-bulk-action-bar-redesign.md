@@ -118,3 +118,5 @@ Symbio (E) still to run.
 ## Released (2026-10-29)
 
 Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** human test step 3 in Symbio (Products, select, Add to categories), once Symbio has the new bwc.dataTable.* keys.
+
+**Step 3, PASS (2026-10-30)**, walked by the user in Symbio (main 6b2a14b7, dev tenant FlowerFur), reported by the Symbio session: Products → select → Add to categories on the floating bar read as the obvious next step; ×, Escape and scroll were part of the walk. Symbio carries the 36 v0.1.22 keys in en/sk/cs. Ripple: the table's own b-confirm-dialog made `b-confirm-dialog .btn-confirm` ambiguous in 52 Symbio specs, fixed Symbio-side with `dialog[open] .btn-confirm` (Symbio TASK-1009); Symbio gate 3 green (505, 0 failed). No open follow-ups remain.
