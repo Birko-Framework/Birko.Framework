@@ -24,13 +24,13 @@ generated: 2026-10-30
 0 / 4 tasks done.
 
 - TASK-789 — the list for the web components, and the check that it is complete — built, awaiting sign-off
-- TASK-790 — the web application shell's files in the list — to do
+- TASK-790 — the web application shell's files in the list — built, awaiting sign-off
 - TASK-791 — the check that every desktop control the list names exists — to do
 - TASK-792 — the build-server job that runs the check with the web library present — to do
 
 ## What can be tested now
 
-TASK-789: read the list and confirm each component's status, and that you agree with the reason given for each of the nine skipped components. TASK-790 and TASK-792 have test plans that become runnable once each is built.
+TASK-789: read the list and confirm each component's status, and that you agree with the reason given for each of the nine skipped components. TASK-790: read the shell section and confirm each mapping. TASK-792 has a test plan that becomes runnable once it is built.
 
 ## Prototype
 
@@ -38,4 +38,4 @@ Skipped — the list itself is what a stakeholder reviews, and the check's faili
 
 ## Next step
 
-Maintainer to run TASK-789's test plan (review the list). Meanwhile TASK-790, TASK-791 and TASK-792 can be built in any order: `/tasks pick --feature FEATURE-021`.
+Maintainer to run the test plans of TASK-789 and TASK-790 (review the list). Meanwhile TASK-791 and TASK-792 can be built in either order: `/tasks pick --feature FEATURE-021`.

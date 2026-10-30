@@ -53,4 +53,22 @@ internal static class WebCheckout
             .Where(f => !f.EndsWith(".d.ts", StringComparison.Ordinal))
             .Select(f => Path.GetFileNameWithoutExtension(f))
             .ToList();
+
+    /// <summary>The Birko.Web.Shell source files except <c>index.ts</c>, by path under <c>src</c> without <c>.ts</c>.</summary>
+    public static IReadOnlyList<string> ShellNames(string webRoot)
+    {
+        var src = Path.Combine(webRoot, "Birko.Web.Shell", "src");
+        return Directory.EnumerateFiles(src, "*.ts", SearchOption.AllDirectories)
+            .Where(f => !f.EndsWith(".d.ts", StringComparison.Ordinal) && Path.GetFileName(f) != "index.ts")
+            .Select(f => Path.ChangeExtension(Path.GetRelativePath(src, f), null).Replace('\\', '/'))
+            .ToList();
+    }
+
+    /// <summary>The web names a section of the parity list must cover.</summary>
+    public static IReadOnlyList<string> Names(string webRoot, string section) => section switch
+    {
+        "Components" => ComponentNames(webRoot),
+        "Shell" => ShellNames(webRoot),
+        _ => throw new ArgumentOutOfRangeException(nameof(section), section, "No such section in the parity list."),
+    };
 }

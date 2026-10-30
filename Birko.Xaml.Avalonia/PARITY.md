@@ -1,10 +1,11 @@
 # Birko.Web ↔ Birko.Xaml parity
 
 Where every Birko.Web building block stands on the desktop ([FEATURE-021](../Birko.Framework/docs/features/FEATURE-021-web-xaml-parity-list/idea.md)).
-One row per web component. `ParityListTests` in `tests/Birko.Xaml.Avalonia.Tests` reads this file and the
+One row per web component (`## Components`) and one per Birko.Web.Shell source file except `index.ts`
+(`## Shell`, keyed by its path under `src` without `.ts`). `ParityListTests` in `tests/Birko.Xaml.Avalonia.Tests` reads this file and the
 `Birko\Web` checkout beside the framework, and fails when:
 
-- a `b-*.ts` in `Birko.Web.Components/src` has no row here;
+- a `b-*.ts` in `Birko.Web.Components/src`, or a `.ts` in `Birko.Web.Shell/src`, has no row here;
 - a row names a component that no longer exists on the web;
 - a status is not one of those below, or a component has two rows;
 - a `skipped` row gives no reason in its Note.
@@ -22,7 +23,7 @@ A new web component therefore fails the desktop test suite until it has a row. D
 | `needs-theme` | Avalonia has the control, but Birko does not style it yet |
 | `missing` | nothing on the desktop yet |
 | `skipped` | not needed on the desktop, on purpose — the Note says why |
-| `n/a` | nothing to port (used by the shell section for type-only files) |
+| `n/a` | nothing to port: a type-only file whose types have no desktop use, or a browser-only helper |
 
 The Desktop column names the counterpart in plain words for now.
 
@@ -100,3 +101,43 @@ The Desktop column names the counterpart in plain words for now.
 | `b-ribbon` | built | `Ribbon` | |
 | `b-sidebar` | built | the sidebar of `ShellView` (Birko.Xaml.Shell) | |
 | `b-tree-menu` | themed | `TreeView` | |
+
+## Shell
+
+| Web file | Status | Desktop | Note |
+|---|---|---|---|
+| `auth/auth-guards` | missing | | `ModuleDefinition.Permission` is declared, but nothing enforces it |
+| `auth/auth-session` | missing | | reads tokens from the sign-in redirect's URL fragment and refreshes them |
+| `auth/auth-store` | missing | | the desktop shell has only `UserName` and `UserCommands` |
+| `auth/auth-types` | n/a | | types of the auth store |
+| `commands/entity-search-provider` | missing | | the palette lists modules and themes, not entities |
+| `commands/module-nav-provider` | built | `ShellViewModel.PaletteCommands` | navigate-to-module entries |
+| `connection/connection-state` | missing | | `SyncStatusIndicator` shows sync state, not connection |
+| `dashboard/base-dashboard-widget` | missing | | |
+| `modules/breadcrumb` | missing | | the desktop shell shows no breadcrumbs; the `Breadcrumb` control exists |
+| `modules/module-store` | built | `NavigationService` | its `Modules` registry |
+| `modules/module-types` | built | `ModuleDefinition` | |
+| `modules/permissions` | missing | | see `auth/auth-guards` |
+| `modules/ribbon-builder` | missing | | the host fills `ShellViewModel.RibbonTabs` by hand |
+| `modules/route-builder` | built | `NavigationService.Navigate` | module ids instead of hash routes |
+| `notifications/notification-store` | missing | | `DialogService.Notify` shows a toast but keeps no list |
+| `notifications/notification-types` | n/a | | types of the notification store |
+| `pages/base-crud-page` | built | `CrudViewModelBase` | |
+| `pages/base-detail-page` | built | `DetailPageViewModel` and `DetailPageView` | |
+| `pages/base-form-modal` | built | `FormModal` | |
+| `pages/base-list-page` | built | `ListPageViewModel` and `ListPageView` | |
+| `pages/base-page` | built | `BasePageViewModel` | |
+| `pages/base-split-page` | built | `SplitPageViewModel` and `SplitPageView` | |
+| `pages/endpoint-utils` | n/a | | builds REST URLs; desktop pages read through `ICrudDataSource` |
+| `pages/live-refresh` | missing | | |
+| `shell/b-app-shell` | built | `RibbonShellView` | |
+| `shell/b-core-app-shell` | built | `ShellViewModel` | |
+| `shell/b-mobile-app-shell` | built | `MobileShellView` | |
+| `shell/b-sidebar-app-shell` | built | `ShellView` | |
+| `shell/breadcrumbs` | missing | | see `modules/breadcrumb` |
+| `shell/mobile-nav` | built | `MobileNavItem` | |
+| `shell/shell-types` | n/a | | types shared by the web shells |
+| `shell/shell-wrapper` | built | `ViewLocator` | swaps the page inside a persistent shell |
+| `shell/theme-registry` | built | `IThemeManager` and `AvaloniaThemeManager` | |
+| `tenants/branding` | missing | | the desktop shell has a tenant switcher but no per-tenant branding |
+| `tenants/tenant-types` | n/a | | types of the tenant switcher; the desktop's is a list of names |

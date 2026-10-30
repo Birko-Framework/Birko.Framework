@@ -144,7 +144,7 @@ included: their `[i]` index is their identity. A null root still shows as one `n
 
 ## Parity with Birko.Web
 
-[PARITY.md](PARITY.md) lists every Birko.Web component and where it stands here: built, an Avalonia control in the
+[PARITY.md](PARITY.md) lists every Birko.Web component, and every Birko.Web.Shell file, and where it stands here: built, an Avalonia control in the
 Birko look, a form field only, needing a Birko look, missing, or skipped on purpose with the reason. A test fails when
 a web component has no row, so a new one on the web cannot go unnoticed (FEATURE-021).
 

@@ -89,7 +89,7 @@ Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="
 
 ## Parity list (`PARITY.md`, FEATURE-021 / TASK-789)
 
-One row per `b-*` component of Birko.Web.Components: status (`built` / `themed` / `form-only` / `needs-theme` /
+One row per `b-*` component of Birko.Web.Components (`## Components`) and per Birko.Web.Shell file except `index.ts`, keyed by its path under `src` (`## Shell`, TASK-790): status (`built` / `themed` / `form-only` / `needs-theme` /
 `missing` / `skipped` / `n/a`), desktop counterpart, note. `ParityListTests` fails on a web component with no row, a
 row with no web component, an unknown status, a duplicate, and a `skipped` row without a reason. **Adding or porting
 a control: update its row.** A web component added on the web side fails this suite until it has a row; deciding its

@@ -16,16 +16,25 @@ public class ParityListTests(ITestOutputHelper output)
     private static IReadOnlyList<string> Check(string rows, params string[] web) =>
         ParityList.Validate(ParityList.Parse("# List\n\n## Components\n\n" + Header + rows, "Components"), web);
 
-    [Fact]
-    public void Every_component_on_the_web_has_exactly_one_valid_row()
+    [Theory]
+    [InlineData("Components")]
+    [InlineData("Shell")]
+    public void Every_web_piece_has_exactly_one_valid_row(string section)
     {
         if (WebCheckout.Locate(output.WriteLine) is not { } web) return;
-        var rows = ParityList.Parse(File.ReadAllText(WebCheckout.ParityListPath()), "Components");
-        var names = WebCheckout.ComponentNames(web);
+        var rows = ParityList.Parse(File.ReadAllText(WebCheckout.ParityListPath()), section);
+        var names = WebCheckout.Names(web, section);
 
-        names.Should().NotBeEmpty("the web checkout was found, so it has components");
+        names.Should().NotBeEmpty("the web checkout was found, so it has a {0} section to cover", section);
         ParityList.Validate(rows, names).Should().BeEmpty();
     }
+
+    [Fact]
+    public void Shell_rows_are_keyed_by_path() =>
+        ParityList.Validate(
+                ParityList.Parse("## Shell\n\n" + Header + "| `pages/base-page` | built | `BasePageViewModel` | |\n", "Shell"),
+                ["pages/base-page", "pages/base-foo-page"])
+            .Should().ContainSingle().Which.Should().Be("pages/base-foo-page exists on the web but has no row");
 
     [Fact]
     public void A_complete_list_has_no_problems() =>
