@@ -1,7 +1,7 @@
 ---
 id: TASK-797
 parent: EPIC-001
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -131,3 +131,6 @@ which README § Versions counts as breaking for code that reads them. Symbio.UI 
   222/222 earlier today. They are not counted as evidence either way.
 
 **Human test, Playground (2026-10-30, the user, Birko.Web 1c6de6d in Chrome):** step 1 (Lab card, en -> sk -> en: labels, placeholder, help, option and errors relabel; typed value and the server error kept) **ok**. The Symbio walk (step 2) pending.
+
+**Symbio walk (2026-10-30, Symbio TASK-1010 on v0.2.0):** blocks-editor passes `setSchema(() => getBlockSchema(...))`. With a Hero block open and an unsaved title, switching to Slovak relabels the fields ("Titulok", "Podtitulok"); the modal stays open ("Upraviť blok", "Uložiť"); the typed title is kept; no console errors. Symbio spec presentation-block-locale.spec.ts is green, and red with an object schema; the 30 other block-editor specs are green; Symbio tsc clean. **PASS.**
+Closed by the user 2026-10-30.
