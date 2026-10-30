@@ -1,7 +1,7 @@
 ---
 id: STORY-069
 parent: EPIC-015
-status: todo
+status: in-progress
 created: 2026-10-30
 feature: FEATURE-021
 affects: [Birko.Xaml.Avalonia, Birko.Xaml.Shell, Birko.Web.Components, Birko.Web.Shell]

@@ -87,6 +87,14 @@ it's a new category, to the `Controls.axaml` merge list.
 Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="{StaticResource BCard}"`.
 `Form` binds each `FormField` to `Model.[Name]` (reflection binding, two-way); it pairs with `CrudViewModelBase.EditingItem` / `DetailPageViewModel.Model`. **Field types (TASK-055):** Text/TextArea/Number/Percent/Password/Email/Search → `TextBox` (Password sets `PasswordChar`; Number/Percent clamp to `Min`/`Max` on commit), Checkbox→`CheckBox`, Switch→`ToggleSwitch`, Select→`ComboBox`, Radio/OptionGroup→`RadioButton` group (equality-converter binding, vertical/horizontal), Markdown→`MarkdownEditor`, Range→`Slider`, Date/Time/DateTime/DateRange→`CalendarDatePicker`/`TimePicker` (+ composites), MultiSelect→multi-`ListBox` (TASK-057), Tags→`TagInput` over the model's `IList<string>`, refilled in place on `TagsChanged` (TASK-057; the control since TASK-774, so a duplicate tag is refused and separators commit, as on the web), File→path box + Browse via `StorageProvider` (TASK-057). `FormField.Default` seeds a null model prop at bind time; `Hint` renders muted under the field.
 
+## Parity list (`PARITY.md`, FEATURE-021 / TASK-789)
+
+One row per `b-*` component of Birko.Web.Components: status (`built` / `themed` / `form-only` / `needs-theme` /
+`missing` / `skipped` / `n/a`), desktop counterpart, note. `ParityListTests` fails on a web component with no row, a
+row with no web component, an unknown status, a duplicate, and a `skipped` row without a reason. **Adding or porting
+a control: update its row.** A web component added on the web side fails this suite until it has a row; deciding its
+status is the whole fix, a port is separate work.
+
 ## Scope / deferred
 
 - **STORY-030** = tokens + swap. **STORY-034** = the Tier-1 restyle sweep (above).

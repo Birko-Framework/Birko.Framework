@@ -142,6 +142,12 @@ included: their `[i]` index is their identity. A null root still shows as one `n
 - **`Theming.BirkoThemeVariants`** — the `ThemeVariant` instances. Light/Dark reuse the built-ins; **Neon** (inherits Dark) and **Finstat** (inherits Light) are custom variants. The *same* static instances are the `ThemeDictionaries` keys (via `{x:Static}`) and the value assigned to `RequestedThemeVariant`, so lookup matches by identity.
 - **`Theming.AvaloniaThemeManager`** — `IThemeManager` over `RequestedThemeVariant`.
 
+## Parity with Birko.Web
+
+[PARITY.md](PARITY.md) lists every Birko.Web component and where it stands here: built, an Avalonia control in the
+Birko look, a form field only, needing a Birko look, missing, or skipped on purpose with the reason. A test fails when
+a web component has no row, so a new one on the web cannot go unnoticed (FEATURE-021).
+
 ## Scope
 
 STORY-030 = tokens + theme swap. Composite/motion tokens (shadows, focus rings, transitions,

@@ -38,6 +38,7 @@ Tier-1 controls, Tier-2 composites, the shell/ribbon/mobile views, and the schem
 - `RibbonTests` — the `Ribbon`: renders tabs/groups/items, click runs the item action, tab switching, collapse (keeps the tab strip), and active-tab toggle-collapse.
 - `MobileShellRenderTests` — `MobileShellView`: one bottom-nav item per module, renders the active page, and bottom-nav surface switching.
 - `WakeLockTests` / `AudioCueTests` / `SyncStatusIndicatorTests` — the Avalonia device adapters (wake lock acquire/release idempotency, best-effort audio cue) and the `SyncStatusIndicator` content/class per `SyncStatus`.
+- `ParityListTests` (TASK-789, FEATURE-021) — `Birko.Xaml.Avalonia/PARITY.md` against the `b-*.ts` files of the neighbouring Birko\Web checkout (`Parity/WebCheckout.cs`, located as `Birko.Xaml.Core.Tests`' `DiffVectors`; absent → skips with a line, `BIRKO_REQUIRE_LIVE` → fails); `Parity/ParityList.cs` parses a section and returns every problem, pinned rule by rule on fixtures.
 
 Screenshot capture tests across the above render each surface via Skia and save a PNG (to `BIRKO_SHOTS`
 or the temp dir) for visual parity per theme.
