@@ -118,7 +118,7 @@ as a factory.
 CHANGELOG entry for **v0.2.0**. It is a MINOR bump: the text properties' type changed from `string` to `FormText`,
 which README § Versions counts as breaking for code that reads them. Symbio.UI compiles unchanged.
 
-**Committed** in Birko.Web 1c6de6d (v0.2.0, not yet pushed or tagged) and Playground cb633eb.
+**Committed** in Birko.Web 1c6de6d (released as v0.2.0, pushed and tagged 2026-10-30) and Playground cb633eb.
 
 **Gate:**
 - `locale-switch-check.mjs` 39/39 (9 new b-form checks). With the `softUpdate` override disabled, 3 fail: the factory
