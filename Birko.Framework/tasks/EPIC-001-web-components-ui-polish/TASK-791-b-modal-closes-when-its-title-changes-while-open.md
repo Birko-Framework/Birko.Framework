@@ -59,4 +59,4 @@ Add Block modal and switch the locale; it stays open (Symbio TASK-1010).
 - **Proof:** `locale-switch-check.mjs`, TASK-791 half: b-modal (title, size), b-drawer modal and non-modal (title),
   b-confirm-dialog (title, message): stays open, modal where it should be, the same `<dialog>`, focus kept in the
   field, the new title shown, `close()` still closes. 15/26 before the fix (with TASK-790), 30/30 after.
-- Committed in Birko.Web dc59ddd (version 0.1.23, not yet tagged or pushed) and Playground 653375c (with TASK-790).
+- Committed in Birko.Web dc59ddd (released as v0.1.23, pushed and tagged 2026-10-30) and Playground 653375c (with TASK-790).
