@@ -25,14 +25,25 @@ A new web component therefore fails the desktop test suite until it has a row. D
 | `skipped` | not needed on the desktop, on purpose — the Note says why |
 | `n/a` | nothing to port: a type-only file whose types have no desktop use, or a browser-only helper |
 
-The Desktop column names the counterpart in plain words for now.
+**The Desktop column.** Every name in backticks there is checked by `ParityCounterpartTests`, whether or not the
+web checkout is present: a type (`TagInput`), a member (`DialogService.Notify`), or a Birko theme key (`BCard`).
+Words outside backticks are not. By status:
+
+- `built` — a type or member in the Birko.Xaml assemblies;
+- `form-only` — a `FieldType` member;
+- `themed` — a Birko theme key, or an Avalonia control the Birko theme styles (a `ControlTheme` for its type in
+  `BirkoTheme.axaml`, or a style in `DataGridStyles.axaml`);
+- `needs-theme` — an Avalonia control the Birko theme does **not** style yet, so the row must move to `themed` when
+  its theme lands.
+
+`built`, `themed` and `form-only` rows must name at least one counterpart. Names in the Note are not checked.
 
 ## Components
 
 | Web component | Status | Desktop | Note |
 |---|---|---|---|
 | `b-command-palette` | built | `CommandPalette` | |
-| `b-badge` | themed | `BBadge` theme on `ContentControl` | |
+| `b-badge` | themed | `BBadge` | a `ContentControl` theme |
 | `b-chart` | built | `BChart` | over LiveCharts2 |
 | `b-code-block` | needs-theme | `SelectableTextBlock` | no syntax highlighting |
 | `b-data-table` | themed | `DataGrid` | `DataGridStyles.axaml` |
@@ -48,7 +59,7 @@ The Desktop column names the counterpart in plain words for now.
 | `b-sortable-list` | missing | | |
 | `b-stat` | missing | | |
 | `b-table` | themed | `DataGrid` | |
-| `b-tag` | themed | `BTag` theme on `ContentControl` | |
+| `b-tag` | themed | `BTag` | a `ContentControl` theme |
 | `b-xml-viewer` | built | `XmlViewer` | |
 | `b-empty` | skipped | | an app composes its own empty state from text and an icon |
 | `b-progress` | themed | `ProgressBar` | |
@@ -59,7 +70,7 @@ The Desktop column names the counterpart in plain words for now.
 | `b-toast` | built | `DialogService.Notify` | |
 | `b-button` | themed | `Button` | |
 | `b-checkbox` | themed | `CheckBox` | |
-| `b-color-picker` | needs-theme | `ColorPicker` | in the `Avalonia.Controls.ColorPicker` package, not referenced yet |
+| `b-color-picker` | needs-theme | | Avalonia's `ColorPicker`, in the `Avalonia.Controls.ColorPicker` package, not referenced yet |
 | `b-date-picker` | themed | `CalendarDatePicker` | |
 | `b-date-range-picker` | form-only | `FieldType.DateRange` | two pickers |
 | `b-datetime-picker` | form-only | `FieldType.DateTime` | a date picker and a time picker |
@@ -84,12 +95,12 @@ The Desktop column names the counterpart in plain words for now.
 | `b-time` | themed | `TimePicker` | |
 | `b-accordion` | themed | `Expander` | |
 | `b-button-group` | skipped | | a `StackPanel` of buttons does the same |
-| `b-card` | themed | `BCard` theme on `ContentControl` | |
+| `b-card` | themed | `BCard` | a `ContentControl` theme |
 | `b-carousel` | needs-theme | `Carousel` | |
 | `b-chat` | skipped | | a messaging surface, of little use in a desktop back-office app |
 | `b-confirm-dialog` | built | `DialogService.ConfirmAsync` | |
 | `b-drawer` | built | `Drawer` | |
-| `b-dropdown-menu` | themed | `MenuFlyout` | `MenuFlyoutPresenter` and `MenuItem` themes |
+| `b-dropdown-menu` | themed | `MenuFlyoutPresenter` and `MenuItem` | the look of a `MenuFlyout` |
 | `b-gallery` | skipped | | an image gallery is a web-app pattern, not a desktop back-office one |
 | `b-modal` | built | `Modal` | |
 | `b-split-panel` | built | `SplitPanel` | |

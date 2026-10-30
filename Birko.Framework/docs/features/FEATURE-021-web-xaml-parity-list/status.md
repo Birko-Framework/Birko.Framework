@@ -21,11 +21,11 @@ generated: 2026-10-30
 
 ## Build progress
 
-0 / 4 tasks done.
+1 / 4 tasks done.
 
 - TASK-789 — the list for the web components, and the check that it is complete — built, awaiting sign-off
 - TASK-790 — the web application shell's files in the list — built, awaiting sign-off
-- TASK-791 — the check that every desktop control the list names exists — to do
+- TASK-791 — the check that every desktop control the list names exists — done
 - TASK-792 — the build-server job that runs the check with the web library present — to do
 
 ## What can be tested now
@@ -38,4 +38,4 @@ Skipped — the list itself is what a stakeholder reviews, and the check's faili
 
 ## Next step
 
-Maintainer to run the test plans of TASK-789 and TASK-790 (review the list). Meanwhile TASK-791 and TASK-792 can be built in either order: `/tasks pick --feature FEATURE-021`.
+Maintainer to run the test plans of TASK-789 and TASK-790 (review the list). Meanwhile TASK-792, the last task, can be built: `/tasks pick --feature FEATURE-021`.
