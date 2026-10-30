@@ -187,6 +187,9 @@ Decomposed into 8 stories (dependency-ordered):
     the `diffJson` / `xmlToTree` engine ported to `Birko.Xaml.Core` against test vectors shared with Birko.Web, a
     `JsonDiffViewer` (tree, then side-by-side), a `TagInput` and a Birko `Expander` theme. Requested by the FinStat
     desktop tester (ClientApi.CSharp); the engine (TASK-770) is its blocker.
+13. **STORY-069** — Birko.Web ↔ Birko.Xaml parity list ([FEATURE-021](../../docs/features/FEATURE-021-web-xaml-parity-list/idea.md)):
+    one row per `b-*` component and Birko.Web.Shell file, saying where it stands on the desktop, and a test that fails
+    when the web side moves without the list. Ports of the `missing` components are out of scope.
 
 ## WPF addendum — adding WPF after Avalonia
 

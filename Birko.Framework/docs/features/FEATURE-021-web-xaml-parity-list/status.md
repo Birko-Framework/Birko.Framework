@@ -21,13 +21,16 @@ generated: 2026-10-30
 
 ## Build progress
 
-0 / 0 tasks done.
+0 / 4 tasks done.
 
-No tasks yet — the approved decisions have not been split into tasks.
+- TASK-789 — the list for the web components, and the check that it is complete — to do
+- TASK-790 — the web application shell's files in the list — to do
+- TASK-791 — the check that every desktop control the list names exists — to do
+- TASK-792 — the build-server job that runs the check with the web library present — to do
 
 ## What can be tested now
 
-Nothing yet.
+Nothing yet — TASK-789, TASK-790 and TASK-792 have test plans that become runnable once each is built.
 
 ## Prototype
 
@@ -35,4 +38,4 @@ Skipped — the list itself is what a stakeholder reviews, and the check's faili
 
 ## Next step
 
-Split the 13 approved decisions into tasks: `/feature decompose FEATURE-021`.
+Build TASK-789 first; the other three follow it in any order: `/tasks pick --feature FEATURE-021`.
