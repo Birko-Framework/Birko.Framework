@@ -129,3 +129,5 @@ which README § Versions counts as breaking for code that reads them. Symbio.UI 
 - verify.mjs and keyboard-check are flaky on this machine today, with and without the change. verify: 0, 2 and 23
   failing with the change; 27, 4 and 29 on the baseline. keyboard: 5 failing on both, on the same code that passed
   222/222 earlier today. They are not counted as evidence either way.
+
+**Human test, Playground (2026-10-30, the user, Birko.Web 1c6de6d in Chrome):** step 1 (Lab card, en -> sk -> en: labels, placeholder, help, option and errors relabel; typed value and the server error kept) **ok**. The Symbio walk (step 2) pending.
