@@ -1,7 +1,7 @@
 ---
 id: TASK-789
 parent: EPIC-001
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-10-30
@@ -156,3 +156,10 @@ v0.4.0 and push with the user's word, and Symbio TASK-1012.
 Playground "Tree menu, sortable" card on the branch: "playground was working". Steps 1 to 4 are recorded as one pass, as
 the user reported them; touch on a real device and the screen reader were not reported separately. Step 5 (Symbio,
 TASK-1012) follows the merge.
+
+## Released (2026-10-30)
+
+Birko.Web **v0.4.0**: merge 9e6b0fe on main, tagged and pushed at the user's word, after Symbio's go (its walk-through
+on the dev server had to finish first). Symbio confirmed all four of its sortable trees already use `reorder`, so nothing
+breaks; the arrows go, as its TASK-1012 wants. Playground merged and pushed (a0186f3; tree-drag-check 17/17 on main).
+Worktrees and branches removed. **Open:** human test step 5 in Symbio (TASK-1012).
