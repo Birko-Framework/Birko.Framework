@@ -1,7 +1,7 @@
 ---
 id: TASK-801
 parent: EPIC-001
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-30
@@ -96,3 +96,5 @@ was told at once; it merged TASK-1010 and TASK-966 (sweep 67f2b7f6) into its loc
    the switch and the modal stays open.
 2. Symbio: its locale specs 4/4 on v0.3.0: the Notifications heading reads "Notifikácie" after the switch, and
    putting the field form back fails the spec. Symbio's full gates were running; its main is pushed once green.
+
+**Closed 2026-10-30 by the user.**
