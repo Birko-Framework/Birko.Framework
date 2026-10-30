@@ -163,3 +163,10 @@ Birko.Web **v0.4.0**: merge 9e6b0fe on main, tagged and pushed at the user's wor
 on the dev server had to finish first). Symbio confirmed all four of its sortable trees already use `reorder`, so nothing
 breaks; the arrows go, as its TASK-1012 wants. Playground merged and pushed (a0186f3; tree-drag-check 17/17 on main).
 Worktrees and branches removed. **Open:** human test step 5 in Symbio (TASK-1012).
+
+## Human test, Symbio (2026-10-30, the user)
+
+On Symbio's dev server with Birko.Web v0.4.0, Presentation → Pages: grips shown and the arrows gone; drag before,
+after and into a page, saved across a reload; keyboard pick-up with ↑ ↓ → ← and Space, saved across a reload; Escape
+puts it back with nothing saved. **PASS.** The same in Navigation and Products → Categories: **PASS**. Presentation →
+Categories was not walked.
