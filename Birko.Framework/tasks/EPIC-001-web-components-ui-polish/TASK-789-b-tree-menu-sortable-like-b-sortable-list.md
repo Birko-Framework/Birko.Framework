@@ -63,8 +63,65 @@ Nothing is announced, and there is no drop indicator in `b-sortable-list`'s styl
    drag check like `sortable-drag-check.mjs`; mutation-prove the key assertions.
 4. API.md, ACCESSIBILITY.md, CHANGELOG, version bump; tell the Symbio session for TASK-1012.
 
+## Decisions (2026-10-30, the user, on a clickable preview)
+
+Preview: https://claude.ai/artifact/2HBM1ZaboG4F1TrpKb6XgW
+
+1. **The ▲ / number / ▼ controls stay behind an option.** A sortable tree shows a grip per node by default; the old
+   controls render only with the option on. `sort` and `sort-order` keep firing from them, documented as deprecated.
+2. **Reparenting by keyboard too**: while a node is picked up, → moves it into the node above it (as the last child), ←
+   moves it out to after its parent. **No veto hook**: the user did not take `canDrop`. A node still cannot be dropped
+   into itself or its own descendant, which today's drag allows.
+3. **As in b-sortable-list**: the whole row drags (a touch needs a hold, so a swipe still scrolls), and a `handle-only`
+   option limits it to the grip.
+4. **A collapsed parent stays closed** under a drag. Dropping inside it still works.
+5. **One shared helper** for the pointer drag, the touch hold, edge scrolling and the click swallowed after a drag,
+   used by b-sortable-list and b-tree-menu.
+
+## Implementation plan
+
+1. **Shared helper** (`Birko.Web.Components/src/pointer-drag.ts`, beside `dom-utils.ts`): b-sortable-list's pointer
+   machinery moved out as is — arming on a handle or a row (a press on an interactive element is not a drag), the
+   350 ms touch hold, the 4 px start and 8 px swipe cancel, pointer capture, `pressing` / `dragging` classes, the
+   follow transform, the edge auto-scroll with its scroller lookup, Escape and `pointercancel`, the swallowed click,
+   and the context-menu / touchmove guards. The host supplies `target(x, y)` (where it would land, drawing its own
+   indicator) and `drop(cancelled)`. b-sortable-list is rewired onto it with no behaviour change: its smoke suites and
+   `sortable-drag-check.mjs` are the regression gate, run before anything is built on the helper.
+2. **Tree drag** (b-tree-menu, `sortable: true`): the HTML5 `draggable` path goes. Each node gets a grip button
+   (b-sortable-list's grip icon, `aria-roledescription`, label "{label}, position {p} of {n}"). The whole row drags
+   unless `handleOnly: true` in the config; a click with no drag still selects. Hit-testing keeps today's zones (top
+   25 % before, bottom 25 % after, middle inside); before / after draw b-sortable-list's drop bar, inside the
+   existing outline. A spot inside the dragged node's own subtree is refused (no indicator, announced once).
+3. **Keyboard** on the grip: Space / Enter picks up, ↑ ↓ move among siblings, → into the node above (expanding it,
+   loading it through `onExpand` if needed, so focus can follow), ← out to after the parent, Space / Enter drops,
+   Escape restores the start. Each step is announced with its level ("position 2 of 3 in About us"); the grip keeps
+   focus across the re-renders.
+4. **Data**: the tree moves nodes in its own copies of the child arrays, never in the consumer's arrays or items, and
+   emits one `reorder` per completed move with today's detail `{ sourceId, targetId, position, sourceItem,
+   targetItem }`. A keyboard move describes its final spot against a neighbour: after the previous sibling, else
+   before the next, else inside the parent. A consumer that re-sets the items on `reorder` (Symbio's four pages)
+   keeps working.
+5. **Old controls**: `sortControls: true` renders ▲ / number / ▼ as today, with their titles localized; `sort` /
+   `sort-order` unchanged. **This changes what a `sortable` tree shows by default** (the arrows go), so the release is
+   **v0.4.0** with a BREAKING note: a page that relies on the arrows sets `sortControls: true` or moves to `reorder`.
+6. **Labels**: every new string under `bwc.treeMenu.*` (grip, hint, picked up, position, first / last, into, out of,
+   no node above, top level, dropped, cancelled, moved, refused), English in the source with fallbacks; Slovak in the
+   Playground's sk.json for the human test.
+7. **Proof**: a Playground smoke suite for the tree (keyboard pick-up / move / reparent / drop / Escape, each
+   announcement, the `reorder` details, refusal of a descendant, `handleOnly`, `sortControls` still emitting `sort`
+   and `sort-order`, no listener growth across re-renders), and `sortable-drag-check.mjs` extended to the tree with
+   real mouse and touch input (hold, swipe scrolls). Mutation-prove the key assertions. Then verify.mjs,
+   rerender-leak, entry-points, locale-keys, a11y-name, keyboard-check, Components tsc.
+8. **Docs and release**: API.md (b-tree-menu sortable, the helper is internal), ACCESSIBILITY.md, Components CLAUDE.md
+   entry, CHANGELOG v0.4.0, versions; the Playground Tree menu card gains a sortable demo with its options. Tell the
+   Symbio session for TASK-1012.
+
 ## Human test plan
 
-To be written once the decisions are taken: in the Playground's Tree menu card (sortable) — drag a node before / after
-/ into another, by mouse and by keyboard, with a screen reader's announcements; then in Symbio, Presentation → Pages,
-reorder and reparent a page (Symbio TASK-1012).
+1. Playground, Tree menu card (sortable): drag a node before, after and into another with the mouse, and drag a row
+   (not its grip). Dropping a node into its own child does nothing. With `handle-only` on, only the grip drags.
+2. Same card by keyboard: Tab to a grip, Space, ↑ ↓, → into the node above, ← back out, Space; then pick one up and
+   Escape. A screen reader (NVDA or Narrator) reads each step.
+3. Touch (emulation now, a real device when one is to hand): hold a row and drag; a quick swipe scrolls instead.
+4. `sortControls` on: ▲ / ▼ and the number still work and show their titles in Slovak after a switch.
+5. Symbio (TASK-1012): Presentation → Pages, reorder and reparent a page by drag and by keyboard; the order is saved.
