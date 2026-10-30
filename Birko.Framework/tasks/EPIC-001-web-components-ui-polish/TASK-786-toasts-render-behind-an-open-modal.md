@@ -1,7 +1,7 @@
 ---
 id: TASK-786
 parent: EPIC-001
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-10-29
@@ -113,3 +113,5 @@ Symbio step is pending its re-walk.
 Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** human test step 3 in Symbio (the Event list block's refusal toast, on top and clear of the modal footer), once Symbio builds on v0.1.22.
 
 **Step 3, PASS (2026-10-30)**, walked by the user in Symbio (main 6b2a14b7, dev tenant FlowerFur), reported by the Symbio session: Presentation → Pages → a page → Event list block, "only upcoming" off, no type or venue, Save. The refusal toast was readable at the top centre, above the block modal and its backdrop. No open follow-ups remain.
+
+**Closed 2026-10-30 by the user.**
