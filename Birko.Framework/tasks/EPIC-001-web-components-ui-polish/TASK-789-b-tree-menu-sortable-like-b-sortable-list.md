@@ -150,3 +150,9 @@ half-done step 1 for about 30 s before the work moved to the worktree; Symbio re
 
 Pending: the human test; then, after telling Symbio (it asked to hear before v0.4.0 reaches Web main), merge, tag
 v0.4.0 and push with the user's word, and Symbio TASK-1012.
+
+## Human test, round 1 (2026-10-30, the user)
+
+Playground "Tree menu, sortable" card on the branch: "playground was working". Steps 1 to 4 are recorded as one pass, as
+the user reported them; touch on a real device and the screen reader were not reported separately. Step 5 (Symbio,
+TASK-1012) follows the merge.
