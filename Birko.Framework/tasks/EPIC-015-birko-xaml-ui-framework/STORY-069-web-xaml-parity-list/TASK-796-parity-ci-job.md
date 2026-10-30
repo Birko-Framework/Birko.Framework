@@ -1,13 +1,13 @@
 ---
-id: TASK-792
+id: TASK-796
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-10-30
-depends-on: [TASK-789]
+depends-on: [TASK-793]
 blocks: []
 findings: []
 pr: null

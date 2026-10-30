@@ -6,7 +6,7 @@ using Xunit;
 namespace Birko.Xaml.Avalonia.Tests;
 
 /// <summary>
-/// TASK-791 (FEATURE-021 D8): every counterpart <c>PARITY.md</c> names exists, by its status's rule. Needs no web
+/// TASK-795 (FEATURE-021 D8): every counterpart <c>PARITY.md</c> names exists, by its status's rule. Needs no web
 /// checkout, so it runs everywhere.
 /// </summary>
 public class ParityCounterpartTests

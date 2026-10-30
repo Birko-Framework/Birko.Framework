@@ -1,5 +1,5 @@
 ---
-id: TASK-791
+id: TASK-795
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
@@ -7,7 +7,7 @@ status: done
 priority: P2
 assignee: ai
 created: 2026-10-30
-depends-on: [TASK-789]
+depends-on: [TASK-793]
 blocks: []
 findings: []
 pr: null
@@ -24,7 +24,7 @@ FEATURE-021 D8. The list must not claim a port that is not there. For rows whose
 `Birko.Xaml.Core.Mvvm.ListPageViewModel`) found by reflection in the Birko.Xaml assemblies; a themed Avalonia control
 (e.g. `TabControl`) for which the Birko theme has a `ControlTheme`; a named theme key (e.g. `BCard`) present in the
 theme's resources; a `FieldType` member for `form-only`. Settle one notation for the column so the test can tell these
-apart, and apply it to every row (both sections if TASK-790 is in by then; otherwise TASK-790 adopts it).
+apart, and apply it to every row (both sections if TASK-794 is in by then; otherwise TASK-794 adopts it).
 `DataGridStyles.axaml` is Styles, not a resource dictionary — the `DataGrid` row needs a rule of its own.
 
 ## Acceptance criteria

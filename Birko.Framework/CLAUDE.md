@@ -290,11 +290,11 @@ immediately).
 
 ## Recent Updates
 ### Birko.Xaml keeps a parity list with Birko.Web (2026-10-30)
-[[TASK-789]], [[TASK-790]] (FEATURE-021). New `Birko.Xaml.Avalonia/PARITY.md`: one row per Birko.Web component and per
+[[TASK-793]], [[TASK-794]] (FEATURE-021). New `Birko.Xaml.Avalonia/PARITY.md`: one row per Birko.Web component and per
 Birko.Web.Shell file, saying where it
 stands on the desktop (built, themed, form field only, needs a theme, missing, or skipped with the reason). A test
 fails when a web component has no row, when a row's component is gone, or when a skip gives no reason; another
-([[TASK-791]]) fails when a desktop control the list names does not exist, or a "needs a theme" one already has one. Without the
+([[TASK-795]]) fails when a desktop control the list names does not exist, or a "needs a theme" one already has one. Without the
 Birko\Web checkout it skips. Nine components are skipped on purpose (tour, chat, gallery, segmented, button group,
 toolbar, empty, skeleton, stale banner).
 ### GraphQL compiles beside WebSocket (2026-10-28)

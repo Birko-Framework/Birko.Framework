@@ -1,5 +1,5 @@
 ---
-id: TASK-790
+id: TASK-794
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
@@ -7,7 +7,7 @@ status: verify
 priority: P2
 assignee: ai
 created: 2026-10-30
-depends-on: [TASK-789]
+depends-on: [TASK-793]
 blocks: []
 findings: []
 pr: null
@@ -23,13 +23,13 @@ FEATURE-021 D4, D5. Birko.Web.Shell has no `b-*` components; it is modules (auth
 feedback, modules, notifications, pages, shell, tenants) of `.ts` files. Add a second section to the parity list with
 one row per `Birko.Web.Shell/src/**/*.ts` except `index.ts` (about 35 rows), mapped to Birko.Xaml.Shell / Birko.Xaml.Core
 (e.g. `base-list-page.ts` → `ListPageViewModel` + `ListPageView`, `b-app-shell.ts` → `RibbonShellView`). Type-only
-files (`*-types.ts`) are usually `n/a`. Extend TASK-789's test to the Shell section with the same rules (no row, stale
+files (`*-types.ts`) are usually `n/a`. Extend TASK-793's test to the Shell section with the same rules (no row, stale
 row, skip reason, unknown status, duplicate).
 
 ## Acceptance criteria
 
 - [x] One row per non-index `.ts` in Birko.Web.Shell, each with a status and, unless `n/a` / `missing`, its desktop counterpart.
-- [x] The test applies the TASK-789 rules to the Shell section; a fixture test per rule.
+- [x] The test applies the TASK-793 rules to the Shell section; a fixture test per rule.
 - [x] Proved it can fail: a temporary `src/pages/base-foo-page.ts` fails the test, naming it.
 
 ## Out of scope
@@ -50,14 +50,14 @@ row, skip reason, unknown status, duplicate).
    decided nine skips, so a web-only file (e.g. the URL-fragment auth session) is `missing` and named in the review
    log as a skip candidate for the maintainer, not skipped unasked.
 3. `WebCheckout.ShellNames`; the live test runs per section (a `[Theory]` over Components / Shell). `Validate` is
-   section-agnostic, so its fixture tests (TASK-789) already pin every rule; add a fixture for path-shaped names.
+   section-agnostic, so its fixture tests (TASK-793) already pin every rule; add a fixture for path-shaped names.
 
 ## Review log
 
 - 2026-10-30 — Built; **verify** (step 1 needs the maintainer's judgement on the mappings). `PARITY.md` `## Shell`:
   35 rows — 17 built, 13 missing, 5 n/a, no skips. Keyed by path under `src`. `WebCheckout.ShellNames` / `Names`;
   the live test is a `[Theory]` over both sections; one fixture for path-shaped names (`Validate` is
-  section-agnostic, so TASK-789's fixtures pin every rule for both).
+  section-agnostic, so TASK-793's fixtures pin every rule for both).
 - **Skip candidate for the maintainer** (left `missing`, because FEATURE-021 decided the skips and it was not among
   them): `auth/auth-session`, which reads tokens from the browser redirect's URL fragment. Deciding whether desktop sign-in, permissions, notifications or a dashboard are wanted is a
   separate feature, not this list's job (D12).

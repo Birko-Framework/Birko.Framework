@@ -19,12 +19,15 @@ Decisions: [FEATURE-021](../../../docs/features/FEATURE-021-web-xaml-parity-list
 
 ## Tasks (build order)
 
-1. [TASK-789](TASK-789-parity-list-components-and-check.md) — the list for `b-*` components and the check: no row, stale row, skip reason, skip without the web checkout (D1–D3, D6, D7, D9–D12)
-2. [TASK-790](TASK-790-parity-list-shell-files.md) — Birko.Web.Shell rows, one per file (D4, D5)
-3. [TASK-791](TASK-791-parity-check-named-controls-exist.md) — the check that a named desktop counterpart exists (D8)
-4. [TASK-792](TASK-792-parity-ci-job.md) — a CI job with the web checkout and `BIRKO_REQUIRE_LIVE` (D13)
+1. [TASK-793](TASK-793-parity-list-components-and-check.md) — the list for `b-*` components and the check: no row, stale row, skip reason, skip without the web checkout (D1–D3, D6, D7, D9–D12)
+2. [TASK-794](TASK-794-parity-list-shell-files.md) — Birko.Web.Shell rows, one per file (D4, D5)
+3. [TASK-795](TASK-795-parity-check-named-controls-exist.md) — the check that a named desktop counterpart exists (D8)
+4. [TASK-796](TASK-796-parity-ci-job.md) — a CI job with the web checkout and `BIRKO_REQUIRE_LIVE` (D13)
 
-TASK-790, TASK-791 and TASK-792 each depend only on TASK-789 and can run in any order.
+TASK-794, TASK-795 and TASK-796 each depend only on TASK-793 and can run in any order.
+
+> Renumbered 2026-10-30 from TASK-789–792: a parallel session filed EPIC-001 tasks under TASK-789–791. Commits
+> before the renumber (b29629f0, 7864af8e, e5959c81, 741c0614) carry the old ids in their subjects.
 
 ## Success criteria
 

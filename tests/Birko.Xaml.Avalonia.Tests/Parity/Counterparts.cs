@@ -8,7 +8,7 @@ using Birko.Xaml.Core.Forms;
 namespace Birko.Xaml.Avalonia.Tests.Parity;
 
 /// <summary>
-/// TASK-791 (FEATURE-021 D8): every name in backticks in a row's Desktop column must exist, by the rule its status
+/// TASK-795 (FEATURE-021 D8): every name in backticks in a row's Desktop column must exist, by the rule its status
 /// sets — see the head of <c>PARITY.md</c>. Needs a running Avalonia app (an <c>[AvaloniaFact]</c>) to load the theme.
 /// </summary>
 internal sealed class Counterparts

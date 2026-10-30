@@ -1,5 +1,5 @@
 ---
-id: TASK-789
+id: TASK-793
 parent: STORY-069
 feature: FEATURE-021
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
@@ -8,7 +8,7 @@ priority: P2
 assignee: ai
 created: 2026-10-30
 depends-on: []
-blocks: [TASK-790, TASK-791, TASK-792]
+blocks: [TASK-794, TASK-795, TASK-796]
 findings: []
 pr: null
 github-issue: null
@@ -44,7 +44,7 @@ the 2026-10-30 survey (see the feature's idea.md) had to be done by hand.
 
 ## Out of scope
 
-- Shell rows (TASK-790), the named-counterpart check (TASK-791), CI (TASK-792).
+- Shell rows (TASK-794), the named-counterpart check (TASK-795), CI (TASK-796).
 - Porting any `missing` component (D12).
 
 ## Human test plan
@@ -59,7 +59,7 @@ the 2026-10-30 survey (see the feature's idea.md) had to be done by hand.
 1. `Birko.Xaml.Avalonia/PARITY.md` — header (what the list is, the seven statuses, how the check works, how to run it),
    then `## Components`: one table, `| Web component | Status | Desktop | Note |`, one row per `b-*` (name only, they are
    unique across folders), grouped by the web folder. Seed from the 2026-10-30 survey; the D11 nine `skipped`.
-   The Desktop column is free text here; TASK-791 gives it a resolvable notation.
+   The Desktop column is free text here; TASK-795 gives it a resolvable notation.
 2. `tests/Birko.Xaml.Avalonia.Tests/Parity/ParityList.cs` — pure: parse the `## Components` table out of the Markdown
    (rows between that heading and the next `## `), and `Validate(rows, webNames)` returning problem strings: no row,
    stale row, unknown status, duplicate, `skipped` without a note. No I/O, so fixture tests feed it strings.
@@ -88,4 +88,4 @@ the 2026-10-30 survey (see the feature's idea.md) had to be done by hand.
   built, Out of scope respected (no shell rows, no counterpart check, no CI, no ports); correctness — no blocker
   found; security — not applicable (test-only code and a Markdown file); comments — the new doc comments describe
   what the code does and point at `DiffVectors` rather than restating it. `ci: main RED — diff-parity failure at
-  efb186e7` (unrelated to this diff; relevant to TASK-792, which models its job on that workflow).
+  efb186e7` (unrelated to this diff; relevant to TASK-796, which models its job on that workflow).

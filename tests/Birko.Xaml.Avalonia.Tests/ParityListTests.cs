@@ -6,7 +6,7 @@ using Xunit.Abstractions;
 namespace Birko.Xaml.Avalonia.Tests;
 
 /// <summary>
-/// TASK-789 (FEATURE-021): <c>Birko.Xaml.Avalonia/PARITY.md</c> has exactly one valid row per <c>b-*</c> component in
+/// TASK-793 (FEATURE-021): <c>Birko.Xaml.Avalonia/PARITY.md</c> has exactly one valid row per <c>b-*</c> component in
 /// the neighbouring Birko.Web checkout. The fixture tests pin each rule; the live test runs them on the real list.
 /// </summary>
 public class ParityListTests(ITestOutputHelper output)
