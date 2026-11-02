@@ -46,7 +46,7 @@ its proper home.
       consumer task.
 - [x] Tests on a real database (SQLite at least): two devices both refresh; switch on one leaves the other's tenant;
       reuse of a rotated token revokes; logout-everywhere revokes all; a hashed token is never readable back.
-- [ ] Symbio adoption filed as a Symbio task (AuthService / TokenIssuer / TenantService onto the service, the
+- [x] Symbio adoption filed as a Symbio task (AuthService / TokenIssuer / TenantService onto the service, the
       `UserLogin.RefreshToken` column retired after a release with both, DDL in Symbio's docs/92-pending-ddl.md).
 
 ## Out of scope
@@ -132,4 +132,5 @@ prune retention, except, old column cleared, old tenant, switch tenant), each ca
 mutation through (the revoked row had also expired) and was fixed. Users.SQL.Tests 34/34, Users.Tests 9/9, the
 solution builds, and the consumer smoke harness (Birko.Sandbox) reports 20 verified, 0 failed.
 
-Human test pending: needs Symbio's adoption (filed through the Symbio session).
+Human test pending: needs Symbio's adoption, filed as Symbio **TASK-1039** "Adopt Birko login sessions" (2026-11-02,
+Symbio main 0369f840). Its human test is this task's.
