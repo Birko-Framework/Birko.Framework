@@ -1,7 +1,7 @@
 ---
 id: TASK-789
 parent: EPIC-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-30
@@ -168,5 +168,10 @@ Worktrees and branches removed. **Open:** human test step 5 in Symbio (TASK-1012
 
 On Symbio's dev server with Birko.Web v0.4.0, Presentation → Pages: grips shown and the arrows gone; drag before,
 after and into a page, saved across a reload; keyboard pick-up with ↑ ↓ → ← and Space, saved across a reload; Escape
-puts it back with nothing saved. **PASS.** The same in Navigation and Products → Categories: **PASS**. Presentation →
-Categories was not walked.
+puts it back with nothing saved. **PASS.** The same in Navigation and Products → Categories: **PASS**.
+
+**Presentation → Categories, PASS (2026-11-02)**, walked by the user after Symbio's gates: grips and no arrows;
+drag before, after and into a category, saved across a reload; keyboard pick-up with ↑ ↓ → ← and Space, saved across a
+reload; Escape puts it back; a parent does not drop into its own subtree. All four Symbio trees are now walked.
+
+**Closed 2026-11-02 by the user.**
