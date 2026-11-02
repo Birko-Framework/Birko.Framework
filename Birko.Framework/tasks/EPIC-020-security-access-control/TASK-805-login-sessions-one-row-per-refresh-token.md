@@ -2,7 +2,7 @@
 id: TASK-805
 parent: EPIC-020
 feature: null
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-11-02
@@ -59,6 +59,45 @@ its proper home.
 - [ ] In Symbio, log in on two browsers (or a PC and a phone), switch tenant in one, wait out or force a refresh in both.
       Expected: both stay logged in, each in its own tenant.
 
+## Decisions (the user, 2026-11-02)
+
+1. **Placement:** inside Birko.Models.Users (model, filter, view model, service) and Birko.Models.Users.SQL (mapping).
+   No new projects. Birko.Models.Users gains a dependency on Birko.Data.Stores; measured first: all five consumer
+   aggregators that import Birko.Models.Users already import Birko.Data.Stores (Symbio, Presenter, Reps, FisData.Stock
+   .Angular, the Sandbox). The clock is the BCL `TimeProvider`, not Birko.Time.Abstractions, which four of the five do
+   not import.
+2. **Tenant rule:** the framework checks the user is still a member (`UserTenants`), and the app may add its own check
+   through a hook (Symbio: the tenant is still active). If either says no, the refresh drops the tenant and the app picks
+   one as at login.
+3. **Old tokens:** the framework redeems a token found on `UserLogin.RefreshToken` once, moves it onto a session row and
+   clears the column. The app passes an optional parser for a tenant carried in the token (Symbio's `<random>.<tenant>`).
+
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-805` — leave empty until then._
+- **`UserSession`** (`Models/UserSession.cs`, `AbstractLogModel`, `IRelatedToUser`): `UserGuid`, `UserLoginGuid?`,
+  `TokenHash`, `PreviousTokenHash?`, `TenantGuid?`, `DeviceLabel?`, `LastUsedAt`, `ExpiresAt`, `RevokedAt?`,
+  `RevokedReason?`. The view model and `ILoadable` carry no hash, so a session listed to a page cannot leak one. Filter
+  by user, tenant, active-at.
+- **`UserSessionService`** (`Sessions/`), over `IAsyncBulkStore<UserSession>`, optionally `IAsyncBulkStore<UserTenant>`
+  (the membership check) and `IAsyncBulkStore<UserLogin>` (old tokens), with `UserSessionOptions` (lifetime, the
+  tenant hook, the legacy-tenant parser, revoked-row retention) and a `TimeProvider`:
+  - `CreateAsync(user, tenant?, login?, device?)`: a new row, the token returned once (32 random bytes, base64url);
+    the row stores SHA-256 of it. Prunes the user's own dead rows on the way.
+  - `RefreshAsync(token)`: find by hash; rotate on the SAME row as a claim (a filtered update
+    `Guid == g && TokenHash == presented && RevokedAt == null`, then a re-read: the Grants invitation pattern, one
+    conditional statement on SQL). Lost claim = a concurrent refresh, refused without revoking. A token matching a row's
+    `PreviousTokenHash` is a reuse: that session is revoked. Not found by hash → the old `UserLogin.RefreshToken`
+    lookup, moved onto a new row. The tenant is kept only while member + hook allow it.
+  - `SwitchTenantAsync(session, user, tenant)`: moves one session (and rotates), the other devices keep theirs. The
+    results expose the session id so the app can put it in the access token (`sid`) and find it at logout/switch.
+  - `RevokeAsync(session, user, reason)`, `RevokeAllAsync(user, reason, except?)` (also clears old
+    `UserLogin.RefreshToken` values, so an unmigrated token dies too), `ListActiveAsync(user)` (view models),
+    `PruneAsync()` (expired rows, and revoked rows past the retention).
+- **`UserSessionMapping`**: `UserSessions`, UNIQUE `TokenHash`, indexes on `PreviousTokenHash` and `UserGuid`.
+- **Tests on SQLite** (Birko.Models.Users.SQL.Tests): two devices both refresh; a switch on one leaves the other's
+  tenant; a rotated token presented again revokes its session; a lost claim does not; logout everywhere revokes all
+  and kills an old column token; the stored hash is not the token and the view model has none; an old plain token and
+  an old `<random>.<tenant>` token are redeemed once onto a row; the tenant dropped when the user left it or the hook
+  says no; expired refused; prune.
+- Docs: both CLAUDE.md / README, CLAUDE-projects.md dependency line, framework CLAUDE.md Recent Updates.
+- Then file the Symbio adoption task (via the Symbio session).
