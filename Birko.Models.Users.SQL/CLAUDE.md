@@ -11,6 +11,7 @@ Canonical `IModelMapping<T>` implementations for the `Birko.Models.Users` domain
 - **UserLoginMapping** → `UserLogins` table (Provider, ProviderKey, PasswordHash, RefreshToken, DisplayName)
 - **UserProfileMapping** → `UserProfiles` table (FirstName, LastName, DisplayName, Phone, AvatarUrl, Locale, TimeZone, Bio; UserGuid unique)
 - **UserRoleMapping** → `UserRoles` table
+- **UserSessionMapping** → `UserSessions` table (TASK-805: `UX_UserSessions_TokenHash` unique, `IX_UserSessions_PreviousTokenHash`, `IX_UserSessions_UserGuid`)
 - **UserTenantMapping** → `UserTenants` table
 - **RoleMapping** → `Roles` table (Name unique)
 - **RolePermissionMapping** → `RolePermissions` table (PermissionCode)
@@ -23,6 +24,7 @@ Mappings/
 ├── UserLoginMapping.cs
 ├── UserProfileMapping.cs
 ├── UserRoleMapping.cs
+├── UserSessionMapping.cs
 ├── UserTenantMapping.cs
 ├── RoleMapping.cs
 ├── RolePermissionMapping.cs

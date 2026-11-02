@@ -18,6 +18,7 @@ User, authentication, profile, role-based access control, and agenda management 
 | **UserProfile** | UserProfiles | 1:1 with User (GDPR separation): `FirstName`, `LastName`, `DisplayName`, `Phone`, `AvatarUrl`, `Locale`, `TimeZone`, `DateOfBirth`, `Bio`. Has `GetDisplayName()` method. Implements IRelatedToUser |
 | **Role** | Roles | Named role definition: `Name` (unique), `Description`, `IsSystem` (cannot be deleted/renamed) |
 | **RolePermission** | RolePermissions | Links Role to permission code string: `RoleGuid`, `PermissionCode` (format: `{module}:{entity}:{action}`), `GrantedAt`. Implements IRelatedToRole |
+| **UserSession** | UserSessions | One signed-in device per refresh token (TASK-805): `UserGuid`, `UserLoginGuid?`, `TokenHash` (SHA-256, never the token), `PreviousTokenHash?` (reuse detection), `TenantGuid?`, `DeviceLabel?`, `LastUsedAt`, `ExpiresAt`, `RevokedAt?`, `RevokedReason?`. Implements IRelatedToUser |
 | **UserRole** | UserRoles | Assigns Role to User: `UserGuid`, `RoleGuid`, `AgendaGuid` (optional — null = global role), `GrantedAt`. Implements IRelatedToUser, IRelatedToRole |
 
 All models extend `AbstractDatabaseLogModel` and implement `ILoadable<ViewModels.*>`.
@@ -36,6 +37,7 @@ All extend `LogViewModel` with INotifyPropertyChanged property tracking:
 | **Role** | Name, Description, IsSystem |
 | **RolePermission** | PermissionCode, GrantedAt |
 | **UserRole** | AgendaGuid, GrantedAt |
+| **UserSession** | TenantGuid, DeviceLabel, LastUsedAt, ExpiresAt, RevokedAt, RevokedReason (no hash, by design) |
 
 ### Filters (`Birko.Models.Users.Filters`)
 
@@ -51,6 +53,7 @@ All implement `IFilter<T>` with AND-combined nullable filter properties:
 | **Role** | Name, IsSystem |
 | **RolePermission** | RoleGuid, PermissionCode, PermissionCodePrefix (StartsWith) |
 | **UserRole** | UserGuid, RoleGuid, AgendaGuid, GlobalOnly (filters AgendaGuid == null) |
+| **UserSession** | UserGuid, TenantGuid, ActiveAt (not revoked, not expired) |
 
 ### Interfaces (`Birko.Models.Users`)
 
@@ -89,7 +92,19 @@ Filters/
 ### Authentication (UserLogin)
 - Multiple auth providers per user (local, Google, Apple, Microsoft, Facebook, GitHub)
 - `PasswordHash` only for local provider (Birko.Security PBKDF2)
-- `RefreshToken` / `RefreshTokenExpiry` for JWT refresh flow
+- `RefreshToken` / `RefreshTokenExpiry`: the single-token refresh flow from before sessions. Superseded by `UserSession`;
+  `UserSessionService` redeems a token still there once and clears it.
+
+### Sessions (`Sessions/`, TASK-805)
+- `UserSessionService` over `IAsyncBulkStore<UserSession>` (+ optional `UserTenant` store for the membership check, `UserLogin`
+  store for tokens from before sessions), `UserSessionOptions`, BCL `TimeProvider` (not Birko.Time.Abstractions: four of
+  the five consumer aggregators importing this project do not import it).
+- Rotation is a claim on the same row: filtered update `Guid == g && TokenHash == presented && RevokedAt == null`, then a
+  re-read (the Grants invitation pattern). A lost claim is `Raced` and revokes nothing; the previous token presented again
+  is `Reused` and revokes the session. Only the latest previous hash is kept.
+- An old `UserLogin.RefreshToken` is claimed with a one-off marker before the session is created, so two concurrent
+  redemptions cannot both open one.
+- Proof: `tests/Birko.Models.Users.SQL.Tests/UserSessionServiceTests.cs` on SQLite, nine mutations each caught.
 
 ### RBAC (Role, RolePermission, UserRole)
 - Permission codes follow `{module}:{entity}:{action}` convention
@@ -103,6 +118,7 @@ Filters/
 
 ## Dependencies
 - **Birko.Data.Core** — AbstractDatabaseLogModel, ILoadable, IDefault, IFilter
+- **Birko.Data.Stores** — `IAsyncBulkStore<T>`, `PropertyUpdate<T>` (the session service, TASK-805; every consumer aggregator importing this project already imported it)
 - **Birko.Data.SQL** — Table, UniqueField, PrecisionField, NamedField attributes
 
 ## Maintenance

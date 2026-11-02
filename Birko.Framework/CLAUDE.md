@@ -289,6 +289,14 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Login sessions: a row per signed-in device (2026-11-02)
+[[TASK-805]], for Symbio TASK-1035. `UserLogin` held one refresh token, so every sign-in, refresh or tenant switch
+signed the other devices out, and the token was stored in plain text. New `UserSession` (Birko.Models.Users) and
+`UserSessionService`: SHA-256 of the token on the row, rotation on every refresh as a claim (two tabs at once: one wins,
+nothing revoked), a rotated token presented again revokes the session, the tenant kept on the row while the user is a
+member and the app's hook agrees. Logout of one device or everywhere. An old `UserLogin.RefreshToken` is redeemed once
+onto a session; nobody is signed out at the upgrade. `UserSessionMapping` in Birko.Models.Users.SQL. Birko.Models.Users
+now imports Birko.Data.Stores (every consumer aggregator already does). Measured on SQLite.
 ### Birko.Xaml keeps a parity list with Birko.Web (2026-10-30)
 [[TASK-793]], [[TASK-794]] (FEATURE-021). New `Birko.Xaml.Avalonia/PARITY.md`: one row per Birko.Web component and per
 Birko.Web.Shell file, saying where it

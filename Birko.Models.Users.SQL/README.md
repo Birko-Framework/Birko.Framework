@@ -10,6 +10,7 @@ Canonical fluent SQL mappings for the `Birko.Models.Users` domain. Pairs with [`
 | `UserLoginMapping` | `UserLogins` | Provider, ProviderKey, PasswordHash, RefreshToken, DisplayName |
 | `UserProfileMapping` | `UserProfiles` | UserGuid unique; FirstName, LastName, DisplayName, Phone, AvatarUrl, Locale, TimeZone, Bio |
 | `UserRoleMapping` | `UserRoles` | — |
+| `UserSessionMapping` | `UserSessions` | TokenHash unique (64), PreviousTokenHash and UserGuid indexed, DeviceLabel, RevokedReason |
 | `UserTenantMapping` | `UserTenants` | — |
 | `RoleMapping` | `Roles` | Name unique, Description |
 | `RolePermissionMapping` | `RolePermissions` | PermissionCode |

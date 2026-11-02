@@ -16,6 +16,8 @@ Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidE
 Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
   -> Birko.Models (AbstractPercentage, AbstractTree, ValueData + Value Objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
     -> Birko.Models.Inventory / .Pricing / .Customers / .Users / .Product / .Category / .SEO (clean, no SQL attrs)
+       (.Users also <- Birko.Data.Stores for UserSessionService, TASK-805; measured: all five consumer aggregators
+        importing .Users already imported it)
     -> Birko.Models.SQL (ModelMap<T>, IModelMapping<T>, ModelMapRegistry — fluent SQL mapping framework only, no canonical mappings)
       -> Birko.Models.Users.SQL / .Customers.SQL / .Inventory.SQL / .Pricing.SQL / .Product.SQL
          (one optional sibling per domain — pre-built IModelMapping<T> for User/Role/Tenant, Address/Customer,
@@ -189,11 +191,11 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue) + Value Objects (Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
 - **Birko.Models.Product** (ISluggable from Name) / **.Category** (ISluggable from Title) / **.SEO**
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress
-- **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Tenant, UserTenant
+- **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Tenant, UserTenant, UserSession + UserSessionService (a row per signed-in device: hashed, rotating refresh tokens with reuse detection, the tenant on the row)
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
 - **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
 - **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry, FieldBuilder) — framework only, no canonical mappings
-- **Birko.Models.Users.SQL** - Canonical SQL mappings for `Birko.Models.Users`: UserMapping, UserLoginMapping, UserProfileMapping, UserRoleMapping, UserTenantMapping, RoleMapping, RolePermissionMapping, TenantMapping
+- **Birko.Models.Users.SQL** - Canonical SQL mappings for `Birko.Models.Users`: UserMapping, UserLoginMapping, UserProfileMapping, UserRoleMapping, UserSessionMapping, UserTenantMapping, RoleMapping, RolePermissionMapping, TenantMapping
 - **Birko.Models.Customers.SQL** - Canonical SQL mappings for `Birko.Models.Customers`: AddressMapping (Address + InvoiceAddress + ContactPerson), CustomerMapping
 - **Birko.Models.Inventory.SQL** - Canonical SQL mappings for `Birko.Models.Inventory`: StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping
 - **Birko.Models.Pricing.SQL** - Canonical SQL mappings for `Birko.Models.Pricing`: CurrencyMapping (Currency + Tax + PriceGroup)

@@ -24,6 +24,7 @@ Shared project — import in your `.csproj`:
 ## Dependencies
 
 - Birko.Data.Core (AbstractDatabaseLogModel, ILoadable, IDefault, IFilter)
+- Birko.Data.Stores (`IAsyncBulkStore<T>`, `PropertyUpdate<T>`: the session service)
 - Birko.Data.SQL (Table, UniqueField, PrecisionField, NamedField attributes)
 
 ## API Reference
@@ -40,6 +41,7 @@ Shared project — import in your `.csproj`:
 | **Role** | Named role: `Name`, `Description`, `IsSystem` |
 | **RolePermission** | Role → permission: `RoleGuid`, `PermissionCode`, `GrantedAt` |
 | **UserRole** | User → role: `UserGuid`, `RoleGuid`, `AgendaGuid` (optional), `GrantedAt` |
+| **UserSession** | A signed-in device: `UserGuid`, `UserLoginGuid`, `TokenHash`, `PreviousTokenHash`, `TenantGuid`, `DeviceLabel`, `LastUsedAt`, `ExpiresAt`, `RevokedAt`, `RevokedReason` |
 
 ### ViewModels (Birko.Models.Users.ViewModels)
 
@@ -56,10 +58,43 @@ Filter classes for all 8 models with nullable AND-combined properties. Notable:
 
 | Interface | Property | Implemented By |
 |-----------|----------|---------------|
-| **IRelatedToUser** | `Guid UserGuid` | UserAgenda, UserLogin, UserProfile, UserRole |
+| **IRelatedToUser** | `Guid UserGuid` | UserAgenda, UserLogin, UserProfile, UserRole, UserSession |
 | **IRelatedToAgenda** | `Guid AgendaGuid` | UserAgenda |
 | **IRelatedToRole** | `Guid RoleGuid` | RolePermission, UserRole |
 | **IRelatedToUserLogin** | `Guid UserLoginGuid` | (defined for future use) |
+
+### Sessions (Birko.Models.Users.Sessions, TASK-805)
+
+`UserSession` is one signed-in device: a row per refresh token. A sign-in on a phone no longer signs the PC out, and each
+device keeps its own tenant. `UserSessionService` issues, refreshes and revokes them over any `IAsyncBulkStore<T>`:
+
+```csharp
+var sessions = new UserSessionService(sessionStore, userTenantStore, userLoginStore, new UserSessionOptions
+{
+    Lifetime = TimeSpan.FromDays(7),
+    UserAllowed = (user, ct) => IsActiveAsync(user, ct),               // false signs the session out
+    TenantAllowed = (user, tenant, ct) => TenantIsActiveAsync(tenant, ct), // after the membership check
+    LegacyTenant = RefreshTokenTenant.TryRead,                          // a tenant your old tokens carried, if any
+});
+
+var issued = await sessions.CreateAsync(user, tenant, loginGuid, userAgent);   // issued.Token once; sid = issued.Session.Guid
+var refreshed = await sessions.RefreshAsync(token);                             // .Status, .Token, .Session.TenantGuid, .TenantDropped
+await sessions.SwitchTenantAsync(sid, user, newTenant);                         // this device only
+await sessions.RevokeAsync(sid, user);                                          // logout
+await sessions.RevokeAllAsync(user, SessionRevokeReasons.PasswordChanged);      // everywhere
+var devices = await sessions.ListActiveAsync(user);                             // view models, no hashes
+await sessions.PruneAsync();                                                    // from a recurring job
+```
+
+- The row stores SHA-256 of the token, never the token; the view model has no hash at all.
+- Every refresh rotates the token on the same row as a claim (a filtered update, then a re-read). Of two refreshes
+  with one token, one wins and the other gets `Raced`, with nothing revoked.
+- The token a row was last rotated from, presented again, is a reuse: the session is revoked (`Reused`).
+- A refresh keeps the tenant while the user is still in `UserTenants` and `TenantAllowed` agrees; otherwise
+  `TenantDropped` is set and you pick one as at login.
+- A token from before sessions, found on `UserLogin.RefreshToken`, is redeemed once onto a new session and the column
+  is cleared. Nobody is signed out by the upgrade. `RevokeAllAsync` clears that column too.
+- The service opens no transaction; run it inside your unit of work if you want one.
 
 ## Usage
 
