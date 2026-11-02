@@ -39,8 +39,8 @@ the builder uses neither.
       the routing.
 - [ ] `ModuleManifest.description` / `descriptionKey` and `ModuleOption.description` / `descriptionKey` (optional),
       resolved through the label resolver and passed to `RibbonItem.description` (tooltip).
-- [ ] The active module's pages group stays (an option the builder takes, default on), so an app can drop it once
-      the menus carry the pages. Existing callers compile and render as before apart from the split ▾.
+- [ ] The active module's pages group stays (an option the builder takes, default on). Symbio ruled for this layout
+      (prototype variant B, 2026-11-02): split ▾ on every module **and** the active module's pages group. Existing callers compile and render as before apart from the split ▾.
 - [ ] `b-ribbon` renders a split button's main part as a link (`<a href>`) when the item has `href` and no `action`,
       like a plain command: today it is always a `<button>` (`b-ribbon.ts` `_renderItem`, the `item.split` branch), so
       turning a module button into a split button loses middle-click / open in new tab. Found by the prototype
