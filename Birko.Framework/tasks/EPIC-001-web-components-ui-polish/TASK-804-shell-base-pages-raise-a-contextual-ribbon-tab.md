@@ -100,3 +100,6 @@ a11y-name and testing-smoke checks pass.
 Birko.Web main afc9edb, tagged **v0.4.3** locally; Playground main 616c965. Not pushed, at the user's word (batch the
 pushes to save CI runs): push both, with the tag, with the next batch. Symbio told before the merge; its dev server
 watches the local checkout, so it already builds on v0.4.3. Worktrees and branches removed.
+
+Symbio (2026-11-03): its shell keeps navigating on a category-tab click (the user's ruling), so a selected record's
+contextual tab closes with the page there. No framework change; recorded on Symbio TASK-1028.
