@@ -201,6 +201,10 @@ namespace Birko.Data.SQL.Connectors
             return !field.Table.Fields.Values.Any(f => StoredColumnName(f.Name) == time);
         }
 
+        /// <summary>TimescaleDB's own bucket function, the one provider that has it (TASK-706).</summary>
+        protected override string TimeBucketExpression(System.TimeSpan interval, string column)
+            => $"time_bucket({IntervalSecondsLiteral(interval)}, {column})";
+
         protected override void CreateTableCore(string name, IEnumerable<string> fields)
         {
             base.CreateTableCore(name, fields);

@@ -289,6 +289,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL aggregates refuse names that are not columns (2026-11-03)
+[[TASK-706]]. An aggregate query's group-by field, source, time column and ORDER BY key reached the SQL text as
+written when they named no property (measured on SQLite: `SUM(length(Name))` and `ORDER BY random()` ran), and an
+interval that did not parse went into `time_bucket('…')` as written (measured live on TimescaleDB). Each is now
+resolved against the table's columns or refused with `ArgumentException`; the interval is parsed and rendered as seconds.
+Time buckets are TimescaleDB's: other SQL providers refuse them with `NotSupportedException` (they failed at the
+database). One of `TimeBucketInterval` / `TimeColumn` alone is refused, as the in-memory aggregation already did.
 ### Login sessions: a row per signed-in device (2026-11-02)
 [[TASK-805]], for Symbio TASK-1035. `UserLogin` held one refresh token, so every sign-in, refresh or tenant switch
 signed the other devices out, and the token was stored in plain text. New `UserSession` (Birko.Models.Users) and

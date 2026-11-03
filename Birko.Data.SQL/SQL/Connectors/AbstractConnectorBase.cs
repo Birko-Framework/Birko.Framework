@@ -1725,24 +1725,47 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Resolves a C# property name to its SQL column name using loaded field metadata.
+        /// Resolves an aggregate query's property name (or its column name) to the SQL column, or refuses it.
+        /// <para>TASK-706 (SH-T696-01): a name that matched no property used to be returned as written, so a caller's
+        /// group-by field, aggregate source or time column reached the SQL text as SQL (measured on SQLite:
+        /// <c>SUM(length(Name))</c> ran). The metadata lookup is the whitelist (rule 15).</para>
         /// </summary>
-        protected static string ResolveSqlName(IEnumerable<Birko.Data.SQL.Fields.AbstractField> fields, string propertyName)
+        protected static string ResolveSqlName(IEnumerable<Birko.Data.SQL.Fields.AbstractField> fields, string propertyName, string role)
         {
-            var field = fields.FirstOrDefault(f =>
-                f.Property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
+            var list = fields as IList<Birko.Data.SQL.Fields.AbstractField> ?? fields.ToList();
+            var field = list.FirstOrDefault(f => f.Property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                ?? list.FirstOrDefault(f => f.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
             if (field != null)
                 return field.Name;
 
-            // Fallback: use property name as-is
-            return propertyName;
+            throw new ArgumentException(
+                $"Aggregate {role} '{propertyName}' does not resolve to a column. Name a mapped property or its column.",
+                nameof(propertyName));
         }
+
+        /// <summary>
+        /// The SELECT expression that puts <paramref name="column"/> into buckets of <paramref name="interval"/>.
+        /// <para>TASK-706: only TimescaleDB has <c>time_bucket</c>, which this used to emit on every provider (measured on
+        /// SQLite: "no such function: time_bucket"). A provider without a bucket function refuses (rule 41); the
+        /// in-memory aggregation (<c>AggregateHelper</c>) buckets any store's rows.</para>
+        /// </summary>
+        protected virtual string TimeBucketExpression(TimeSpan interval, string column)
+            => throw new NotSupportedException(
+                $"{GetType().Name} has no time bucket function: an aggregate time bucket needs TimescaleDB (time_bucket). "
+                + "Aggregate in the application (AggregateHelper) on other providers.");
+
+        /// <summary>
+        /// An interval as a PostgreSQL interval literal of whole and fractional seconds. Made only of the parsed
+        /// number, so no caller text reaches the SQL (TASK-706); exact, where the old "N hours" truncated 90 minutes.
+        /// </summary>
+        protected static string IntervalSecondsLiteral(TimeSpan interval)
+            => $"INTERVAL '{interval.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} seconds'";
 
         /// <summary>
         /// Builds SELECT and GROUP BY field dictionaries for an aggregation query.
         /// Shared by sync and async aggregate connectors to avoid duplicating query-building logic.
         /// </summary>
-        protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions) BuildAggregateQueryParts<T>(
+        protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields) BuildAggregateQueryParts<T>(
             Type type,
             Birko.Data.Stores.AggregateQuery<T> query)
             where T : Models.AbstractModel
@@ -1751,21 +1774,32 @@ namespace Birko.Data.SQL.Connectors
             var groupFields = new Dictionary<int, string>();
             int idx = 0;
 
-            var allFields = DataBase.LoadFields(type);
+            var allFields = DataBase.LoadFields(type).ToList();
+            // What an ORDER BY key may name: a group-by field (property or column), an aggregate alias, the bucket.
+            var orderable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var groupBy in query.GroupByFields)
             {
-                var sqlName = ResolveSqlName(allFields, groupBy);
+                var sqlName = ResolveSqlName(allFields, groupBy, "group-by field");
                 fields[idx] = sqlName;
                 groupFields[idx] = sqlName;
+                orderable[groupBy] = sqlName;
+                orderable[sqlName] = sqlName;
                 idx++;
             }
 
-            if (!string.IsNullOrEmpty(query.TimeBucketInterval) && !string.IsNullOrEmpty(query.TimeColumn))
+            if (!string.IsNullOrEmpty(query.TimeBucketInterval) || !string.IsNullOrEmpty(query.TimeColumn))
             {
-                var timeCol = ResolveSqlName(allFields, query.TimeColumn);
-                var interval = Birko.Data.Stores.TimeIntervalParser.ToSqlInterval(query.TimeBucketInterval);
-                fields[idx] = $"time_bucket('{interval}', {timeCol}) AS bucket_time";
+                // As AggregateHelper does: one without the other, or an interval that does not parse, is refused. An
+                // unparseable interval used to go into time_bucket('…') as written (measured live on TimescaleDB).
+                if (string.IsNullOrEmpty(query.TimeBucketInterval) || string.IsNullOrEmpty(query.TimeColumn))
+                    throw new ArgumentException("Time bucketing needs both TimeBucketInterval and TimeColumn.", nameof(query));
+                var interval = Birko.Data.Stores.TimeIntervalParser.Parse(query.TimeBucketInterval);
+                if (interval <= TimeSpan.Zero)
+                    throw new ArgumentException($"Time bucket interval '{query.TimeBucketInterval}' is not a positive interval.", nameof(query));
+                var timeCol = ResolveSqlName(allFields, query.TimeColumn, "time column");
+                fields[idx] = $"{TimeBucketExpression(interval, timeCol)} AS bucket_time";
                 groupFields[idx] = "bucket_time";
+                orderable["bucket_time"] = "bucket_time";
                 idx++;
             }
 
@@ -1775,16 +1809,33 @@ namespace Birko.Data.SQL.Connectors
                 var funcName = GetSqlFunctionName(agg.Function);
                 var sqlFunc = agg.Function == Birko.Data.Stores.AggregateFunction.Count
                     ? "COUNT(*)"
-                    : $"{funcName}({ResolveSqlName(allFields, agg.SourcePropertyName)})";
+                    : $"{funcName}({ResolveSqlName(allFields, agg.SourcePropertyName, "source")})";
                 fields[idx] = $"{sqlFunc} AS {QuoteIdentifier(alias)}";
+                orderable[alias] = QuoteIdentifier(alias);
                 idx++;
+            }
+
+            // TASK-706: SelectAggregate passed query.OrderBy to CreateSelectCommand as written, the ORDER BY sink TASK-110
+            // closed for ordinary reads (measured: ORDER BY random() ran). Each key is resolved here or refused.
+            Dictionary<string, bool>? orderFields = null;
+            if (query.OrderBy != null && query.OrderBy.Count > 0)
+            {
+                orderFields = new Dictionary<string, bool>(query.OrderBy.Count);
+                foreach (var kvp in query.OrderBy)
+                {
+                    if (!orderable.TryGetValue(kvp.Key, out var sql))
+                        throw new ArgumentException(
+                            $"Aggregate ORDER BY key '{kvp.Key}' is neither a group-by field, an aggregate alias nor bucket_time.",
+                            nameof(query));
+                    orderFields[sql] = kvp.Value;
+                }
             }
 
             var conditions = query.Filter != null
                 ? DataBase.ParseConditionExpression(query.Filter as System.Linq.Expressions.LambdaExpression)
                 : null;
 
-            return (fields, groupFields, conditions);
+            return (fields, groupFields, conditions, orderFields);
         }
 
         /// <summary>

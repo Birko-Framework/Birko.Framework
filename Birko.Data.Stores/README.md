@@ -24,7 +24,7 @@ Settings (Location, Name)
 
 - `IStore<T>` / `IAsyncStore<T>` — Single-entity CRUD operations
 - `IBulkStore<T>` / `IAsyncBulkStore<T>` — Batch operations with filtering, ordering, paging, filter-based update/delete
-- `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` — Optional server-side aggregation (GROUP BY, SUM, AVG, MIN, MAX, COUNT with time bucketing)
+- `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` — Optional server-side aggregation (GROUP BY, SUM, AVG, MIN, MAX, COUNT with time bucketing). Names are property (or column) names, refused when they resolve to nothing; on SQL stores only TimescaleDB buckets by time, other SQL providers refuse it (TASK-706)
 - `PropertyUpdate<T>` — Fluent builder for native partial property updates (SQL SET, MongoDB $set, ES scripts)
 - `IStoreWrapper` — Decorator pattern for store composition
 - `ITransactionalStore<T, TContext>` — External transaction participation

@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
             var table = DataBase.LoadTable(type);
             if (table == null) yield break;
 
-            var (fields, groupFields, conditions) = BuildAggregateQueryParts(type, query);
+            var (fields, groupFields, conditions, orderFields) = BuildAggregateQueryParts(type, query);
 
             foreach (var row in RunReaderCommand(
                 command =>
@@ -30,7 +30,7 @@ namespace Birko.Data.SQL.Connectors
                         null,
                         conditions,
                         groupFields.Count > 0 ? groupFields : null,
-                        query.OrderBy,
+                        orderFields,
                         query.Limit,
                         query.Offset);
                 },

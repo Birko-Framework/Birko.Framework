@@ -45,7 +45,11 @@ namespace Birko.Data.Stores
         /// <summary>Aggregate computations to apply per group.</summary>
         public IReadOnlyList<AggregateField> Aggregates { get; init; } = [];
 
-        /// <summary>Optional time-bucket interval (e.g. "1 hour", "5 minutes"). Used by TimescaleDB time_bucket / PostgreSQL date_trunc.</summary>
+        /// <summary>
+        /// Optional time-bucket interval (e.g. "1 hour", "5 minutes", "00:15:00"); needs <see cref="TimeColumn"/>, and an interval
+        /// that does not parse is refused. On SQL stores only TimescaleDB buckets (time_bucket); other SQL providers refuse
+        /// it (TASK-706). The in-memory aggregation buckets any store's rows.
+        /// </summary>
         public string? TimeBucketInterval { get; init; }
 
         /// <summary>Property name of the time column for time-bucketing.</summary>

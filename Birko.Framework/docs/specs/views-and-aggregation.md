@@ -1705,16 +1705,20 @@ The system SHALL let a SQL connector answer an `AggregateQuery<T>` with one `GRO
 through `SelectAggregate<T>(type, query)` (sync) and `SelectAggregateAsync<T>(type, query, ct)`
 (async, streaming), yielding nothing when `DataBase.LoadTable(type)` returns null. The statement
 SHALL select from the type's one table with no joins; each group-by field SHALL be both selected
-and grouped by; a time bucket, when both `TimeBucketInterval` and `TimeColumn` are set, SHALL be
-selected as `time_bucket('{TimeIntervalParser.ToSqlInterval(interval)}', {column}) AS bucket_time`
-and grouped by `bucket_time`; each aggregate SHALL be selected as `{FN}({column}) AS
-{QuoteIdentifier(ResolvedAlias)}`, a `Count` always as `COUNT(*)` whatever its source property; the
-filter SHALL be parsed with `DataBase.ParseConditionExpression`; and `query.OrderBy`, `Limit` and
-`Offset` SHALL be passed to the entity `CreateSelectCommand`. Every property name — group-by field,
-time column, aggregate source — SHALL be resolved to its SQL column by `ResolveSqlName`, which matches
-the type's field metadata case-insensitively on property name and, when nothing matches, **uses the
-supplied name as-is**. Each row SHALL become an `AggregateResult` keyed by the reader's column names,
-`DBNull` read as `null`.
+and grouped by; each aggregate SHALL be selected as `{FN}({column}) AS {QuoteIdentifier(ResolvedAlias)}`,
+a `Count` always as `COUNT(*)` whatever its source property; the filter SHALL be parsed with
+`DataBase.ParseConditionExpression`; `Limit` and `Offset` SHALL be passed to the entity `CreateSelectCommand`.
+Every property name — group-by field, time column, aggregate source — SHALL be resolved to its SQL column by
+`ResolveSqlName`, which matches the type's field metadata case-insensitively on property name, then on column name,
+and **throws `ArgumentException` naming the role and the name** when neither matches (TASK-706: the name used to be
+interpolated as written). Every `query.OrderBy` key SHALL be resolved before it reaches `CreateSelectCommand`: a
+group-by field (property or column name) to its column, an aggregate alias to the quoted alias, `bucket_time` to
+`bucket_time`; any other key SHALL throw `ArgumentException`. A time bucket SHALL need both `TimeBucketInterval` and
+`TimeColumn` (one alone throws `ArgumentException`), an interval `TimeIntervalParser.Parse` reads as a positive
+`TimeSpan` (otherwise `ArgumentException`), and is selected as the connector's `TimeBucketExpression(interval, column)
+AS bucket_time`, grouped by `bucket_time`: the base connector throws `NotSupportedException`, and TimescaleDB renders
+`time_bucket(INTERVAL '<seconds> seconds', column)` from the parsed `TimeSpan`, so no caller text reaches the SQL.
+Each row SHALL become an `AggregateResult` keyed by the reader's column names, `DBNull` read as `null`.
 
 #### Scenario: A grouped sum is one GROUP BY statement
 
@@ -1728,17 +1732,23 @@ supplied name as-is**. Each row SHALL become an `AggregateResult` keyed by the r
 - **When** the select list is built
 - **Then** the column is `COUNT(*) AS <quoted "n">` — the source property is not consulted
 
-#### Scenario: An unknown property name reaches the statement verbatim
+#### Scenario: An unknown property name is refused before the database sees it
 
-- **Given** a group-by field, time column or aggregate source naming no property of the type
+- **Given** a group-by field, time column or aggregate source naming no property or column of the type (e.g. `length(Name)`)
 - **When** the select list is built
-- **Then** `ResolveSqlName` returns the supplied text unchanged and it is interpolated into the SELECT / GROUP BY — no refusal is raised before the database sees it
+- **Then** `ArgumentException` is thrown naming the role ("group-by field", "time column", "source") and the name; nothing is sent
 
-#### Scenario: Time bucketing emits time_bucket
+#### Scenario: An ORDER BY key must name a group, an alias or the bucket
+
+- **Given** `OrderBy == { "total": true }` with an aggregate aliased `total`, or `{ "Name": false }` with `Name` grouped
+- **When** the statement is built
+- **Then** it orders by the quoted alias, or by `Name`'s column; a key such as `random()` throws `ArgumentException` instead
+
+#### Scenario: A time bucket only on a provider that has one
 
 - **Given** `TimeBucketInterval == "1 hour"` and `TimeColumn == "Created"`
 - **When** the select list is built
-- **Then** it contains `time_bucket('1 hours', Created) AS bucket_time` and `bucket_time` is a GROUP BY key — a TimescaleDB function, so on a provider without it the statement fails at the database; an interval `TimeIntervalParser` cannot parse is embedded between the quotes verbatim
+- **Then** on TimescaleDB it contains `time_bucket(INTERVAL '3600 seconds', Created) AS bucket_time` and `bucket_time` is a GROUP BY key; on any other SQL provider `NotSupportedException` is thrown; an interval that does not parse (`"soon"`, or text carrying SQL) throws `ArgumentException` on every provider
 
 ### Requirement: Pure aggregate computation
 
