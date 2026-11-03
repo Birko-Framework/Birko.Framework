@@ -2,7 +2,7 @@
 id: TASK-809
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-03
@@ -35,7 +35,8 @@ consumer whose `mustSee` names a page hits it. `manifest-smoke.ts`'s `expectSele
 - [x] A check that fails without it: Playground `testing-smoke-check.mjs` drives the real `runSmoke` with a real
       Playwright against a page whose hidden menu holds the heading's text first (2/4 before, 4/4 after).
 - [x] Symbio told when it is on Birko.Web main.
-- [ ] Symbio's gate re-run green (its smoke.spec.ts › Communication dashboard).
+- [x] Symbio's gate re-run green (its smoke.spec.ts › Communication dashboard): smoke and ribbon specs 19/19 on
+      v0.4.2 (Symbio, 2026-11-03).
 
 ## Out of scope
 

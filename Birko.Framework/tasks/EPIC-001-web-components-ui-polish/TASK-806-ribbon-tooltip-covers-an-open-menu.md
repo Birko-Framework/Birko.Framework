@@ -56,7 +56,10 @@ this now shows on every module with two or more pages.
 - [x] In the Playground's "Category ribbon (Shell)" card, hover Sales until its tooltip shows, then click its ▾.
       Expected: the tooltip is gone and the menu's first choices are visible; moving over the menu, or over another
       module while the menu is open, does not bring one back. **PASS (the user, 2026-11-03).**
-- [ ] Symbio, Commerce tab, E-Shop's ▾: the same.
+- [x] Symbio, Commerce tab, E-Shop's ▾: the same. Symbio's guard (`ribbon-module-menu.spec.ts`: Commerce tab click,
+      which re-renders, then E-Shop's ▾; no tooltip at once and 1 s later) was red 3 of 3 on v0.4.1 (also at 2 s and
+      5 s), green on v0.4.2. Hovering the main part before the ▾ click did not reproduce it; only the click path did,
+      which fits the re-render mechanism. Symbio has not seen the menu close after a ▾ click on re-render.
 
 ## Mechanism (measured 2026-11-03)
 
