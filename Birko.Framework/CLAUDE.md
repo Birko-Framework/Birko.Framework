@@ -281,6 +281,9 @@ immediately).
 ## Commands
 
 - **Build:** `dotnet build Birko.Framework.slnx --nologo`, from this directory — the command `build-and-test.yml` runs.
+  `build-and-test.yml` and `wiki-snippets.yml` skip a push that touches only `tasks/`, `docs/` or `*.md` (TASK-810;
+  `Birko.Xaml.Avalonia/PARITY.md` is read by a test and re-included). A test that starts reading a doc must be
+  re-included in both triggers there, or its change will not be built.
 - **Test one project:** `dotnet test --nologo` from `tests/Birko.{Project}.Tests/` (CI loops it over every `tests/*/`
   that has a `.csproj`).
 - **Consumer smoke harness:** `dotnet run --nologo` from `Birko/Consumers/Birko.Sandbox` — the only check that the

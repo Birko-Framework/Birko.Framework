@@ -1,7 +1,14 @@
 # Build the whole solution and run every suite that needs no server.
 #
-# 345 projects build in ~80s, so this is deliberately NOT path-filtered: a change anywhere can
+# 345 projects build in ~80s, so this is deliberately NOT filtered by project: a change anywhere can
 # break a shared project, and proving that in one build is the point of the monorepo.
+#
+# It IS filtered against what nothing here reads (TASK-810, to save Actions minutes, which ran out
+# at the end of October): task files, docs/ and Markdown. Measured 2026-11-03: no build step, test or
+# the Sandbox reads tasks/ or docs/, and the one .md a test opens is Birko.Xaml.Avalonia/PARITY.md,
+# re-included last (patterns apply in order; paths-ignore cannot re-include, hence `paths`). A push
+# touching only those starts no run. Nothing is packaged or tagged from this repo, so no release
+# depends on every main commit being built. A test that starts reading a doc must add it here.
 # Server-backed suites live in live-tests.yml.
 #
 # WHY THE BUCKET LAYOUT: Birko.Framework.slnx registers the Sandbox aggregator as
@@ -17,7 +24,19 @@ name: build-and-test
 on:
   push:
     branches: [main]
+    paths:
+      - '**'
+      - '!Birko.Framework/tasks/**'
+      - '!Birko.Framework/docs/**'
+      - '!**/*.md'
+      - 'Birko.Xaml.Avalonia/PARITY.md'
   pull_request:
+    paths:
+      - '**'
+      - '!Birko.Framework/tasks/**'
+      - '!Birko.Framework/docs/**'
+      - '!**/*.md'
+      - 'Birko.Xaml.Avalonia/PARITY.md'
   workflow_dispatch:
 
 jobs:

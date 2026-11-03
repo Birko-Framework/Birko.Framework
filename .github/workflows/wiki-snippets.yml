@@ -32,6 +32,10 @@ on:
       - 'ci/wiki-snippets/**'
       - '.github/workflows/wiki-snippets.yml'
       - 'Birko.*/**'          # an API change can invalidate the guide
+      # Birko.*/** also matches Birko.Framework/: task files, docs and Markdown change no API (TASK-810)
+      - '!Birko.Framework/tasks/**'
+      - '!Birko.Framework/docs/**'
+      - '!**/*.md'
   schedule:
     - cron: '30 2 * * *'      # nightly: the wiki can change without touching this repo
   workflow_dispatch:
