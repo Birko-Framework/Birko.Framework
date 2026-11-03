@@ -2,7 +2,7 @@
 id: TASK-803
 parent: EPIC-001
 feature: null
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-02
@@ -107,4 +107,10 @@ focus), `keyboard-check.mjs` (key-tip section) and `sortable-drag-check.mjs` (au
 bulk-bar). They passed at TASK-789 (2026-10-30), so the browser environment on this machine changed;
 ribbon-overflow-smoke passes alone (16/16). Measured 2026-11-02.
 
-Human test passed (the user, 2026-11-03). Pending: Symbio told, merge, tag v0.4.1 and push at the user's word.
+Human test passed (the user, 2026-11-03).
+
+## Merged (2026-11-03)
+
+Symbio told first; it saw no reason to hold (its `onItemClick` resolves by tab id, so the menu choices pass it by; no
+`actionOnly` pages), and TASK-1027 follows. Birko.Web main 66ac0ab, tagged **v0.4.1** and pushed; Playground main
+bb138b8, pushed. Worktrees and branches removed. The flaky focus/drag checks on main are left as recorded above.
