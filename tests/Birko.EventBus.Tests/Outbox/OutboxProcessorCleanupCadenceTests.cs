@@ -24,12 +24,12 @@ namespace Birko.EventBus.Tests.Outbox
 
             public Task SaveAsync(OutboxEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-            public Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(int batchSize, CancellationToken cancellationToken = default)
+            public Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
                 => Task.FromResult<IReadOnlyList<OutboxEntry>>(Array.Empty<OutboxEntry>());
 
-            public Task MarkPublishedAsync(Guid entryId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task MarkPublishedAsync(OutboxEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-            public Task MarkFailedAsync(Guid entryId, string error, int maxAttempts, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task MarkFailedAsync(OutboxEntry entry, string error, int maxAttempts, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
             public Task CleanupAsync(DateTime cutoffDate, CancellationToken cancellationToken = default)
             {

@@ -72,9 +72,10 @@ public class Task174OutboxTests
         clock.Advance(TimeSpan.FromMinutes(1));
         (await store.GetPendingAsync(10)).Should().BeEmpty("the claim is one minute old by the store's clock");
         clock.Advance(TimeSpan.FromMinutes(5));
-        (await store.GetPendingAsync(10)).Should().ContainSingle("past the stale timeout by the same clock, it is reclaimed");
+        var reclaimed = await store.GetPendingAsync(10);
+        reclaimed.Should().ContainSingle("past the stale timeout by the same clock, it is reclaimed");
 
-        await store.MarkPublishedAsync(entry.Guid);
+        await store.MarkPublishedAsync(reclaimed[0]);
         entry.PublishedAt.Should().Be(clock.UtcNow);
     }
 

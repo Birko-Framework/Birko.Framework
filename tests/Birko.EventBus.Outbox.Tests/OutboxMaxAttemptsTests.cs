@@ -41,13 +41,13 @@ public class OutboxMaxAttemptsTests
         var entry = new OutboxEntry { EventType = "x", Payload = "{}" };
         await store.SaveAsync(entry);
 
-        await store.MarkFailedAsync(entry.Guid, "e1", maxAttempts: 3, CancellationToken.None);
+        await store.MarkFailedAsync((await store.GetPendingAsync(10)).Single(), "e1", maxAttempts: 3, CancellationToken.None);
         entry.Status.Should().Be(OutboxStatus.Pending);   // 1/3
 
-        await store.MarkFailedAsync(entry.Guid, "e2", maxAttempts: 3, CancellationToken.None);
+        await store.MarkFailedAsync((await store.GetPendingAsync(10)).Single(), "e2", maxAttempts: 3, CancellationToken.None);
         entry.Status.Should().Be(OutboxStatus.Pending);   // 2/3
 
-        await store.MarkFailedAsync(entry.Guid, "e3", maxAttempts: 3, CancellationToken.None);
+        await store.MarkFailedAsync((await store.GetPendingAsync(10)).Single(), "e3", maxAttempts: 3, CancellationToken.None);
         entry.Status.Should().Be(OutboxStatus.Failed);    // 3/3 — cap reached
         entry.Attempts.Should().Be(3);
     }

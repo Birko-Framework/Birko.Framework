@@ -61,7 +61,7 @@ namespace Birko.EventBus.Outbox.Publishing
         /// </summary>
         public async Task<int> ProcessBatchAsync(CancellationToken cancellationToken = default)
         {
-            var entries = await _store.GetPendingAsync(_options.BatchSize, cancellationToken).ConfigureAwait(false);
+            var entries = await _store.GetPendingAsync(_options.BatchSize, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
             if (entries.Count == 0)
             {
                 return 0;
@@ -78,7 +78,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var eventType = Type.GetType(entry.EventType);
                     if (eventType == null)
                     {
-                        await _store.MarkFailedAsync(entry.Guid, $"Cannot resolve type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry, $"Cannot resolve type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -86,7 +86,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var @event = _serializer.Deserialize(entry.Payload, eventType) as IEvent;
                     if (@event == null)
                     {
-                        await _store.MarkFailedAsync(entry.Guid, $"Cannot deserialize payload for type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry, $"Cannot deserialize payload for type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -103,7 +103,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     await _scopeAccessor
                         .RunWithScopeAsync(scopeContext, () => PublishEventAsync(@event, cancellationToken), cancellationToken)
                         .ConfigureAwait(false);
-                    await _store.MarkPublishedAsync(entry.Guid, cancellationToken).ConfigureAwait(false);
+                    await _store.MarkPublishedAsync(entry, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -119,7 +119,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     // CR-M189: record the underlying cause, not the opaque reflection wrapper
                     // ("Exception has been thrown by the target of an invocation.").
                     var cause = Unwrap(ex);
-                    await _store.MarkFailedAsync(entry.Guid, cause.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                    await _store.MarkFailedAsync(entry, cause.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
             }

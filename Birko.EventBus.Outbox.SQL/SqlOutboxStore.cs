@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.SQL.Connectors;
@@ -37,10 +38,10 @@ namespace Birko.EventBus.Outbox.SQL
     /// the intended answer, and handlers that write rows need to be idempotent regardless.
     /// </para>
     /// <para>
-    /// ⚠ <b>A claim is not a lease.</b> If a processor dies mid-batch its claimed entries stay
-    /// <c>Publishing</c> and no one retries them, because nothing here knows the holder is gone. That is
-    /// a deliberate limit of this first version, not an oversight — reclaiming needs either a heartbeat
-    /// or an age-based sweep, and both need a policy decision about how long "too long" is.
+    /// <b>A claim is a lease.</b> An entry held in <c>Publishing</c> longer than the claim timeout is
+    /// reclaimed (TASK-451), and the reclaim is won by at most one processor (TASK-710). A mark carries
+    /// the claim it was handed out under and applies only while that claim is current, so a slow
+    /// processor whose entry was reclaimed cannot put it back to <c>Pending</c> or over a newer outcome.
     /// </para>
     /// </remarks>
     public class SqlOutboxStore<DB> : IOutboxStore
@@ -63,8 +64,9 @@ namespace Birko.EventBus.Outbox.SQL
         private readonly TimeSpan _claimTimeout;
 
         /// <summary>
-        /// Attempts before a repeatedly-reclaimed entry is given up on. Defaults to
-        /// <c>OutboxOptions.MaxAttempts</c>'s own default so the two do not silently disagree.
+        /// The attempt cap for <see cref="GetPendingAsync(int, CancellationToken)"/> only, a caller with no
+        /// <c>OutboxOptions</c>. The processor passes <c>OutboxOptions.MaxAttempts</c> through
+        /// <see cref="GetPendingAsync(int, int, CancellationToken)"/>, so the two cannot disagree (TASK-710).
         /// </summary>
         private readonly int _maxAttempts;
 
@@ -94,8 +96,13 @@ namespace Birko.EventBus.Outbox.SQL
             await _store.CreateAsync(OutboxEntryModel.FromEntry(entry), ct: cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(
+        /// <summary>Claims a batch with the attempt cap this store was constructed with.</summary>
+        public Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(
             int batchSize, CancellationToken cancellationToken = default)
+            => GetPendingAsync(batchSize, _maxAttempts, cancellationToken);
+
+        public async Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(
+            int batchSize, int maxAttempts, CancellationToken cancellationToken = default)
         {
             if (batchSize <= 0) return Array.Empty<OutboxEntry>();
 
@@ -122,34 +129,46 @@ namespace Birko.EventBus.Outbox.SQL
             {
                 var id = candidate.Guid;
                 var token = Guid.NewGuid();
-                var origin = candidate.Status;
-                var reclaiming = origin == publishing;
+                var reclaiming = candidate.Status == publishing;
+                var seenAttempts = candidate.Attempts;
+
+                // Conditional on the row still being as we read it, so the database serializes the write
+                // and only one processor's WHERE can match. TASK-710: Status alone could not tell. A
+                // reclaim writes Publishing over Publishing, so a second processor's reclaim matched after
+                // the first one's and both published (measured); the winner's write moves ClaimedAt to
+                // now, so "still stale" matches one reclaim at most. A Pending claim also requires the
+                // attempts it read: an entry claimed and failed back to Pending in between matched, and
+                // the late claim wound Attempts back (measured). As SqlJobQueue (TASK-575, TASK-158).
+                Expression<Func<OutboxEntryModel, bool>> stillEligible = reclaiming
+                    ? e => e.Guid == id && e.Status == publishing && e.ClaimedAt != null && e.ClaimedAt < staleBefore
+                    : e => e.Guid == id && e.Status == pending && e.Attempts == seenAttempts;
 
                 // TASK-451: reclaiming has to be bounded, or an entry whose publish kills the processor
-                // every time is handed round forever and the failure never surfaces.
-                if (reclaiming && candidate.Attempts + 1 >= _maxAttempts)
+                // every time is handed round forever and the failure never surfaces. TASK-710: guarded
+                // like the claim; it wrote the whole row back, over whatever had happened since the read.
+                if (reclaiming && seenAttempts + 1 >= maxAttempts)
                 {
-                    candidate.Attempts += 1;
-                    candidate.Status = (int)OutboxStatus.Failed;
-                    candidate.ClaimToken = null;
-                    candidate.ClaimedAt = null;
-                    candidate.LastError = $"Abandoned: held in Publishing for longer than {_claimTimeout} "
-                        + $"after {candidate.Attempts} attempt(s), and the attempt budget is spent.";
-                    await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+                    await _store.UpdateAsync(
+                        filter: stillEligible,
+                        updates: new PropertyUpdate<OutboxEntryModel>()
+                            .Set(e => e.Status, (int)OutboxStatus.Failed)
+                            .Set(e => e.Attempts, seenAttempts + 1)
+                            .Set(e => e.ClaimToken, (Guid?)null)
+                            .Set(e => e.ClaimedAt, (DateTime?)null)
+                            .Set(e => e.LastError, $"Abandoned: held in Publishing for longer than {_claimTimeout} "
+                                + $"after {seenAttempts + 1} attempt(s), and the attempt budget is spent."),
+                        ct: cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
-                // Conditional on the row still being in the status we read it in, so the database
-                // serializes the write and only one processor's WHERE can match. Same shape as
-                // SqlJobQueue's dequeue claim.
                 await _store.UpdateAsync(
-                    filter: e => e.Guid == id && e.Status == origin,
+                    filter: stillEligible,
                     updates: new PropertyUpdate<OutboxEntryModel>()
                         .Set(e => e.Status, publishing)
                         .Set(e => e.ClaimToken, token)
                         .Set(e => e.ClaimedAt, now)
                         // A redelivery is counted, or the attempt budget above could never run out.
-                        .Set(e => e.Attempts, reclaiming ? candidate.Attempts + 1 : candidate.Attempts),
+                        .Set(e => e.Attempts, reclaiming ? seenAttempts + 1 : seenAttempts),
                     ct: cancellationToken).ConfigureAwait(false);
 
                 // The API exposes no rows-affected count, so the token is how we learn whether we won.
@@ -163,16 +182,21 @@ namespace Birko.EventBus.Outbox.SQL
             return claimed;
         }
 
-        public async Task MarkPublishedAsync(Guid entryId, CancellationToken cancellationToken = default)
+        // TASK-710: each mark is one update guarded by the entry's claim. They read the row by id and wrote it back, so a
+        // processor whose entry had been reclaimed put it back to Pending while the new holder was publishing it (a third
+        // claim followed), or turned a Published entry back to Pending (both measured).
+        public async Task MarkPublishedAsync(OutboxEntry entry, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(e => e.Guid == entryId, cancellationToken).ConfigureAwait(false);
-            if (model == null) return;
+            var (id, token) = Claim(entry);
+            var publishing = (int)OutboxStatus.Publishing;
 
-            model.Status = (int)OutboxStatus.Published;
-            model.PublishedAt = DateTime.UtcNow;
-            model.ClaimToken = null;
-
-            await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
+            await _store.UpdateAsync(
+                filter: e => e.Guid == id && e.Status == publishing && e.ClaimToken == token,
+                updates: new PropertyUpdate<OutboxEntryModel>()
+                    .Set(e => e.Status, (int)OutboxStatus.Published)
+                    .Set(e => e.PublishedAt, DateTime.UtcNow)
+                    .Set(e => e.ClaimToken, (Guid?)null),
+                ct: cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -186,20 +210,33 @@ namespace Birko.EventBus.Outbox.SQL
         /// life of the deployment, and the failure would never surface anywhere.
         /// </remarks>
         public async Task MarkFailedAsync(
-            Guid entryId, string error, int maxAttempts, CancellationToken cancellationToken = default)
+            OutboxEntry entry, string error, int maxAttempts, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(e => e.Guid == entryId, cancellationToken).ConfigureAwait(false);
+            var (id, token) = Claim(entry);
+            var publishing = (int)OutboxStatus.Publishing;
+            Expression<Func<OutboxEntryModel, bool>> held = e => e.Guid == id && e.Status == publishing && e.ClaimToken == token;
+
+            var model = await _store.ReadAsync(held, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
-            model.Attempts += 1;
-            model.LastError = error?.Length > 2000 ? error[..2000] : error;
-            model.ClaimToken = null;
-            model.ClaimedAt = null;
-            model.Status = model.Attempts >= maxAttempts
-                ? (int)OutboxStatus.Failed
-                : (int)OutboxStatus.Pending;
+            var attempts = model.Attempts + 1;
+            await _store.UpdateAsync(
+                filter: held,
+                updates: new PropertyUpdate<OutboxEntryModel>()
+                    .Set(e => e.Attempts, attempts)
+                    .Set(e => e.LastError, error?.Length > 2000 ? error[..2000] : error)
+                    .Set(e => e.ClaimToken, (Guid?)null)
+                    .Set(e => e.ClaimedAt, (DateTime?)null)
+                    .Set(e => e.Status, attempts >= maxAttempts ? (int)OutboxStatus.Failed : (int)OutboxStatus.Pending),
+                ct: cancellationToken).ConfigureAwait(false);
+        }
 
-            await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
+        private static (Guid Id, Guid Token) Claim(OutboxEntry entry)
+        {
+            if (entry == null) throw new ArgumentNullException(nameof(entry));
+            if (entry.ClaimToken is not Guid token)
+                throw new ArgumentException("The entry carries no claim token: only an entry GetPendingAsync handed out can be marked.", nameof(entry));
+            return (entry.Guid, token);
         }
 
         /// <summary>

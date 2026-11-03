@@ -55,7 +55,7 @@ namespace Birko.EventBus.Tests.Outbox
             var entry = CreateEntry();
             await store.SaveAsync(entry);
 
-            await store.MarkPublishedAsync(entry.Guid);
+            await store.MarkPublishedAsync((await store.GetPendingAsync(10)).Single());
 
             var all = store.GetAll();
             all.Should().ContainSingle()
@@ -70,7 +70,7 @@ namespace Birko.EventBus.Tests.Outbox
             var entry = CreateEntry();
             await store.SaveAsync(entry);
 
-            await store.MarkFailedAsync(entry.Guid, "Connection refused", maxAttempts: 5);
+            await store.MarkFailedAsync((await store.GetPendingAsync(10)).Single(), "Connection refused", maxAttempts: 5);
 
             var all = store.GetAll();
             all[0].Attempts.Should().Be(1);
@@ -88,7 +88,7 @@ namespace Birko.EventBus.Tests.Outbox
             // Fail 5 times (default max in InMemoryOutboxStore)
             for (int i = 0; i < 5; i++)
             {
-                await store.MarkFailedAsync(entry.Guid, $"Attempt {i + 1}", maxAttempts: 5);
+                await store.MarkFailedAsync((await store.GetPendingAsync(10)).Single(), $"Attempt {i + 1}", maxAttempts: 5);
             }
 
             store.GetAll()[0].Status.Should().Be(OutboxStatus.Failed);

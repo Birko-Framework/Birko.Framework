@@ -71,6 +71,14 @@ namespace Birko.EventBus.Outbox
         public DateTime? ClaimedAt { get; set; }
 
         /// <summary>
+        /// The claim this copy was handed out under by <see cref="IOutboxStore.GetPendingAsync(int, int, System.Threading.CancellationToken)"/>.
+        /// A mark passes it back, and the store applies the mark only while that claim is still the
+        /// current one, so a processor whose entry was reclaimed cannot overwrite the new holder (TASK-710).
+        /// Null on an entry that was not handed out by a claim.
+        /// </summary>
+        public Guid? ClaimToken { get; set; }
+
+        /// <summary>
         /// Number of publish attempts made.
         /// </summary>
         public int Attempts { get; set; }

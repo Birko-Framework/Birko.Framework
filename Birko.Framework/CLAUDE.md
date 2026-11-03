@@ -292,6 +292,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Outbox marks carry the claim; a stale reclaim is won once (2026-11-03)
+[[TASK-710]]. Two processors reclaiming one stale SQL outbox row both published it, and a slow processor whose
+entry was reclaimed put it back to `Pending` under the new holder or a `Published` row back to `Pending`
+(measured). Each claim and mark is now one guarded update. **Breaking:** `MarkPublishedAsync(OutboxEntry)` and
+`MarkFailedAsync(OutboxEntry, …)` take the claimed entry (it carries the new `ClaimToken`), and
+`GetPendingAsync(batchSize, maxAttempts)` takes `OutboxOptions.MaxAttempts`, so reclaims count against it.
+Measured on SQLite, PostgreSQL and SQL Server.
 ### Tenant middleware clears the tenant in a finally (2026-11-03)
 [[TASK-708]]. `Birko.Data.Tenant`'s `TenantMiddleware` cleared the tenant after the pipeline with no `finally`, and
 cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw
@@ -367,11 +374,6 @@ closed with `LocalizationSqlMappings.Register<TTranslation>(registry, table)`.
 The whole send now returns at the deadline as a `Transient` failure; the caller's cancellation still throws. New
 `MessageResult.FailureKind` (Transient / Permanent / Unknown), set from the SMTP reply code and inner exception.
 Measured with a real `SmtpClient` against a stub server. Symbio can drop its linked-CTS and reclassification workarounds.
-### A decorator's retry no longer poisons the caller's unit (2026-10-21)
-[[TASK-697]]. A slug decorator over a localized store with `SqlLocalizedWriteBoundary`, in your `SqlUnitOfWork`, retried
-a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL
-Server. A write declared retried (`RetryableWrite.IsDeclared`) now runs in a savepoint: a failure is undone and your
-unit stays committable. New `SqlSavepoint`. MongoDB and RavenDB have no savepoints and still refuse the commit.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -284,9 +284,11 @@ Implement `IOutboxStore` for your database:
 public interface IOutboxStore
 {
     Task SaveAsync(OutboxEntry entry, CancellationToken ct = default);
-    Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(int batchSize, CancellationToken ct = default);
-    Task MarkPublishedAsync(Guid entryId, CancellationToken ct = default);
-    Task MarkFailedAsync(Guid entryId, string error, CancellationToken ct = default);
+    // Claims a batch; each entry carries the ClaimToken it was claimed under.
+    Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(int batchSize, int maxAttempts, CancellationToken ct = default);
+    // Apply only while the entry's claim is current (TASK-710).
+    Task MarkPublishedAsync(OutboxEntry entry, CancellationToken ct = default);
+    Task MarkFailedAsync(OutboxEntry entry, string error, int maxAttempts, CancellationToken ct = default);
     Task CleanupAsync(DateTime cutoffDate, CancellationToken ct = default);
 }
 

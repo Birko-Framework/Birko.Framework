@@ -118,9 +118,9 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         var store = NewStore();
         var entry = Entry();
         await store.SaveAsync(entry);
-        await store.GetPendingAsync(10);
+        var claimed = await store.GetPendingAsync(10);
 
-        await store.MarkPublishedAsync(entry.Guid);
+        await store.MarkPublishedAsync(claimed[0]);
 
         (await store.GetPendingAsync(10)).Should().BeEmpty();
     }
@@ -131,9 +131,9 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
         var store = NewStore();
         var entry = Entry();
         await store.SaveAsync(entry);
-        await store.GetPendingAsync(10);
+        var claimed = await store.GetPendingAsync(10);
 
-        await store.MarkFailedAsync(entry.Guid, "transport down", maxAttempts: 3);
+        await store.MarkFailedAsync(claimed[0], "transport down", maxAttempts: 3);
 
         var pending = await store.GetPendingAsync(10);
         pending.Should().ContainSingle(e => e.Guid == entry.Guid);
@@ -150,8 +150,8 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
 
         for (var i = 0; i < 3; i++)
         {
-            await store.GetPendingAsync(10);
-            await store.MarkFailedAsync(entry.Guid, "still down", maxAttempts: 3);
+            var claimed = await store.GetPendingAsync(10);
+            await store.MarkFailedAsync(claimed[0], "still down", maxAttempts: 3);
         }
 
         (await store.GetPendingAsync(10)).Should().BeEmpty(

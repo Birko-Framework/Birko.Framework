@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-21 — A decorator's retry no longer poisons the caller's unit
+[[TASK-697]]. A slug decorator over a localized store with `SqlLocalizedWriteBoundary`, in your `SqlUnitOfWork`, retried
+a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL
+Server. A write declared retried (`RetryableWrite.IsDeclared`) now runs in a savepoint: a failure is undone and your
+unit stays committable. New `SqlSavepoint`. MongoDB and RavenDB have no savepoints and still refuse the commit.
+
 ## 2026-10-21 — The 500-GUID chunk budget is measured off SQL
 
 [[TASK-701]]. A broad match on a translated field (2 200 of 3 300 entities) was counted, paged and deleted live on

@@ -43,7 +43,8 @@ OutboxProcessor (background)
 - OutboxProcessor uses reflection to call PublishAsync&lt;TEvent&gt; with the correct generic type
 - **Cleanup cadence (CR-L259):** the background loop calls `ProcessBatchAsync` every `PollingInterval`, but the retention prune (`CleanupIfDueAsync`) is throttled to `CleanupInterval` (default 1h) — a full retention scan/delete does not run every poll. `CleanupAsync` still runs unconditionally if called directly. `OutboxProcessor` takes an optional `IDateTimeProvider` for testable cadence
 - **Registration order-independent (CR-L260):** `AddOutbox` and `AddOutboxEventBus` may be called in either order — the `OutboxProcessor` factory resolves `IEventBus` lazily and unwraps the `OutboxEventBus` decorator to its inner bus, so the processor always publishes through the real transport, never back into the outbox. `AddOutbox` registers the processor/store/hosted service; `AddOutboxEventBus` is the one that decorates `IEventBus`
-- MarkFailed honors the configured `OutboxOptions.MaxAttempts` cap (passed into `IOutboxStore.MarkFailedAsync`), not a hardcoded value (CR-H115)
+- MarkFailed honors the configured `OutboxOptions.MaxAttempts` cap (passed into `IOutboxStore.MarkFailedAsync`), not a hardcoded value (CR-H115); `GetPendingAsync(batchSize, maxAttempts)` gets the same cap, so a reclaim counts against it (TASK-710)
+- Marks take the claimed `OutboxEntry`, not an id: the store applies a mark only while the entry's `ClaimToken` is current, so a processor whose entry was reclaimed changes nothing (TASK-710). `InMemoryOutboxStore` hands out copies for that reason
 - SQL store not included — implement IOutboxStore for your database
 
 ## Maintenance

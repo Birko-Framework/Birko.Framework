@@ -82,6 +82,7 @@ namespace Birko.EventBus.Outbox.SQL.Models
                 CreatedAt = CreatedAt,
                 PublishedAt = PublishedAt,
                 ClaimedAt = ClaimedAt,
+                ClaimToken = ClaimToken,
                 Attempts = Attempts,
                 LastError = LastError,
             };

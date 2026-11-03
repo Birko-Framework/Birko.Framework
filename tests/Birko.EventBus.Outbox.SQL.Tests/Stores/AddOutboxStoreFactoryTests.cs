@@ -163,7 +163,7 @@ public sealed class AddOutboxStoreFactoryTests : IDisposable
         };
 
         await store.SaveAsync(entry);
-        var pending = await store.GetPendingAsync(10);
+        var pending = await store.GetPendingAsync(10, maxAttempts: 5);
 
         pending.Should().ContainSingle(e => e.Guid == entry.Guid,
             "resolving the type is not the same as the wiring producing a working store");

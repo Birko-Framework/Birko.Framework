@@ -38,13 +38,20 @@ row back and comparing the token is how a losing processor learns it lost.
 crash in that window republishes on recovery. Mark-first-publish-second loses events instead, which is
 strictly worse.
 
-**A claim is not a lease.** A processor that dies mid-batch leaves its entries `Publishing` and nothing
-reclaims them. Deliberate for a first version — reclaiming needs a heartbeat or an age-based sweep, and
-both need a policy decision about how long "too long" is.
+**A claim is a lease.** An entry held in `Publishing` past the claim timeout (default 5 minutes) is reclaimed
+(TASK-451); the reclaim's update also requires the row to be still stale, so one processor wins it, and a
+`Pending` claim requires the attempts it read (TASK-710). A reclaim counts as an attempt.
 
-**`MarkFailedAsync` takes `maxAttempts` from the caller**, not a constant, because the core contract passes
-it from `OutboxOptions.MaxAttempts` — one place to configure it rather than one per store. Reaching the cap
-is terminal so a permanently failing handler stops being retried and the failure can be seen.
+**Marks carry the claim.** `MarkPublishedAsync(entry)` / `MarkFailedAsync(entry, …)` take the `OutboxEntry` the
+claim handed out and apply only while its `ClaimToken` is the row's; a processor whose entry was reclaimed changes
+nothing (TASK-710: it put the row back to `Pending` under the new holder, or a `Published` row back to `Pending`).
+An entry with no token is refused with `ArgumentException`.
+
+**`MarkFailedAsync` and `GetPendingAsync` take `maxAttempts` from the caller**, not a constant, because the core
+contract passes it from `OutboxOptions.MaxAttempts` — one place to configure it rather than one per store, and one
+budget for reclaims and failures (TASK-710). The constructor's `maxAttempts` serves only the convenience overload
+`GetPendingAsync(batchSize)`. Reaching the cap is terminal so a permanently failing handler stops being retried and
+the failure can be seen.
 
 **Cleanup deletes only `Published` and `Failed`.** A pending entry is the thing this table exists to
 protect; removing one for being old would destroy it exactly when something is already wrong.

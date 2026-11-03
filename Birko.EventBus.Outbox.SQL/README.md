@@ -54,9 +54,11 @@ apply.
 published; a crash in that window republishes it on recovery. The alternative — mark first, publish second
 — loses events instead, which is strictly worse. Consumers must tolerate a repeat.
 
-**A claim is not a lease.** If a processor dies mid-batch its entries stay `Publishing` and nothing
-reclaims them, because nothing here knows the holder is gone. Reclaiming needs a heartbeat or an age-based
-sweep, and both need a policy decision about how long "too long" is.
+**A claim is a lease.** An entry held in `Publishing` longer than the claim timeout (default 5 minutes) is
+offered again, and only one processor wins the reclaim. A mark is made with the entry the claim handed out
+(`MarkPublishedAsync(entry)`), and it changes nothing once the entry was reclaimed by another processor, so a
+slow processor cannot undo the new holder's work. A reclaim counts as an attempt against `OutboxOptions.MaxAttempts`.
+A handler that legitimately runs past the timeout will have its event published twice (at-least-once).
 
 **Durability is not atomicity.** Storing entries in the same database as the business write makes an atomic
 enqueue *possible*; whether the enqueue actually joins the caller's transaction is up to the caller.

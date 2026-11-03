@@ -925,7 +925,8 @@ SHALL default to `string.Empty`, never null.
 
 ### Requirement: Outbox batch processing publishes, marks, and never aborts the batch on one bad entry
 
-The system SHALL, in `OutboxProcessor.ProcessBatchAsync`, fetch up to `BatchSize` pending entries,
+The system SHALL, in `OutboxProcessor.ProcessBatchAsync`, claim up to `BatchSize` pending entries with
+the configured `MaxAttempts` (TASK-710), mark each with the claimed entry itself,
 and for each: mark it failed when its `EventType` cannot be resolved or its payload cannot be
 deserialized to `IEvent`, otherwise publish it through the inner bus (reflectively, as the concrete
 event type, through a closed `PublishAsync` `MethodInfo` built once per event type and cached —
@@ -1048,9 +1049,12 @@ breaking out on cancellation, and delaying `PollingInterval` between iterations.
 ### Requirement: Outbox entries are claimed atomically and stale claims reclaimed
 
 The system SHALL, in `InMemoryOutboxStore.GetPendingAsync`, under a lock: return `Publishing` entries
-whose `ClaimedAt` is null or older than the stale-claim timeout (default 5 minutes) to `Pending`, then
-take up to `batchSize` `Pending` entries ordered by `CreatedAt`, flipping each to `Publishing` with
-`ClaimedAt = now` before returning them. `MarkPublishedAsync`, `MarkFailedAsync`, `CleanupAsync` and
+whose `ClaimedAt` is null or older than the stale-claim timeout (default 5 minutes) to `Pending`, counting
+the reclaim as an attempt and making the entry `Failed` (`LastError` `"Abandoned: …"`) at the passed
+`maxAttempts` (TASK-710), then take up to `batchSize` `Pending` entries ordered by `CreatedAt`, flipping
+each to `Publishing` with `ClaimedAt = now` and a fresh `ClaimToken`, and return copies of them. A mark
+SHALL apply only while the entry is `Publishing` under the passed entry's `ClaimToken`, and SHALL throw
+`ArgumentException` for an entry with no token. `MarkPublishedAsync`, `MarkFailedAsync`, `CleanupAsync` and
 `GetAll` SHALL take the same lock, and `now` (for `ClaimedAt`, `PublishedAt` and the staleness test) SHALL come from the optional `IDateTimeProvider` passed to the constructor, else the
 system clock.
 
@@ -1081,9 +1085,15 @@ system clock.
 
 #### Scenario: Marking an unknown entry id
 
-- **Given** an id not present in the store
+- **Given** a claimed entry whose id is not present in the store
 - **When** `MarkPublishedAsync` or `MarkFailedAsync` is called
 - **Then** the call completes successfully with no effect
+
+#### Scenario: A reclaimed processor marks late
+
+- **Given** an entry claimed by A, reclaimed by B after the timeout
+- **When** A calls `MarkFailedAsync` or `MarkPublishedAsync` with its own copy
+- **Then** nothing changes: the entry stays `Publishing` under B's claim, and B's mark applies (TASK-710)
 
 #### Scenario: Marking concurrently with a claim
 
@@ -1156,10 +1166,13 @@ original lifetime.
 The system SHALL provide `SqlOutboxStore<DB>` (an `IOutboxStore` over an
 `AsyncDataBaseBulkStore<DB, OutboxEntryModel>`, built from `SqlSettings` or from a supplied store, a null
 store throwing `ArgumentNullException`) whose `SaveAsync` creates one `__Outbox` row per entry (a null
-entry throwing `ArgumentNullException`), and whose `GetPendingAsync(batchSize)` returns an empty list for
+entry throwing `ArgumentNullException`), and whose `GetPendingAsync(batchSize, maxAttempts)` (and `GetPendingAsync(batchSize)`, using the constructor's
+`maxAttempts`) returns an empty list for
 a `batchSize` of 0 or less and otherwise reads up to `batchSize` candidates ordered by `CreatedAt` —
 `Pending` rows, plus `Publishing` rows whose non-null `ClaimedAt` is older than the claim timeout (default
-5 minutes) — and claims each by an update conditional on the row's `Guid` and the status it was read in,
+5 minutes) — and claims each by an update conditional on the row's `Guid` and, for a `Pending` row,
+`Status == Pending` and the `Attempts` it was read with, for a `Publishing` row, `Status == Publishing` and
+a `ClaimedAt` still older than the timeout (TASK-710),
 setting `Status = Publishing`, a fresh `ClaimToken` and `ClaimedAt = DateTime.UtcNow`, then re-reading the
 row and returning it only when the stored `ClaimToken` is its own. `now` SHALL be the system clock; this
 store takes no `IDateTimeProvider`.
@@ -1187,9 +1200,9 @@ store takes no `IDateTimeProvider`.
 ### Requirement: The SQL outbox store reclaims stale claims within an attempt budget
 
 The system SHALL, in `SqlOutboxStore.GetPendingAsync`, count a reclaim of a stale `Publishing` row as an
-attempt (`Attempts + 1` written with the claim), and when that would reach the store's own `maxAttempts`
-(constructor argument, default 5, independent of `OutboxOptions.MaxAttempts`) SHALL instead mark the row
-`Failed` with `Attempts` incremented, `ClaimToken`/`ClaimedAt` cleared and `LastError` starting
+attempt (`Attempts + 1` written with the claim), and when that would reach the passed `maxAttempts` (the
+processor passes `OutboxOptions.MaxAttempts`; the one-argument overload the constructor's, default 5) SHALL
+instead mark the row, by an update under the same condition as the claim, `Failed` with `Attempts` incremented, `ClaimToken`/`ClaimedAt` cleared and `LastError` starting
 `"Abandoned: held in Publishing for longer than …"`, and skip it, so the batch returned may hold fewer than
 `batchSize` entries (TASK-451).
 
@@ -1201,7 +1214,7 @@ attempt (`Attempts + 1` written with the claim), and when that would reach the s
 
 #### Scenario: Attempt budget spent by reclaims
 
-- **Given** a stale `Publishing` row with `Attempts = 4` and the default `maxAttempts` of 5
+- **Given** a stale `Publishing` row with `Attempts = 4` and `maxAttempts` of 5
 - **When** `GetPendingAsync` reaches it
 - **Then** it becomes `Failed` with `Attempts = 5` and an `"Abandoned: …"` `LastError`, and it is not
   returned
@@ -1209,24 +1222,30 @@ attempt (`Attempts + 1` written with the claim), and when that would reach the s
 #### Scenario: Two processors reclaim the same stale row
 
 - **Given** a stale `Publishing` row read as a candidate by two processors
-- **When** each runs its conditional update (`Status == Publishing`, which the first claim leaves true) and
-  then re-reads the row
-- **Then** the condition does not exclude the second claim, so a processor that re-reads before the other's
-  update returns the row as well and both may publish it
+- **When** each runs its conditional update
+- **Then** the first moves `ClaimedAt` to now, so the second's "still stale" condition does not match and the
+  row is returned to one processor only (TASK-710; measured on SQLite, PostgreSQL and SQL Server)
+
+#### Scenario: A pending row claimed and failed in between
+
+- **Given** a `Pending` row read with `Attempts = 0` by A, then claimed and failed back to `Pending` by B
+- **When** A runs its conditional update
+- **Then** it does not match (`Attempts` is 1), so A does not claim the row or wind `Attempts` back (TASK-710)
 
 ### Requirement: The SQL outbox store marks, fails and prunes entries
 
-The system SHALL, in `SqlOutboxStore`, make `MarkPublishedAsync` set `Status = Published`, `PublishedAt =
-DateTime.UtcNow` and clear `ClaimToken`; make `MarkFailedAsync` increment `Attempts`, store `LastError`
+The system SHALL, in `SqlOutboxStore`, make `MarkPublishedAsync(entry)` set `Status = Published`, `PublishedAt =
+DateTime.UtcNow` and clear `ClaimToken`; make `MarkFailedAsync(entry, …)` increment `Attempts`, store `LastError`
 truncated to 2000 characters, clear `ClaimToken` and `ClaimedAt`, and set `Failed` when `Attempts` reaches
-the passed `maxAttempts`, else `Pending`; complete both with no effect for an unknown id, without checking
-the claim token; and make `CleanupAsync(cutoff)` delete only `Published` and `Failed` rows whose
+the passed `maxAttempts`, else `Pending`; apply both by an update conditional on the row being `Publishing`
+under the entry's `ClaimToken`, completing with no effect otherwise (a reclaimed processor's late mark, or an
+unknown id), and throw `ArgumentException` for an entry with no token (TASK-710); and make `CleanupAsync(cutoff)` delete only `Published` and `Failed` rows whose
 `CreatedAt` is before the cutoff, never `Pending` or `Publishing` ones.
 
 #### Scenario: Failure below and at the cap
 
 - **Given** a claimed row with `Attempts = 0`
-- **When** `MarkFailedAsync(id, error, maxAttempts: 3)` is called, then twice more
+- **When** `MarkFailedAsync(entry, error, maxAttempts: 3)` is called on each claim, three times
 - **Then** it returns to `Pending` after the first two calls and is `Failed` with `Attempts = 3` after the
   third
 
