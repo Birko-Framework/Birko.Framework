@@ -89,8 +89,22 @@ public class TenantMiddleware
             // correlate whatever door was used. TenantContextKey above is configurable and the context
             // may be a different instance from the one downstream middleware resolves — see ResolvedTenant.
             ResolvedTenant.Publish(context, tenantGuid, source);
+
+            // TASK-708: cleared in a finally, so a downstream throw does not leave the tenant set. Measured
+            // on a field-backed ITenantContext (the interface allows one): the outer catch and later flows
+            // still saw it. TenantContext's AsyncLocal undid it on return either way.
+            try
+            {
+                await _next(context);
+            }
+            finally
+            {
+                ambient.ClearTenant();
+            }
+            return;
         }
-        else if (_options.RequireTenant)
+
+        if (_options.RequireTenant)
         {
             // Tenant is required but not found - return 401
             context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
@@ -106,10 +120,9 @@ public class TenantMiddleware
             return;
         }
 
+        // No tenant was set here, so none is cleared: a tenant an outer flow set stays (TASK-708; clearing it
+        // unconditionally discarded it on a field-backed context).
         await _next(context);
-
-        // Clear tenant after request completes
-        ambient.ClearTenant();
     }
 
     /// <summary>

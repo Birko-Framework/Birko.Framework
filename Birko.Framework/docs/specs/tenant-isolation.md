@@ -824,23 +824,24 @@ resolves and `RequireTenant` is true, SHALL short-circuit with HTTP `401`, conte
 - **When** the middleware runs
 - **Then** `SetTenant` is never called, `HttpContext.Items` is untouched, and the pipeline continues — a Permissive store downstream then reads across all tenants
 
-### Requirement: Birko.Data.Tenant middleware clears the tenant only on a normal completion
+### Requirement: Birko.Data.Tenant middleware clears the tenant it set, in a finally
 
-The system SHALL call `_tenantContext.ClearTenant()` unconditionally on the statement after
-`await _next(context)`, without a `try`/`finally` and without checking whether this middleware set a
-tenant.
+The system SHALL, when this middleware set a tenant, run the rest of the pipeline in a `try` and call
+`ClearTenant()` in the `finally`; when it set none, it SHALL continue the pipeline and clear nothing
+(TASK-708). `TenantContext`'s `AsyncLocal` state is undone when the async call returns either way; the
+rule matters for an `ITenantContext` that keeps its state otherwise, which the interface allows.
 
-#### Scenario: A downstream exception leaves the tenant set
+#### Scenario: A downstream exception does not leave the tenant set
 
-- **Given** a request that resolves tenant `t` and a downstream middleware that throws
+- **Given** a request that resolves tenant `t` and a downstream middleware that throws (synchronously or as a faulted task)
 - **When** the exception propagates out of `InvokeAsync`
-- **Then** `ClearTenant()` is never reached and the context still reports `HasTenant == true` — a leak when `ITenantContext` is registered as a singleton or is `Tenant.Current`
+- **Then** `ClearTenant()` has run: the catching caller and a later flow see `HasTenant == false`, on a field-backed context as on `TenantContext`
 
-#### Scenario: A request with no tenant still clears
+#### Scenario: A request with no tenant keeps an outer tenant
 
 - **Given** `RequireTenant = false`, a request with no tenant source, and an outer flow that had already set tenant `t` on the same context instance
 - **When** the middleware completes
-- **Then** `ClearTenant()` runs anyway and tenant `t` is discarded
+- **Then** `ClearTenant()` is not called and the context still reports `t`
 
 ### Requirement: UseTenantMiddleware takes ITenantContext per request, not from the root provider
 
@@ -994,7 +995,7 @@ rest of the pipeline in a `try`, and call `ClearTenant()` in the `finally`.
 
 - **Given** a request that resolves tenant `t` and a downstream throw
 - **When** the exception propagates
-- **Then** `ClearTenant()` has run — diverging from `Birko.Data.Tenant.Middleware.TenantMiddleware`, which leaks in the same situation
+- **Then** `ClearTenant()` has run, as in `Birko.Data.Tenant.Middleware.TenantMiddleware` (TASK-708)
 
 #### Scenario: Per-request injection sees the scoped context
 

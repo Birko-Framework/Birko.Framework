@@ -292,6 +292,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Tenant middleware clears the tenant in a finally (2026-11-03)
+[[TASK-708]]. `Birko.Data.Tenant`'s `TenantMiddleware` cleared the tenant after the pipeline with no `finally`, and
+cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw
+left the tenant set and a no-tenant request discarded an outer one (measured; `TenantContext` showed neither). It
+now clears what it set, in a `finally`.
 ### Redis and MongoDB credentials reach the server whole (2026-11-03)
 [[TASK-707]]. A comma in a Redis password started a new option (measured: `x,allowAdmin=true` turned admin mode on),
 and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `RedisConnectionManager` now connects
@@ -367,11 +372,6 @@ Measured with a real `SmtpClient` against a stub server. Symbio can drop its lin
 a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL
 Server. A write declared retried (`RetryableWrite.IsDeclared`) now runs in a savepoint: a failure is undone and your
 unit stays committable. New `SqlSavepoint`. MongoDB and RavenDB have no savepoints and still refuse the commit.
-### The 500-GUID chunk budget is measured off SQL (2026-10-21)
-[[TASK-701]]. A broad match on a translated field (2 200 of 3 300 entities) was counted, paged and deleted live on
-MongoDB, ElasticSearch, RavenDB and Cosmos DB. Each also took 10 000 GUIDs in one query. The budget stays 500
-everywhere: nothing refuses it, and a chunk query costs 4–181 ms of operations taking 0.3–2.6 s. New shared
-`BroadMatchContract`. EPIC-022 is done.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

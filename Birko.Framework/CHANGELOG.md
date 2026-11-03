@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-21 — The 500-GUID chunk budget is measured off SQL
+
+[[TASK-701]]. A broad match on a translated field (2 200 of 3 300 entities) was counted, paged and deleted live on
+MongoDB, ElasticSearch, RavenDB and Cosmos DB. Each also took 10 000 GUIDs in one query. The budget stays 500
+everywhere: nothing refuses it, and a chunk query costs 4–181 ms of operations taking 0.3–2.6 s. New shared
+`BroadMatchContract`. EPIC-022 is done.
+
 ## 2026-10-21 — ElasticSearch runs filters on translated fields
 
 [[TASK-703]]. Every filter on a translated field threw `NotSupportedException` on ElasticSearch: the localized wrappers
