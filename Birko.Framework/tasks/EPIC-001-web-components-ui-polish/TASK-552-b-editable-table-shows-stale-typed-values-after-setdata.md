@@ -62,7 +62,8 @@ N/A — fully covered by automated tests (the defect is a value read off a DOM p
 ## Progress
 
 **2026-10-14 — released in Birko.Web v0.1.9** with [[TASK-580]] (Web `76ff38f`, Playground `30d0701`). In `verify`:
-the last criterion waits on Symbio removing `syncCellValues` once it consumes v0.1.9.
+the last criterion waits on Symbio removing `syncCellValues` once it consumes v0.1.9: that is Symbio TASK-930
+("Birko.Web v0.1.9 cleanups", todo; also named in its TASK-1006), per Symbio 2026-11-03.
 
 - **Removal reproduced** (criterion 2's step one): type rows 0–2, remove row 1, and row 1 still showed `second`.
   Selects and checkboxes are affected the same way as text inputs: a changed `selected` / `checked` attribute does
