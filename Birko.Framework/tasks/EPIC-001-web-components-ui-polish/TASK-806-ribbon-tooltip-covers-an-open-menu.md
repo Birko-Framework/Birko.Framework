@@ -2,7 +2,7 @@
 id: TASK-806
 parent: EPIC-001
 feature: null
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-03
@@ -42,7 +42,7 @@ this now shows on every module with two or more pages.
 - [x] After the menu closes, hovering a command shows its tooltip as before.
 - [x] A real-input check that fails without the fix: `category-ribbon-check.mjs` (on Birko.Web main: Sales'
       description over Catalogue's open menu).
-- [ ] Symbio told when it is on Birko.Web main (its dev server watches it). Symbio then rebuilds its bundle and adds
+- [x] Symbio told when it is on Birko.Web main (its dev server watches it). Symbio then rebuilds its bundle and adds
       an assertion to its `tests/ui-e2e/ribbon-module-menu.spec.ts` (E-Shop's ▾ open, no tooltip over the menu); its
       TASK-1027 does not wait for this one and names it as the owner (Symbio, 2026-11-03).
 
@@ -82,3 +82,8 @@ keyboard-check (flyout tooltip in the top layer, first Escape hides the tooltip)
 
 Birko.Web `task/TASK-808` c5a157a (v0.4.2), Playground `task/TASK-808` 10ddd9d. category-ribbon-check 19/19 with the fix, 16/19 on
 Birko.Web main.
+
+## Merged (2026-11-03)
+
+Birko.Web main 3260449, tagged **v0.4.2** and pushed; Playground main 6d27396, pushed. Symbio told before and after.
+Worktrees and branches removed.

@@ -2,7 +2,7 @@
 id: TASK-808
 parent: EPIC-001
 feature: null
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-03
@@ -34,7 +34,7 @@ its tint.
 - [x] An inactive split button is unchanged.
 - [x] Checks that fail without the fix: category-ribbon-smoke (whole tint, caret, inactive untouched) and
       category-ribbon-check (stacked at large size, tinted whole; the same tint under the real pointer).
-- [ ] Human test passed, Symbio told before it reaches Birko.Web main.
+- [x] Human test passed, Symbio told before it reaches Birko.Web main.
 
 ## Out of scope
 
@@ -61,3 +61,8 @@ Birko.Web `task/TASK-808` 6540e43, v0.4.2 (worktree `Web.TASK-808`); Playground 
 checks fail (14/16, 27/28). Mutations caught: main part left to `.ribbon-item.active` (hover grey on the icon), caret
 rule removed. verify.mjs 0 failing, keyboard-check 222/222, ribbon-a11y-check 22/22, entry-points-check 427/427,
 device-fix and rerender-leak checks pass.
+
+## Merged (2026-11-03)
+
+Birko.Web main 3260449, tagged **v0.4.2** and pushed; Playground main 6d27396, pushed. Symbio told before and after.
+Worktrees and branches removed.

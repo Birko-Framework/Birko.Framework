@@ -2,7 +2,7 @@
 id: TASK-809
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P1
 assignee: ai
 created: 2026-11-03
@@ -34,7 +34,8 @@ consumer whose `mustSee` names a page hits it. `manifest-smoke.ts`'s `expectSele
       selector that only matches hidden elements still fails.
 - [x] A check that fails without it: Playground `testing-smoke-check.mjs` drives the real `runSmoke` with a real
       Playwright against a page whose hidden menu holds the heading's text first (2/4 before, 4/4 after).
-- [ ] Symbio told when it is on Birko.Web main; its gate re-run.
+- [x] Symbio told when it is on Birko.Web main.
+- [ ] Symbio's gate re-run green (its smoke.spec.ts › Communication dashboard).
 
 ## Out of scope
 
@@ -49,3 +50,8 @@ N/A — fully covered by automated tests (`testing-smoke-check.mjs`), and Symbio
 
 Birko.Web `task/TASK-808` c5a157a (v0.4.2), Playground `task/TASK-808` 10ddd9d (`testing-smoke-check.mjs`, Playwright 1.61.1 from the
 Reps ui-e2e suite).
+
+## Merged (2026-11-03)
+
+Birko.Web main 3260449, tagged **v0.4.2** and pushed; Playground main 6d27396, pushed. Symbio told before and after.
+Worktrees and branches removed.
