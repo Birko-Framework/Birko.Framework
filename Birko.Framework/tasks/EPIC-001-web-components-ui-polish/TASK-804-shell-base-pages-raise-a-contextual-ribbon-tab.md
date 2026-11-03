@@ -58,8 +58,9 @@ selected.
 
 ## Human test plan
 
-- [ ] Playground split page: select a row, then switch ribbon tabs and back. Expected: the contextual tab stays,
-      in its band colour, until the row is deselected or the page left.
+- [x] Playground split page: select a row, then switch ribbon tabs and back. Expected: the contextual tab stays,
+      in its band colour, until the row is deselected or the page left. **PASS (the user, 2026-11-03)**, in the
+      "Contextual tab (Shell)" card on the TASK-804 build.
 
 ## Implementation plan
 
