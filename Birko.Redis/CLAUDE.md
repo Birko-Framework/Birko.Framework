@@ -34,7 +34,10 @@ New fields:
 | `RawConnectionString` | Override connection string | `null` |
 
 ## Key Design Decisions
-- `GetConnectionString()` builds a StackExchange.Redis connection string from inherited properties
+- `GetConfigurationOptions()` builds StackExchange.Redis `ConfigurationOptions` from inherited properties;
+  `RedisConnectionManager(RedisSettings)` connects with it, so a comma in a password reaches the server whole (TASK-707)
+- `GetConnectionString()` builds the same as a string, and refuses a password, user or client name with a `,`
+  (a connection string has no escape for it; measured, `password=x,allowAdmin=true` turned admin mode on)
 - `RawConnectionString` bypasses all property-based building for advanced use cases
 - `RedisConnectionManager` accepts either `RedisSettings` or a raw connection string
 - Connection is lazy-initialized and thread-safe via `Lazy<ConnectionMultiplexer>`

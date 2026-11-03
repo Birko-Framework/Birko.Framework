@@ -1,6 +1,8 @@
+using System;
 using System.Text;
 using Birko.Data.Stores;
 using Birko.Configuration;
+using StackExchange.Redis;
 
 namespace Birko.Redis
 {
@@ -64,9 +66,40 @@ namespace Birko.Redis
         #region Connection String
 
         /// <summary>
+        /// Builds the StackExchange.Redis options from the settings; this is what <see cref="RedisConnectionManager"/>
+        /// connects with. If RawConnectionString is set, it is parsed instead. Each value is set as a property, so a
+        /// password, user or client name containing a comma reaches the server whole (TASK-707).
+        /// </summary>
+        public ConfigurationOptions GetConfigurationOptions()
+        {
+            if (!string.IsNullOrEmpty(RawConnectionString))
+            {
+                return ConfigurationOptions.Parse(RawConnectionString);
+            }
+
+            var host = Location ?? "localhost";
+            var options = new ConfigurationOptions();
+            options.EndPoints.Add(host, Port > 0 ? Port : 6379);
+            if (!string.IsNullOrEmpty(Password)) options.Password = Password;
+            if (!string.IsNullOrEmpty(UserName)) options.User = UserName;
+            if (UseSecure)
+            {
+                options.Ssl = true;
+                options.SslHost = host;
+            }
+            if (Database != 0) options.DefaultDatabase = Database;
+            if (!string.IsNullOrEmpty(Name)) options.ClientName = Name;
+            return options;
+        }
+
+        /// <summary>
         /// Builds a StackExchange.Redis connection string from the settings.
         /// If RawConnectionString is set, returns it verbatim.
         /// </summary>
+        /// <exception cref="ArgumentException">
+        /// The password, user or client name contains a comma: the connection string has no escape for it, and the
+        /// comma would start another option (TASK-707). Use <see cref="GetConfigurationOptions"/>.
+        /// </exception>
         public string GetConnectionString()
         {
             // CR-L331: only an actually-set raw string overrides; an explicit "" falls through to
@@ -75,6 +108,10 @@ namespace Birko.Redis
             {
                 return RawConnectionString;
             }
+
+            RefuseComma(Password, nameof(Password));
+            RefuseComma(UserName, nameof(UserName));
+            RefuseComma(Name, nameof(Name));
 
             var sb = new StringBuilder();
             sb.Append(Location ?? "localhost");
@@ -112,6 +149,15 @@ namespace Birko.Redis
             }
 
             return sb.ToString();
+        }
+
+        private static void RefuseComma(string? value, string property)
+        {
+            if (value != null && value.Contains(','))
+                throw new ArgumentException(
+                    $"RedisSettings.{property} contains ',', which a StackExchange.Redis connection string cannot carry: it "
+                    + "would start another option. Use GetConfigurationOptions(), which RedisConnectionManager connects with.",
+                    property);
         }
 
         #endregion

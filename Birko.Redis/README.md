@@ -34,6 +34,9 @@ var connectionManager = new RedisConnectionManager(settings);
 var db = connectionManager.GetDatabase();
 ```
 
+The manager connects with `settings.GetConfigurationOptions()`, so a password containing `,` works.
+`GetConnectionString()` refuses one: a StackExchange.Redis connection string has no escape for it.
+
 ### Raw connection string
 
 ```csharp

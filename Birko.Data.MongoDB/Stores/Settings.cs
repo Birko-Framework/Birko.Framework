@@ -80,10 +80,12 @@ namespace Birko.Data.MongoDB.Stores
 
             var connectionString = "mongodb://";
 
-            // Add credentials if provided
+            // TASK-707: every value is percent-encoded, as the URI format requires; written as is, a password
+            // "p@ss/w?rd" made the server "ss" and the database "w", and an auth database could add options.
+            // Location stays as written: it may be a host list.
             if (!string.IsNullOrEmpty(UserName) && !string.IsNullOrEmpty(Password))
             {
-                connectionString += $"{UserName}:{Password}@";
+                connectionString += $"{Uri.EscapeDataString(UserName)}:{Uri.EscapeDataString(Password)}@";
             }
 
             // Add server and port
@@ -92,7 +94,7 @@ namespace Birko.Data.MongoDB.Stores
             // Add database name
             if (!string.IsNullOrEmpty(Name))
             {
-                connectionString += $"/{Name}";
+                connectionString += $"/{Uri.EscapeDataString(Name)}";
             }
 
             // Add query parameters
@@ -100,12 +102,12 @@ namespace Birko.Data.MongoDB.Stores
 
             if (!string.IsNullOrEmpty(AuthDatabase))
             {
-                queryParams.Add($"authSource={AuthDatabase}");
+                queryParams.Add($"authSource={Uri.EscapeDataString(AuthDatabase)}");
             }
 
             if (!string.IsNullOrEmpty(ReplicaSet))
             {
-                queryParams.Add($"replicaSet={ReplicaSet}");
+                queryParams.Add($"replicaSet={Uri.EscapeDataString(ReplicaSet)}");
             }
 
             if (UseSecure)

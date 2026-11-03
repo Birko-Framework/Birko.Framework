@@ -73,6 +73,8 @@ Connection string format:
 ```
 mongodb://[username:password@]host[:port][/database][?options]
 ```
+User name, password, database, `authSource` and `replicaSet` are percent-encoded (TASK-707: a password `p@ss/w?rd`
+made the server `ss` and the database `w`). `Location` is written as is, so it can hold a host list.
 
 Example:
 ```csharp

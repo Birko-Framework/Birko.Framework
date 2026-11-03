@@ -43,8 +43,9 @@ initialized RavenDB `DocumentStore`.
 
 This document records what the settings classes in the family (fourteen source files, including the
 `ISqlSchemaSettings` interface) actually do. They do not all do the same thing: the identity format
-changes shape three times down the chain, connection-string escaping is implemented only on the SQL
-providers (through their drivers' builders) while MongoDB and Redis still interpolate, and three
+changes shape three times down the chain, connection-string escaping is done on the SQL providers through
+their drivers' builders, on MongoDB by percent-encoding each value, and on Redis by connecting through
+`ConfigurationOptions` rather than a string (TASK-707), and three
 classes never override the copy hook at all, so their own fields are silently dropped when copied
 through a base-typed reference.
 
@@ -532,6 +533,9 @@ When `RawConnectionString` is empty the system SHALL build the connection string
 `{Location}:{Port}`, SHALL append `/{Name}` when `Name` is non-empty, and SHALL append a query string
 composed of `authSource={AuthDatabase}` (when non-empty), `replicaSet={ReplicaSet}` (when non-empty),
 `tls=true` (when `UseSecure`), and unconditionally `retryWrites=true` and `retryReads=true`.
+`UserName`, `Password`, `Name`, `AuthDatabase` and `ReplicaSet` SHALL each be percent-encoded
+(`Uri.EscapeDataString`), so the driver reads back exactly the value set (TASK-707); `Location` SHALL
+be written as is, since it may hold a host list.
 
 #### Scenario: A raw connection string wins over every composed field
 
@@ -559,11 +563,11 @@ composed of `authSource={AuthDatabase}` (when non-empty), `replicaSet={ReplicaSe
 - **When** `GetConnectionString()` is called
 - **Then** it returns `mongodb://:27017?authSource=admin&retryWrites=true&retryReads=true`
 
-#### Scenario: Credentials are not URL-encoded
+#### Scenario: Credentials and names are percent-encoded
 
-- **Given** a `MongoDB.Stores.Settings` with `Password = "p@ss"`
-- **When** `GetConnectionString()` is called
-- **Then** the emitted URI is `mongodb://u:p@ss@h:27017/...`, containing two `@` characters
+- **Given** a `MongoDB.Stores.Settings` with `UserName = "s:vc"`, `Password = "p@ss/w?rd"` and `AuthDatabase = "admin&directConnection=true"`
+- **When** the driver parses `GetConnectionString()`
+- **Then** it reads that user name, password and auth source whole, the server stays `Location:Port`, and `directConnection` stays off
 
 #### Scenario: Replica set and TLS are added when configured
 
@@ -578,7 +582,12 @@ non-null and non-empty, and SHALL otherwise compose `{Location}:{Port}` — subs
 for a null `Location` and `6379` for a `Port` that is not greater than zero — followed by
 `,password=` (when `Password` is non-empty), `,user=` (when `UserName` is non-empty),
 `,ssl=True,sslHost={Location}` (when `UseSecure`), `,defaultDatabase=` (when `Database != 0`), and
-`,name=` (when `Name` is non-empty).
+`,name=` (when `Name` is non-empty). A connection string has no escape for `,`, so `GetConnectionString()`
+SHALL throw `ArgumentException` when `Password`, `UserName` or `Name` contains one (TASK-707).
+
+`GetConfigurationOptions()` SHALL build the same settings as a StackExchange.Redis `ConfigurationOptions`
+(`ConfigurationOptions.Parse(RawConnectionString)` when that is set), each value set as a property, so a
+comma in a credential reaches the server whole; `RedisConnectionManager(RedisSettings)` SHALL connect with it.
 
 #### Scenario: A set raw connection string wins
 
@@ -610,12 +619,12 @@ for a null `Location` and `6379` for a `Port` that is not greater than zero — 
 - **When** `GetConnectionString()` is called
 - **Then** it returns `srv:6380,password=pw,user=acl,ssl=True,sslHost=srv,defaultDatabase=3,name=client1`
 
-#### Scenario: Composed Redis option values are not escaped
+#### Scenario: A comma in a Redis credential is carried by the options, refused by the string
 
-- **Given** a `RedisSettings` with `Location = "srv"`, `Port = 6380` and `Password = "x,ssl=False"`
-- **When** `GetConnectionString()` is called
-- **Then** it returns `srv:6380,password=x,ssl=False` — the value is appended verbatim, so a `,` in a credential
-  becomes an option separator (unlike the SQL providers, which compose through their drivers' builders)
+- **Given** a `RedisSettings` with `Password = "x,allowAdmin=true"`
+- **When** `GetConfigurationOptions()` and `GetConnectionString()` are called
+- **Then** the options carry that password whole with `AllowAdmin` false, and the string form throws `ArgumentException`
+  rather than emit `password=x,allowAdmin=true`, which the driver reads as a second option
 
 #### Scenario: Default-constructed Redis settings target localhost
 

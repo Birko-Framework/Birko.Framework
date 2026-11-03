@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-21 — ElasticSearch runs filters on translated fields
+
+[[TASK-703]]. Every filter on a translated field threw `NotSupportedException` on ElasticSearch: the localized wrappers
+render `x.Guid != null && guids.Contains(x.Guid.Value)`, and the translator refused the nullable `.Value`. It now reads
+`x.Nullable.Value` on the entity's own member as that member's field. Measured live; found by [[TASK-701]].
+
 ## 2026-10-20 — RavenDB: localized writes in one session, and stores join a unit of work
 
 [[TASK-700]]. New `RavenLocalizedWriteBoundary.For(entityStore, translationStore)` (Birko.Data.Localization.RavenDB):

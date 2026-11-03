@@ -289,6 +289,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Redis and MongoDB credentials reach the server whole (2026-11-03)
+[[TASK-707]]. A comma in a Redis password started a new option (measured: `x,allowAdmin=true` turned admin mode on),
+and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `RedisConnectionManager` now connects
+with the new `RedisSettings.GetConfigurationOptions()`; `GetConnectionString()` refuses a `,` in the password, user or
+client name, which a connection string cannot carry. MongoDB percent-encodes user name, password, database,
+`authSource` and `replicaSet`. Measured live on both.
 ### SQL aggregates refuse names that are not columns (2026-11-03)
 [[TASK-706]]. An aggregate query's group-by field, source, time column and ORDER BY key reached the SQL text as
 written when they named no property (measured on SQLite: `SUM(length(Name))` and `ORDER BY random()` ran), and an
@@ -363,10 +369,6 @@ unit stays committable. New `SqlSavepoint`. MongoDB and RavenDB have no savepoin
 MongoDB, ElasticSearch, RavenDB and Cosmos DB. Each also took 10 000 GUIDs in one query. The budget stays 500
 everywhere: nothing refuses it, and a chunk query costs 4–181 ms of operations taking 0.3–2.6 s. New shared
 `BroadMatchContract`. EPIC-022 is done.
-### ElasticSearch runs filters on translated fields (2026-10-21)
-[[TASK-703]]. Every filter on a translated field threw `NotSupportedException` on ElasticSearch: the localized wrappers
-render `x.Guid != null && guids.Contains(x.Guid.Value)`, and the translator refused the nullable `.Value`. It now reads
-`x.Nullable.Value` on the entity's own member as that member's field. Measured live; found by [[TASK-701]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

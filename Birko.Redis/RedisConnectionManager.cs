@@ -12,7 +12,6 @@ namespace Birko.Redis
     public sealed class RedisConnectionManager : IDisposable
     {
         private readonly Lazy<ConnectionMultiplexer> _connection;
-        private readonly string _connectionString;
         private readonly int _database;
         private bool _disposed;
 
@@ -23,10 +22,11 @@ namespace Birko.Redis
         public RedisConnectionManager(RedisSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
-            _connectionString = settings.GetConnectionString();
+            // TASK-707: options, not the connection string, so a password with a comma is not split into options.
+            var options = settings.GetConfigurationOptions();
             _database = settings.Database;
             _connection = new Lazy<ConnectionMultiplexer>(
-                () => ConnectionMultiplexer.Connect(_connectionString),
+                () => ConnectionMultiplexer.Connect(options.Clone()),
                 // CR-M231: PublicationOnly does NOT cache the factory's exception, so a transient
                 // connect failure at first access can be retried on the next access rather than
                 // permanently poisoning this long-lived singleton (the default ExecutionAndPublication
@@ -41,10 +41,10 @@ namespace Birko.Redis
         /// <param name="database">The database index (0-15).</param>
         public RedisConnectionManager(string connectionString, int database = 0)
         {
-            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
             _database = database;
             _connection = new Lazy<ConnectionMultiplexer>(
-                () => ConnectionMultiplexer.Connect(_connectionString),
+                () => ConnectionMultiplexer.Connect(connectionString),
                 LazyThreadSafetyMode.PublicationOnly); // CR-M231: don't cache a transient connect failure
         }
 
