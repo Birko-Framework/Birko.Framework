@@ -42,7 +42,9 @@ this now shows on every module with two or more pages.
 - [ ] Same for a plain menu button and a folded group's flyout.
 - [ ] After the menu closes, hovering a command shows its tooltip as before.
 - [ ] A real-input check that fails without the fix (mutation), in `category-ribbon-check.mjs` or `keyboard-check.mjs`.
-- [ ] Symbio told when it is on Birko.Web main (its dev server watches it).
+- [ ] Symbio told when it is on Birko.Web main (its dev server watches it). Symbio then rebuilds its bundle and adds
+      an assertion to its `tests/ui-e2e/ribbon-module-menu.spec.ts` (E-Shop's ▾ open, no tooltip over the menu); its
+      TASK-1027 does not wait for this one and names it as the owner (Symbio, 2026-11-03).
 
 ## Out of scope
 
