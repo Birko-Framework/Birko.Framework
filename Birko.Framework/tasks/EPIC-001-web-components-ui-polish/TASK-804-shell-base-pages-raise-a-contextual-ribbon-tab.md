@@ -2,7 +2,7 @@
 id: TASK-804
 parent: EPIC-001
 feature: null
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-02
@@ -94,3 +94,9 @@ collapse, since `refreshRibbon` sets `active` after `setTabs`). Shell and Compon
 files type-check against the branch. verify.mjs 0 failing, keyboard-check 222/222, ribbon-a11y-check 22/22,
 category-ribbon-check 19/19, entry-points-check 427/427, locale-switch 47/47; subpath, rerender-leak, device-fix,
 a11y-name and testing-smoke checks pass.
+
+## Merged (2026-11-03), not pushed
+
+Birko.Web main afc9edb, tagged **v0.4.3** locally; Playground main 616c965. Not pushed, at the user's word (batch the
+pushes to save CI runs): push both, with the tag, with the next batch. Symbio told before the merge; its dev server
+watches the local checkout, so it already builds on v0.4.3. Worktrees and branches removed.
