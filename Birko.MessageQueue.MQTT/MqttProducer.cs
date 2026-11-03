@@ -34,17 +34,19 @@ namespace Birko.MessageQueue.Mqtt
 
         public async Task SendAsync(string destination, QueueMessage message, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(message);   // TASK-711: was a NullReferenceException
             // SH-M113 (decided by the user 2026-10-18: refuse loudly): MQTT has no delayed delivery, and a message with
             // Delay was published at once. Only the in-memory transport honours Delay.
-            if (message?.Delay != null)
+            if (message.Delay != null)
             {
                 throw new NotSupportedException("The MQTT transport cannot delay a message; send it without Delay, or delay it before sending.");
             }
-            uint? expirySeconds = null;
-            if (message != null)
+            var mqtt5 = IsMqtt5();
+            var expirySeconds = MessageExpiryInterval(message, mqtt5);
+            TransportSupport.RefusePriority(message, "MQTT");   // SH-L109
+            if (!mqtt5)
             {
-                expirySeconds = MessageExpiryInterval(message);
-                TransportSupport.RefusePriority(message, "MQTT");   // SH-L109
+                RefuseMetadataMqtt311CannotCarry(message);
             }
 
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -65,21 +67,60 @@ namespace Birko.MessageQueue.Mqtt
                 builder.WithMessageExpiryInterval(seconds);
             }
 
-            // Carry QueueMessage metadata as MQTT5 user properties so a typed publish/subscribe
-            // round-trip preserves PayloadType + Headers (parity with the Redis / InMemory backends).
-            // NOTE: user properties are an MQTT5 feature — on an MQTT 3.1.1 connection the broker
-            // ignores them and the metadata is (as before) not carried on the wire.
-            if (!string.IsNullOrEmpty(message.PayloadType))
+            // Carry QueueMessage metadata as MQTT5 user properties so a typed publish/subscribe round-trip preserves
+            // PayloadType + Headers (parity with the Redis / InMemory backends). TASK-711: MQTT 3.1.1 has no user
+            // properties and MQTTnet refuses a publish that has any, so there the message goes without them; what only
+            // they could carry was refused above.
+            if (mqtt5)
             {
-                builder.WithUserProperty(PayloadTypeProperty, message.PayloadType);
-            }
-
-            if (message.Headers != null)
-            {
-                builder.WithUserProperty(HeadersProperty, _serializer.Serialize(message.Headers));
+                if (!string.IsNullOrEmpty(message.PayloadType))
+                {
+                    builder.WithUserProperty(PayloadTypeProperty, message.PayloadType);
+                }
+                if (message.Headers != null)
+                {
+                    builder.WithUserProperty(HeadersProperty, _serializer.Serialize(message.Headers));
+                }
             }
 
             await _client.PublishAsync(builder.Build(), cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// TASK-711: the protocol of the connection, or, before one is made, the one <see cref="MqttSettings.ProtocolVersion"/>
+        /// will connect with (a TimeToLive sent before ConnectAsync was refused as 3.1.1 under V500 settings).
+        /// </summary>
+        private bool IsMqtt5() => _client.Options is { } connected
+            ? connected.ProtocolVersion == MQTTnet.Formatter.MqttProtocolVersion.V500
+            : _options.ProtocolVersion == MqttProtocol.V500;
+
+        /// <summary>
+        /// TASK-711: on MQTT 3.1.1 the only metadata a message can carry is its body. A correlation id, reply-to, group
+        /// id, custom header or a content type other than the serializer's would be lost on the way, so it is refused
+        /// (rule 41). The payload type is not refused: a typed subscriber deserializes the body as its own type.
+        /// </summary>
+        private void RefuseMetadataMqtt311CannotCarry(QueueMessage message)
+        {
+            var headers = message.Headers;
+            if (headers == null)
+            {
+                return;
+            }
+            var lost = new System.Collections.Generic.List<string>();
+            if (headers.CorrelationId != null) lost.Add(nameof(MessageHeaders.CorrelationId));
+            if (headers.ReplyTo != null) lost.Add(nameof(MessageHeaders.ReplyTo));
+            if (headers.GroupId != null) lost.Add(nameof(MessageHeaders.GroupId));
+            if (headers.Custom is { Count: > 0 }) lost.Add(nameof(MessageHeaders.Custom));
+            if (headers.ContentType != _serializer.ContentType && headers.ContentType != new MessageHeaders().ContentType)
+            {
+                lost.Add(nameof(MessageHeaders.ContentType));
+            }
+            if (lost.Count > 0)
+            {
+                throw new NotSupportedException(
+                    $"MQTT 3.1.1 cannot carry message headers, so {string.Join(", ", lost)} would be lost; send the message without them. " +
+                    "An MQTT 5 connection (MqttSettings.ProtocolVersion = V500) sends them as user properties.");
+            }
         }
 
         /// <summary>
@@ -87,13 +128,13 @@ namespace Birko.MessageQueue.Mqtt
         /// MQTT 3.1.1 connection (no expiry exists there; SH-L108), and unless it is a whole number of seconds from 1 up,
         /// since the interval counts whole seconds and 0 would mean "never expires".
         /// </summary>
-        private uint? MessageExpiryInterval(QueueMessage message)
+        private static uint? MessageExpiryInterval(QueueMessage message, bool mqtt5)
         {
             if (message.TimeToLive is not { } ttl)
             {
                 return null;
             }
-            if (_client.Options?.ProtocolVersion != MQTTnet.Formatter.MqttProtocolVersion.V500)
+            if (!mqtt5)
             {
                 TransportSupport.RefuseTimeToLive(message, "MQTT 3.1.1",
                     "An MQTT 5 connection (MqttSettings.ProtocolVersion = V500) sends it as the message expiry interval.");

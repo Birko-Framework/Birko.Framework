@@ -46,7 +46,8 @@ MqttMessageQueue
 - **MQTTnet** — MQTT client (NuGet, referenced by consuming project)
 
 ## Important Notes
-- **TimeToLive (TASK-668):** on an MQTT 5 connection (`MqttSettings.ProtocolVersion = V500`, read back from `IMqttClient.Options`) it is sent as the message expiry interval in whole seconds; refused on MQTT 3.1.1 and for a TTL under a second or not in whole seconds (0 would mean "never expires").
+- **TimeToLive (TASK-668):** on an MQTT 5 connection (`MqttSettings.ProtocolVersion = V500`, read back from `IMqttClient.Options` once connected, from the settings before) it is sent as the message expiry interval in whole seconds; refused on MQTT 3.1.1 and for a TTL under a second or not in whole seconds (0 would mean "never expires").
+- **MQTT 3.1.1 sends no user properties (TASK-711):** MQTTnet refuses a 3.1.1 publish that has any, and every send on the default connection used to throw. There the `PayloadType` is not sent, and headers only a user property could carry (`CorrelationId`, `ReplyTo`, `GroupId`, `Custom`, a `ContentType` other than the serializer's or the default) are refused with `NotSupportedException`. The protocol is the connection's, or before `ConnectAsync` the settings'. A null message is `ArgumentNullException`.
 - **PrefetchCount stays refused:** the MQTT 5 receive maximum is a CONNECT property, per connection, so it cannot bound one subscription. No `IRedeliveryCapability` either (every delivery reports count 1), so the distributed bus refuses a retry policy over MQTT.
 - Consuming project must add `<PackageReference Include="MQTTnet" />` to its .csproj
 - MQTTnet v4+ API is used (MqttClientFactory, MqttApplicationMessageBuilder, event-based handlers)

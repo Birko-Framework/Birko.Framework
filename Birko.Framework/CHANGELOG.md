@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-21 — SMTP sends keep their timeout and say whether to retry
+[[TASK-675]]. `SmtpEmailSender` ignored `EmailSettings.Timeout` on async sends (Symbio measured 2000 ms taking 4096 ms).
+The whole send now returns at the deadline as a `Transient` failure; the caller's cancellation still throws. New
+`MessageResult.FailureKind` (Transient / Permanent / Unknown), set from the SMTP reply code and inner exception.
+Measured with a real `SmtpClient` against a stub server. Symbio can drop its linked-CTS and reclassification workarounds.
+
 ## 2026-10-21 — A decorator's retry no longer poisons the caller's unit
 [[TASK-697]]. A slug decorator over a localized store with `SqlLocalizedWriteBoundary`, in your `SqlUnitOfWork`, retried
 a refused write successfully, yet your commit threw `TransactionRollbackOnlyException`. Measured on PostgreSQL and SQL

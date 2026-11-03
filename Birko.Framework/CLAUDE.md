@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### MQTT sends work on the default 3.1.1 connection (2026-11-03)
+[[TASK-711]]. Every `SendAsync` on an MQTT 3.1.1 connection, the default, threw `Feature UserProperties requires MQTT
+version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands among them): the headers always went as a
+user property. On 3.1.1 none is sent now; a `CorrelationId`, `ReplyTo`, `GroupId`, `Custom` header or foreign
+`ContentType`, which only one could carry, is refused. Before `ConnectAsync` the settings' protocol decides a
+`TimeToLive`, and a null message is `ArgumentNullException`.
 ### Outbox marks carry the claim; a stale reclaim is won once (2026-11-03)
 [[TASK-710]]. Two processors reclaiming one stale SQL outbox row both published it, and a slow processor whose
 entry was reclaimed put it back to `Pending` under the new holder or a `Published` row back to `Pending`
@@ -369,11 +375,6 @@ read (measured on MySQL); fill it with an `UPDATE` (README). Measured on all fou
 it instantiated every `IModelMapping<>` type, and an open generic cannot be. A consumer compiling
 Birko.Data.Localization.SQL into its own assembly could not boot (Symbio). Open generics are now skipped; register them
 closed with `LocalizationSqlMappings.Register<TTranslation>(registry, table)`.
-### SMTP sends keep their timeout and say whether to retry (2026-10-21)
-[[TASK-675]]. `SmtpEmailSender` ignored `EmailSettings.Timeout` on async sends (Symbio measured 2000 ms taking 4096 ms).
-The whole send now returns at the deadline as a `Transient` failure; the caller's cancellation still throws. New
-`MessageResult.FailureKind` (Transient / Permanent / Unknown), set from the SMTP reply code and inner exception.
-Measured with a real `SmtpClient` against a stub server. Symbio can drop its linked-CTS and reclassification workarounds.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

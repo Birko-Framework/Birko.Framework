@@ -1527,8 +1527,9 @@ refusals, lifted by TASK-668 where a transport honours the option):
 - `QueueMessage.TimeToLive`, counted from `CreatedAt`: honoured by Redis (a `ttl_ms` field, expired entries
   acknowledged and skipped) and in-memory (an expired message is dropped at dispatch, measured on
   `InMemoryMessageQueueOptions.Clock`); on MQTT sent as the MQTT 5 message expiry interval when the client's
-  connection is MQTT 5 (`MqttSettings.ProtocolVersion = V500`), refused on MQTT 3.1.1 and refused unless it is a
-  whole number of seconds from 1 (the interval counts whole seconds, and 0 means "never expires").
+  connection is MQTT 5 (before `ConnectAsync`, when `MqttSettings.ProtocolVersion = V500`, the protocol it will
+  connect with; TASK-711), refused on MQTT 3.1.1 and refused unless it is a whole number of seconds from 1 (the
+  interval counts whole seconds, and 0 means "never expires").
 - `ConsumerOptions.PrefetchCount` (at least 1, else `ArgumentOutOfRangeException`): on Redis an explicit value
   is the read batch, i.e. the entries the subscription holds delivered-but-unacknowledged in the stream's
   pending list (the default 1 leaves `RedisStreamSettings.ReadCount` in charge); on in-memory it is the number of
@@ -1568,8 +1569,9 @@ The `ReplyTo` and `GroupId` message headers SHALL be carried on the wire with no
 
 - **Given** a message whose `Headers.ReplyTo` or `Headers.GroupId` is set
 - **When** it is sent and received on any of the three transports
-- **Then** the header values travel with the message's headers (on MQTT, only as MQTT5 user properties),
-  and no transport acts on them (SH-L111; unchanged — documented as carried-only)
+- **Then** the header values travel with the message's headers (on MQTT, only as MQTT5 user properties; on
+  MQTT 3.1.1 the send is refused, TASK-711), and no transport acts on them (SH-L111; unchanged — documented as
+  carried-only)
 
 ### Requirement: Transports declare how a failed delivery comes back
 
@@ -2022,6 +2024,28 @@ that shares no mutable state, headers included) and isolating handler exceptions
 The system SHALL publish `QueueMessage.PayloadType` and the serialized `MessageHeaders` as MQTT5 user
 properties (`payload_type`, `headers`) when present, and on receipt rebuild `PayloadType` and
 `Headers` from those properties, stamping `CreatedAt` with the consumer's clock.
+
+On an MQTT 3.1.1 connection (the default) the system SHALL publish no user property, since MQTTnet refuses a
+3.1.1 publish that has any (TASK-711: measured, every `SendAsync` on the default connection threw). The
+`PayloadType` is not sent there (a typed subscriber deserializes the body as its own type), and a message whose
+headers carry what only user properties could (`CorrelationId`, `ReplyTo`, `GroupId`, any `Custom` entry, or a
+`ContentType` other than the serializer's and the default) SHALL be refused with `NotSupportedException` naming
+those headers and `ProtocolVersion = V500`, with nothing published. Before `ConnectAsync` the protocol is the one
+`MqttSettings.ProtocolVersion` will connect with; once connected, the connection's. A null message SHALL be
+`ArgumentNullException`.
+
+#### Scenario: Typed send on the default protocol (TASK-711)
+
+- **Given** a queue with default `MqttSettings` (MQTT 3.1.1) connected to a broker, and a typed subscriber
+- **When** `SendAsync<T>(topic, payload)` is called
+- **Then** the message is published without user properties and the subscriber receives the payload
+
+#### Scenario: A header MQTT 3.1.1 cannot carry (TASK-711)
+
+- **Given** an MQTT 3.1.1 connection and a message whose `Headers.CorrelationId` (or `ReplyTo`, `GroupId`, a
+  `Custom` entry, a foreign `ContentType`) is set
+- **When** it is sent
+- **Then** `NotSupportedException` names the header and `ProtocolVersion = V500`, and nothing is published
 
 #### Scenario: Typed round-trip over MQTT5
 

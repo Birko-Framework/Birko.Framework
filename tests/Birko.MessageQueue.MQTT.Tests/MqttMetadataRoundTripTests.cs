@@ -100,7 +100,7 @@ public class MqttMetadataRoundTripTests
     {
         var (mock, captured) = MockClient();
         var serializer = new JsonMessageSerializer();
-        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings());
+        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings { ProtocolVersion = MqttProtocol.V500 });
 
         var headers = new MessageHeaders { CorrelationId = "corr-1", ContentType = serializer.ContentType };
         await producer.SendAsync(Topic, new TestPayload { Name = "a", Value = 7 }, headers);
@@ -118,7 +118,7 @@ public class MqttMetadataRoundTripTests
     {
         var (mock, captured) = MockClient();
         var serializer = new JsonMessageSerializer();
-        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings());
+        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings { ProtocolVersion = MqttProtocol.V500 });
         var consumer = new MqttConsumer(mock.Object, serializer, new MqttSettings());
 
         var headers = new MessageHeaders
@@ -150,7 +150,7 @@ public class MqttMetadataRoundTripTests
     {
         var (mock, captured) = MockClient();
         var serializer = new JsonMessageSerializer();
-        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings());
+        var producer = new MqttProducer(mock.Object, serializer, new MqttSettings { ProtocolVersion = MqttProtocol.V500 });
         var consumer = new MqttConsumer(mock.Object, serializer, new MqttSettings());
 
         var headers = new MessageHeaders { CorrelationId = "corr-9", ContentType = serializer.ContentType };

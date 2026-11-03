@@ -185,6 +185,7 @@ ManualAck, FromBeginning, GroupId or requeue, and MQTT and Redis have no `Delay`
 | `TimeToLive` | honoured (`ttl_ms`; expired entries skipped) | honoured (dropped at dispatch; clock: `InMemoryMessageQueueOptions.Clock`) | MQTT 5 only (`MqttSettings.ProtocolVersion = V500`): message expiry interval, whole seconds from 1; refused on 3.1.1 |
 | `PrefetchCount` | the read batch: entries pending at once (default 1 keeps `ReadCount`) | handlers in flight at once | refused: the receive maximum is per connection |
 | `Priority` (non-zero) | refused | refused | refused (kept for a transport that orders by it, such as RabbitMQ) |
+| `PayloadType`, `Headers` | carried | carried | MQTT 5: user properties. MQTT 3.1.1 (default): not sent; `CorrelationId`, `ReplyTo`, `GroupId`, `Custom` or a foreign `ContentType` refused (TASK-711) |
 | Bus `RetryPolicy` / `DeadLetterOptions` | with a consumer group and `PendingRetryMilliseconds` above 0 | yes (delayed re-send) | refused (no delivery count) |
 
 A redelivered message carries an `x-delivery-count` header on Redis and in-memory. A new Redis consumer group starts at
