@@ -58,8 +58,9 @@ the builder uses neither.
 
 ## Human test plan
 
-- [ ] In the Playground shell, hover a category tab, open a module's ▾ and pick its third page. Expected: that page
+- [x] In the Playground shell, hover a category tab, open a module's ▾ and pick its third page. Expected: that page
       opens, the module becomes active, the ribbon stays where it was (pinned or not).
+      **PASS (the user, 2026-11-03)**, in the Playground's "Category ribbon (Shell)" card on the TASK-803 build.
 
 ## Decision (the user, 2026-11-02)
 
@@ -106,4 +107,4 @@ focus), `keyboard-check.mjs` (key-tip section) and `sortable-drag-check.mjs` (au
 bulk-bar). They passed at TASK-789 (2026-10-30), so the browser environment on this machine changed;
 ribbon-overflow-smoke passes alone (16/16). Measured 2026-11-02.
 
-Pending: the human test in the Playground, then Symbio told, merge, tag v0.4.1 and push at the user's word.
+Human test passed (the user, 2026-11-03). Pending: Symbio told, merge, tag v0.4.1 and push at the user's word.
