@@ -42,9 +42,9 @@ its tint.
 
 ## Human test plan
 
-- [ ] In the Playground's "Category ribbon (Shell)" card (and in Symbio, Obchod → E-Shop → any page): the active
+- [x] In the Playground's "Category ribbon (Shell)" card (and in Symbio, Obchod → E-Shop → any page): the active
       module's tile is tinted from the icon down through "Label ▾", like an active page button, and stays so under the
-      mouse. Other modules are untinted.
+      mouse. Other modules are untinted. **PASS in the Playground (the user, 2026-11-03)**; Symbio after the merge.
 
 ## Implementation plan
 
