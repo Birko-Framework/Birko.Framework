@@ -53,9 +53,9 @@ this now shows on every module with two or more pages.
 
 ## Human test plan
 
-- [ ] In the Playground's "Category ribbon (Shell)" card, hover Sales until its tooltip shows, then click its ▾.
+- [x] In the Playground's "Category ribbon (Shell)" card, hover Sales until its tooltip shows, then click its ▾.
       Expected: the tooltip is gone and the menu's first choices are visible; moving over the menu, or over another
-      module while the menu is open, does not bring one back.
+      module while the menu is open, does not bring one back. **PASS (the user, 2026-11-03).**
 - [ ] Symbio, Commerce tab, E-Shop's ▾: the same.
 
 ## Mechanism (measured 2026-11-03)
