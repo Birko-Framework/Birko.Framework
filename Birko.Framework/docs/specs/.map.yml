@@ -57,9 +57,9 @@
 #
 # Per-sub-repo specs (each Birko.X/docs/specs/) were long recorded here as "the fix".
 # Measured: only 4 of 25 areas are single-repo, so that move addresses 16% of the map
-# and cannot host a cross-repo area at all. Still worth doing on its own merits for
-# those 4 plus the 64 unspecced single-repo projects -- TASK-226 -- but it is not the
-# staleness fix and should not be cited as one.
+# and cannot host a cross-repo area at all. Decided 2026-11-04 (the user, TASK-226):
+# there are no per-project spec trees. Every spec lives here, and each project's
+# CLAUDE.md links to the areas that cover it, derived from this map.
 #
 # Note: test code is now CO-LOCATED, under `../tests/Birko.X.Tests/`, so a careless
 # glob CAN reach it. The test entries in `ignore:` (notably `**/*Tests*/**`) are
@@ -79,8 +79,8 @@
 #   - AI.Providers/Agents/Orchestration/Resilience joined llm-provider-and-agents, Models.SQL schema-index-and-ddl,
 #     Birko.Data.SQL.View views-and-aggregation, Data.EventSourcing and Telemetry's wrappers
 #     store-decorator-composition, the transport auth adapters and the owner-or-admin rule security-and-authorization.
-# "own tree" entries in `ignore:` are real behaviour awaiting a per-project spec tree (TASK-226), not a claim that
-# they need no spec.
+# "own tree" entries in `ignore:` are real behaviour that has no area yet, not a claim that they need no spec. They get
+# an area in this map when they are specced; there are no per-project spec trees (TASK-226, decided 2026-11-04).
 # ───────────────────────────────────────────────────────────────────────────────
 
 coverage: verified
@@ -882,8 +882,8 @@ ignore:
   #
   # ── Not specced HERE, by decision (TASK-689, measured and decided by the user) ──
   # Each entry was checked, not assumed: commits since 2026-09-01 (2 = the monorepo migration, i.e. dormant) and the
-  # area contracts it references. "own tree" means real, self-contained behaviour that belongs in a per-project spec
-  # tree (TASK-226) — NOT a claim that it needs no spec. Re-check an entry when it starts changing.
+  # area contracts it references. "own tree" means real, self-contained behaviour that gets its own area in this
+  # map when specced (TASK-226; there are no per-project spec trees) — NOT a claim that it needs no spec. Re-check an entry when it starts changing.
   #
   # own tree: the UI library and its tokens (active, but self-contained)
   - "../Birko.Xaml.*/**"

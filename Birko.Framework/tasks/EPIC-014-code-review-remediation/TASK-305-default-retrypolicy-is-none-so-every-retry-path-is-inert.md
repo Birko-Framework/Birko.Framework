@@ -132,6 +132,18 @@ That matters to this decision in three ways:
   not block writers, so the `SQLITE_BUSY` storms that made CR-M144's retry look valuable are largely gone.
   Re-measure the transient rate before pricing option 2 or 3 against it.
 
+## Decision — 2026-11-04, by the user: a small default retry
+
+**Approved: `AbstractConnectorBase.RetryPolicy` defaults to a small retry with backoff, not `None`.** It applies only
+to failures `IsTransientException` already classifies as transient (deadlock victim, timeout, dropped connection), so a
+constraint violation or a syntax error is never retried. A consumer can still set `RetryPolicy.None`. Chosen over
+"keep `None` and document it" and over "retry deadlock victims only": the 2026-09-08 SQL Server deadlock above is the
+case it exists for, and no consumer has ever configured a policy, so the change cannot override a consumer's choice.
+
+This task is now the implementation. The retry count and backoff are implementation details, set within the
+constraints below and recorded in the Outcome. Every retry path that was inert (TASK-258's `retryWhenOwned`, CR-M144's
+SQLite bulk retry) has to be re-checked, because it now does something.
+
 ## Acceptance criteria
 
 - [ ] A decision recorded on the three options, with the measurement behind it — not a preference.

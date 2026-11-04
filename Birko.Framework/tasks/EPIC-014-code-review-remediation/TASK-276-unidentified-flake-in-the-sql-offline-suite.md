@@ -714,3 +714,10 @@ Its own standing instruction still applies to what remains: *if it has not recur
 ordinary sweeps, cancel this task and say which change is the likeliest cause rather than leaving it open
 indefinitely.* First sighting was 2026-08-22, so that clock has ~2 weeks left; **and note the lever
 above** — a fortnight of *idle* runs is not the evidence that instruction wants.
+
+## Decision — 2026-11-04, by the user: fix it, do not cancel
+
+The re-check of EPIC-014's open tasks proposed cancelling this under its own rule (no sighting recorded since
+2026-09-08). **The user chose to keep it and fix the test instead.** So the next step is not another
+run-until-green: first capture the failing test's name (run the full suite under the CPU-load lever with a `trx`
+logger kept on every run), then fix that test's dependence on process-wide state. Any fix follows rule 61.

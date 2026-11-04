@@ -49,6 +49,26 @@ staleness for all 25 instead, with a per-sibling `source-commits:` baseline.
   competing with the aggregator for a home; they simply have none. This is the larger half of the value
   and it was never what TASK-131 was about.
 
+## Decision — 2026-11-04, by the user: no per-project spec trees; projects LINK to the central specs
+
+**Approved, and it replaces this task's original scope.** The monorepo gave every spec one history, which was the
+main thing a per-project tree offered ([[TASK-457]]). The problem that remains is discoverability: an agent working in
+one project should always find the specs that govern it. Measured 2026-11-04: **1 of 196** project `CLAUDE.md` files
+mentions `docs/specs` at all.
+
+So: every spec stays in `Birko.Framework/docs/specs/`, and each project's `CLAUDE.md` gets a short **Specs** line listing
+the areas whose globs cover it, derived from `.map.yml` (e.g. `Birko.Data.Tagging` → `entity-tagging`). A project with
+no area says so explicitly. The "own tree" families in `ignore:` get an area in the central map when they are specced.
+The three `.map.yml` comments that pointed at per-project trees were rewritten in the same change as this decision.
+
+**The acceptance criteria below are replaced by these:**
+
+- [ ] Each project `CLAUDE.md` carries a Specs line naming its covering areas (or "none yet"), derived from `.map.yml`
+      and not hand-written: one producer, the map
+- [ ] Something keeps them current: `/specs regen`, or a check that fails when a Specs line disagrees with the map.
+      Shown by changing a glob and watching the check fail
+- [ ] The root `CLAUDE.md` / `CLAUDE-maintenance.md` new-project checklist says where the Specs line comes from
+
 ## Acceptance criteria
 
 - [ ] Decide the split for the 4 measured single-repo areas: move to the sub-repo, or leave at the
