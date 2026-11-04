@@ -24,6 +24,8 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
 
     // The ambient registration this unit of work owns, released on commit/rollback/dispose.
     private IDisposable? _ambientScope;
+    // The entry that registration published: a participant marks THIS rollback-only, so the owner reads it here.
+    private AmbientSqlTransaction.Entry? _owned;
     // The AsyncLocal cell installed at construction — see the constructor for why it cannot be installed
     // in BeginAsync. Released on dispose.
     private readonly IDisposable _cellScope;
@@ -127,7 +129,8 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
 
         // Publishing to the ambient scope is what makes every store in this flow participate without
         // the caller having to hand the context to each one individually.
-        _ambientScope = AmbientSqlTransaction.Enter(settingsId, _connection, _transaction);
+        _ambientScope = AmbientSqlTransaction.Enter(settingsId, _connection, _transaction, out var owned);
+        _owned = owned;
     }
 
     public async Task CommitAsync(CancellationToken ct = default)
@@ -147,7 +150,10 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
             return;
         }
 
-        if (_ambientScope is not null && AmbientSqlTransaction.Find(_settings.GetId()) is { IsRollbackOnly: true })
+        // TASK-718: the owner's own entry, not a lookup in the calling flow — a commit from a flow that does not carry the
+        // cell (a callback queued without the execution context) found nothing and committed over a participant's
+        // rollback (measured), where the Mongo and Raven units of work read their own published scope.
+        if (_owned is { IsRollbackOnly: true })
         {
             throw new TransactionRollbackOnlyException();
         }
@@ -222,6 +228,7 @@ public sealed class SqlUnitOfWork : IUnitOfWork<SqlTransactionContext>
     {
         _ambientScope?.Dispose();
         _ambientScope = null;
+        _owned = null;
     }
 
     /// <summary>

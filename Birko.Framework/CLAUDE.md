@@ -292,6 +292,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL unit of work reads its own rollback mark; a failed savepoint release is not a failed write (2026-11-04)
+[[TASK-718]]. `SqlUnitOfWork.CommitAsync` looked for a participant's rollback mark in the calling flow, so an owner
+committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it
+published (new `AmbientSqlTransaction.Enter(…, out entry)`). A `SqlSavepoint` release that threw after the write
+applied reported the write as failed, inviting a retry to repeat it; it no longer does.
 ### SQL views are created and replaced on every provider (2026-11-04)
 [[TASK-717]]. A migration's `CreateView` sent `CREATE OR REPLACE VIEW`, which SQLite refuses (measured); it now drops,
 then creates. SQLite's connector `CreateView` kept an old definition with no error; it now replaces it. On SQL Server a
@@ -365,13 +370,6 @@ and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `R
 with the new `RedisSettings.GetConfigurationOptions()`; `GetConnectionString()` refuses a `,` in the password, user or
 client name, which a connection string cannot carry. MongoDB percent-encodes user name, password, database,
 `authSource` and `replicaSet`. Measured live on both.
-### SQL aggregates refuse names that are not columns (2026-11-03)
-[[TASK-706]]. An aggregate query's group-by field, source, time column and ORDER BY key reached the SQL text as
-written when they named no property (measured on SQLite: `SUM(length(Name))` and `ORDER BY random()` ran), and an
-interval that did not parse went into `time_bucket('…')` as written (measured live on TimescaleDB). Each is now
-resolved against the table's columns or refused with `ArgumentException`; the interval is parsed and rendered as seconds.
-Time buckets are TimescaleDB's: other SQL providers refuse them with `NotSupportedException` (they failed at the
-database). One of `TimeBucketInterval` / `TimeColumn` alone is refused, as the in-memory aggregation already did.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

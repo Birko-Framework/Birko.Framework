@@ -521,7 +521,10 @@ settings id, join it instead of opening a second connection: the unit of work be
 transaction. A participant's `CommitAsync` SHALL commit nothing and detach; a participant's
 `RollbackAsync` SHALL undo nothing, mark the enclosing boundary rollback-only and detach. The owner's
 `CommitAsync` on a boundary marked rollback-only SHALL throw `TransactionRollbackOnlyException` without
-committing, and a participant asked to commit a boundary already marked rollback-only SHALL throw it too.
+committing, and a participant asked to commit a boundary already marked rollback-only SHALL throw it too. The owner
+SHALL read the mark on the entry it published (`AmbientSqlTransaction.Enter(…, out entry)`), whatever flow calls
+`CommitAsync` (TASK-718: it looked the boundary up in the calling flow, so a commit from a flow without its cell
+committed over a participant's rollback, measured).
 
 #### Scenario: Nested begin against the same database
 
@@ -550,6 +553,13 @@ committing, and a participant asked to commit a boundary already marked rollback
 - **When** the owner then calls `CommitAsync()`
 - **Then** `TransactionRollbackOnlyException` is thrown, nothing is committed, and the owner is still
   active so it can call `RollbackAsync()`
+
+#### Scenario: An owner committed from another flow still honours the mark (TASK-718)
+
+- **Given** a participant that rolled back inside an owner's boundary
+- **When** the owner's `CommitAsync()` runs in a flow that does not carry its cell (queued with the execution context
+  suppressed)
+- **Then** `TransactionRollbackOnlyException` is thrown and nothing is committed
 
 #### Scenario: Disposing a participant without commit or rollback
 
@@ -897,7 +907,9 @@ in `RavenDbUnitOfWork` (keyed by `RavenAmbientKey.Of(documentStore)`), install a
 the constructor and, on `BeginAsync`, publish the new session under that key, so an async store on that database given no
 session of its own (`TransactionContext ?? AmbientSession.Find(AmbientKey)`) writes inside it. The publication SHALL be
 withdrawn when the transaction ends (commit, rollback, failed commit) and on disposal, which also releases the cell. A
-`MongoDbUnitOfWork` built from a bare `IMongoClient` SHALL publish nothing. `CommitAsync` SHALL throw
+`MongoDbUnitOfWork` built from a bare `IMongoClient` SHALL publish nothing, as no Birko database names it (TASK-718,
+recorded: a key derived from the driver's settings would not match a store's settings id); its `Context` is handed to
+each store. `CommitAsync` SHALL throw
 `TransactionRollbackOnlyException` without committing when a participant marked the published session rollback-only,
 leaving the unit of work active for `RollbackAsync` (TASK-700). The RavenDB unit of work publishes an
 `IAsyncDocumentSession`, so the synchronous `RavenDBStore` (which looks up `IDocumentSession`) does not join.
@@ -1087,7 +1099,10 @@ arguments → `ArgumentNullException`), which save a savepoint named `birko_retr
 run the write, release the savepoint when the write succeeds or throws `EntityNotFoundException` (rethrown, so a
 collection write keeps what it applied, TASK-555, TASK-705), and when it throws anything else roll back to the savepoint
 and rethrow the write's own exception; a failure of that rollback SHALL NOT replace it but SHALL be recorded as its message under
-`exception.Data["Birko.SavepointRollbackFailure"]` (`SqlSavepoint.RollbackFailureKey`). The async form SHALL pass the
+`exception.Data["Birko.SavepointRollbackFailure"]` (`SqlSavepoint.RollbackFailureKey`). A release that fails SHALL NOT
+fail the write, which has applied: the savepoint ends with its transaction, and a transaction really lost fails at its
+own commit (TASK-718: the release's exception reported the write as failed, so a retrying caller would run it again,
+measured). The async form SHALL pass the
 caller's token only to the save, and `CancellationToken.None` to the rollback and the release (TASK-694, TASK-697).
 
 #### Scenario: A collection write that met a missing entity keeps what it stored

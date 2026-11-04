@@ -44,6 +44,12 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
     /// <summary>
     /// Creates a new MongoDbUnitOfWork from a MongoClient.
     /// </summary>
+    /// <remarks>
+    /// This one publishes nothing: a bare client names no Birko database, so there is no key a store could find the
+    /// session under, and a store given no context writes outside the transaction. Hand <see cref="Context"/> to each
+    /// store, or construct from a <see cref="MongoDBClient"/> (TASK-718, recorded: a key derived from the driver's
+    /// settings would not match the stores' settings ids).
+    /// </remarks>
     public MongoDbUnitOfWork(IMongoClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));

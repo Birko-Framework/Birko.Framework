@@ -41,7 +41,7 @@ namespace Birko.Data.SQL.Stores
             {
                 // TASK-705: a collection write that met a missing entity applied the rest and says so (TASK-555); undoing
                 // that here would lose it on exactly the paths that retry.
-                transaction.Release(name);
+                TryRelease(transaction, name);
                 throw;
             }
             catch (Exception error)
@@ -49,7 +49,7 @@ namespace Birko.Data.SQL.Stores
                 RollBack(transaction, name, error);
                 throw;
             }
-            transaction.Release(name);
+            TryRelease(transaction, name);
         }
 
         /// <inheritdoc cref="Run"/>
@@ -65,7 +65,7 @@ namespace Birko.Data.SQL.Stores
             }
             catch (EntityNotFoundException)
             {
-                await transaction.ReleaseAsync(name, CancellationToken.None).ConfigureAwait(false);
+                await TryReleaseAsync(transaction, name).ConfigureAwait(false);
                 throw;
             }
             catch (Exception error)
@@ -75,7 +75,35 @@ namespace Birko.Data.SQL.Stores
                 throw;
             }
             // Nor here: the write was applied, so a cancellation now must not report it as failed.
-            await transaction.ReleaseAsync(name, CancellationToken.None).ConfigureAwait(false);
+            await TryReleaseAsync(transaction, name).ConfigureAwait(false);
+        }
+
+        // TASK-718: the write has applied, so a release that fails is not the write failing. Reported as one (measured), it
+        // sent the retrying callers this producer exists for round again inside the same transaction. A savepoint left
+        // unreleased ends with its transaction, and a transaction that is really lost fails at its own commit — which is
+        // the one failure this swallows, and the reason it is safe to.
+        private static void TryRelease(DbTransaction transaction, string name)
+        {
+            try
+            {
+                transaction.Release(name);
+            }
+            catch (Exception)
+            {
+                // See above.
+            }
+        }
+
+        private static async Task TryReleaseAsync(DbTransaction transaction, string name)
+        {
+            try
+            {
+                await transaction.ReleaseAsync(name, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // See TryRelease.
+            }
         }
 
         // A rollback that fails means the transaction is lost anyway, so the write's own error is the one to surface

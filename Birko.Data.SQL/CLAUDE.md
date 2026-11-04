@@ -41,7 +41,7 @@ Extends AsyncDataBaseStore with async bulk operations.
 - `AsyncDataBaseBulkStore<DB,T>` - Base async SQL bulk store
 - `DataBase.RegisterMaxLength(type, property, length)` - a fluent length (TASK-691): `LoadField` appends it as a `MaxLengthField` after the property's own attributes, so `CreateAbstractField` stays the one producer of a column's type and the fluent value wins. A changed length drops the type's cached fields and table; the same length again changes nothing. Register before any store loads the type
 - `ISqlConnectedStore` - a store's connector without its generic arguments, implemented explicitly by the two base stores; how composing code tells two stores share one database (`Connector.Settings.GetId()`, TASK-683)
-- `IRetryableWriteStore` (TASK-694) - implemented by the two base stores through `SqlRetryableWrite`, the one producer: a retryable write runs in a savepoint (`DbTransaction.Save` / `Rollback(name)` / `Release`) only when the connector's `AbortsTransactionOnError` (PostgreSQL) and a transaction is active (the store's context or the ambient boundary); a refusal rolls back to it, so the caller's transaction stays usable. The savepoint mechanics are `SqlSavepoint.Run(Async)(transaction, write)`, the one producer since TASK-697, which the localized write boundary also uses. An `EntityNotFoundException` releases the savepoint and is rethrown, so a collection write keeps what it stored (TASK-705)
+- `IRetryableWriteStore` (TASK-694) - implemented by the two base stores through `SqlRetryableWrite`, the one producer: a retryable write runs in a savepoint (`DbTransaction.Save` / `Rollback(name)` / `Release`) only when the connector's `AbortsTransactionOnError` (PostgreSQL) and a transaction is active (the store's context or the ambient boundary); a refusal rolls back to it, so the caller's transaction stays usable. The savepoint mechanics are `SqlSavepoint.Run(Async)(transaction, write)`, the one producer since TASK-697, which the localized write boundary also uses. An `EntityNotFoundException` releases the savepoint and is rethrown, so a collection write keeps what it stored (TASK-705). A release that fails does not fail the applied write (TASK-718)
 
 ### Repositories
 - `DataBaseRepository<T,S,DB>` - SQL repository base
@@ -239,6 +239,9 @@ lifetime, and it composes across stores without the caller remembering to wire e
 - **A boundary stops resolving the instant its owner leaves** (`Entry.IsEnded`), even for a flow still
   holding a stale cell — because `DisposeAsync` cannot restore the cell either. Without it, a later read
   ran on a disposed connection.
+- **The owner reads its own mark (TASK-718).** `SqlUnitOfWork` keeps the entry `AmbientSqlTransaction.Enter(…, out entry)`
+  published and checks its rollback-only mark at commit, so a commit from a flow without the cell still honours a
+  participant's rollback.
 - **After-commit work (TASK-669).** `AmbientSqlTransaction.OnCommitted(transaction, key, callback)` registers work on
   the boundary's `DbTransaction` (keyed by the transaction, not an ambient entry: an explicit context publishes a fresh
   entry per operation, and a participant may run in another flow). The owner runs it once after a successful commit —

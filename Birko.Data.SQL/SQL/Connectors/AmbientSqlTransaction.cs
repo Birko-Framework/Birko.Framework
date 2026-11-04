@@ -312,6 +312,13 @@ namespace Birko.Data.SQL.Connectors
         /// </para>
         /// </remarks>
         public static IDisposable Enter(string settingsId, DbConnection connection, DbTransaction transaction)
+            => Enter(settingsId, connection, transaction, out _);
+
+        /// <summary>
+        /// Enters a boundary as <see cref="Enter(string, DbConnection, DbTransaction)"/> does, and hands back the entry it
+        /// published, so its owner can read the entry's rollback-only mark from any flow (TASK-718).
+        /// </summary>
+        public static IDisposable Enter(string settingsId, DbConnection connection, DbTransaction transaction, out Entry entered)
         {
             if (string.IsNullOrEmpty(settingsId)) throw new ArgumentNullException(nameof(settingsId));
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -325,6 +332,7 @@ namespace Birko.Data.SQL.Connectors
             }
             var previousHead = cell.Head;
             cell.Head = new Entry(settingsId, connection, transaction, previousHead);
+            entered = cell.Head;
             return new EntryScope(cell, cell.Head, previousHead);
         }
 
