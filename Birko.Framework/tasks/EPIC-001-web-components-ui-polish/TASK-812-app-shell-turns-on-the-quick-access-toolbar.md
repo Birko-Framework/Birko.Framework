@@ -40,3 +40,8 @@ then `setQuickAccess(defaults | null)` only when on/off changes. README § *The 
 Tests: no Playground smoke yet — covered end to end by Symbio `tests/ui-e2e/ribbon-quick-access.spec.ts` (add from the
 context menu, the key names user and tenant, survives a reload, removed again); red with the key `null`. A Playground smoke
 is the open follow-up if wanted.
+
+**Fix found in Symbio's human test (same v0.4.4, `111f760`, tag moved — it was never pushed):** the shell kept its own
+`_qatOn` flag, and the brand link (→ dashboard) re-mounts the shell, which builds a NEW `<b-ribbon>`; the flag said
+"already on", so the new ribbon had its key but no toolbar until a reload. On/off is now read from the ribbon
+(`BRibbon.quickAccessEnabled`). Red then green: Symbio `ribbon-quick-access.spec.ts` (System tenant, brand-link step).
