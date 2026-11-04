@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-26 — The Birko.Xaml diff viewer is framed as on the web
+[[TASK-776]] (FEATURE-020 D6, changed). `JsonDiffViewer` now sits in `b-json-diff`'s card: a bordered, rounded card, a
+header bar with a line under it, a padded body; side-by-side panes stay a gap apart. On by default; `IsFramed = false`
+turns it off for a host that frames the viewer itself. Asked for by the FinStat desktop tester. Signed off in the Gallery and the tester.
+
+## 2026-10-26 — Birko text boxes mask passwords, show placeholders and selections
+[[TASK-768]]. The Birko Avalonia `TextBox` template passed its presenter only the text, so every password field showed
+its value (the FinStat tester's "Private Key"), no placeholder showed, selections were not drawn, and a long value ran
+out of the box. It now passes what Avalonia's own template does, with a watermark and a scroll viewer.
+
 ## 2026-10-26 — Birko.Xaml compares JSON and XML as the web does
 [[TASK-770]] (FEATURE-020). New `Birko.Xaml.Core.Diff`: `JsonDiff.Diff(a, b, options)` ports Birko.Web.Core's `diffJson`
 for the FinStat desktop tester: changes by path, a merged tree and counts, with ignore, normalize and array pairing.

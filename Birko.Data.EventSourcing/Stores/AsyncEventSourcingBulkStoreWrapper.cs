@@ -32,8 +32,9 @@ namespace Birko.Data.EventSourcing.Stores
         /// <param name="eventStore">The async event store for recording events.</param>
         /// <param name="serializer">The serializer for event data. Defaults to SystemJsonSerializer.</param>
         /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
-        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, Birko.Serialization.ISerializer? serializer = null, IDateTimeProvider? clock = null)
-            : base(innerStore, eventStore, serializer, clock)
+        /// <param name="currentUser">Reads the current user for each event.</param>
+        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, Birko.Serialization.ISerializer? serializer = null, IDateTimeProvider? clock = null, Func<Guid?>? currentUser = null)
+            : base(innerStore, eventStore, serializer, clock, currentUser)
         {
         }
 
@@ -61,17 +62,9 @@ namespace Birko.Data.EventSourcing.Stores
                 var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
                 var newVersion = currentVersion + 1;
 
-                var @event = new DomainEvent(
-                    item.Guid.Value,
-                    newVersion,
-                    "Created",
-                    _serializer.Serialize(item),
-                    CurrentUserGuid,
-                    _clock
-                );
+                var @event = NewEvent(item, "Created", newVersion);
 
                 events.Add(@event);
-                item.Version = newVersion;
             }
 
             // Append all events first
@@ -110,7 +103,12 @@ namespace Birko.Data.EventSourcing.Stores
             for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
                 var item = items[itemIndex];
-                if (item?.Guid == null) continue;
+                if (item?.Guid == null)
+                {
+                    // TASK-713: refused before any event is appended. It used to be skipped without an event while the
+                    // events of the items before it were appended and the inner store then refused the call.
+                    throw new Data.Exceptions.EntityNotFoundException(typeof(T), item?.Guid);
+                }
 
                 item = StoreDelegates.Apply(storeDelegate, item);
                 items[itemIndex] = item; // the list is what gets persisted
@@ -118,17 +116,9 @@ namespace Birko.Data.EventSourcing.Stores
                 var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
                 var newVersion = currentVersion + 1;
 
-                var @event = new DomainEvent(
-                    item.Guid.Value,
-                    newVersion,
-                    "Updated",
-                    _serializer.Serialize(item),
-                    CurrentUserGuid,
-                    _clock
-                );
+                var @event = NewEvent(item, "Updated", newVersion);
 
                 events.Add(@event);
-                item.Version = newVersion;
             }
 
             // Append all events first
@@ -145,7 +135,8 @@ namespace Birko.Data.EventSourcing.Stores
         {
             if (data == null) return;
 
-            var items = data.ToList();
+            // TASK-713: an item without a Guid names no row: it gets no event and is not passed on.
+            var items = data.Where(x => x?.Guid != null).ToList();
             var events = new List<IEvent>();
 
             foreach (var item in items)
@@ -155,14 +146,7 @@ namespace Birko.Data.EventSourcing.Stores
                 var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
                 var newVersion = currentVersion + 1;
 
-                var @event = new DomainEvent(
-                    item.Guid.Value,
-                    newVersion,
-                    "Deleted",
-                    _serializer.Serialize(item),
-                    CurrentUserGuid,
-                    _clock
-                );
+                var @event = NewEvent(item, "Deleted", newVersion);
 
                 events.Add(@event);
             }
@@ -180,6 +164,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken cancellationToken = default)
         {
+            RequireBoundedFilter(filter, "update");
             if (updates.Assignments.Count == 0) return Task.CompletedTask; // SH-M032 (TASK-170)
             return UpdateAsync(filter, entity => updates.ApplyTo(entity), cancellationToken);
         }
@@ -190,6 +175,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)
         {
+            RequireBoundedFilter(filter, "update");
             var bulkStore = (_innerStore as IAsyncBulkStore<T>)!;
             var items = (await bulkStore.ReadAsync(filter, null, null, null, cancellationToken)).ToList();
             var events = new List<IEvent>();
@@ -203,17 +189,9 @@ namespace Birko.Data.EventSourcing.Stores
                 var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
                 var newVersion = currentVersion + 1;
 
-                var @event = new DomainEvent(
-                    item.Guid.Value,
-                    newVersion,
-                    "Updated",
-                    _serializer.Serialize(item),
-                    CurrentUserGuid,
-                    _clock
-                );
+                var @event = NewEvent(item, "Updated", newVersion);
 
                 events.Add(@event);
-                item.Version = newVersion;
             }
 
             await _eventStore.AppendRangeAsync(events, cancellationToken);
@@ -225,6 +203,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         public virtual async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken cancellationToken = default)
         {
+            RequireBoundedFilter(filter, "delete");
             var bulkStore = (_innerStore as IAsyncBulkStore<T>)!;
             var items = (await bulkStore.ReadAsync(filter, null, null, null, cancellationToken)).ToList();
             var events = new List<IEvent>();
@@ -236,20 +215,25 @@ namespace Birko.Data.EventSourcing.Stores
                 var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
                 var newVersion = currentVersion + 1;
 
-                var @event = new DomainEvent(
-                    item.Guid.Value,
-                    newVersion,
-                    "Deleted",
-                    _serializer.Serialize(item),
-                    CurrentUserGuid,
-                    _clock
-                );
+                var @event = NewEvent(item, "Deleted", newVersion);
 
                 events.Add(@event);
             }
 
             await _eventStore.AppendRangeAsync(events, cancellationToken);
             await bulkStore.DeleteAsync(items, cancellationToken);
+        }
+        /// <summary>
+        /// TASK-713 (rules 1-3): a filtered write needs a filter that names rows. A null or always-true one read every row
+        /// and rewrote or deleted each, with an event each; this wrapper offers no whole-table door.
+        /// </summary>
+        private static void RequireBoundedFilter(Expression<Func<T, bool>> filter, string operation)
+        {
+            if (filter is null)
+            {
+                throw new ArgumentNullException(nameof(filter), $"A filtered event-sourced {operation} on {typeof(T).Name} needs a filter.");
+            }
+            Birko.Data.Expressions.BoundedFilterGuard.Require(filter, operation, typeof(T).Name, "a filter that names the rows");
         }
     }
 }

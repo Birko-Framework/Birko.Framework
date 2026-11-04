@@ -56,21 +56,20 @@ Entity contract for aggregates the wrappers can sit in front of:
 `EventSourcedAggregate` is a default base class that tracks uncommitted events in a `List<IEvent>`, sets `Version` from the applied event, and clears the buffer on commit.
 
 ### Wrappers (`Stores/`)
-All four implement the same store interface as the inner store **and** `IStoreWrapper<T>`. Generic constraint: `T : AbstractModel, IEventSourced`. Constructor takes `(innerStore, eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null)`. Defaults: `SystemJsonSerializer`, `SystemDateTimeProvider`.
+All four implement the same store interface as the inner store **and** `IStoreWrapper<T>`. Generic constraint: `T : AbstractModel, IEventSourced`. Constructor takes `(innerStore, eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null, Func<Guid?>? currentUser = null)`. Defaults: `SystemJsonSerializer`, `SystemDateTimeProvider`.
 
 Write-side behavior is uniform across the four:
 1. Compute `newVersion = eventStore.GetVersion(aggregateId) + 1`
-2. Build a `DomainEvent("Created" | "Updated" | "Deleted", serializer.Serialize(item), CurrentUserGuid, clock)`
+2. Set `item.Version = newVersion`, then build a `DomainEvent("Created" | "Updated" | "Deleted", serializer.Serialize(item), currentUser?.Invoke(), clock)` (`NewEvent`, the one producer; TASK-713: the payload carried the old version)
 3. **Append to event store first**, then delegate to the inner store
-4. Set `item.Version = newVersion` on the entity before persisting
 
-The bulk wrappers also implement the filter-based `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, and `Delete(filter)` overloads — they read the matching entities, raise per-entity events via `AppendRange`, then call the inner bulk store. (No native UpdateByQuery / filter-delete optimization — event recording requires per-entity events.)
+The bulk wrappers also implement the filter-based `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, and `Delete(filter)` overloads — they read the matching entities, raise per-entity events via `AppendRange`, then call the inner bulk store. (No native UpdateByQuery / filter-delete optimization — event recording requires per-entity events.) A null filter, or one reducing to every row, is refused (TASK-713, `BoundedFilterGuard`; `x => true` is the explicit all-rows filter). A bulk update with an item without a Guid throws `EntityNotFoundException` before any event; a bulk delete leaves such items out.
 
 Replay APIs (sync + async):
 - `Replay(aggregateId)` — `CreateInstance()` + `IEventSourced.LoadFromEvents(events)`
 - `GetHistory(aggregateId)` — raw event list for the aggregate
 
-Optional `CurrentUserGuid` setter on the wrapper instance stamps `IEvent.UserGuid` on every emitted event.
+The optional `currentUser` delegate is read at each write and stamps `IEvent.UserGuid` (TASK-713: a settable `CurrentUserGuid` on a shared wrapper, now removed).
 
 ### `.WithEventSourcing(...)` extensions (`Stores/EventSourcingStoreExtensions.cs`)
 One overload per store interface (`IStore<T>`, `IAsyncStore<T>`, `IBulkStore<T>`, `IAsyncBulkStore<T>`). Returns the same interface. The `IStore<T>` / `IAsyncStore<T>` overloads upcast to the bulk wrapper automatically if the store is already bulk.
@@ -99,7 +98,7 @@ var rebuilt = await ((AsyncEventSourcingBulkStoreWrapper<IAsyncBulkStore<Custome
     .ReplayAsync(aggregateId);
 ```
 
-To set the user on emitted events, cast to the wrapper type and set `CurrentUserGuid`.
+To set the user on emitted events, pass `currentUser` (e.g. `() => auditContext.CurrentUserGuid`); `StoreWrapperBuilder` passes its `IAuditContext`'s.
 
 ## Composition
 `Birko.Data.Composition.StoreWrapperBuilder.Build<T>` wires event sourcing into the decorator chain automatically — pass an `IAsyncEventStore` and any `T : IEventSourced` gets the wrapper applied innermost:

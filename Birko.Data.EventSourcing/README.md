@@ -13,7 +13,7 @@ implementation (typically backed by another Birko store, e.g. SQL / Mongo / JSON
 - Record every state change as an immutable `DomainEvent` alongside the normal write
 - Rebuild (`Replay`) an aggregate's state by folding its event stream
 - Full event history per aggregate (`GetHistory`)
-- Optional `CurrentUserGuid` stamping on emitted events
+- Optional `currentUser` delegate, read at each write, stamping `UserGuid` on emitted events
 - Composes into the `StoreWrapperBuilder` decorator chain (innermost)
 
 ## Dependencies

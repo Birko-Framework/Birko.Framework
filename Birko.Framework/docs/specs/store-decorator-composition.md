@@ -1087,10 +1087,10 @@ The system SHALL, in `EventSourcingStoreWrapper` / `AsyncEventSourcingStoreWrapp
 create, update and delete BEFORE writing to the inner store: apply the caller's store delegate, (on create) assign
 the entity's Guid with `EnsureGuid()`, read the aggregate's current version from the event store
 (`GetVersion` / `GetVersionAsync`, 0 for an unknown aggregate), build an event with version `current + 1`, event
-type `"Created"` / `"Updated"` / `"Deleted"`, the serialized entity as `EventData`, the wrapper's
-`CurrentUserGuid` as `UserGuid` and `OccurredAt` from the wrapper's clock, append it, then — on create and update
-— set the entity's `Version` to the new version and forward the write to the inner store with no store
-delegate. An update or delete of a null entity or an entity with a null `Guid` SHALL return without recording or
+type `"Created"` / `"Updated"` / `"Deleted"`, the entity's `Version` set to the new version **before** it is serialized
+as `EventData` (TASK-713: the payload carried the previous version, measured), `UserGuid` from the wrapper's
+`currentUser` delegate read at that write (null when none was given), and `OccurredAt` from the wrapper's clock, append
+it, then forward the write to the inner store with no store delegate. An update or delete of a null entity or an entity with a null `Guid` SHALL return without recording or
 writing anything. Reads, counts, `Init`, `Destroy` and `CreateInstance` SHALL be forwarded unchanged.
 
 #### Scenario: Create records a Created event under the persisted Guid
@@ -1099,11 +1099,11 @@ writing anything. Reads, counts, `Init`, `Destroy` and `CreateInstance` SHALL be
 - **When** `AsyncEventSourcingStoreWrapper.CreateAsync(item)` is called
 - **Then** the entity's Guid is assigned first, one event with that `AggregateGuid`, `Version = 1` and `EventType = "Created"` is appended, `item.Version` becomes 1, and the inner create receives the same entity — so the event and the row share one Guid (CR-C06)
 
-#### Scenario: The event payload is serialized before the version is bumped
+#### Scenario: The event payload carries its own version (TASK-713)
 
 - **Given** a stored aggregate at event version 3 and an entity whose `Version` is 3
 - **When** it is updated through the event-sourcing wrapper
-- **Then** the appended event has `Version = 4` but its `EventData` was serialized while the entity's `Version` was still 3; the entity reaches the inner store with `Version = 4`
+- **Then** the appended event has `Version = 4` and its `EventData` carries `Version = 4`; the entity reaches the inner store with `Version = 4`
 
 #### Scenario: The event is appended even when the inner write then fails
 
@@ -1123,23 +1123,27 @@ writing anything. Reads, counts, `Init`, `Destroy` and `CreateInstance` SHALL be
 - **When** `EventSourcingStoreWrapper.Update(data)` or `Delete(data)` is called
 - **Then** no event is appended, the inner store is not called, and no exception is thrown
 
-#### Scenario: Audit user is the wrapper's property, not a context
+#### Scenario: The user is read at each write (TASK-713)
 
-- **Given** an event-sourcing wrapper whose `CurrentUserGuid` was never set (as in every chain `StoreWrapperBuilder` builds)
-- **When** any write is recorded
-- **Then** the event's `UserGuid` is null
+- **Given** a chain `StoreWrapperBuilder` built with an `IAuditContext` and an event store
+- **When** two writes are recorded while the context's `CurrentUserGuid` changes between them
+- **Then** each event carries the user current at its write; without an audit context `UserGuid` is null. (It was a
+  settable `CurrentUserGuid` on the shared wrapper, which the builder never set.)
 
 ### Requirement: Event recording on bulk and filter-based writes
 
 The system SHALL, in `EventSourcingBulkStoreWrapper` / `AsyncEventSourcingBulkStoreWrapper`, materialize a
-bulk write's items into a list, build one event per item (skipping items with a null `Guid` on update and delete
-— but still passing them to the inner store), append them all with one `AppendRange` / `AppendRangeAsync`, and
+bulk write's items into a list, build one event per item, append them all with one `AppendRange` / `AppendRangeAsync`, and
 then make one inner bulk write with the list. The filter-based `Action<T>` update and filter delete SHALL read
 the matching rows from the inner store, apply the action (update), record one event per row, append them, and
 then write the rows back with the inner entity-collection update or delete — never the inner filter overload.
 The `PropertyUpdate<T>` update SHALL do nothing when it has no assignments, and otherwise take the `Action<T>`
-path with `updates.ApplyTo(entity)`. A null bulk collection SHALL be a no-op. No filter-based path refuses a
-null or whole-table filter.
+path with `updates.ApplyTo(entity)`. A null bulk collection SHALL be a no-op. A bulk update holding a null item or one
+without a `Guid` SHALL throw `EntityNotFoundException` before any event is appended (TASK-713: its siblings' events were
+appended, then the inner store refused the call, measured); a bulk delete SHALL leave such items out of both the events
+and the inner call. Every filter-based write SHALL refuse a null filter (`ArgumentNullException`) and one that reduces
+to every row (`WholeTableWriteException`, through `BoundedFilterGuard`) before reading anything; `x => true`, the
+explicit all-rows filter, is let through (TASK-713: both rewrote or deleted every row with an event each, measured).
 
 #### Scenario: One append for a whole batch
 

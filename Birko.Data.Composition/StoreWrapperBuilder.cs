@@ -52,7 +52,9 @@ public static class StoreWrapperBuilder
         // IsDeleted=true — matches physical storage.
         if (eventStore is not null && typeof(IEventSourced).IsAssignableFrom(typeof(T)))
         {
-            store = Wrap(typeof(AsyncEventSourcingBulkStoreWrapper<,>), store, eventStore, null, effectiveClock);
+            // TASK-713: the events carry the audit context's user, read at each write.
+            Func<Guid?>? currentUser = auditContext is null ? null : () => auditContext.CurrentUserGuid;
+            store = Wrap(typeof(AsyncEventSourcingBulkStoreWrapper<,>), store, eventStore, null, effectiveClock, currentUser);
         }
 
         // Timestamp (applies to all ITimestamped entities — AbstractLogModel+)

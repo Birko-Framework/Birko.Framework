@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Event-sourced filtered writes refuse every-row filters; events carry their version and user (2026-11-04)
+[[TASK-713]]. The event-sourcing wrappers' filtered update and delete took a null filter, or one reducing to every row,
+and rewrote or deleted every row (measured); they now refuse both (`x => true` stays the explicit all-rows filter).
+`EventData` carried the previous `Version`; a bulk update holding an item without a Guid appended its siblings' events
+before the store refused it. **Breaking:** the settable `CurrentUserGuid` is gone; pass `currentUser` (a `Func<Guid?>`).
+`StoreWrapperBuilder` passes its `IAuditContext`'s user, which events never had.
 ### Fluent IsUnique, IsRequired and Ignore act as the attributes do (2026-11-04)
 [[TASK-712]]. A fluent `IsUnique` on a nullable column got no `ux_` index, so SQLite took a duplicate, and `Ignore()`
 left the property a column (measured). Both, with `IsRequired`, are now registered before the table loads
@@ -367,14 +373,6 @@ nonce, a state bound to the browser) and returns a status. `IdTokenValidator` ch
 provider's published keys. Google and Microsoft factories. The framework now owns OIDC sign-in (EPIC-020's boundary,
 moved by the user); who may sign in stays in the app. New package `Microsoft.IdentityModel.JsonWebTokens` 8.*: CPM
 consumers add it. [[TASK-779]]: a PKCE code exchange now also sends the client secret, which Google and Microsoft require.
-### The Birko.Xaml diff viewer is framed as on the web (2026-10-26)
-[[TASK-776]] (FEATURE-020 D6, changed). `JsonDiffViewer` now sits in `b-json-diff`'s card: a bordered, rounded card, a
-header bar with a line under it, a padded body; side-by-side panes stay a gap apart. On by default; `IsFramed = false`
-turns it off for a host that frames the viewer itself. Asked for by the FinStat desktop tester. Signed off in the Gallery and the tester.
-### Birko text boxes mask passwords, show placeholders and selections (2026-10-26)
-[[TASK-768]]. The Birko Avalonia `TextBox` template passed its presenter only the text, so every password field showed
-its value (the FinStat tester's "Private Key"), no placeholder showed, selections were not drawn, and a long value ran
-out of the box. It now passes what Avalonia's own template does, with a watermark and a scroll viewer.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

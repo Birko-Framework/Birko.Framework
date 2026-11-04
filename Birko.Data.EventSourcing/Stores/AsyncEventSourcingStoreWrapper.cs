@@ -29,10 +29,8 @@ namespace Birko.Data.EventSourcing.Stores
         protected readonly ISerializer _serializer;
         protected readonly IDateTimeProvider _clock;
 
-        /// <summary>
-        /// Gets the current user ID for event tracking.
-        /// </summary>
-        public Guid? CurrentUserGuid { get; set; }
+        /// <summary>The caller's current user, read at each write and stamped on its events; null for none.</summary>
+        protected readonly Func<Guid?>? _currentUser;
 
         /// <summary>
         /// Creates a new async event sourcing store wrapper.
@@ -41,12 +39,26 @@ namespace Birko.Data.EventSourcing.Stores
         /// <param name="eventStore">The async event store for recording events.</param>
         /// <param name="serializer">The serializer for event data. Defaults to SystemJsonSerializer.</param>
         /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
-        public AsyncEventSourcingStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null)
+        /// <param name="currentUser">Reads the current user for each event (e.g. <c>() =&gt; auditContext.CurrentUserGuid</c>).</param>
+        public AsyncEventSourcingStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null, Func<Guid?>? currentUser = null)
         {
+            _currentUser = currentUser;
             _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
             _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
             _serializer = serializer ?? new SystemJsonSerializer();
             _clock = clock ?? new SystemDateTimeProvider();
+        }
+
+        /// <summary>
+        /// The one producer of this wrapper's events (TASK-713). The entity's <c>Version</c> is set before it is
+        /// serialized, so <c>EventData</c> carries the version it is the event of (it carried the previous one), and the
+        /// user is read from the caller's <c>currentUser</c> at each write (it was a settable property on a wrapper the
+        /// builder shares, and nothing set it).
+        /// </summary>
+        protected DomainEvent NewEvent(T item, string eventType, long version)
+        {
+            item.Version = version;
+            return new DomainEvent(item.Guid!.Value, version, eventType, _serializer.Serialize(item), _currentUser?.Invoke(), _clock);
         }
 
         /// <summary>
@@ -66,20 +78,10 @@ namespace Birko.Data.EventSourcing.Stores
             var newVersion = currentVersion + 1;
 
             // Create the event
-            var @event = new DomainEvent(
-                item.Guid.Value,
-                newVersion,
-                "Created",
-                _serializer.Serialize(item),
-                CurrentUserGuid,
-                _clock
-            );
+            var @event = NewEvent(item, "Created", newVersion);
 
             // Append event first
             await _eventStore.AppendAsync(@event, cancellationToken);
-
-            // Update version
-            item.Version = newVersion;
 
             // Then persist to the inner store
             return await _innerStore.CreateAsync(item, null, cancellationToken);
@@ -128,20 +130,10 @@ namespace Birko.Data.EventSourcing.Stores
             var newVersion = currentVersion + 1;
 
             // Create the event
-            var @event = new DomainEvent(
-                data.Guid.Value,
-                newVersion,
-                "Updated",
-                _serializer.Serialize(data),
-                CurrentUserGuid,
-                _clock
-            );
+            var @event = NewEvent(data, "Updated", newVersion);
 
             // Append event first
             await _eventStore.AppendAsync(@event, cancellationToken);
-
-            // Update version
-            data.Version = newVersion;
 
             // Then persist to the inner store
             await _innerStore.UpdateAsync(data, null, cancellationToken);
@@ -164,14 +156,7 @@ namespace Birko.Data.EventSourcing.Stores
             var newVersion = currentVersion + 1;
 
             // Create the event
-            var @event = new DomainEvent(
-                item.Guid.Value,
-                newVersion,
-                "Deleted",
-                _serializer.Serialize(item),
-                CurrentUserGuid,
-                _clock
-            );
+            var @event = NewEvent(item, "Deleted", newVersion);
 
             // Append event first
             await _eventStore.AppendAsync(@event, cancellationToken);
