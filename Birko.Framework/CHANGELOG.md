@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-03 — Outbox marks carry the claim; a stale reclaim is won once
+[[TASK-710]]. Two processors reclaiming one stale SQL outbox row both published it, and a slow processor whose
+entry was reclaimed put it back to `Pending` under the new holder or a `Published` row back to `Pending`
+(measured). Each claim and mark is now one guarded update. **Breaking:** `MarkPublishedAsync(OutboxEntry)` and
+`MarkFailedAsync(OutboxEntry, …)` take the claimed entry (it carries the new `ClaimToken`), and
+`GetPendingAsync(batchSize, maxAttempts)` takes `OutboxOptions.MaxAttempts`, so reclaims count against it.
+Measured on SQLite, PostgreSQL and SQL Server.
+
 ## 2026-11-03 — Tenant middleware clears the tenant in a finally
 [[TASK-708]]. `Birko.Data.Tenant`'s `TenantMiddleware` cleared the tenant after the pipeline with no `finally`, and
 cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw

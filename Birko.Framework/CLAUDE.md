@@ -292,6 +292,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos serializer hands a stream over open; MongoDBLogModel is a log entity (2026-11-04)
+[[TASK-723]]. `CosmosGuidIdSerializer.FromStream<Stream>` returned the stream disposed (measured). `MongoDBLogModel`
+implements `ILogEntity` now, so the timestamp decorator stamps it, and a copy or load between two Mongo log models keeps
+the timestamps (both lost them, measured).
 ### Migration edges: Cosmos patch names, the InfluxDB delete range (2026-11-04)
 [[TASK-722]]. A Cosmos `RenameField` of a field named `a/b` copied it instead of moving it (the unescaped path was
 nested), and escaping it did not help: the emulator kept `a~1b` literally. Patch-based steps now refuse a name holding
@@ -368,13 +372,6 @@ version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands amon
 user property. On 3.1.1 none is sent now; a `CorrelationId`, `ReplyTo`, `GroupId`, `Custom` header or foreign
 `ContentType`, which only one could carry, is refused. Before `ConnectAsync` the settings' protocol decides a
 `TimeToLive`, and a null message is `ArgumentNullException`.
-### Outbox marks carry the claim; a stale reclaim is won once (2026-11-03)
-[[TASK-710]]. Two processors reclaiming one stale SQL outbox row both published it, and a slow processor whose
-entry was reclaimed put it back to `Pending` under the new holder or a `Published` row back to `Pending`
-(measured). Each claim and mark is now one guarded update. **Breaking:** `MarkPublishedAsync(OutboxEntry)` and
-`MarkFailedAsync(OutboxEntry, …)` take the claimed entry (it carries the new `ClaimToken`), and
-`GetPendingAsync(batchSize, maxAttempts)` takes `OutboxOptions.MaxAttempts`, so reclaims count against it.
-Measured on SQLite, PostgreSQL and SQL Server.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

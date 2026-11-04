@@ -459,12 +459,14 @@ than at compile time.
 - **When** the result is counted
 - **Then** it is empty
 
-### Requirement: MongoDBLogModel is a timestamped Mongo base outside the log-model hierarchy
+### Requirement: MongoDBLogModel is a timestamped Mongo base, a log entity outside the log-model hierarchy
 
 The system SHALL provide `MongoDBLogModel` as an `abstract partial` class deriving `MongoDBModel` (not
 `AbstractLogModel`) that declares `virtual` `CreatedAt` and `UpdatedAt` initialised to `DateTime.UtcNow` at
-construction and a `virtual` nullable `PrevUpdatedAt` initialised to `null`, and that implements
-`ICopyable<AbstractLogModel>` and `ILoadable<LogViewModel>` but neither `ITimestamped` nor `ILogEntity`.
+construction and a `virtual` nullable `PrevUpdatedAt` initialised to `null`, and that implements `ILogEntity` (so
+`ITimestamped`), `ICopyable<AbstractLogModel>`, `ILoadable<LogViewModel>` and `ILoadable<ILogEntity>`. It SHALL override
+`CopyTo(AbstractModel?)` and `LoadFrom(IGuidEntity)` to carry the timestamps to and from any `ILogEntity`, as
+`AbstractLogModel` does (TASK-723: it implemented neither contract and overrode neither method, measured).
 
 #### Scenario: A freshly constructed Mongo log model is pre-stamped
 
@@ -472,11 +474,11 @@ construction and a `virtual` nullable `PrevUpdatedAt` initialised to `null`, and
 - **When** an instance is created with `new`
 - **Then** `CreatedAt` and `UpdatedAt` hold the UTC construction time (not `0001-01-01` as on `AbstractLogModel`) and `PrevUpdatedAt` is `null`
 
-#### Scenario: Timestamp infrastructure does not recognise it
+#### Scenario: Timestamp infrastructure recognises it (TASK-723)
 
 - **Given** a `MongoDBLogModel` instance
 - **When** it is tested with `is ITimestamped` or `is ILogEntity`
-- **Then** both tests are false, because the class declares the three properties without implementing the contracts — so a decorator that stamps by testing for `ITimestamped` does not stamp it
+- **Then** both are true, so a decorator that stamps by testing for `ITimestamped` stamps it (both were false)
 
 #### Scenario: The typed copy transfers identity and timestamps onto an AbstractLogModel
 
@@ -490,11 +492,11 @@ construction and a `virtual` nullable `PrevUpdatedAt` initialised to `null`, and
 - **When** `source.CopyTo((AbstractLogModel?)null)` is called
 - **Then** `ArgumentNullException` is thrown by `AbstractModel.CopyTo` before any timestamp is touched (SH-M424; it used to return the null target)
 
-#### Scenario: A base-typed copy moves only the identity
+#### Scenario: A base-typed copy keeps the timestamps (TASK-723)
 
 - **Given** a `MongoDBLogModel` source held as `AbstractModel`, and a target of the same concrete type
 - **When** `CopyTo(target)` is called through the base reference
-- **Then** only `Guid` is copied, because `MongoDBLogModel` does not override `CopyTo(AbstractModel?)` and its own type cannot be passed to the `AbstractLogModel` overload
+- **Then** `Guid`, `CreatedAt`, `UpdatedAt` and `PrevUpdatedAt` are copied (only `Guid` was)
 
 #### Scenario: Loading from a LogViewModel takes identity and timestamps, tolerating null
 

@@ -28,14 +28,15 @@ namespace Birko.Data.CosmosDB.Serialization
 
         public override T FromStream<T>(Stream stream)
         {
+            // The Cosmos SDK sometimes reads the payload as a raw Stream: it is handed over open, and the caller owns it.
+            // TASK-723: this returned it from inside `using (stream)`, so the caller got a disposed stream (measured).
+            if (typeof(Stream).IsAssignableFrom(typeof(T)))
+            {
+                return (T)(object)stream;
+            }
+
             using (stream)
             {
-                // The Cosmos SDK sometimes reads the payload as a raw Stream.
-                if (typeof(Stream).IsAssignableFrom(typeof(T)))
-                {
-                    return (T)(object)stream;
-                }
-
                 if (stream.CanSeek && stream.Length == 0)
                 {
                     return default!;
