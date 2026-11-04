@@ -24,7 +24,8 @@ namespace Birko.Data.SQL.Connectors
             // TASK-639: a persistent view's WHERE names its own columns, not the source ones.
             conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
 
-            if (usePersistent && !string.IsNullOrEmpty(view.Name))
+            // TASK-724: no name test — see the sync twin (rule 53: an unreachable fallback, removed).
+            if (usePersistent)
             {
                 return await SelectCountPersistentViewAsync(view.Name!, conditions, ct).ConfigureAwait(false);
             }

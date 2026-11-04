@@ -62,9 +62,9 @@ namespace Birko.Data.SQL.SqLite.Stores
         /// </para>
         /// <para>
         /// ⚠ <b>It is applied per database, by whichever settings object created the connector.</b>
-        /// <c>DataBase.GetConnector</c> caches per (type, settings id) and the id is <c>Location:Name</c>
-        /// only — so, exactly as with <see cref="CommandTimeout"/>, the first caller's value wins for
-        /// everyone on that file.
+        /// <c>DataBase.GetConnector</c> caches per (type, settings id) and the id is <c>Location:Name</c>, plus
+        /// <c>:Schema</c> when one is set — never the journal mode — so, exactly as with <see cref="CommandTimeout"/>,
+        /// the first caller's value wins for everyone on that file.
         /// </para>
         /// </remarks>
         public string? JournalMode { get; set; } = "WAL";

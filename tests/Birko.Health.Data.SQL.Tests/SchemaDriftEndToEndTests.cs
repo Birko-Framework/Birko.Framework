@@ -404,11 +404,12 @@ public class SchemaDriftEndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task The_health_check_is_Unhealthy_when_its_factory_returns_null()
+    public async Task The_health_check_is_Degraded_when_its_factory_returns_null()
     {
         var check = new SchemaDriftHealthCheck(() => null!, new[] { typeof(Widget) });
         var result = await check.CheckAsync();
-        result.Status.Should().Be(HealthStatus.Unhealthy);
+        // TASK-724 (rule 56, inverted): Degraded, never Unhealthy, as the class's remarks promise.
+        result.Status.Should().Be(HealthStatus.Degraded);
     }
 }
 

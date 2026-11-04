@@ -27,8 +27,10 @@ public class InfluxDBPureLogicTests
         s.IsTransientException(new TimeoutException()).Should().BeTrue();
         s.IsTransientException(new HttpRequestException()).Should().BeTrue();
         s.IsTransientException(new TaskCanceledException("x", new TimeoutException())).Should().BeTrue();
-        s.IsTransientException(new Exception("HTTP 429 too many requests")).Should().BeTrue();
-        s.IsTransientException(new Exception("503 service unavailable")).Should().BeTrue();
+        // TASK-724 (rule 56, inverted): the status decides, not the message text.
+        s.IsTransientException(new global::InfluxDB.Client.Core.Exceptions.HttpException("too many requests", 429, null!)).Should().BeTrue();
+        s.IsTransientException(new global::InfluxDB.Client.Core.Exceptions.HttpException("service unavailable", 503, null!)).Should().BeTrue();
+        s.IsTransientException(new Exception("HTTP 429 too many requests")).Should().BeFalse();
     }
 
     [Fact]

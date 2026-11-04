@@ -49,16 +49,16 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
-        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
-        /// (declare precision via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
+        /// <summary>The column's precision: applied to a <c>decimal</c> column by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (TASK-692), winning over <c>[PrecisionField]</c>; refused on a type that has none.</summary>
         public FieldBuilder<T> HasPrecision(int precision)
         {
             _field.Precision = precision;
             return this;
         }
 
-        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
-        /// (declare scale via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
+        /// <summary>The column's scale: applied to a <c>decimal</c> column by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (TASK-692), winning over <c>[ScaleField]</c>; refused on a type that has none.</summary>
         public FieldBuilder<T> HasScale(int scale)
         {
             _field.Scale = scale;

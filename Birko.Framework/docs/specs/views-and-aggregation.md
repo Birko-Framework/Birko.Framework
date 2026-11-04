@@ -817,7 +817,8 @@ source column name and whose `IsAggregate` is true: `COUNT` as an integer functi
 decimal function, each nullable exactly when the source column is; `SUM`, `MIN` and `MAX` typed by the
 source field — integer, decimal, date-time, boolean and Guid sources giving the same-typed function
 (nullable when the source is), a char source a `CharFunction` of its length, and anything else a
-`StringFunction`, both of which are non-nullable regardless of the source. An aggregate attribute other
+`StringFunction`, both typed non-nullable regardless of the source; a `StringFunction` SHALL read `DBNull` as `null`
+(TASK-724: `GetString` threw on a group whose every value was NULL, measured). An aggregate attribute other
 than the five SHALL throw `NotSupportedException`. Each typed function SHALL read its column with the
 matching typed reader getter (`GetInt32`, `GetDecimal`, `GetDateTime`, `GetBoolean`, `GetGuid`,
 `GetString`), the nullable forms first assigning `null` for `DBNull`.
@@ -834,11 +835,11 @@ matching typed reader getter (`GetInt32`, `GetDecimal`, `GetDateTime`, `GetBoole
 - **When** a row whose maximum is `NULL` is read
 - **Then** the field is a `NullableDateTimeFunction` and the view property is set to `null`
 
-#### Scenario: A string aggregate is always non-nullable
+#### Scenario: A string aggregate of only NULLs reads null (TASK-724)
 
 - **Given** `[MinField(typeof(Person), "Nickname")]` over a nullable string column
 - **When** a group whose every `Nickname` is `NULL` is read
-- **Then** the field is a `StringFunction`, and `GetString` on the `DBNull` column throws
+- **Then** the field is a `StringFunction` and the view property is `null` (`GetString` threw)
 
 ### Requirement: The view SELECT body has one builder
 
@@ -906,7 +907,9 @@ query returns (TASK-151).
 
 The system SHALL decide per read and per count whether to query the persistent view:
 `OnTheFly` never, `Persistent` always, and `Auto` only when the view has a name and the existence check
-answers true. In `Auto` it SHALL cache only a positive answer, per connector instance and view name, so a
+answers true. The read and the count SHALL follow that decision alike: the count's extra "and the view has a name" test,
+which fell back to counting on-the-fly with conditions already resolved to the persistent view's columns, is removed —
+a view's name comes from its tables when none is given, so it could not be reached (TASK-724, rule 53). In `Auto` it SHALL cache only a positive answer, per connector instance and view name, so a
 `false` (absent, or a swallowed transient failure) is re-checked on the next query (CR-M149).
 `CreateView`, `DropView`, `CreateIndexedView` and `DropIndexedView` SHALL invalidate the name's cache
 entry; `ClearViewExistsCache` and `InvalidateViewExistsCache` SHALL be public. The sync read and count funnels

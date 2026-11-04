@@ -1,7 +1,7 @@
 ---
 id: EPIC-023
 # status — one of: planned, in-progress, done, cancelled
-status: planned
+status: done
 created: 2026-10-21
 owner: ai
 affects: [Birko.Data.SQL, Birko.Data.SQL.View, Birko.Models.SQL, Birko.Redis, Birko.Data.MongoDB, Birko.Data.Tenant, Birko.Communication, Birko.EventBus.Outbox.SQL, Birko.MessageQueue.MQTT, Birko.Data.EventSourcing, Birko.Data.InMemory, Birko.AI, Birko.Data.Migrations, Birko.Data.CosmosDB, Birko.Data.InfluxDB, Birko.Data.JSON, Birko.Data.XML]

@@ -26,8 +26,18 @@ namespace Birko.Data.RavenDB.Stores
         /// <summary>
         /// Creates and initializes a RavenDB DocumentStore from the current settings.
         /// </summary>
+        /// <exception cref="NotSupportedException">A user name or password is set (TASK-724): RavenDB authenticates with a
+        /// client certificate, so they were accepted and never used.</exception>
         public virtual IDocumentStore CreateDocumentStore()
         {
+            if (!string.IsNullOrEmpty(UserName) || !string.IsNullOrEmpty(Password))
+            {
+                throw new NotSupportedException(
+                    "RavenDB authenticates with a client certificate, not a user name and password; this settings object "
+                    + "carries credentials RavenDB would never use. Leave them empty and configure the certificate on a "
+                    + "DocumentStore you pass to the store.");
+            }
+
             var store = new DocumentStore
             {
                 Urls = new[] { Location },

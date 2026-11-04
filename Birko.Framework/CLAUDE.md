@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### The harvest's smaller findings, confirmed or closed (2026-11-04)
+[[TASK-724]], the last of EPIC-023. The async `CreateTableAsync` was a second copy without the composite key or the
+created-table record, and its own `IF NOT EXISTS` failed on SQL Server; it is the sync path now. The schema-drift check
+answers `Degraded`, never `Unhealthy`. A cancelled async insert stops waiting for the write gate. RavenDB refuses
+credentials it never used; InfluxDB retries by status, not message text; a string `MIN` of NULLs reads null; the
+instrumented wrappers forward aggregation. Four stale comments corrected; two findings recorded, one already fixed.
 ### A store with no settings refuses reads and writes (2026-11-04)
 [[TASK-812]]. An unconfigured MongoDB, RavenDB, Cosmos DB or InfluxDB store returned `Guid.Empty` from `Create`, nothing
 from `Update` / `Delete`, and empty reads; JSON and XML refused writes but answered reads empty (measured by a new
@@ -365,12 +371,6 @@ left the property a column (measured). Both, with `IsRequired`, are now register
 (`DataBase.RegisterColumnFlags`), as lengths are. A flag or `HasColumnName` on a property that is no column is refused
 instead of skipped; a second `Property()` call reuses the member's descriptor, so one index declared twice is refused;
 `RegisterPrecision(…, null, null)` removes a registration.
-### REST, SSE and SOAP read tokens by one rule (2026-11-04)
-[[TASK-709]]. REST passed a `Basic …` `Authorization` value whole as the token, and SSE stopped at one, so a valid
-`?token=` was refused (measured). An `Authorization` header now yields a token only under its scheme (default `Bearer`),
-and otherwise the next source is tried. The query-token name matches exactly on all three (SSE matched any case). New
-`AuthenticationService.TokenFromAuthorizationHeader` / `TokenFromQueryString` hold both rules. `SoapAuthenticationService`
-is `IDisposable`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

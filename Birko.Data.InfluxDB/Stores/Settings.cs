@@ -81,8 +81,10 @@ namespace Birko.Data.InfluxDB.Stores
             if (ex is TimeoutException) return true;
             if (ex is HttpRequestException) return true;
             if (ex is TaskCanceledException tce && tce.InnerException is TimeoutException) return true;
-            // InfluxDB API errors with 429 (too many requests) or 503 (service unavailable)
-            if (ex.Message.Contains("429") || ex.Message.Contains("503") || ex.Message.Contains("unavailable")) return true;
+            // InfluxDB API errors with 429 (too many requests) or 503 (service unavailable), by the status the client
+            // reports. TASK-724: this read the message text, so any message holding "429", "503" or "unavailable" — a bucket
+            // named that, an id — was retried as transient.
+            if (ex is global::InfluxDB.Client.Core.Exceptions.InfluxException { Status: 429 or 503 }) return true;
             return false;
         }
 

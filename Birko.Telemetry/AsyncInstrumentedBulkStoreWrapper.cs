@@ -11,13 +11,20 @@ namespace Birko.Telemetry;
 /// <summary>
 /// Store wrapper that adds metrics and tracing instrumentation to all <see cref="IAsyncBulkStore{T}"/> operations.
 /// </summary>
-public class AsyncInstrumentedBulkStoreWrapper<TStore, T> : AsyncInstrumentedStoreWrapper<TStore, T>, IAsyncBulkStore<T>
+public class AsyncInstrumentedBulkStoreWrapper<TStore, T> : AsyncInstrumentedStoreWrapper<TStore, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel
 {
     public AsyncInstrumentedBulkStoreWrapper(TStore innerStore) : base(innerStore)
     {
     }
+
+    /// <summary>
+    /// Forwards aggregation, recorded like any other operation. TASK-724: the wrapper did not implement it, so an
+    /// aggregatable chain stopped being one under instrumentation, and a decorator above it refused (measured).
+    /// </summary>
+    public Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default)
+        => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Aggregate", true, () => StoreChain.AggregateThrough(_innerStore, query, ct));
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
         => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Read", true, () => _innerStore.ReadAsync(ct));

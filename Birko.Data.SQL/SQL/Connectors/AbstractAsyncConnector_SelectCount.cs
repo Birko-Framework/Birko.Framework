@@ -33,7 +33,8 @@ namespace Birko.Data.SQL.Connectors
 
         public Task<long> SelectCountAsync(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            return (tables != null) ? SelectCountAsync(tables.Select(x => x.Name), conditions, ct) : Task.FromResult(0L);
+            // TASK-724: a null table is skipped, as the sync overload does; it threw NullReferenceException (measured).
+            return (tables != null) ? SelectCountAsync(tables.Where(x => x != null).Select(x => x.Name), conditions, ct) : Task.FromResult(0L);
         }
 
         public Task<long> SelectCountAsync(IEnumerable<string> tableNames, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
@@ -63,7 +64,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         var data = await command.ExecuteScalarAsync(ct);
                         count = data != null ? Convert.ToInt64(data) : 0;
-                    });
+                    }, false, ct);   // TASK-724: the token reaches the connection's open too
                 }
                 catch (Exception ex) when (IsMissingTableExceptionChain(ex))
                 {

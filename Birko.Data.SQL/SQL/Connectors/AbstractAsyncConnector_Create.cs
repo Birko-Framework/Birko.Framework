@@ -49,42 +49,19 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <remarks>
+        /// TASK-724: the sync <see cref="AbstractConnector.CreateTable(IDictionary{string, IEnumerable{Fields.AbstractField}})"/>
+        /// is the one producer, as the async stores' schema-ensure already uses it (<c>Task.Run</c>, which carries the
+        /// ambient boundary). This path was a second copy that lacked the composite primary key and its auto-increment
+        /// refusal, never recorded the table (<c>TablesCreated</c>), and sent its own <c>CREATE TABLE IF NOT EXISTS</c>
+        /// past the provider's <c>CreateTableCore</c> — which SQL Server refuses (measured on SQLite and SQL Server).
+        /// </remarks>
         public Task CreateTableAsync(IDictionary<string, IEnumerable<Fields.AbstractField>> tables, CancellationToken ct = default)
-        {
-            if (tables != null && tables.Any() && tables.Any(x => x.Value != null && x.Value.Count() > 0))
-            {
-                var tasks = new List<Task>();
-                foreach (var kvp in tables.Where(x => x.Value != null && x.Value.Any()))
-                {
-                    tasks.Add(CreateTableAsync(kvp.Key, kvp.Value.Select(x => FieldDefinition(x)), ct));
-                }
-                return Task.WhenAll(tasks);
-            }
-            return Task.CompletedTask;
-        }
+            => Task.Run(() => CreateTable(tables), ct);
 
-        public virtual async Task CreateTableAsync(string name, IEnumerable<string> fields, CancellationToken ct = default)
-        {
-            // TASK-272: the schema first, where the provider has schemas and the table has one.
-            var ensureSchema = EnsureSchemaSqlFor(name);
-            if (ensureSchema != null)
-            {
-                await DoDdlCommandAsync(command => { command.CommandText = ensureSchema; return Task.CompletedTask; },
-                    async command => { await command.ExecuteNonQueryAsync(ct); }, true);
-            }
-            await DoDdlCommandAsync(async (command) =>
-            {
-                command.CommandText = "CREATE TABLE IF NOT EXISTS "
-                    + TableIdentifier(name)
-                    + " ("
-                    + string.Join(", ", fields.Where(x => !string.IsNullOrEmpty(x)))
-                    + ")";
-                await Task.CompletedTask;
-            }, async (command) =>
-            {
-                await command.ExecuteNonQueryAsync(ct);
-            }, true);
-        }
+        /// <inheritdoc cref="CreateTableAsync(IDictionary{string, IEnumerable{Fields.AbstractField}}, CancellationToken)"/>
+        public virtual Task CreateTableAsync(string name, IEnumerable<string> fields, CancellationToken ct = default)
+            => Task.Run(() => CreateTable(name, fields), ct);
 
         /// <param name="throwIfExists">See the sync twin — false (default) is an ensure, true is a plain create.</param>
         /// <remarks>

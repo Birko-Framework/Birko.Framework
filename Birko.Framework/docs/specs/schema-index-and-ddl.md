@@ -2550,11 +2550,11 @@ list is non-empty, building the definitions with each provider's `FieldDefinitio
 The system SHALL, on the synchronous table-dictionary path, emit every field's definition and — when more than one
 field is primary — append `PRIMARY KEY (<primary columns in declaration order>)`, the inline clause being suppressed
 through `UsesInlinePrimaryConstraint`; and SHALL throw `TableAttributeException` before any DDL when a composite key
-includes an auto-increment column. The asynchronous `CreateTableAsync(IDictionary…)` SHALL instead render each field
-with `FieldDefinition` alone — no table-level key clause and no auto-increment refusal — creating all the tables
-concurrently (`Task.WhenAll`), and `AbstractAsyncConnector.CreateTableAsync(name, fields)` is a separate virtual that
-runs the ensure-schema statement and the default `CREATE TABLE IF NOT EXISTS` but does not record the table as created
-and does not route through `CreateTableCore`.
+includes an auto-increment column. The asynchronous `CreateTableAsync(IDictionary…)` and `CreateTableAsync(name,
+fields)` SHALL run the synchronous path (on the thread pool, carrying the ambient boundary), so they build the composite
+key, refuse the auto-increment case, route through `CreateTableCore` and record the table (TASK-724: they were a second
+copy without any of the four — measured on SQLite, and on SQL Server their own `CREATE TABLE IF NOT EXISTS` was a syntax
+error).
 
 #### Scenario: A composite key is declared once
 
@@ -2568,11 +2568,11 @@ and does not route through `CreateTableCore`.
 - **When** the sync path builds the definitions
 - **Then** `TableAttributeException` is thrown naming the table and the auto-increment column, and no statement runs
 
-#### Scenario: The async table path omits the composite key
+#### Scenario: The async table path builds the composite key (TASK-724)
 
 - **Given** the same two-primary-field table
 - **When** `CreateTableAsync(types)` runs
-- **Then** the definitions are emitted without the table-level `PRIMARY KEY (…)` clause, and the table is not added to
+- **Then** the statement ends with `PRIMARY KEY (…)`, two rows sharing one Guid are stored, and the table is in
   `TablesCreated`
 
 ### Requirement: Schema-ensure records an unbuildable index instead of failing the table
@@ -2750,8 +2750,9 @@ doc comment still says "never actioned", which holds for `EnsureColumns` but not
 ### Requirement: The schema drift health check reports drift as Degraded
 
 The system SHALL provide `SchemaDriftHealthCheck(connectorFactory, entityTypes)` (null arguments throwing
-`ArgumentNullException`) that calls `DetectDrift` for each listed type and returns: `Unhealthy` when the factory returns
-null or any exception other than cancellation is thrown (cancellation propagates); `Degraded` when there is any column
+`ArgumentNullException`) that calls `DetectDrift` for each listed type and returns: `Degraded` when the factory returns
+null or any exception other than cancellation is thrown (cancellation propagates) — never `Unhealthy`, as reachability
+is `SqlHealthCheck`'s question (TASK-724: both were `Unhealthy`, against the class's own remarks); `Degraded` when there is any column
 drift, index drift or entry in the connector's `IndexCreationFailures`, the description counting each; otherwise
 `Degraded` when any report is unsupported; otherwise `Healthy`, saying how many types were verified and how many tables
 were not created yet when some are absent. Its data SHALL carry `checked`, `drifted`, `indexDrifted`, `indexFailures`,
@@ -2770,12 +2771,11 @@ were not created yet when some are absent. Its data SHALL carry `checked`, `drif
 - **Then** the result is `Healthy` with "Schema matches the models for 1 of 2 type(s); 1 table(s) not created yet, so
   they were not checked."
 
-#### Scenario: A catalogue failure is Unhealthy
+#### Scenario: A catalogue failure is Degraded (TASK-724)
 
 - **Given** `DetectDrift` throwing, for example because the index listing query fails
 - **When** `CheckAsync` runs
-- **Then** the result is `Unhealthy` with "Schema drift check failed: …", although the check is documented as
-  "Degraded, never Unhealthy"
+- **Then** the result is `Degraded` with "Schema drift check failed: …" (it was `Unhealthy`)
 
 ### Requirement: The index declaration health check reports document-store index drift
 

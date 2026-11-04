@@ -35,7 +35,10 @@ namespace Birko.Data.SQL.Connectors
             // TASK-639: a persistent view's WHERE names its own columns, not the source ones.
             conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
 
-            if (usePersistent && !string.IsNullOrEmpty(view.Name))
+            // TASK-724: no name test. A view's name comes from its tables when none is given, so only a view with no tables
+            // is nameless, and it fails before here. The fallback this had counted on-the-fly with conditions already
+            // resolved to the persistent view's columns (rule 53: removed, not kept).
+            if (usePersistent)
             {
                 return SelectCountPersistentView(view.Name!, conditions);
             }

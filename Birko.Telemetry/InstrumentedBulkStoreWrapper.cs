@@ -9,13 +9,19 @@ namespace Birko.Telemetry;
 /// <summary>
 /// Store wrapper that adds metrics and tracing instrumentation to all <see cref="IBulkStore{T}"/> operations.
 /// </summary>
-public class InstrumentedBulkStoreWrapper<TStore, T> : InstrumentedStoreWrapper<TStore, T>, IBulkStore<T>
+public class InstrumentedBulkStoreWrapper<TStore, T> : InstrumentedStoreWrapper<TStore, T>, IBulkStore<T>, IAggregatableStore<T>
     where TStore : IBulkStore<T>
     where T : Data.Models.AbstractModel
 {
     public InstrumentedBulkStoreWrapper(TStore innerStore) : base(innerStore)
     {
     }
+
+    /// <summary>Forwards aggregation, recorded like any other operation (TASK-724; see the async twin).</summary>
+    public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
+        => StoreInstrumentation.Execute(_storeType, _entityType, "Aggregate", true, () => _innerStore is IAggregatableStore<T> aggregatable
+            ? aggregatable.Aggregate(query)
+            : throw new NotSupportedException($"{_innerStore.GetType().Name} does not support aggregation, so the chain cannot aggregate {typeof(T).Name}."));
 
     public IEnumerable<T> Read()
         => StoreInstrumentation.Execute(_storeType, _entityType, "Read", true, () => _innerStore.Read());

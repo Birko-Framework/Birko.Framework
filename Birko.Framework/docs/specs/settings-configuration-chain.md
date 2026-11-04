@@ -667,8 +667,8 @@ property in both directions, and SHALL return the raw `Location` from `GetConnec
 The system SHALL default `InfluxDB.Stores.Settings.RetryPolicy` to `RetryPolicy.None`, and SHALL
 implement `IsTransientException(Exception ex)` to return true for `TimeoutException`, for
 `HttpRequestException`, for a `TaskCanceledException` whose `InnerException` is a `TimeoutException`,
-and for any exception whose `Message` contains the substring `"429"`, `"503"` or `"unavailable"`;
-otherwise it SHALL return false.
+and for an `InfluxException` whose `Status` is 429 or 503; otherwise it SHALL return false (TASK-724: it matched the
+substrings `"429"`, `"503"` and `"unavailable"` in any message, measured).
 
 #### Scenario: A timeout is transient
 
@@ -682,11 +682,11 @@ otherwise it SHALL return false.
 - **When** `IsTransientException` is called
 - **Then** it returns `false`
 
-#### Scenario: Classification by message substring matches unrelated exceptions
+#### Scenario: A message that names a status is not transient (TASK-724)
 
-- **Given** an `InvalidOperationException("record 503 could not be parsed")`
+- **Given** an `InvalidOperationException("record 503 could not be parsed")`, or an `HttpException` with status 404
 - **When** `IsTransientException` is called
-- **Then** it returns `true`, because the check is a plain `Message.Contains("503")` with no status-code parsing
+- **Then** it returns `false`; an `HttpException` with status 503 returns `true`
 
 #### Scenario: Retries are off unless configured
 
@@ -771,13 +771,14 @@ creating a `CosmosClient`.
 - **When** a Cosmos store takes the settings
 - **Then** no exception is thrown, because a null or empty path passes the check alongside `"/id"`
 
-### Requirement: RavenDB settings build and initialize a DocumentStore, ignoring the credential slots
+### Requirement: RavenDB settings build and initialize a DocumentStore, refusing credentials it cannot use
 
 The system SHALL implement `RavenDB.Stores.Settings.CreateDocumentStore()` to construct a
 `DocumentStore` with `Urls = new[] { Location }`, `Database = Name` and
 `Conventions = new DocumentConventions { RequestTimeout = RequestTimeout }`, to call `Initialize()`
-on it, and to return the initialized instance — with the inherited `UserName`, `Password` and
-`UseSecure` unused.
+on it, and to return the initialized instance. A non-empty inherited `UserName` or `Password` SHALL be refused with
+`NotSupportedException`: RavenDB authenticates with a client certificate (TASK-724: they were accepted and unused, so a
+caller believing the store signed in got an anonymous one). `UseSecure` stays unused; the URL's scheme decides.
 
 #### Scenario: The returned store is already initialized
 
@@ -785,11 +786,12 @@ on it, and to return the initialized instance — with the inherited `UserName`,
 - **When** `CreateDocumentStore()` is called
 - **Then** an `IDocumentStore` is returned on which `Initialize()` has already been invoked, with a single URL and `Database == "db"`
 
-#### Scenario: Credentials supplied to the constructor never reach the driver
+#### Scenario: Credentials RavenDB cannot use are refused (TASK-724)
 
 - **Given** `new RavenDB.Stores.Settings("https://secure.raven", "db", "user", "secret")`
 - **When** `CreateDocumentStore()` is called
-- **Then** the `DocumentStore` is created with no `Certificate` and no credential configuration — a secured RavenDB cluster cannot be reached through this method
+- **Then** `NotSupportedException` is thrown (a store was created with no credential configuration); a secured cluster
+  is reached with a certificate on a `DocumentStore` passed to the store
 
 #### Scenario: Request timeout default
 

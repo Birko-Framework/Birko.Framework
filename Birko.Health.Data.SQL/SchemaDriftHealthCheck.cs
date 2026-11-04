@@ -69,7 +69,8 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
             var connector = _connector();
             if (connector == null)
             {
-                return Task.FromResult(HealthCheckResult.Unhealthy(
+                // TASK-724: Degraded, as the remarks promise — reachability is SqlHealthCheck's question.
+                return Task.FromResult(HealthCheckResult.Degraded(
                     "Schema drift check has no connector: its factory returned null."));
             }
 
@@ -164,7 +165,9 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
         }
         catch (Exception ex)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy(
+            // TASK-724: Degraded, never Unhealthy (see the remarks): a check that could not run says so without pulling an
+            // instance out of rotation; an unreachable database is SqlHealthCheck's Unhealthy.
+            return Task.FromResult(HealthCheckResult.Degraded(
                 $"Schema drift check failed: {ex.Message}", ex));
         }
     }

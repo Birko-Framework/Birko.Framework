@@ -1202,8 +1202,11 @@ key set differs from the first row's (CR-L174), and otherwise build one `INSERT 
 and execute it once per row, rebinding parameters by key. The execution SHALL go through `DoCommandWithTransaction` /
 `DoCommandWithTransactionAsync` with `isLock: true`: on an ambient transaction it runs on that connection and
 transaction; otherwise in an owned transaction serialized by the connector's lock (`_lock` for sync, the
-`SemaphoreSlim _asyncLock` for async). `null` models in a model collection SHALL be skipped. The async insert passes
-its token only to `ExecuteNonQueryAsync`, not to `DoCommandWithTransactionAsync`.
+`SemaphoreSlim _asyncLock` for async — two gates, so a sync and an async insert on one connector do not exclude each
+other; recorded, not changed, by TASK-724: the monitor is reentrant and a shared semaphore would deadlock a locked
+command that issues another, and the async stores use only the async path). `null` models in a model collection SHALL be
+skipped. The async insert SHALL pass its token to `DoCommandWithTransactionAsync` too, so a cancelled insert stops
+waiting for the gate (TASK-724: it waited the holder out, measured).
 
 #### Scenario: A heterogeneous batch
 
@@ -1223,8 +1226,9 @@ its token only to `ExecuteNonQueryAsync`, not to `DoCommandWithTransactionAsync`
 The system SHALL answer `SelectCount` / `SelectCountAsync` with `0` when the statement fails with an exception whose
 chain `IsMissingTableExceptionChain` recognises (TASK-285), the same answer a reader gives for a missing table's rows,
 and SHALL record nothing at this site (the anomaly is recorded once, in `EnsureSchemaAndReport`, TASK-288). Writes keep
-reporting a missing table. A `null` or all-empty table list SHALL answer `0` without a command. The sync table-overload
-skips `null` tables; the async one does not.
+reporting a missing table. A `null` or all-empty table list SHALL answer `0` without a command. Both table-overloads
+skip `null` tables (TASK-724: the async one threw `NullReferenceException`, measured), and the async count passes its
+token to the connection's open as well as to the statement.
 
 #### Scenario: Counting before the table exists
 

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — REST, SSE and SOAP read tokens by one rule
+[[TASK-709]]. REST passed a `Basic …` `Authorization` value whole as the token, and SSE stopped at one, so a valid
+`?token=` was refused (measured). An `Authorization` header now yields a token only under its scheme (default `Bearer`),
+and otherwise the next source is tried. The query-token name matches exactly on all three (SSE matched any case). New
+`AuthenticationService.TokenFromAuthorizationHeader` / `TokenFromQueryString` hold both rules. `SoapAuthenticationService`
+is `IDisposable`.
+
 ## 2026-11-04 — JSON and XML stores write atomically and destroy only their own files
 [[TASK-721]]. A failed JSON save left an empty file (measured on the single, separate and batch stores), and an XML batch
 save deleted every batch before writing any. Each file is now written through the new `Birko.Helpers.AtomicFile` (temp

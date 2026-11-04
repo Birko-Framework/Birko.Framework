@@ -31,8 +31,9 @@ namespace Birko.Data.SQL.SchemaDrift
         /// emits, on a provider where that makes it a different identifier — PostgreSQL, where a bare
         /// <c>SupplierVatin</c> resolves as <c>suppliervatin</c> and never reaches a column created quoted as
         /// <c>"SupplierVatin"</c>. Every query on the column fails (<c>42703</c>), so this is not cosmetic.
-        /// <see cref="ColumnDrift.StoredColumn"/> carries the stored spelling. Reported, never actioned:
-        /// adding the column the connector reads would orphan the values in the stored one (TASK-610).
+        /// <see cref="ColumnDrift.StoredColumn"/> carries the stored spelling. Never actioned by schema-ensure or
+        /// <c>EnsureColumns</c> — adding the column the connector reads would orphan the values in the stored one
+        /// (TASK-610) — and written by <c>PlanRepair</c> as a rename, which keeps them, for an operator to apply (TASK-633).
         /// </summary>
         CaseMismatch = 3,
 

@@ -104,7 +104,7 @@ namespace Birko.Data.SQL.Connectors
                     }
                     await command.ExecuteNonQueryAsync(ct);
                 }
-            }, true);
+            }, true, ct);   // TASK-724: the token reaches the write gate and the open; a waiting insert could not be cancelled
         }
     }
 }

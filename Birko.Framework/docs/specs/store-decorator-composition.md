@@ -1229,11 +1229,12 @@ extensions construct them.
 - **When** any operation is recorded
 - **Then** the store-type tag is the full name of `IAsyncBulkStore<T>`, not of the concrete store behind it
 
-#### Scenario: Instrumentation hides aggregation
+#### Scenario: Instrumentation forwards aggregation (TASK-724)
 
-- **Given** an instrumented wrapper around an aggregatable chain
-- **When** a caller casts the wrapper to `IAsyncAggregatableStore<T>`
-- **Then** the cast fails, and a Patterns decorator placed above the instrumented wrapper throws `NotSupportedException` from `AggregateAsync`, because its inner store is not an `IAsyncAggregatableStore<T>`
+- **Given** an instrumented bulk wrapper (sync or async) around an aggregatable chain
+- **When** a caller aggregates through it, directly or through a Patterns decorator above it
+- **Then** the inner store answers, and the call is recorded as operation `Aggregate` (the cast failed and the decorator
+  above threw `NotSupportedException`, measured)
 
 ### Requirement: Clock abstraction
 
