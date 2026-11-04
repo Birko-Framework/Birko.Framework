@@ -36,7 +36,8 @@ Core messaging framework providing unified interfaces for email, SMS, and push n
 ### Templates (`Birko.Messaging.Templates`)
 - **ITemplateEngine** - RenderAsync(template, model) and RenderAsync(IMessageTemplate, model); TASK-586 overloads take `TemplateRenderOptions` (per-call `ITemplateValueEncoder` + caller-declared `RawPaths`). They are default interface methods that refuse an encoder, so an engine that cannot encode never merges unencoded values silently
 - **TemplateRenderOptions / ITemplateValueEncoder / MarkdownValueEncoder** - per-call value encoding; with an encoder set every value is encoded except the exact `RawPaths` (fails closed). Chosen per call, not per placeholder or attribute: one model renders a plain subject and a Markdown body, and templates are tenant-authored (decision in TASK-586)
-- **StringTemplateEngine** - `{{Property.SubProperty}}` replacement via reflection, GeneratedRegex; `{{#if Path}}…{{/if}}` optional sections (present = not null / blank / `false`; no nesting, no else; any leftover `{{#`/`{{/` marker throws)
+- **StringTemplateEngine** - `{{Property.SubProperty}}` replacement via reflection, GeneratedRegex; `{{#if Path}}…{{/if}}` optional sections (present = not null / blank / `false`; no nesting, no else; any leftover `{{#`/`{{/` marker throws); TASK-815 filters `{{Path|name}}` / `{{Path|name:ArgPath}}` from `TemplateRenderOptions.Filters` (unknown or option-less filter throws; encoder runs on the output)
+- **ITemplateValueFilter / MoneyTemplateFilter** - TASK-815: `money` formats an amount in the argument's currency in the render culture (own format for the culture's region currency, else € $ £ or the ISO code), currency places whatever the scale, no-break spaces; equals Intl.NumberFormat for CZK/EUR in cs/en
 
 ## Dependencies
 - **Birko.Data.Core** - ILoadable\<T\> interface

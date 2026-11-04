@@ -102,6 +102,27 @@ var body    = await engine.RenderAsync(template.BodyTemplate, model, markdown, c
 - An engine that cannot encode (`RazorTemplateEngine`, which HTML-encodes on its own) throws `NotSupportedException`
   when given an encoder, rather than merging the values unencoded.
 
+### Filters
+
+A placeholder may name one filter: `{{Path|name}}`, or `{{Path|name:ArgPath}}` where `ArgPath` is a model path. Filters
+are passed per call; the engine registers none on its own.
+
+```csharp
+var options = new TemplateRenderOptions
+{
+    Filters = new Dictionary<string, ITemplateValueFilter> { [MoneyTemplateFilter.Name] = new MoneyTemplateFilter() },
+};
+// "Celkem: {{TotalAmount|money:CurrencyCode}}" → "Celkem: 390,00 Kč" (cs), "Total: CZK 390.00" (en)
+```
+
+- `money` writes the amount in the **argument's** currency (a Czech e-mail for a EUR order says EUR), in the render
+  culture's format, with the currency's own places whatever the value's scale, and no-break spaces. For CZK and EUR in
+  cs and en it equals the browser's `Intl.NumberFormat`.
+- A filter the options do not carry, or any filter rendered without options, throws `TemplateRenderException`.
+- The encoder runs on the filter's output. `{{#if}}` takes no filter.
+- ⚠ An engine older than TASK-815 does not match `{{x|money:y}}` at all and leaves the marker in the text. Deploy the
+  engine before any template that uses a filter.
+
 ## SMS / Push (Interface Only)
 
 SMS and push notification sender interfaces are defined in core. Provider implementations are in separate projects:

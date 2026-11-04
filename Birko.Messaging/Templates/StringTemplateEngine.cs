@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -18,10 +19,14 @@ namespace Birko.Messaging.Templates;
 /// <para>Sections do not nest and have no else branch. A <c>{{#if}}</c> without its <c>{{/if}}</c>, a stray
 /// <c>{{/if}}</c> or a nested <c>{{#if}}</c> throws <see cref="TemplateRenderException"/> rather than shipping
 /// the marker text to a recipient.</para>
+/// <para><b>Filters</b> (TASK-815): <c>{{Property.Path|name}}</c> or <c>{{Property.Path|name:Argument.Path}}</c>, where the
+/// argument is a model path resolved like a placeholder, e.g. <c>{{TotalAmount|money:CurrencyCode}}</c>. They come from
+/// <see cref="TemplateRenderOptions.Filters"/>; a name the options do not carry, or any filter rendered through an
+/// overload without options, throws <see cref="TemplateRenderException"/>. The encoder runs on the filter's output.</para>
 /// </remarks>
 public sealed partial class StringTemplateEngine : ITemplateEngine
 {
-    [GeneratedRegex(@"\{\{(\w+(?:\.\w+)*)\}\}", RegexOptions.Compiled)]
+    [GeneratedRegex(@"\{\{(\w+(?:\.\w+)*)(?:\|(\w+)(?::(\w+(?:\.\w+)*))?)?\}\}", RegexOptions.Compiled)]
     private static partial Regex PlaceholderPattern();
 
     [GeneratedRegex(@"\{\{#if\s+(\w+(?:\.\w+)*)\s*\}\}(.*?)\{\{/if\}\}", RegexOptions.Compiled | RegexOptions.Singleline)]
@@ -31,7 +36,7 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
     private static partial Regex SectionMarkerPattern();
 
     public Task<string> RenderAsync(string template, object model, CancellationToken ct = default)
-        => Task.FromResult(Render(template, model, encoder: null, rawPaths: null));
+        => Task.FromResult(Render(template, model, options: null));
 
     /// <summary>
     /// Renders with <paramref name="options"/>: each merged value goes through <see cref="TemplateRenderOptions.Encoder"/>
@@ -41,7 +46,7 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
     public Task<string> RenderAsync(string template, object model, TemplateRenderOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        return Task.FromResult(Render(template, model, options.Encoder, options.RawPaths));
+        return Task.FromResult(Render(template, model, options));
     }
 
     public async Task<string> RenderAsync(IMessageTemplate messageTemplate, object model, TemplateRenderOptions options, CancellationToken ct = default)
@@ -50,7 +55,7 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
         return await RenderAsync(messageTemplate.BodyTemplate, model, options, ct).ConfigureAwait(false);
     }
 
-    private static string Render(string template, object model, ITemplateValueEncoder? encoder, IReadOnlySet<string>? rawPaths)
+    private static string Render(string template, object model, TemplateRenderOptions? options)
     {
         if (template == null)
         {
@@ -80,7 +85,13 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
         return PlaceholderPattern().Replace(withSections, match =>
         {
             var path = match.Groups[1].Value;
-            var text = ResolvePropertyPath(model, path)?.ToString() ?? string.Empty;
+            var value = ResolvePropertyPath(model, path);
+            var text = match.Groups[2].Success
+                ? ApplyFilter(match.Groups[2].Value, value,
+                    match.Groups[3].Success ? ResolvePropertyPath(model, match.Groups[3].Value) : null, options)
+                : value?.ToString() ?? string.Empty;
+            var encoder = options?.Encoder;
+            var rawPaths = options?.RawPaths;
             if (encoder == null || text.Length == 0 || (rawPaths != null && rawPaths.Contains(path)))
             {
                 return text;
@@ -97,6 +108,15 @@ public sealed partial class StringTemplateEngine : ITemplateEngine
         }
 
         return await RenderAsync(messageTemplate.BodyTemplate, model, ct).ConfigureAwait(false);
+    }
+
+    private static string ApplyFilter(string name, object? value, object? argument, TemplateRenderOptions? options)
+    {
+        if (options == null || !options.Filters.TryGetValue(name, out var filter))
+        {
+            throw new TemplateRenderException("inline", $"Unknown filter '{name}'.");
+        }
+        return filter.Apply(value, argument, CultureInfo.CurrentCulture);
     }
 
     private static bool IsPresent(object? value) => value switch

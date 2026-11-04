@@ -36,6 +36,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Templates\ITemplateValueEncoder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Templates\MarkdownValueEncoder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Templates\TemplateRenderOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Templates\ITemplateValueFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Templates\MoneyTemplateFilter.cs" />
   </ItemGroup>
 
 </Project>

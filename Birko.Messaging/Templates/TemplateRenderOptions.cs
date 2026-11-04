@@ -22,4 +22,13 @@ public sealed class TemplateRenderOptions
     /// misspelt entry fails safe: the value shows as text.
     /// </summary>
     public IReadOnlySet<string> RawPaths { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The filters a placeholder may name, <c>{{Path|name}}</c> or <c>{{Path|name:ArgPath}}</c> (TASK-815), by
+    /// case-insensitive name; e.g. <see cref="MoneyTemplateFilter"/> under <see cref="MoneyTemplateFilter.Name"/>. None by
+    /// default: a placeholder naming a filter that is not here throws rather than shipping the marker. An engine with no
+    /// filter syntax ignores them; offering a filter is not a demand to use one.
+    /// </summary>
+    public IReadOnlyDictionary<string, ITemplateValueFilter> Filters { get; init; } =
+        new Dictionary<string, ITemplateValueFilter>(StringComparer.OrdinalIgnoreCase);
 }
