@@ -2,7 +2,7 @@
 id: TASK-813
 parent: EPIC-001
 feature: null
-status: verify  # built, awaiting the human test
+status: done  # signed off by the user 2026-11-04
 priority: P2
 assignee: ai
 created: 2026-11-04
@@ -41,8 +41,9 @@ flyout all 4, the gallery grid all 8.
 
 ## Human test plan
 
-- [ ] Symbio, Alt+Windows, a category tab's letter, then the letter of a module's ▾ (Hotel): each menu choice shows a
-      whole dark badge with its letter, on top of the menu; pressing one opens that page.
+- [x] Symbio, Alt+Windows, a category tab's letter, then the letter of a module's ▾ (Hotel): each menu choice shows a
+      whole dark badge with its letter, on top of the menu; pressing one opens that page. **PASS (the user, 2026-11-04)**, on a Symbio bundle built against the
+      branch (the dev server had overwritten the first one from main within a minute).
 
 ## Built (2026-11-04), on branches, not merged
 
@@ -53,3 +54,8 @@ flyout all 4, the gallery grid all 8.
   centre, with the layer's `pointer-events: none` lifted for the measurement). keyboard-check 225/225, three runs;
   222/225 on Birko.Web main (the three new checks). category-ribbon-check 19/19, verify.mjs clean.
 - Not run: `tsc` (the Playground's tsconfig paths point at the main checkout, not the worktree); esbuild bundled it.
+
+## Merged (2026-11-04)
+
+Birko.Web main 32b582d, tagged **v0.4.5** locally; Playground main d1b1822. Not pushed. Worktrees and branches
+removed.
