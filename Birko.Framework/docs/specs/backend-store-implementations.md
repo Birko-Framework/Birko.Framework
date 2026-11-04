@@ -246,9 +246,10 @@ SHALL use a realtime GET (`.Realtime()`), set `Guid` from the id when the source
 ### Requirement: Duplicate-create refusal is detected per backend, and InfluxDB has none
 
 The system SHALL refuse a create of a key already stored with `StoreUniqueViolationException` on every backend except
-InfluxDB, where a point for a stored Guid is a newer version of it and refusing would cost a query on every create
-(TASK-720, recorded, not changed: a decision for the user, as TimescaleDB's acceptance was, TASK-567), by these
-mechanisms:
+InfluxDB, which SHALL accept it and write it as a newer point of that entity, the shape an update has — decided
+2026-11-04 by the user, as TimescaleDB's acceptance was (TASK-567): refusing would need a read across the bucket's whole
+history before every write, and still could not be atomic, as InfluxDB has no unique constraint or transaction. Pinned by
+`tests/Birko.Data.InfluxDB.Tests/InfluxDuplicateCreateTests.cs`. The others refuse by these mechanisms:
 - MongoDB: `IsDuplicateKeyException` recognises `MongoWriteException` / `MongoBulkWriteException` with category
   `DuplicateKey`.
 - Cosmos DB: `IsDuplicateKeyException` recognises `CosmosException` 409, also inside an `AggregateException`.

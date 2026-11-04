@@ -89,6 +89,13 @@ using (var table = Client.GetQueryApi().Query(
 }
 ```
 
+## A duplicate create is accepted (decided 2026-11-04)
+
+A create of a Guid that is already stored is written as a newer point of that entity, as an update is — not refused as on
+the other stores. InfluxDB has no unique constraint or transaction, so a refusal would be a check-then-write that two
+concurrent creates both pass, and the check reads the bucket's whole history on every create. TimescaleDB accepts it the
+same way (TASK-567). Pinned by `InfluxDuplicateCreateTests`.
+
 ## Read plan (TASK-720)
 
 `Stores/InfluxReadPlan.cs` is the one producer of the sync and async bulk read: with a C# filter (run on the returned

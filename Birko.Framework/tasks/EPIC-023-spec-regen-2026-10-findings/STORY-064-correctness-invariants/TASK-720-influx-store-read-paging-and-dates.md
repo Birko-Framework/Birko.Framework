@@ -54,7 +54,7 @@ annotated-CSV table.
 | The bulk read pages before it filters | **reproduced:** a filtered `limit: 1, offset: 1` sent both to the server and filtered what came back |
 | Sorting uses only the first field's direction | **reproduced:** `ByDescending(Rank).ThenBy(Name)` sent `sort(columns: ["Rank", "Name"], desc: true)` |
 | A UTC `DateTime` comes back local | **reproduced:** `DateTime.Parse` of `2026-01-01T10:00:00.0000000Z` gave `Kind = Local` |
-| A duplicate create is never refused | **true, recorded, not changed:** a point for a stored Guid is a newer version of it; refusing costs a query on every create. Left for the user to decide, as TimescaleDB's acceptance was (TASK-567) |
+| A duplicate create is never refused | **true, recorded, not changed:** a point for a stored Guid is a newer version of it; refusing costs a query on every create. Decided 2026-11-04 by the user: accepted, as TimescaleDB's (TASK-567) — a refusal could not be atomic and would cost a read of the bucket's history per create; pinned by `InfluxDuplicateCreateTests` |
 
 ## Implementation plan
 
