@@ -21,12 +21,18 @@ namespace Birko.Data.Stores
             }
 
             var current = store;
+            // TASK-714: a wrapper chain that leads back to itself looped forever.
+            var seen = new System.Collections.Generic.HashSet<object>(ReferenceEqualityComparer.Instance) { current };
             while (current is IStoreWrapper wrapper)
             {
                 var inner = wrapper.GetInnerStore();
                 if (inner == null)
                 {
                     break;
+                }
+                if (!seen.Add(inner))
+                {
+                    throw new InvalidOperationException($"The store wrapper chain from {store.GetType().Name} leads back to {inner.GetType().Name}.");
                 }
                 current = inner;
             }

@@ -34,11 +34,11 @@ public class AsyncCosmosDBStoreTests
     }
 
     [Fact]
-    public async Task CreateAsync_WithNullData_ShouldReturnEmptyGuid()
+    public async Task CreateAsync_WithNullData_IsAnArgumentError()
     {
+        // TASK-714 (inverted): a null create answered Guid.Empty, a write reported that did not happen.
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.CreateAsync((TestModel)null!);
-        result.Should().Be(Guid.Empty);
+        await store.Invoking(s => s.CreateAsync((TestModel)null!)).Should().ThrowAsync<ArgumentNullException>();
     }
 
     [Fact]

@@ -154,6 +154,8 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            // TASK-714: the sync cores threw NullReferenceException here where the async ones answered quietly.
+            ArgumentNullException.ThrowIfNull(data);
             EnsureInitialized();
             try
             {
@@ -199,6 +201,7 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            ArgumentNullException.ThrowIfNull(data);   // TASK-714
             EnsureInitialized();
             try
             {

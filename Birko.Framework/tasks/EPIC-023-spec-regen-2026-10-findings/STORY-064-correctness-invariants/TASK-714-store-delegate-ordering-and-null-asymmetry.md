@@ -3,7 +3,7 @@ id: TASK-714
 parent: STORY-064
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -28,10 +28,10 @@ Evidence: Birko.Data.SQL/Stores/DataBaseStore.cs:218,249-254; AsyncDataBaseStore
 
 ## Acceptance criteria
 
-- [ ] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
+- [x] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
       closed with its evidence, never quietly dropped (rule 54).
-- [ ] Each reproduced defect fixed, with a regression test that fails without the fix.
-- [ ] The spec area that describes the behaviour updated to the fixed behaviour.
+- [x] Each reproduced defect fixed, with a regression test that fails without the fix.
+- [x] The spec area that describes the behaviour updated to the fixed behaviour.
 
 ## Out of scope
 
@@ -41,6 +41,33 @@ Evidence: Birko.Data.SQL/Stores/DataBaseStore.cs:218,249-254; AsyncDataBaseStore
 
 N/A — covered by automated tests once reproduced.
 
+## Measured (2026-11-04, before the fix)
+
+`tests/Birko.Data.SQL.SqLite.Tests/Task714StoreContractTests.cs` and
+`tests/Birko.Data.InMemory.Tests/Task714InMemoryContractTests.cs` against the shipped stores.
+
+| Claim | Result |
+|---|---|
+| A SQL update whose delegate returns a copy with its own Guid rewrites the original row's key | **reproduced**, sync and async: no exception, and the in-memory store wrote the copy's row instead |
+| The in-memory bulk create checks keys before the delegate, so a duplicate replacement fails after earlier items were stored | **reproduced:** 2 rows after the refused batch (1 expected), sync and async |
+| `EnsureGuid` changes the caller's entities even on refusal | **reproduced:** a refused batch left a Guid on the caller's new entity |
+| Sync `Create`/`Update` throw NRE on null where the async twins return quietly | **reproduced:** async create answered `Guid.Empty` and async update returned |
+| SQL bulk create NREs on a null element | **reproduced** on SQLite, create and update |
+| `GetUnwrappedStore` has no cycle guard | **reproduced:** the test run hung until the 300 s timeout |
+
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-714` — leave empty until then._
+`StoreDelegates.Apply`, the one producer every store calls, refuses a returned entity with another key; an
+identity-less copy still inherits the key. The public `Create` / `Update` (sync and async) refuse `null` with
+`ArgumentNullException` on every provider; the SQL cores' own null answers go (rule 53). Every SQL bulk create and update
+(the eight provider stores, TimescaleDB's two, the base loops) skips a null element, as every portable store does. The
+in-memory bulk create checks the keys that exist first, then assigns Guids, runs every delegate, and only then stores.
+`GetUnwrappedStore` keeps the stores it visited and refuses a repeat.
+
+## Built (2026-11-04)
+
+10 tests: 9 fail on the old code (the cycle test by hanging); the tenth pins that an identity-less copy still
+inherits the key. No consumer delegate returns another entity (grepped Birko\Consumers: every `StoreDataDelegate` use
+passes through). Two CosmosDB tests pinned the quiet `Create(null)` → `Guid.Empty` and are inverted (rule 56). All 124
+suites importing Birko.Data.Stores green, TimescaleDB re-run after its two bulk sites. Spec
+`store-crud-contract.md` and `backend-store-implementations.md` updated (scoped; `generated-at` left).

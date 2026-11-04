@@ -43,7 +43,7 @@ namespace Birko.Data.SQL.SqLite.Stores
             if (Connector == null || data == null || !data.Any())
                 return;
 
-            var items = data.ToList();
+            var items = data.Where(x => x != null).ToList();   // TASK-714: a null element was a NullReferenceException
             for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
                 var item = items[itemIndex];
@@ -66,7 +66,7 @@ namespace Birko.Data.SQL.SqLite.Stores
             if (Connector == null || data == null || !data.Any())
                 return;
 
-            var items = data.ToList();
+            var items = data.Where(x => x != null).ToList();   // TASK-714: a null element was a NullReferenceException
             // TASK-557: the list is what gets persisted, so it takes what the delegate returns.
             for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {

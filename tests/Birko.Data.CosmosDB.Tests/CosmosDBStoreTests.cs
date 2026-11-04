@@ -49,11 +49,11 @@ public class CosmosDBStoreTests
     }
 
     [Fact]
-    public void Create_WithNullData_ShouldReturnEmptyGuid()
+    public void Create_WithNullData_IsAnArgumentError()
     {
+        // TASK-714 (inverted): a null create answered Guid.Empty, a write reported that did not happen.
         var store = new CosmosDBStore<TestModel>();
-        var result = store.Create((TestModel)null!);
-        result.Should().Be(Guid.Empty);
+        store.Invoking(s => s.Create((TestModel)null!)).Should().Throw<ArgumentNullException>();
     }
 
     [Fact]

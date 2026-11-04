@@ -28,6 +28,14 @@ namespace Birko.Data.Stores
             {
                 result.Guid = data.Guid;
             }
+            // TASK-714: a delegate may return a copy, never another entity. A SQL update built its WHERE from the original
+            // and so rewrote the original row's key to the copy's; the in-memory store wrote the copy's row instead.
+            if (data.Guid != null && result.Guid != data.Guid)
+            {
+                throw new InvalidOperationException(
+                    $"The store delegate returned a {typeof(T).Name} with Guid {result.Guid}, not the entity's {data.Guid}. "
+                    + "A delegate may change an entity or return a copy of it, but not its key.");
+            }
             return result;
         }
     }

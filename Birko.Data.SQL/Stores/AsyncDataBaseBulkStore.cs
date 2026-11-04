@@ -184,7 +184,7 @@ namespace Birko.Data.SQL.Stores
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
         {
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 await CreateAsync(item, storeDelegate, ct);
             }
@@ -218,7 +218,7 @@ namespace Birko.Data.SQL.Stores
         {
             // TASK-555: each item's miss is collected rather than ending the batch — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 try
                 {
@@ -363,7 +363,7 @@ namespace Birko.Data.SQL.Stores
             IEnumerable<T> data,
             CancellationToken ct = default)
         {
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 await DeleteAsync(item, ct);
             }

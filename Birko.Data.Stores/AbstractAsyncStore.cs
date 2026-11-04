@@ -170,6 +170,9 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
+            // TASK-714: a null create answered Guid.Empty on some providers (a write reported that did not happen) and threw
+            // NullReferenceException on their sync twins.
+            ArgumentNullException.ThrowIfNull(data);
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             try
             {
@@ -217,6 +220,7 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
+            ArgumentNullException.ThrowIfNull(data);   // TASK-714
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             try
             {

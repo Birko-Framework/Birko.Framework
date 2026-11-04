@@ -299,17 +299,17 @@ The system SHALL apply a bulk `Create` with one already-stored key as follows:
 - **When** bulk `Create([A, B])` runs outside a caller's transaction
 - **Then** neither row is stored and `StoreUniqueViolationException` is thrown
 
-### Requirement: Bulk writes skip null items except on SQL
+### Requirement: Bulk writes skip null items
 
-The system SHALL skip `null` elements in bulk Create/Update/Delete on MongoDB, RavenDB, Cosmos DB, Elasticsearch,
-InfluxDB, JSON and XML. The SQL stores' native bulk overrides SHALL pass every element through, so a `null` element in a
-bulk create throws `NullReferenceException` at `item.EnsureGuid()`.
+The system SHALL skip `null` elements in bulk Create/Update/Delete on every store: MongoDB, RavenDB, Cosmos DB,
+Elasticsearch, InfluxDB, JSON, XML, in-memory and SQL (TASK-714: the SQL stores' native bulk overrides passed every element
+through, so a `null` element threw `NullReferenceException`, measured on SQLite).
 
-#### Scenario: SQL bulk create with a null element
+#### Scenario: SQL bulk create with a null element (TASK-714)
 
 - **Given** an `AsyncSQLiteStore<T>` (likewise PostgreSQL, MySQL, SQL Server, TimescaleDB, sync and async)
-- **When** `CreateAsync(new[] { a, null })` is called
-- **Then** `NullReferenceException` is thrown (`AsyncSQLiteStore.cs:115`)
+- **When** `CreateAsync(new[] { a, null, b })` is called
+- **Then** `a` and `b` are stored and nothing is thrown
 
 ### Requirement: Each backend detects an update miss from its own signal, with listed exceptions
 

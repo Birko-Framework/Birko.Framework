@@ -280,7 +280,7 @@ namespace Birko.Data.SQL.Stores
 
         protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            if (Connector == null || data == null) return Guid.Empty;
+            if (Connector == null) return Guid.Empty;
             using var _tx = EnterTransactionScope();
 
             data.EnsureGuid();
@@ -336,7 +336,7 @@ namespace Birko.Data.SQL.Stores
 
         protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            if (Connector == null || data == null) return;
+            if (Connector == null) return;
             using var _tx = EnterTransactionScope();
 
             var conditions = new List<SQL.Conditions.Condition>();

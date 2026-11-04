@@ -194,16 +194,20 @@ namespace Birko.Data.InMemory.Stores
                 return;
             }
             var items = data.Where(x => x != null).ToList();
+            // TASK-714: the keys are checked before any Guid is assigned (an item without one cannot collide), so a refused
+            // batch leaves the caller's entities as they were; every delegate runs before anything is stored, so a refusal
+            // stores nothing (it used to store the items before it). A delegate keeps the key (StoreDelegates.Apply).
+            RequireNewKeys(items.Where(x => x.Guid != null).ToList());
             foreach (var item in items)
             {
                 item.EnsureGuid();
             }
-            RequireNewKeys(items);
             for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
             {
-                var item = items[itemIndex];
-                item = StoreDelegates.Apply(storeDelegate, item);
-                items[itemIndex] = item; // the list is what gets persisted
+                items[itemIndex] = StoreDelegates.Apply(storeDelegate, items[itemIndex]); // the list is what gets persisted
+            }
+            foreach (var item in items)
+            {
                 AddNew(item);
             }
         }

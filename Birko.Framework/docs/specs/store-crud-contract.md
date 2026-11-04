@@ -437,8 +437,10 @@ described what an existing, correct member already did.
 The system SHALL declare `StoreDataDelegate<T>(T data)` as returning `T` and SHALL, at every invocation site on every
 provider and decorator, persist what the delegate returns through the one helper `StoreDelegates.Apply` — the original
 entity when the delegate returns `null`, and a returned replacement with no Guid of its own inherits the original's
-(identity is assigned and checked before the delegate runs). On a bulk path whose collection is what gets written, the
-collection takes the replacement. (SH-M315, fixed by TASK-557 — all ~110 call sites used to discard the return and
+(identity is assigned and checked before the delegate runs). A replacement carrying another non-empty `Guid` SHALL be
+refused with `InvalidOperationException`: a delegate may change an entity or return a copy of it, never its key
+(TASK-714: a SQL update rewrote the original row's key to the copy's, measured; the in-memory store wrote the copy's
+row instead). On a bulk path whose collection is what gets written, the collection takes the replacement. (SH-M315, fixed by TASK-557 — all ~110 call sites used to discard the return and
 persist the original, so a delegate in the functional style was silently ignored.)
 
 #### Scenario: Delegate stamps a field
@@ -458,7 +460,8 @@ persist the original, so a delegate in the functional style was silently ignored
 - **Given** a delegate that returns `null`, or one that returns a new instance whose `Guid` is `null` or `Guid.Empty`
 - **When** `StoreDelegates.Apply` runs it
 - **Then** a `null` return persists the original entity, and the identity-less copy is given the original's `Guid`
-  before it is persisted; a copy that sets its own non-empty `Guid` keeps it
+  before it is persisted; a copy that sets another non-empty `Guid` is refused with `InvalidOperationException`
+  (TASK-714), and nothing is written
 
 #### Scenario: Delegate parameter name differs between sync and async
 
@@ -961,7 +964,8 @@ wrappers can be traversed.
 
 The system SHALL implement `GetUnwrappedStore(this object? store)` to return `null` for a `null` input,
 otherwise loop while the current value implements `IStoreWrapper`, replacing it with `GetInnerStore()`, and
-break out — returning the current value rather than `null` — when `GetInnerStore()` yields `null`.
+break out — returning the current value rather than `null` — when `GetInnerStore()` yields `null`. A chain that leads
+back to a store already visited SHALL be refused with `InvalidOperationException` (TASK-714: it looped forever, measured).
 The typed overloads `GetUnwrappedStore<T, TStore>(this IStore<T>?)` and
 `GetUnwrappedStore<T, TStore>(this IAsyncStore<T>?)` SHALL run that walk and then apply `as TStore`.
 
@@ -1149,15 +1153,16 @@ apply the store delegate through `StoreDelegates.Apply`, insert the result throu
 `Insert` keeps throwing the driver's exception for callers that classify it themselves (rule 9). The stores' override of
 `IsDuplicateKeyException` is the same classifier, so the public `Update` translates a unique collision too (TASK-632).
 `UpdateCore` / `UpdateCoreAsync` SHALL build the `WHERE` conditions from `DataBase.GetPrimaryFields(typeof(T))` on the
-entity **as passed in**, then apply the delegate, then run the connector `Update`, and SHALL throw
+entity **as passed in**, then apply the delegate (which keeps the key, so the conditions name the row written), then run
+the connector `Update`, and SHALL throw
 `EntityNotFoundException` when the statement matched 0 rows (SH-M306, TASK-555). `DeleteCore` / `DeleteCoreAsync` SHALL
 delete by the same primary-key conditions and report nothing about a miss. `ReadCore` SHALL select with limit 1 and
 return the first `T`; `CountCore` SHALL return the connector's `SelectCount`.
 
-The sync and async stores differ on `null`: the async `CreateCoreAsync` returns `Guid.Empty` and the async
-`UpdateCoreAsync` / `DeleteCoreAsync` return silently for a `null` entity (or a `null` connector), while the sync
-`DeleteCore` returns for `null` and the sync `CreateCore` / `UpdateCore` dereference it and throw
-`NullReferenceException`. When the connector is not an `AbstractAsyncConnector`, the async store runs the sync connector
+A `null` entity SHALL be refused with `ArgumentNullException` by the public `Create` / `Update` / `CreateAsync` /
+`UpdateAsync` of `AbstractStore` / `AbstractAsyncStore`, on every provider (TASK-714: the SQL async create answered
+`Guid.Empty` and the async update returned silently, a write reported that did not happen, while the sync twins threw
+`NullReferenceException`, measured). `Delete` of `null` still returns silently on both. When the connector is not an `AbstractAsyncConnector`, the async store runs the sync connector
 call on `Task.Run`, and its `ReadCoreAsync` fallback selects without a limit and returns the first `T`.
 
 #### Scenario: Creating over a stored key

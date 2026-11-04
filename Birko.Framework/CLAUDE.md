@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A store delegate keeps the entity's key; a null entity is refused (2026-11-04)
+[[TASK-714]]. A store delegate returning a copy with its own Guid made a SQL update rewrite the original row's key
+(measured on SQLite); `StoreDelegates.Apply` now refuses it on every store. A null `Create` / `Update` is
+`ArgumentNullException` on every provider (async SQL answered `Guid.Empty`, sync threw NRE). SQL bulk writes skip a null
+element as the other stores do. A refused in-memory bulk create stores nothing and leaves the caller's Guids alone;
+`GetUnwrappedStore` refuses a wrapper cycle (it hung).
 ### Event-sourced filtered writes refuse every-row filters; events carry their version and user (2026-11-04)
 [[TASK-713]]. The event-sourcing wrappers' filtered update and delete took a null filter, or one reducing to every row,
 and rewrote or deleted every row (measured); they now refuse both (`x => true` stays the explicit all-rows filter).
@@ -367,12 +373,6 @@ empty, skeleton, stale banner); chat stays missing, as a desktop agent chat may 
 [[TASK-780]]. An aggregator importing both `Birko.Communication.GraphQL` and `Birko.Communication.WebSocket` failed
 with CS0118: a bare `WebSocket` in the GraphQL namespace bound to the sibling `Birko.Communication.WebSocket`
 namespace. Now written `System.Net.WebSockets.WebSocket`; a test-side namespace probe keeps it from coming back.
-### OpenID Connect sign-in with Google and Microsoft (2026-10-28)
-[[TASK-778]], for Presenter. New `Birko.Communication.OAuth.OpenIdConnect`: `OpenIdSignIn` runs the sign-in (PKCE,
-nonce, a state bound to the browser) and returns a status. `IdTokenValidator` checks the `id_token` against the
-provider's published keys. Google and Microsoft factories. The framework now owns OIDC sign-in (EPIC-020's boundary,
-moved by the user); who may sign in stays in the app. New package `Microsoft.IdentityModel.JsonWebTokens` 8.*: CPM
-consumers add it. [[TASK-779]]: a PKCE code exchange now also sends the client secret, which Google and Microsoft require.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

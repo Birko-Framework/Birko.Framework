@@ -154,7 +154,7 @@ namespace Birko.Data.SQL.Stores
         /// </summary>
         protected virtual void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 Create(item, storeDelegate);
             }
@@ -182,7 +182,7 @@ namespace Birko.Data.SQL.Stores
         {
             // TASK-555: each item's miss is collected rather than ending the batch — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 try
                 {
@@ -300,7 +300,7 @@ namespace Birko.Data.SQL.Stores
         /// </summary>
         protected virtual void DeleteCore(IEnumerable<T> data)
         {
-            foreach (var item in data)
+            foreach (var item in data.Where(x => x != null))   // TASK-714
             {
                 Delete(item);
             }
