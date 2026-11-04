@@ -102,8 +102,20 @@ namespace Birko.AI.Resilience.Services
                 }
             }
 
-            var response = await _inner.SendMessageAsync(messages, tools, systemPrompt, cancellationToken);
-            await RecordUsageFromResponse(response.Usage);
+            // TASK-715: every request made counts against the request limit, with or without usage in the reply (the
+            // OpenAI-compatible providers send none, so their requests-per-minute limit never applied), and a failed one too.
+            LlmResponse response;
+            try
+            {
+                response = await _inner.SendMessageAsync(messages, tools, systemPrompt, cancellationToken);
+            }
+            catch
+            {
+                _rateLimiter?.RecordRequest(Name);
+                throw;
+            }
+            _rateLimiter?.RecordRequest(Name, response.Usage?.TotalTokens ?? 0);
+            await RecordCostFromResponse(response.Usage);
             return response;
         }
 
@@ -136,7 +148,18 @@ namespace Birko.AI.Resilience.Services
                 }
             }
 
-            var streamingResponse = await _inner.SendMessageStreamingAsync(messages, tools, systemPrompt, cancellationToken);
+            LlmStreamingResponse streamingResponse;
+            try
+            {
+                streamingResponse = await _inner.SendMessageStreamingAsync(messages, tools, systemPrompt, cancellationToken);
+            }
+            catch
+            {
+                _rateLimiter?.RecordRequest(Name);   // TASK-715
+                throw;
+            }
+            // TASK-715: the request is counted now; its tokens when the stream ends, if it reports any.
+            _rateLimiter?.RecordRequest(Name);
 
             // Preserve the inner response's disposable Resource by re-wrapping only the stream delegate.
             var originalGetStream = streamingResponse.GetStreamAsync;
@@ -160,15 +183,17 @@ namespace Birko.AI.Resilience.Services
             }
 
             var usage = streamingResponse.Usage ?? streamingResponse.FinalResponse?.Usage;
-            await RecordUsageFromResponse(usage);
+            if (usage != null)
+            {
+                _rateLimiter?.RecordTokens(Name, usage.TotalTokens);
+            }
+            await RecordCostFromResponse(usage);
         }
 
-        private async Task RecordUsageFromResponse(TokenUsage? usage)
+        private async Task RecordCostFromResponse(TokenUsage? usage)
         {
             if (usage == null || (usage.PromptTokens == 0 && usage.CompletionTokens == 0))
                 return;
-
-            _rateLimiter?.RecordRequest(Name, usage.TotalTokens);
 
             if (_costTracker != null)
             {

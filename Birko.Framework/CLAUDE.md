@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### AI budgets check every scope; every request counts against the rate limit (2026-11-04)
+[[TASK-715]]. `CostTrackingService.CheckBudgetAsync` returned at a daily warning, so an exceeded monthly or project budget
+let the call through; it now answers the first exceeded budget, then the first warning. `TrackedLlmProvider` counted a
+request only when the reply carried usage, which the OpenAI-compatible providers never send (measured: a 1/minute limit
+let two calls through); every request now counts, a stream's tokens at its end (new `RecordTokens`).
+`AgentRegistration.Create` no longer writes into the caller's config.
 ### A store delegate keeps the entity's key; a null entity is refused (2026-11-04)
 [[TASK-714]]. A store delegate returning a copy with its own Guid made a SQL update rewrite the original row's key
 (measured on SQLite); `StoreDelegates.Apply` now refuses it on every store. A null `Create` / `Update` is
@@ -369,10 +375,6 @@ fails when a web component has no row, when a row's component is gone, or when a
 ([[TASK-795]]) fails when a desktop control the list names does not exist, or a "needs a theme" one already has one. Without the
 Birko\Web checkout it skips. Eight components are skipped on purpose (tour, gallery, segmented, button group, toolbar,
 empty, skeleton, stale banner); chat stays missing, as a desktop agent chat may want it.
-### GraphQL compiles beside WebSocket (2026-10-28)
-[[TASK-780]]. An aggregator importing both `Birko.Communication.GraphQL` and `Birko.Communication.WebSocket` failed
-with CS0118: a bare `WebSocket` in the GraphQL namespace bound to the sibling `Birko.Communication.WebSocket`
-namespace. Now written `System.Net.WebSockets.WebSocket`; a test-side namespace probe keeps it from coming back.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

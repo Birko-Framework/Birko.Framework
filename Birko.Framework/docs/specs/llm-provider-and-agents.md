@@ -1819,8 +1819,8 @@ The system SHALL register, in `AgentRegistration.RegisterAll()`, exactly once pe
 four task agents `GetDepthGuidance`) and keeps the nine default tools. `IsCodingAgent(type)` SHALL be true,
 case-insensitively, for `coding`, the eleven language types, `debug`, `refactor`, `test` and `svg`.
 `AgentRegistration.Create(provider, options, config, agentType)` SHALL register both catalogues, inject
-`useCodingEndpoint = "true"` into the config for `zai` / `zhipu` / `zhipuai` when the resolved type is a coding agent
-and the key is absent, then create the provider through `LlmProviderFactory` and the agent through `AgentFactory`.
+`useCodingEndpoint = "true"` into a **copy** of the config (keeping the caller's comparer) for `zai` / `zhipu` / `zhipuai`
+when the resolved type is a coding agent and the key is absent, then create the provider through `LlmProviderFactory` and the agent through `AgentFactory`.
 
 #### Scenario: Z.AI coding endpoint is chosen by agent type
 
@@ -1829,11 +1829,11 @@ and the key is absent, then create the provider through `LlmProviderFactory` and
 - **Then** the config carries `useCodingEndpoint = "true"` and the provider posts to the coding endpoint; for
   `agentType = "documentation"` no flag is added
 
-#### Scenario: The caller's config is mutated
+#### Scenario: The caller's config is left as it was (TASK-715)
 
 - **Given** a config dictionary passed to `AgentRegistration.Create` for `zai` with a coding agent type
 - **When** the call returns
-- **Then** the caller's own dictionary now contains `useCodingEndpoint = "true"`
+- **Then** the caller's dictionary holds only what it held before (it used to gain `useCodingEndpoint = "true"`, measured)
 
 #### Scenario: Alias resolves to a catalogue agent
 
@@ -1881,18 +1881,21 @@ each call (sync or streaming): wait for a rate-limit slot by re-checking `CanMak
 waiting.")` when the final re-check fails; then refuse with `LlmResponse.Error("Budget exceeded ({type}): ${spend:F2} /
 ${limit:F2}")` when `CheckBudgetAsync(ProjectId)` reports the budget exceeded; then call the inner provider. Both
 refusals carry an `Unknown` (permanent) failure, and a budget warning does not refuse; a streaming refusal returns an
-empty stream with `Error` and `FinalResponse` set. Usage SHALL be recorded after a sync response, and after a stream has
-been fully enumerated, only when the response's `Usage` has a non-zero token count: the limiter's
-`RecordRequest(Name, TotalTokens)` and the cost tracker's `RecordUsageAsync` with `ProjectId`, `TaskId`, `AgentType`
+empty stream with `Error` and `FinalResponse` set. Every request the inner provider was called for SHALL count against
+the limiter, whether or not its reply carries `Usage` and whether or not it threw (TASK-715: only a reply with usage was
+counted, and the OpenAI-compatible providers send none, so their request limits never applied, measured): a sync call
+with `RecordRequest(Name, Usage?.TotalTokens ?? 0)`, a streaming call with `RecordRequest(Name)` when the inner call
+returns and `RecordTokens(Name, TotalTokens)` once the stream has been fully enumerated. The cost tracker's
+`RecordUsageAsync` SHALL run only when the `Usage` has a non-zero token count, with `ProjectId`, `TaskId`, `AgentType`
 and `CallerContext`, without the caller's token, logging rather than throwing a recording failure. The streaming
 wrapper SHALL keep the inner response's `Resource`. The limiter and the pricing are keyed by the provider's `Name`
 (e.g. `"Claude"`, `"Ollama (llama3.2)"`).
 
-#### Scenario: A response without usage is never counted
+#### Scenario: A response without usage still counts (TASK-715)
 
 - **Given** a rate limit of 1 request per minute and an inner provider whose responses carry no `Usage`
-- **When** three calls are made within a minute
-- **Then** all three proceed, because a request is recorded against the limiter only together with its tokens
+- **When** two calls are made within a minute
+- **Then** the first proceeds and the second is refused with the rate-limit error
 
 #### Scenario: Budget exceeded
 
@@ -1914,7 +1917,8 @@ for the same name wins, CR-L013), allow every request when disabled or when no l
 one minute window (shared by request and token counts) and one day window per provider. A window SHALL reset entirely
 once its length has elapsed since its start — a fixed window, although the type describes itself as sliding.
 `CanMakeRequest` SHALL refuse when the minute request count, minute token count, day request count or day token count
-has reached a positive limit. `GetRetryAfter` SHALL return the time until the latest blocking window resets, or null
+has reached a positive limit. `RecordRequest(provider, tokens)` counts a request and its tokens; `RecordTokens(provider,
+tokens)` adds tokens alone (TASK-715, for a stream whose request was already counted). `GetRetryAfter` SHALL return the time until the latest blocking window resets, or null
 when nothing blocks, the limiter is disabled or the provider has no limit. `GetAllStatuses` SHALL report counts and
 limits for every configured provider.
 
@@ -1964,8 +1968,9 @@ The system SHALL price usage, in `CostTrackingService.CalculateCost`, by the pri
 when a repository exists. `CheckBudgetAsync(projectId)` SHALL report within budget with type `"none"` when disabled
 (CR-L012) or without a repository, and otherwise check, in order, the daily budget (UTC day), the monthly budget (UTC
 month) and — when a project id is given — the project's all-time spend, each only when positive; the first budget that
-is exceeded (spend ≥ limit) or at warning (spend ≥ limit × `WarningThresholdPercent` / 100, default 80) SHALL be
-returned at once, so a warning on an earlier budget stops the later ones from being checked.
+is exceeded (spend ≥ limit) SHALL be returned, and only when none is, the first at warning (spend ≥ limit ×
+`WarningThresholdPercent` / 100, default 80). (TASK-715: the first warning returned at once, so an exceeded later budget
+was never checked, measured.)
 
 #### Scenario: Wildcard pricing
 
@@ -1973,11 +1978,11 @@ returned at once, so a warning on an earlier budget stops the later ones from be
 - **When** `CalculateCost("claude", "claude-sonnet-4-6", 1_000_000, 100_000)` is called
 - **Then** it returns 4.5
 
-#### Scenario: A daily warning masks an exceeded monthly budget
+#### Scenario: A daily warning does not mask an exceeded monthly budget (TASK-715)
 
 - **Given** a daily budget of $10 with $9 spent today and a monthly budget of $100 with $120 spent this month
 - **When** `CheckBudgetAsync` runs
-- **Then** it returns `IsWithinBudget = true`, `IsWarning = true`, type `"daily"`, and a tracked call is not refused
+- **Then** it returns `IsWithinBudget = false`, type `"monthly"`, and a tracked call is refused
 
 ### Requirement: Resilience state persists over any bulk store
 

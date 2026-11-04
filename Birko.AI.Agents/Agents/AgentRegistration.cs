@@ -106,7 +106,10 @@ namespace Birko.AI.Agents
         {
             EnsureRegistered();
 
-            config ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // TASK-715: a copy, with the caller's comparer, so the Z.AI hint below never lands in the caller's dictionary.
+            config = config == null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(config, config.Comparer);
 
             // For Z.AI, inject coding endpoint hint based on agent type
             if (provider.Equals("zai", StringComparison.OrdinalIgnoreCase)

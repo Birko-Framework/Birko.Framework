@@ -12,16 +12,16 @@ Production resilience for LLM API calls — rate limiting, circuit breaker, cost
 ## Components
 
 ### Services/ProviderRateLimiter.cs
-- `ProviderRateLimiter` — Token bucket rate limiting per provider
+- `ProviderRateLimiter` — Token bucket rate limiting per provider. `RecordRequest(provider, tokens)` counts a request; `RecordTokens(provider, tokens)` adds tokens alone (a stream's, at its end; TASK-715)
 
 ### Services/ProviderCircuitBreaker.cs
 - `ProviderCircuitBreaker` — Circuit breaker pattern for provider failures
 
 ### Services/CostTrackingService.cs
-- `CostTrackingService` — Token usage and cost tracking per provider
+- `CostTrackingService` — Token usage and cost tracking per provider. `CheckBudgetAsync` answers the first exceeded budget (daily, monthly, project), and only then the first warning (TASK-715: a warning used to hide a later exceeded budget)
 
 ### Services/TrackedLlmProvider.cs
-- `TrackedLlmProvider` — Decorator wrapping `ILlmProvider` with rate limiting, circuit breaker, and cost tracking
+- `TrackedLlmProvider` — Decorator wrapping `ILlmProvider` with rate limiting, circuit breaker, and cost tracking. Every request made counts against the rate limit, with or without usage in the reply and when it throws (TASK-715)
 
 ### Configuration/RateLimitConfiguration.cs
 - `RateLimitConfiguration` — Rate limit settings (requests per minute, tokens per minute)

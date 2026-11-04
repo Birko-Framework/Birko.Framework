@@ -4,6 +4,11 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-28 — GraphQL compiles beside WebSocket
+[[TASK-780]]. An aggregator importing both `Birko.Communication.GraphQL` and `Birko.Communication.WebSocket` failed
+with CS0118: a bare `WebSocket` in the GraphQL namespace bound to the sibling `Birko.Communication.WebSocket`
+namespace. Now written `System.Net.WebSockets.WebSocket`; a test-side namespace probe keeps it from coming back.
+
 ## 2026-10-28 — OpenID Connect sign-in with Google and Microsoft
 [[TASK-778]], for Presenter. New `Birko.Communication.OAuth.OpenIdConnect`: `OpenIdSignIn` runs the sign-in (PKCE,
 nonce, a state bound to the browser) and returns a status. `IdTokenValidator` checks the `id_token` against the

@@ -118,6 +118,33 @@ namespace Birko.AI.Resilience.Services
             }
         }
 
+        /// <summary>
+        /// Adds <paramref name="tokenCount"/> to the provider's token windows without counting a request: for a streamed
+        /// response, whose request was counted when it was made and whose usage is known only once the stream ends
+        /// (TASK-715).
+        /// </summary>
+        public void RecordTokens(string provider, int tokenCount)
+        {
+            if (!_enabled || tokenCount <= 0) return;
+
+            var key = provider.ToLowerInvariant();
+            var now = DateTime.UtcNow;
+
+            var minuteWindow = _minuteWindows.GetOrAdd(key, _ => new RateLimitWindow());
+            lock (minuteWindow)
+            {
+                minuteWindow.Slide(now, TimeSpan.FromMinutes(1));
+                minuteWindow.TokenCount += tokenCount;
+            }
+
+            var dayWindow = _dayWindows.GetOrAdd(key, _ => new RateLimitWindow());
+            lock (dayWindow)
+            {
+                dayWindow.Slide(now, TimeSpan.FromDays(1));
+                dayWindow.TokenCount += tokenCount;
+            }
+        }
+
         public TimeSpan? GetRetryAfter(string provider)
         {
             if (!_enabled) return null;

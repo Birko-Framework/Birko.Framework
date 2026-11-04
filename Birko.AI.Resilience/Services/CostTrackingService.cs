@@ -85,16 +85,24 @@ namespace Birko.AI.Resilience.Services
             if (_repository == null)
                 return new BudgetStatus(true, false, 0, 0, "none");
 
+            // TASK-715: every scope is checked before a warning is answered. The first scope in its warning band used to
+            // return at once, so an exceeded monthly or project budget behind a warning daily one let the call go ahead.
+            BudgetStatus? warning = null;
+            BudgetStatus? Assess(double spend, double limit, string type)
+            {
+                if (spend >= limit)
+                    return new BudgetStatus(false, true, spend, limit, type);
+                if (warning == null && spend >= limit * (budget.WarningThresholdPercent / 100.0))
+                    warning = new BudgetStatus(true, true, spend, limit, type);
+                return null;
+            }
+
             if (budget.DailyBudgetUsd > 0)
             {
                 var today = DateTime.UtcNow.Date;
                 var dailySpend = await _repository.GetTotalSpendAsync(today, today.AddDays(1), ct: ct);
-                var threshold = budget.DailyBudgetUsd * (budget.WarningThresholdPercent / 100.0);
-
-                if (dailySpend >= budget.DailyBudgetUsd)
-                    return new BudgetStatus(false, true, dailySpend, budget.DailyBudgetUsd, "daily");
-                if (dailySpend >= threshold)
-                    return new BudgetStatus(true, true, dailySpend, budget.DailyBudgetUsd, "daily");
+                if (Assess(dailySpend, budget.DailyBudgetUsd, "daily") is { } exceeded)
+                    return exceeded;
             }
 
             if (budget.MonthlyBudgetUsd > 0)
@@ -102,26 +110,18 @@ namespace Birko.AI.Resilience.Services
                 var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
                 var monthEnd = monthStart.AddMonths(1);
                 var monthlySpend = await _repository.GetTotalSpendAsync(monthStart, monthEnd, ct: ct);
-                var threshold = budget.MonthlyBudgetUsd * (budget.WarningThresholdPercent / 100.0);
-
-                if (monthlySpend >= budget.MonthlyBudgetUsd)
-                    return new BudgetStatus(false, true, monthlySpend, budget.MonthlyBudgetUsd, "monthly");
-                if (monthlySpend >= threshold)
-                    return new BudgetStatus(true, true, monthlySpend, budget.MonthlyBudgetUsd, "monthly");
+                if (Assess(monthlySpend, budget.MonthlyBudgetUsd, "monthly") is { } exceeded)
+                    return exceeded;
             }
 
             if (budget.ProjectBudgetUsd > 0 && !string.IsNullOrEmpty(projectId))
             {
                 var projectSpend = await _repository.GetProjectSpendAsync(projectId, ct);
-                var threshold = budget.ProjectBudgetUsd * (budget.WarningThresholdPercent / 100.0);
-
-                if (projectSpend >= budget.ProjectBudgetUsd)
-                    return new BudgetStatus(false, true, projectSpend, budget.ProjectBudgetUsd, "project");
-                if (projectSpend >= threshold)
-                    return new BudgetStatus(true, true, projectSpend, budget.ProjectBudgetUsd, "project");
+                if (Assess(projectSpend, budget.ProjectBudgetUsd, "project") is { } exceeded)
+                    return exceeded;
             }
 
-            return new BudgetStatus(true, false, 0, 0, "none");
+            return warning ?? new BudgetStatus(true, false, 0, 0, "none");
         }
 
         public async Task<List<ProviderUsageSummary>> GetUsageSummaryAsync(DateTime from, DateTime to, CancellationToken ct = default)
