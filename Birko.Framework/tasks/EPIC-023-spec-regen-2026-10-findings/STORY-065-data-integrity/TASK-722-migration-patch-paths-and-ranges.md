@@ -3,7 +3,7 @@ id: TASK-722
 parent: STORY-065
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -28,10 +28,10 @@ Evidence: CosmosDBSchemaBuilder.cs:176; CosmosDBDataMigrator.cs:87; InfluxDBData
 
 ## Acceptance criteria
 
-- [ ] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
+- [x] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
       closed with its evidence, never quietly dropped (rule 54).
-- [ ] Each reproduced defect fixed, with a regression test that fails without the fix.
-- [ ] The spec area that describes the behaviour updated to the fixed behaviour.
+- [x] Each reproduced defect fixed, with a regression test that fails without the fix.
+- [x] The spec area that describes the behaviour updated to the fixed behaviour.
 
 ## Out of scope
 
@@ -41,6 +41,27 @@ Evidence: CosmosDBSchemaBuilder.cs:176; CosmosDBDataMigrator.cs:87; InfluxDBData
 
 N/A — covered by automated tests once reproduced.
 
+## Measured (2026-11-04, before the fix)
+
+Live on the Cosmos DB emulator, InfluxDB 2.9 and TimescaleDB: `tests/Birko.Data.Migrations.CosmosDB.Tests/Task722PatchPathLiveTests.cs`,
+`tests/Birko.Data.Migrations.InfluxDB.Tests/Task722DeleteRangeLiveTests.cs`,
+`tests/Birko.Data.Migrations.TimescaleDB.Tests/Task722IntrospectionTransactionLiveTests.cs`; and
+`tests/Birko.Data.Migrations.MongoDB.Tests/Task722RunnerNullClientTests.cs`.
+
+| Claim | Result |
+|---|---|
+| Cosmos `RenameField` / `UpdateDocuments` build `/{name}` unescaped | **reproduced:** renaming `a/b` wrote the new field and kept `a/b` (its remove was refused and swallowed); updating `a/b` was refused with 400. **And the escaped form (`DropField`'s) is no fix:** the emulator stored `a~1b` literally. The service is not measured, so a name holding `/` or `~` is refused |
+| The InfluxDB "delete everything" range stops at `UtcNow` | **reproduced:** points a month ahead and in 1900 survived |
+| `MongoMigrationRunner(null)` is an NRE | **reproduced:** `NullReferenceException` |
+| TimescaleDB introspection never sets `command.Transaction` | **true, harmless, recorded, not changed:** Npgsql runs every command in the connection's open transaction; `IsHypertable` / `GetChunkInterval` saw a hypertable created earlier in the migration's own transaction. The test pins that |
+
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-722` — leave empty until then._
+`CosmosDBDataMigrator.PatchPath`, one producer for the three patch paths, refusing `/` and `~` before any read or
+write. The InfluxDB delete covers 1677-09-22 to 2262-04-11 UTC. The Mongo runner checks its client before the base call.
+
+## Built (2026-11-04)
+
+7 tests: 4 failing on the old code (2 Cosmos refusals, the InfluxDB range, the Mongo null client), a plain-name rename
+guard, and the TimescaleDB pin (passed on the old code — the claim did not reproduce). Migrations.CosmosDB 44,
+InfluxDB 46, MongoDB 20, TimescaleDB 89 green live. Spec `migrations.md` updated (scoped; `generated-at` left).

@@ -704,12 +704,13 @@ to_regclass(@table)` with `@table` bound to `connector.QualifiedIdentifier(table
 - **When** `IsHypertable(context, "reporting.evts")` runs
 - **Then** `@table` is `"reporting"."evts"`, `to_regclass` resolves it, and the answer is `true`
 
-#### Scenario: Hypertable introspection helpers omit the transaction
+#### Scenario: Hypertable introspection sees the migration's own transaction (TASK-722)
 
-- **Given** a migration run with `UseTransaction = true`
+- **Given** a migration run with `UseTransaction = true` that created a hypertable earlier in the same transaction
 - **When** `IsHypertable` or `GetChunkInterval` executes
-- **Then** the command is created without assigning `command.Transaction`, unlike every DDL helper in
-  the same class
+- **Then** it finds the hypertable and its interval. The commands do not assign `command.Transaction`, unlike every DDL
+  helper in the same class, and need not: Npgsql runs a command in its connection's open transaction (measured live;
+  the harvest's suspicion did not reproduce, recorded)
 
 ### Requirement: MongoDB migrations join a session transaction only on a replica set
 
@@ -1535,17 +1536,21 @@ version conflict or per-document failure (SH-M198, TASK-152); `_delete_by_query`
 way. RavenDB SHALL issue a `PatchByQueryOperation` with `$uN` query parameters and
 wait for completion; each update key SHALL pass `RqlField` (a plain dotted identifier path, else
 `NotSupportedException`) and the collection SHALL reach `FROM` as `RqlCollection`'s escaped literal (TASK-640). CosmosDB SHALL query matching ids (plus the partition-key field), then issue one
-`PatchItemAsync` per document. InfluxDB `UpdateDocuments` SHALL throw `NotSupportedException` — points
+`PatchItemAsync` per document; every CosmosDB patch path (`DropField`, `RenameField`, `UpdateDocuments`) SHALL come from
+`CosmosDBDataMigrator.PatchPath`, which refuses a field name holding `/` or `~` with `NotSupportedException` before
+anything is read or written (TASK-722: unescaped, `a/b` was the nested path a → b, so a rename copied the field and an
+update was refused; escaped as a JSON pointer, the emulator stored `a~1b` literally — both measured, the service not). InfluxDB `UpdateDocuments` SHALL throw `NotSupportedException` — points
 are immutable (SH-M191; it was a silent no-op). InfluxDB `DeleteDocuments` SHALL throw
 `InvalidOperationException` when the bucket is not found by exact name (SH-M193), and SHALL wait on the
-delete so that a refused predicate propagates (TASK-619). The InfluxDB delete SHALL cover only the time range
-`[UtcNow - 100 years, UtcNow]`.
+delete so that a refused predicate propagates (TASK-619). The InfluxDB delete SHALL cover every time InfluxDB can
+store, 1677-09-22 to 2262-04-11 UTC (TASK-722: it covered `[UtcNow - 100 years, UtcNow]`, so a future-dated or pre-1926
+point survived, measured).
 
-#### Scenario: An InfluxDB delete does not reach future-dated points
+#### Scenario: An InfluxDB delete reaches future-dated and old points (TASK-722)
 
-- **Given** a bucket holding a point timestamped after the moment the migration runs
+- **Given** a bucket holding points stamped an hour ago, a month ahead and in 1900
 - **When** `DeleteDocuments(bucket, "")` runs
-- **Then** the delete's range stops at `DateTime.UtcNow`, so that point remains
+- **Then** none remains (the month-ahead and 1900 points used to)
 
 #### Scenario: RavenDB names cannot change what the RQL means
 

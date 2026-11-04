@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-03 — Tenant middleware clears the tenant in a finally
+[[TASK-708]]. `Birko.Data.Tenant`'s `TenantMiddleware` cleared the tenant after the pipeline with no `finally`, and
+cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw
+left the tenant set and a no-tenant request discarded an outer one (measured; `TenantContext` showed neither). It
+now clears what it set, in a `finally`.
+
 ## 2026-11-03 — Redis and MongoDB credentials reach the server whole
 [[TASK-707]]. A comma in a Redis password started a new option (measured: `x,allowAdmin=true` turned admin mode on),
 and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `RedisConnectionManager` now connects

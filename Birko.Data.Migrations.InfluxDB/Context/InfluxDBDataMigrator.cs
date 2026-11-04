@@ -37,8 +37,10 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                 ?? throw new InvalidOperationException(
                     $"InfluxDB bucket '{collection}' was not found in organization '{_organization}', so nothing can be deleted from it.");
 
-            var start = DateTime.UtcNow.AddYears(-100);
-            var stop = DateTime.UtcNow;
+            // TASK-722: every time InfluxDB can store (int64 nanoseconds from the epoch). The range was a century back to
+            // now, so a point stamped in the future, or before 1926, survived "delete everything" (measured).
+            var start = new DateTime(1677, 9, 22, 0, 0, 0, DateTimeKind.Utc);
+            var stop = new DateTime(2262, 4, 11, 0, 0, 0, DateTimeKind.Utc);
 
             // Use filterJson as the Flux predicate if provided
             var predicate = string.IsNullOrWhiteSpace(filterJson) || filterJson.Trim() == "{}"

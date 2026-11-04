@@ -95,6 +95,8 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
     /// </remarks>
     public void DropField(string collectionName, string fieldName)
     {
+        // TASK-722: refused before anything is read when the name cannot be a patch path.
+        var pointer = CosmosDBDataMigrator.PatchPath(fieldName);
         var container = _database.GetContainer(collectionName);
         var properties = container.ReadContainerAsync().GetAwaiter().GetResult().Resource;
         var pkProperty = (properties.PartitionKeyPath ?? "/id").TrimStart('/').Split('/')[0];
@@ -104,7 +106,6 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         var projection = new List<string> { "c.id" };
         if (pkProperty != "id") projection.Add($"c.{pkProperty}");
         var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED({fieldPath})";
-        var pointer = "/" + fieldName.Replace("~", "~0").Replace("/", "~1");
         foreach (var item in CosmosDBDataMigrator.QueryDocuments(container, new QueryDefinition(query)))
         {
             string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
@@ -143,6 +144,9 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         // remove the old field. The query reads the actual old value (and the partition-key field)
         // so the value is preserved (CR-H056: it used to write a debug placeholder — data loss) and
         // the point patch targets the correct partition, not the id (CR-H055).
+        // TASK-722: both paths first, so a name a patch cannot hold is refused before anything is read or written.
+        var newPatch = CosmosDBDataMigrator.PatchPath(newName);
+        var oldPatch = CosmosDBDataMigrator.PatchPath(oldName);
         var container = _database.GetContainer(collectionName);
         var pkPath = container.ReadContainerAsync().GetAwaiter().GetResult().Resource.PartitionKeyPath ?? "/id";
         var pkProperty = pkPath.TrimStart('/').Split('/')[0];
@@ -173,8 +177,8 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
                     pk,
                     new[]
                     {
-                        PatchOperation.Set($"/{newName}", CosmosDBDataMigrator.ToPlain(oldValue)),
-                        PatchOperation.Remove($"/{oldName}")
+                        PatchOperation.Set(newPatch, CosmosDBDataMigrator.ToPlain(oldValue)),
+                        PatchOperation.Remove(oldPatch)
                     }
                 ).GetAwaiter().GetResult();
             }

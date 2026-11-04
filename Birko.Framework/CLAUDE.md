@@ -292,6 +292,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Migration edges: Cosmos patch names, the InfluxDB delete range (2026-11-04)
+[[TASK-722]]. A Cosmos `RenameField` of a field named `a/b` copied it instead of moving it (the unescaped path was
+nested), and escaping it did not help: the emulator kept `a~1b` literally. Patch-based steps now refuse a name holding
+`/` or `~`. The InfluxDB "delete everything" stopped at now, so future-dated points survived; it covers every storable
+time. `MongoMigrationRunner(null)` is `ArgumentNullException`. TimescaleDB introspection without a transaction: harmless.
 ### InfluxDB reads page after filtering and keep UTC dates (2026-11-04)
 [[TASK-720]]. The InfluxDB stores sent `limit` / `offset` to the server and filtered what came back, so a filtered page
 held the wrong rows; a sort took the first field's direction for all; a UTC `DateTime` came back local; `Read(Guid)`
@@ -370,11 +375,6 @@ entry was reclaimed put it back to `Pending` under the new holder or a `Publishe
 `MarkFailedAsync(OutboxEntry, …)` take the claimed entry (it carries the new `ClaimToken`), and
 `GetPendingAsync(batchSize, maxAttempts)` takes `OutboxOptions.MaxAttempts`, so reclaims count against it.
 Measured on SQLite, PostgreSQL and SQL Server.
-### Tenant middleware clears the tenant in a finally (2026-11-03)
-[[TASK-708]]. `Birko.Data.Tenant`'s `TenantMiddleware` cleared the tenant after the pipeline with no `finally`, and
-cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw
-left the tenant set and a no-tenant request discarded an outer one (measured; `TenantContext` showed neither). It
-now clears what it set, in a `finally`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -84,7 +84,7 @@ public class CosmosDBDataMigrator : IDataMigrator
 
         var container = _database.GetContainer(collection);
         var patchOperations = updates.Select(kvp =>
-            PatchOperation.Set($"/{kvp.Key}", kvp.Value)
+            PatchOperation.Set(PatchPath(kvp.Key), kvp.Value)
         ).ToArray();
 
         var pkProperty = GetPartitionKeyProperty(container, collection);
@@ -334,6 +334,23 @@ public class CosmosDBDataMigrator : IDataMigrator
     /// Backslash is escaped first, then the double quote, or the escape introduced for the quote would
     /// itself be escaped.
     /// </remarks>
+    /// <summary>
+    /// A top-level field as a patch path, the one producer for DropField, RenameField and UpdateDocuments (TASK-722). A
+    /// name holding <c>/</c> or <c>~</c> is refused: unescaped (as RenameField and UpdateDocuments wrote it) <c>a/b</c> is
+    /// the nested path a → b, so a rename copied the field instead of moving it; escaped as a JSON pointer (<c>~1</c>, as
+    /// DropField wrote it) the emulator stores the escape literally — a field named <c>a~1b</c> — both measured. The
+    /// service's handling is not measured, so neither form is trusted.
+    /// </summary>
+    internal static string PatchPath(string fieldName)
+    {
+        if (fieldName.IndexOfAny(new[] { '/', '~' }) >= 0)
+        {
+            throw new NotSupportedException(
+                $"Field '{fieldName}' holds '/' or '~', which a Cosmos DB patch path cannot name reliably; rewrite those documents instead.");
+        }
+        return "/" + fieldName;
+    }
+
     internal static string QuoteFieldPath(string fieldName)
     {
         var escaped = fieldName.Replace("\\", "\\\\").Replace("\"", "\\\"");
