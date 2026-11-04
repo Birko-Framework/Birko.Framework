@@ -303,13 +303,14 @@ namespace Birko.Data.XML.Stores
 
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
-            foreach (var itemSource in data.Where(x => x != null && x.Guid.HasValue))
+            foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
                 // It wrote every item, stored or not — a bulk Update that silently created entities.
-                if (!_items.ContainsKey(item.Guid!.Value))
+                // TASK-719: an entity with no Guid is reported too, as the sync store does; it was skipped (measured).
+                if (item.Guid == null || !_items.ContainsKey(item.Guid.Value))
                 {
-                    missing.Add(item.Guid!.Value);
+                    missing.Add(item.Guid ?? Guid.Empty);
                     continue;
                 }
                 item = StoreDelegates.Apply(storeDelegate, item);

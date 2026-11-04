@@ -289,10 +289,19 @@ namespace Birko.Data.MongoDB.Stores
                 data = StoreDelegates.Apply(processDelegate, data);
 
                 var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
-                if (Session != null)
-                    await Collection.ReplaceOneAsync(Session, filter, data, new ReplaceOptions { IsUpsert = true }, ct);
-                else
-                    await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                try
+                {
+                    if (Session != null)
+                        await Collection.ReplaceOneAsync(Session, filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                    else
+                        await Collection.ReplaceOneAsync(filter, data, new ReplaceOptions { IsUpsert = true }, ct);
+                }
+                catch (Exception ex) when (ex is not StoreUniqueViolationException && IsDuplicateKeyException(ex))
+                {
+                    // TASK-719: the native upsert bypasses the create path that names a collision; the driver's
+                    // MongoWriteException reached the caller (measured).
+                    throw StoreException.UniqueViolation(typeof(T), ex);
+                }
                 return data.Guid.Value;
             }
         }

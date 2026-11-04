@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Store write edges agree across providers (2026-11-04)
+[[TASK-719]]. A new store contract (`WriteEdgeContract`, all 12 providers, live) found: Cosmos DB and Elasticsearch
+threw on a delete of a key that is not stored (now a no-op); Cosmos DB's and RavenDB's `SaveAsync` gave the delegate a
+Guid-less entity; Elasticsearch, the async JSON and XML stores and a Cosmos DB batch skipped a bulk-update item with no
+Guid (now `EntityNotFoundException`, as elsewhere); a MongoDB `SaveAsync` unique collision was the driver's exception
+(now `StoreUniqueViolationException`). Unconfigured stores answering success, SQL included, are [[TASK-812]].
 ### SQL unit of work reads its own rollback mark; a failed savepoint release is not a failed write (2026-11-04)
 [[TASK-718]]. `SqlUnitOfWork.CommitAsync` looked for a participant's rollback mark in the calling flow, so an owner
 committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it
@@ -364,12 +370,6 @@ Measured on SQLite, PostgreSQL and SQL Server.
 cleared it even when it had set none. On an `ITenantContext` that is not `AsyncLocal`-backed, a downstream throw
 left the tenant set and a no-tenant request discarded an outer one (measured; `TenantContext` showed neither). It
 now clears what it set, in a `finally`.
-### Redis and MongoDB credentials reach the server whole (2026-11-03)
-[[TASK-707]]. A comma in a Redis password started a new option (measured: `x,allowAdmin=true` turned admin mode on),
-and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `RedisConnectionManager` now connects
-with the new `RedisSettings.GetConfigurationOptions()`; `GetConnectionString()` refuses a `,` in the password, user or
-client name, which a connection string cannot carry. MongoDB percent-encodes user name, password, database,
-`authSource` and `replicaSet`. Measured live on both.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -272,8 +272,22 @@ public class CosmosDBStore<T>
     {
         if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
-        _container.DeleteItemAsync<T>(data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()))
-            .GetAwaiter().GetResult();
+        DeleteIfStoredAsync(data.Guid.Value).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// TASK-719: deleting a key that is not stored is a no-op, as on every other provider; the raw 404
+    /// <see cref="CosmosException"/> reached the caller (measured). A missing container (1003) still propagates.
+    /// </summary>
+    private async System.Threading.Tasks.Task DeleteIfStoredAsync(Guid guid)
+    {
+        try
+        {
+            await _container!.DeleteItemAsync<T>(guid.ToString(), new PartitionKey(guid.ToString())).ConfigureAwait(false);
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+        }
     }
 
     #endregion
@@ -421,7 +435,7 @@ public class CosmosDBStore<T>
         {
             if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
 
-            tasks.Add(_container.DeleteItemAsync<T>(item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString())));
+            tasks.Add(DeleteIfStoredAsync(item.Guid.Value));   // TASK-719
         }
 
         System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();

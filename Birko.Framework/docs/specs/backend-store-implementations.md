@@ -181,6 +181,8 @@ The system SHALL, when a store has no client because settings were never applied
   foreign type throws `ArgumentException`.
 - MongoDB, RavenDB, Cosmos DB and InfluxDB: ignore a foreign settings type, and then answer reads with `null` / empty /
   `0`, return `Guid.Empty` from `Create`, and return silently from `Update` and `Delete` — no `EntityNotFoundException`.
+  The SQL stores answer the same way when they have no connector. (Measured as TASK-719's finding and moved to
+  [[TASK-812]], which decides one refusal for every provider.)
 
 #### Scenario: Update on an unconfigured MongoDB store
 
@@ -316,11 +318,16 @@ through, so a `null` element threw `NullReferenceException`, measured on SQLite)
 The system SHALL throw `EntityNotFoundException` for an update of an entity that is not stored, with these departures:
 - InfluxDB: `Update` writes a point whatever is stored (an upsert), and an entity with no Guid returns silently rather
   than throwing; bulk update drops Guid-less items silently.
-- MongoDB: a miss is reported only when the write is acknowledged; an unacknowledged `ReplaceOne` counts as a hit.
-- Cosmos DB inside a transactional batch: the replace is queued and the miss surfaces only when the batch executes;
-  bulk update inside a batch skips Guid-less items silently, where outside a batch they are reported as `Guid.Empty`.
-- Elasticsearch bulk update, and the async JSON and XML bulk updates: Guid-less items are dropped silently instead of
-  being reported as `Guid.Empty` (the sync JSON/XML bulk updates do report them).
+- MongoDB: a miss is reported only when the write is acknowledged; an unacknowledged `ReplaceOne` counts as a hit — an
+  unacknowledged write concern returns no count to tell a miss by, so refusing would make such a concern unusable for
+  updates (TASK-719, recorded, not changed).
+- Cosmos DB inside a transactional batch: the replace is queued and the miss surfaces only when the batch executes; an
+  entity with no Guid is reported as `Guid.Empty` when the batch is assembled, as outside one (TASK-719: it was skipped
+  silently, measured).
+
+A bulk update holding an entity with no Guid SHALL report it as `Guid.Empty` in the `EntityNotFoundException`, after the
+stored ones are written, on every backend (TASK-719: Elasticsearch and the async JSON and XML bulk updates dropped it
+silently, measured by `tests/Shared/StoreContract/WriteEdgeContract.cs`).
 - RavenDB: the miss comes from the load it performs before copying the entity onto the tracked document.
 
 #### Scenario: InfluxDB update of an unstored entity
@@ -377,17 +384,19 @@ transient failures per `RetryPolicy` and any failure rethrown as `InvalidOperati
 - **When** it is updated at t2
 - **Then** a second point is written at t2 and reads return the t2 values (`AsyncInfluxDBStore.cs:647`)
 
-### Requirement: Deleting a missing item is silent everywhere except Cosmos DB
+### Requirement: Deleting a missing item is silent everywhere
 
-The system SHALL make single and bulk `Delete` of an entity that is not stored a no-op on SQL, MongoDB, RavenDB,
-InfluxDB, JSON and XML. On Cosmos DB, `DeleteItemAsync` on a missing id SHALL propagate the driver's `CosmosException`
-(404) untranslated, single or bulk, outside a batch. Every backend SHALL skip an entity whose Guid is `null` or empty.
+The system SHALL make single and bulk `Delete` of an entity that is not stored a no-op on every backend, the rest of a
+bulk delete still deleted. Cosmos DB SHALL absorb the item-level 404 (sub-status 1003, a missing container, still
+propagates) and Elasticsearch a `not_found` result (TASK-719: both threw — Cosmos DB its raw `CosmosException`,
+Elasticsearch `InvalidOperationException` — measured by `WriteEdgeContract`). Every backend SHALL skip an entity whose Guid
+is `null` or empty.
 
-#### Scenario: Cosmos DB delete of a missing item
+#### Scenario: Cosmos DB delete of a missing item (TASK-719)
 
-- **Given** an `AsyncCosmosDBStore<T>` with no item for Guid G
-- **When** `DeleteAsync(entity with G)` is called outside a batch
-- **Then** a `CosmosException` with status 404 is thrown (`AsyncCosmosDBStore.cs:333`)
+- **Given** an `AsyncCosmosDBStore<T>` (or `CosmosDBStore<T>`) with no item for Guid G
+- **When** `DeleteAsync(entity with G)` is called outside a batch, alone or among stored entities
+- **Then** nothing is thrown and the stored entities are deleted
 
 ### Requirement: Filtered Update and Delete run natively on SQL, MongoDB and Elasticsearch only
 
@@ -438,23 +447,24 @@ An assignment whose property cannot be resolved SHALL throw `ArgumentException` 
 
 The system SHALL implement `SaveAsync` on the async MongoDB, Cosmos DB and RavenDB stores as a native upsert
 (`ReplaceOne` with `IsUpsert`, `UpsertItemAsync`, `StoreAsync` without a change vector), overriding the public wrapper.
-Cosmos DB and RavenDB SHALL apply the store delegate **before** `EnsureGuid`, so a delegate on a new entity sees a null
-Guid, where their create paths assign the Guid first. Because the update branch never passes through `UpdateAsync`, a
-unique-index collision on these upserts SHALL surface as the driver's exception, not `StoreUniqueViolationException`.
+Each SHALL assign the Guid before the store delegate runs, as the create paths do (TASK-719: Cosmos DB and RavenDB ran
+the delegate first, so it saw a null Guid, measured). A unique-index collision on the MongoDB and Cosmos DB upserts SHALL
+be `StoreUniqueViolationException`, through the store's `IsDuplicateKeyException`, as on the create path (TASK-719: the
+driver's exception propagated, measured on MongoDB; Cosmos DB's unique-key 409 is translated the same way, not run).
 The sync MongoDB, Cosmos DB and RavenDB stores, and every other backend, SHALL use the base `StoreSave` routing.
 InfluxDB's `SaveAsync` routes to `CreateAsync` / `UpdateAsync`.
 
-#### Scenario: Cosmos DB save of a new entity with a delegate
+#### Scenario: Cosmos DB save of a new entity with a delegate (TASK-719)
 
 - **Given** an entity with `Guid == null` and a delegate that reads `Guid`
-- **When** `AsyncCosmosDBStore.SaveAsync(entity, delegate)` runs
-- **Then** the delegate sees `null` (`AsyncCosmosDBStore.cs:436-438`)
+- **When** `AsyncCosmosDBStore.SaveAsync(entity, delegate)` (or RavenDB's) runs
+- **Then** the delegate sees the Guid the entity is saved under (it saw `null`)
 
-#### Scenario: MongoDB save colliding with a unique index
+#### Scenario: MongoDB save colliding with a unique index (TASK-719)
 
-- **Given** a unique index on `Email` and a stored entity with an existing Guid
-- **When** `SaveAsync` would give it an `Email` another document holds
-- **Then** a `MongoWriteException` propagates untranslated
+- **Given** a unique index on `Name` and an entity carrying a Guid
+- **When** `SaveAsync` would store a `Name` another document holds
+- **Then** `StoreUniqueViolationException` is thrown (a `MongoWriteException` propagated)
 
 ### Requirement: A Cosmos DB transactional batch can only ever cover one entity
 

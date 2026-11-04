@@ -330,7 +330,22 @@ public class AsyncCosmosDBStore<T>
             return;
         }
 
-        await _container.DeleteItemAsync<T>(data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        await DeleteIfStoredAsync(data.Guid.Value, ct);
+    }
+
+    /// <summary>
+    /// TASK-719: deleting a key that is not stored is a no-op, as on every other provider; the raw 404
+    /// <see cref="CosmosException"/> reached the caller (measured). A missing container (1003) still propagates.
+    /// </summary>
+    private async Task DeleteIfStoredAsync(Guid guid, CancellationToken ct)
+    {
+        try
+        {
+            await _container!.DeleteItemAsync<T>(guid.ToString(), new PartitionKey(guid.ToString()), cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (CosmosException ex) when (IsItemNotFound(ex))
+        {
+        }
     }
 
     /// <summary>
@@ -433,18 +448,27 @@ public class AsyncCosmosDBStore<T>
         await EnsureInitializedAsync(ct);
         if (_container == null || data == null) return Guid.Empty;
 
-        data = StoreDelegates.Apply(processDelegate, data);
-
+        // TASK-719: the Guid first, as CreateAsync does, so the delegate sees the entity's identity; it ran on a Guid-less
+        // entity (measured).
         data.EnsureGuid();
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (TransactionContext != null)
         {
-            RequireBatchPartition(data.Guid.Value);
+            RequireBatchPartition(data.Guid!.Value);
             TransactionContext.UpsertItem(data);
             return data.Guid.Value;
         }
 
-        await _container.UpsertItemAsync(data, new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        try
+        {
+            await _container.UpsertItemAsync(data, new PartitionKey(data.Guid!.Value.ToString()), cancellationToken: ct);
+        }
+        catch (Exception ex) when (ex is not StoreUniqueViolationException && IsDuplicateKeyException(ex))
+        {
+            // TASK-719: the native upsert bypasses the create path that names a collision (a unique-key policy's 409).
+            throw StoreException.UniqueViolation(typeof(T), ex);
+        }
         return data.Guid.Value;
     }
 
@@ -554,13 +578,24 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
+            // TASK-719: an entity with no Guid is reported, as on the non-batch path; the batch skipped it silently.
+            var unidentified = 0;
             foreach (var itemSource in data)
             {
                 var item = itemSource;
-                if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+                if (item == null) continue;
+                if (item.Guid == null || item.Guid == Guid.Empty)
+                {
+                    unidentified++;
+                    continue;
+                }
                 item = StoreDelegates.Apply(storeDelegate, item);
-                RequireBatchPartition(item.Guid.Value);
+                RequireBatchPartition(item.Guid!.Value);
                 TransactionContext.ReplaceItem(item.Guid.Value.ToString(), item);
+            }
+            if (unidentified > 0)
+            {
+                throw new EntityNotFoundException(typeof(T), Enumerable.Repeat(Guid.Empty, unidentified));
             }
             return;
         }
@@ -620,7 +655,7 @@ public class AsyncCosmosDBStore<T>
         {
             if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
 
-            tasks.Add(_container.DeleteItemAsync<T>(item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
+            tasks.Add(DeleteIfStoredAsync(item.Guid.Value, ct));   // TASK-719
         }
 
         await Task.WhenAll(tasks);

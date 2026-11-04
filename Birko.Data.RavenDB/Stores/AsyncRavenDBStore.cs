@@ -439,13 +439,14 @@ public class AsyncRavenDBStore<T>
             return Guid.Empty;
         }
 
-        data = StoreDelegates.Apply(processDelegate, data);
-
+        // TASK-719: the Guid first, as CreateAsync does, so the delegate sees the entity's identity; it ran on a Guid-less
+        // entity (measured).
         data.EnsureGuid();
+        data = StoreDelegates.Apply(processDelegate, data);
 
         if (Session != null)
         {
-            await Session.StoreAsync(data, IdOf(data.Guid.Value), ct);
+            await Session.StoreAsync(data, IdOf(data.Guid!.Value), ct);
             return data.Guid.Value;
         }
 

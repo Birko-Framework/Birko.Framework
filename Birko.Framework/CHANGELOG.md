@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-03 — Redis and MongoDB credentials reach the server whole
+[[TASK-707]]. A comma in a Redis password started a new option (measured: `x,allowAdmin=true` turned admin mode on),
+and a MongoDB password `p@ss/w?rd` made the server `ss` and the database `w`. `RedisConnectionManager` now connects
+with the new `RedisSettings.GetConfigurationOptions()`; `GetConnectionString()` refuses a `,` in the password, user or
+client name, which a connection string cannot carry. MongoDB percent-encodes user name, password, database,
+`authSource` and `replicaSet`. Measured live on both.
+
 ## 2026-11-03 — SQL aggregates refuse names that are not columns
 [[TASK-706]]. An aggregate query's group-by field, source, time column and ORDER BY key reached the SQL text as
 written when they named no property (measured on SQLite: `SUM(length(Name))` and `ORDER BY random()` ran), and an

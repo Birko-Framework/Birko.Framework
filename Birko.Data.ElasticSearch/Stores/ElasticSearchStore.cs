@@ -318,6 +318,11 @@ namespace Birko.Data.ElasticSearch.Stores
                 var indexName = GetIndexName();
                 var response = Connector!.Delete<T>(data.Guid, (i) => i.Index(indexName));
 
+                // TASK-719: deleting a key that is not stored is a no-op, as on every other provider; the 404 threw (measured).
+                if (response.Result == Nest.Result.NotFound)
+                {
+                    return;
+                }
                 if (!response.IsValid || response.OriginalException != null)
                 {
                     throw new InvalidOperationException(
@@ -365,12 +370,20 @@ namespace Birko.Data.ElasticSearch.Stores
         {
             if (data == null || Connector == null) return;
 
-            var itemsToUpdate = data.Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty).Select(x =>
+            // TASK-719: an entity with no Guid is reported after the rest are written, as the other providers do (TASK-555);
+            // it was skipped silently (measured).
+            var items = data.Where(x => x != null).ToList();
+            var unidentified = items.Count(x => x.Guid == null || x.Guid == Guid.Empty);
+            var itemsToUpdate = items.Where(x => x.Guid != null && x.Guid != Guid.Empty).Select(x =>
             {
                 return StoreDelegates.Apply(storeDelegate, x);
             });
 
             Bulk(null, itemsToUpdate, null);
+            if (unidentified > 0)
+            {
+                throw new Birko.Data.Exceptions.EntityNotFoundException(typeof(T), Enumerable.Repeat(Guid.Empty, unidentified));
+            }
         }
 
         protected override void DeleteCore(IEnumerable<T> data)

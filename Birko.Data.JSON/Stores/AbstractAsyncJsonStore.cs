@@ -307,12 +307,13 @@ namespace Birko.Data.JSON.Stores
             // TASK-555: an entity that is not stored is reported, not skipped — the stored ones are still written.
             var missing = new List<Guid>();
             var updated = false;
-            foreach (var itemSource in data.Where(x => x != null && x.Guid.HasValue))
+            foreach (var itemSource in data.Where(x => x != null))
             {
                 var item = itemSource;
-                if (!(_items?.ContainsKey(item.Guid!.Value) ?? false))
+                // TASK-719: an entity with no Guid is reported too, as the sync store does; it was skipped (measured).
+                if (item.Guid == null || !(_items?.ContainsKey(item.Guid.Value) ?? false))
                 {
-                    missing.Add(item.Guid!.Value);
+                    missing.Add(item.Guid ?? Guid.Empty);
                     continue;
                 }
                 item = StoreDelegates.Apply(storeDelegate, item);
