@@ -78,9 +78,10 @@ Reasoning approach: Balanced
             if (content is string text)
                 return text;
 
-            // Single ContentBlock
+            // Single ContentBlock. TASK-716: only a text block has text, as in a list (a thinking or tool block's
+            // Text came back, measured).
             if (content is ContentBlock block)
-                return block.Text ?? string.Empty;
+                return block.Type == "text" ? block.Text ?? string.Empty : string.Empty;
 
             // List<ContentBlock> or IEnumerable<ContentBlock>
             if (content is IEnumerable<ContentBlock> contentBlocks)
@@ -112,6 +113,15 @@ Reasoning approach: Balanced
                 else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
                     return jsonElement.GetString() ?? string.Empty;
+                }
+                else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    // TASK-716: one block object is read as a block; its raw JSON came back.
+                    return jsonElement.TryGetProperty("type", out var typeEl) && typeEl.ValueKind == System.Text.Json.JsonValueKind.String
+                        && typeEl.GetString() == "text"
+                        && jsonElement.TryGetProperty("text", out var textEl) && textEl.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? textEl.GetString() ?? string.Empty
+                        : string.Empty;
                 }
             }
 

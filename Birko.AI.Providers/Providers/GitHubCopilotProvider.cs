@@ -40,21 +40,22 @@ namespace Birko.AI.Providers
 
         public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
-            if (!await EnsureAuthenticatedAsync())
-                return NotConfigured();
-
-            var payload = new
-            {
-                model = _model,
-                messages = BuildOpenAiStyleMessages(messages, systemPrompt),
-                tools = BuildOpenAiStyleTools(tools),
-                max_tokens = 16384
-            };
-
-            var json = JsonSerializer.Serialize(payload);
-
             try
             {
+                // TASK-716: inside the try, so a failed sign-in is an error reply; it was thrown to the caller (measured).
+                if (!await EnsureAuthenticatedAsync(cancellationToken))
+                    return NotConfigured();
+
+                var payload = new
+                {
+                    model = _model,
+                    messages = BuildOpenAiStyleMessages(messages, systemPrompt),
+                    tools = BuildOpenAiStyleTools(tools),
+                    max_tokens = 16384
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+
                 var (response, responseJson) = await SendWithRetryAsync(
                     _httpClient,
                     () => CreateRequest(json),
@@ -108,10 +109,10 @@ namespace Birko.AI.Providers
             return request;
         }
 
-        private async Task<bool> EnsureAuthenticatedAsync()
+        private async Task<bool> EnsureAuthenticatedAsync(CancellationToken cancellationToken)
         {
             if (_currentToken == null || _currentToken.IsExpiredWithBuffer(60))
-                _currentToken = await _oauthClient.GetTokenAsync();
+                _currentToken = await _oauthClient.GetTokenAsync(cancellationToken);
 
             return _currentToken != null;
         }
@@ -130,7 +131,20 @@ namespace Birko.AI.Providers
                 };
             }
 
-            if (!await EnsureAuthenticatedAsync())
+            bool authenticated;
+            try
+            {
+                authenticated = await EnsureAuthenticatedAsync(cancellationToken);
+            }
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
+            {
+                // TASK-716: a failed sign-in is a streaming failure, not an exception (measured: it was thrown).
+                var errorMsg = $"GitHub Copilot sign-in failed: {ex.Message}";
+                SendMessage("error", errorMsg);
+                return StreamingFailure(errorMsg, ClassifyException(ex));
+            }
+
+            if (!authenticated)
             {
                 return new LlmStreamingResponse
                 {

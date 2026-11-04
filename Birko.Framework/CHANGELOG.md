@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-30 — Birko.Xaml keeps a parity list with Birko.Web
+[[TASK-793]], [[TASK-794]] (FEATURE-021). New `Birko.Xaml.Avalonia/PARITY.md`: one row per Birko.Web component and per
+Birko.Web.Shell file, saying where it
+stands on the desktop (built, themed, form field only, needs a theme, missing, or skipped with the reason). A test
+fails when a web component has no row, when a row's component is gone, or when a skip gives no reason; another
+([[TASK-795]]) fails when a desktop control the list names does not exist, or a "needs a theme" one already has one. Without the
+Birko\Web checkout it skips. Eight components are skipped on purpose (tour, gallery, segmented, button group, toolbar,
+empty, skeleton, stale banner); chat stays missing, as a desktop agent chat may want it.
+
 ## 2026-10-28 — GraphQL compiles beside WebSocket
 [[TASK-780]]. An aggregator importing both `Birko.Communication.GraphQL` and `Birko.Communication.WebSocket` failed
 with CS0118: a bare `WebSocket` in the GraphQL namespace bound to the sibling `Birko.Communication.WebSocket`

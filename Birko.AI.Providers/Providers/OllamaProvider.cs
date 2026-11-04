@@ -84,20 +84,19 @@ namespace Birko.AI.Providers
             var message = result.GetProperty("message");
             var llmResponse = new LlmResponse { Content = [] };
 
-            if (message.TryGetProperty("tool_calls", out var toolCalls) && toolCalls.GetArrayLength() > 0)
+            if (message.TryGetProperty("tool_calls", out var toolCalls)
+                && toolCalls.ValueKind == JsonValueKind.Array && toolCalls.GetArrayLength() > 0)
             {
                 llmResponse.StopReason = "tool_use";
                 foreach (var toolCall in toolCalls.EnumerateArray())
                 {
                     var function = toolCall.GetProperty("function");
-                    var argumentsJson = function.GetProperty("arguments").GetString();
-                    var args = argumentsJson is not null ? JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson) : [];
                     llmResponse.Content.Add(new ContentBlock
                     {
                         Type = "tool_use",
                         Id = Guid.NewGuid().ToString(),
                         Name = function.GetProperty("name").GetString(),
-                        Input = args
+                        Input = ReadArguments(function)
                     });
                 }
             }
@@ -111,6 +110,25 @@ namespace Birko.AI.Providers
             }
 
             return llmResponse;
+        }
+
+        /// <summary>
+        /// A tool call's <c>arguments</c>: <c>/api/chat</c> sends a JSON object, an OpenAI-style string is also read
+        /// (TASK-716: only a string was read, so every native tool call failed, measured).
+        /// </summary>
+        private static Dictionary<string, object> ReadArguments(JsonElement function)
+        {
+            if (!function.TryGetProperty("arguments", out var arguments))
+                return new Dictionary<string, object>();
+            var json = arguments.ValueKind switch
+            {
+                JsonValueKind.Object => arguments.GetRawText(),
+                JsonValueKind.String => arguments.GetString(),
+                _ => null,
+            };
+            return string.IsNullOrEmpty(json)
+                ? new Dictionary<string, object>()
+                : JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
         }
 
         public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
@@ -267,19 +285,12 @@ namespace Birko.AI.Providers
                         {
                             if (toolCall.TryGetProperty("function", out var function))
                             {
-                                var argumentsJson = function.TryGetProperty("arguments", out var args)
-                                    ? args.GetString()
-                                    : null;
-                                var inputArgs = argumentsJson is not null
-                                    ? JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson)
-                                    : new Dictionary<string, object>();
-
                                 toolCalls.Add(new ContentBlock
                                 {
                                     Type = "tool_use",
                                     Id = Guid.NewGuid().ToString(),
                                     Name = function.TryGetProperty("name", out var name) ? name.GetString() : null,
-                                    Input = inputArgs
+                                    Input = ReadArguments(function)
                                 });
                             }
                         }

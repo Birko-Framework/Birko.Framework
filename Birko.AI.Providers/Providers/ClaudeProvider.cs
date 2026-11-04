@@ -345,9 +345,13 @@ namespace Birko.AI.Providers
             var textBuilder = new StringBuilder();
             string? stopReason = null;
             TokenUsage? tokenUsage = null;
+            (string? Type, string? Message)? streamError = null;
 
             await foreach (var chunk in sseChunks.WithCancellation(cancellationToken))
             {
+                if (streamError != null)
+                    break;
+
                 if (string.IsNullOrWhiteSpace(chunk))
                     continue;
 
@@ -475,6 +479,17 @@ namespace Birko.AI.Providers
                     case "message_stop":
                         // Message complete
                         break;
+
+                    case "error":
+                        // TASK-716: an error event mid-stream (overloaded, for one) ends the message; it was ignored and
+                        // the cut-off turn reported as end_turn (measured).
+                        var error = json.TryGetProperty("error", out var errorElement) && errorElement.ValueKind == JsonValueKind.Object
+                            ? errorElement
+                            : default;
+                        streamError = (
+                            error.ValueKind == JsonValueKind.Object && error.TryGetProperty("type", out var et) ? et.GetString() : null,
+                            error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var em) ? em.GetString() : null);
+                        break;
                 }
             }
 
@@ -488,8 +503,24 @@ namespace Birko.AI.Providers
                 finalContent.Add(new ContentBlock { Type = "text", Text = accumulatedText });
             }
 
-            // Add any tool_use blocks
-            finalContent.AddRange(contentBlocks);
+            // Add any tool_use blocks. TASK-716: not when the token limit cut the message off — the last call's input is
+            // truncated, and it was kept (measured), as the OpenAI-style stream parser already refuses (SH-M161).
+            if (stopReason != "max_tokens")
+                finalContent.AddRange(contentBlocks);
+
+            if (streamError is { } failed)
+            {
+                var errorMsg = $"Claude API returned error: {failed.Type ?? "unknown"} - {failed.Message ?? "Unknown error"}";
+                streamingResponse.FinalResponse = LlmResponse.Error(errorMsg, ClassifyErrorType(failed.Type));
+                streamingResponse.FinalResponse.Content = finalContent;
+                streamingResponse.FinalResponse.Usage = tokenUsage;
+                streamingResponse.Error = errorMsg;
+                streamingResponse.StopReason = "error";
+                streamingResponse.AccumulatedText = accumulatedText;
+                streamingResponse.Usage = tokenUsage;
+                streamingResponse.IsComplete = true;
+                yield break;
+            }
 
             // Populate the streaming response with final data
             streamingResponse.FinalResponse = new LlmResponse

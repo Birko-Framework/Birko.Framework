@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### LLM providers read tool calls, errors and usage they dropped (2026-11-04)
+[[TASK-716]]. Every Ollama tool call failed: `/api/chat` sends `arguments` as an object, read as a string (measured).
+Gemini let a text part after a function call end the turn, and a blocked stream had no message; Claude's stream ignored
+an `error` event and kept a tool call cut off by `max_tokens`. `OpenAiCompatibleProviderBase` now parses with
+`ParseOpenAiStyleResponse`, so `"error": null`, `finish_reason` and `usage` are read. A failed Copilot sign-in is an
+error reply, not an exception. `OrchestratorAgent.ExtractTextFromContent` gives a single non-text block no text.
 ### AI budgets check every scope; every request counts against the rate limit (2026-11-04)
 [[TASK-715]]. `CostTrackingService.CheckBudgetAsync` returned at a daily warning, so an exceeded monthly or project budget
 let the call through; it now answers the first exceeded budget, then the first warning. `TrackedLlmProvider` counted a
@@ -367,14 +373,6 @@ nothing revoked), a rotated token presented again revokes the session, the tenan
 member and the app's hook agrees. Logout of one device or everywhere. An old `UserLogin.RefreshToken` is redeemed once
 onto a session; nobody is signed out at the upgrade. `UserSessionMapping` in Birko.Models.Users.SQL. Birko.Models.Users
 now imports Birko.Data.Stores (every consumer aggregator already does). Measured on SQLite.
-### Birko.Xaml keeps a parity list with Birko.Web (2026-10-30)
-[[TASK-793]], [[TASK-794]] (FEATURE-021). New `Birko.Xaml.Avalonia/PARITY.md`: one row per Birko.Web component and per
-Birko.Web.Shell file, saying where it
-stands on the desktop (built, themed, form field only, needs a theme, missing, or skipped with the reason). A test
-fails when a web component has no row, when a row's component is gone, or when a skip gives no reason; another
-([[TASK-795]]) fails when a desktop control the list names does not exist, or a "needs a theme" one already has one. Without the
-Birko\Web checkout it skips. Eight components are skipped on purpose (tour, gallery, segmented, button group, toolbar,
-empty, skeleton, stale banner); chat stays missing, as a desktop agent chat may want it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

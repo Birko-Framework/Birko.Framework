@@ -398,7 +398,8 @@ namespace Birko.AI.Providers
             function = new { name = t.Name, description = t.Description, parameters = t.InputSchema }
         }).ToList();
 
-        protected static LlmResponse ParseOpenAiStyleResponse(string responseJson, Action<string, string>? messageCallback = null)
+        /// <param name="providerName">Names the provider in an error; <c>null</c> says "API".</param>
+        protected static LlmResponse ParseOpenAiStyleResponse(string responseJson, Action<string, string>? messageCallback = null, string? providerName = null)
         {
             try
             {
@@ -409,7 +410,7 @@ namespace Birko.AI.Providers
                 {
                     var errorMessage = error.ValueKind == JsonValueKind.String ? error.GetString() : ReadString(error, "message") ?? "Unknown error";
                     var errorType = error.ValueKind == JsonValueKind.Object ? ReadString(error, "type") ?? "unknown" : "unknown";
-                    var errorMsg = $"API returned error: {errorType} - {errorMessage}";
+                    var errorMsg = $"{providerName ?? "API"} returned error: {errorType} - {errorMessage}";
                     messageCallback?.Invoke("error", errorMsg);
                     return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
                 }
@@ -441,7 +442,8 @@ namespace Birko.AI.Providers
                         llmResponse.Content.Add(new ContentBlock
                         {
                             Type = "tool_use",
-                            Id = ReadString(toolCall, "id"),
+                            // Some local servers send no tool-call id; the agent's tool_result needs one to answer.
+                            Id = ReadString(toolCall, "id") ?? Guid.NewGuid().ToString(),
                             Name = ReadString(function, "name"),
                             Input = args
                         });
@@ -462,7 +464,7 @@ namespace Birko.AI.Providers
             }
             catch (Exception ex)
             {
-                var errorMsg = $"Error parsing OpenAI-style response: {ex.Message}";
+                var errorMsg = $"Error parsing {providerName ?? "OpenAI-style"} response: {ex.Message}";
                 messageCallback?.Invoke("error", errorMsg);
                 return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
             }

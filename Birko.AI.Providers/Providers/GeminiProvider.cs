@@ -286,7 +286,10 @@ namespace Birko.AI.Providers
                         {
                             if (part.TryGetProperty("text", out var textElement))
                             {
-                                llmResponse.StopReason = "end_turn";
+                                // TASK-716: a text part after a function call no longer turns the turn back into end_turn
+                                // (the call was dropped, measured); any function call makes it a tool turn.
+                                if (llmResponse.StopReason != "tool_use")
+                                    llmResponse.StopReason = "end_turn";
                                 llmResponse.Content.Add(new ContentBlock { Type = "text", Text = textElement.GetString() });
                             }
                             else if (part.TryGetProperty("functionCall", out var functionCall))
@@ -506,15 +509,13 @@ namespace Birko.AI.Providers
                     else if (part.TryGetProperty("functionCall", out var functionCall))
                     {
                         // Capture tool call
+                        // TASK-716: the whole object, as the sync parser reads it (CR-L011); a nested argument used to
+                        // arrive as its JSON text.
                         var args = new Dictionary<string, object>();
-                        if (functionCall.TryGetProperty("args", out var argsElement))
+                        if (functionCall.TryGetProperty("args", out var argsElement) && argsElement.ValueKind == JsonValueKind.Object)
                         {
-                            foreach (var prop in argsElement.EnumerateObject())
-                            {
-                                args[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
-                                    ? prop.Value.GetString() ?? string.Empty
-                                    : prop.Value.ToString();
-                            }
+                            args = JsonSerializer.Deserialize<Dictionary<string, object>>(argsElement.GetRawText())
+                                ?? new Dictionary<string, object>();
                         }
 
                         toolCalls.Add(new ContentBlock
@@ -556,13 +557,25 @@ namespace Birko.AI.Providers
                 stopReason = "end_turn";
             }
 
-            // Populate streaming response
-            streamingResponse.FinalResponse = new LlmResponse
+            // Populate streaming response. TASK-716: a blocked stream says why, as the sync path does; it ended in an
+            // error with no message, which the agent reported as "Unknown LLM error" (measured).
+            if (stopReason == "error")
             {
-                StopReason = stopReason,
-                Content = finalContent,
-                Usage = tokenUsage
-            };
+                var errorMsg = $"Gemini blocked response: {finishReason}";
+                streamingResponse.FinalResponse = LlmResponse.Error(errorMsg);
+                streamingResponse.FinalResponse.Content = finalContent;
+                streamingResponse.FinalResponse.Usage = tokenUsage;
+                streamingResponse.Error = errorMsg;
+            }
+            else
+            {
+                streamingResponse.FinalResponse = new LlmResponse
+                {
+                    StopReason = stopReason,
+                    Content = finalContent,
+                    Usage = tokenUsage
+                };
+            }
             streamingResponse.StopReason = stopReason;
             streamingResponse.AccumulatedText = accumulatedText;
             streamingResponse.Usage = tokenUsage;

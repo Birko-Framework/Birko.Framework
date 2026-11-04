@@ -138,72 +138,12 @@ namespace Birko.AI.Providers
         protected override bool IsConfigured() => !string.IsNullOrWhiteSpace(BaseUrl);
 
         /// <summary>
-        /// Parse the OpenAI-compatible response. Handles missing tool_call IDs gracefully.
+        /// Parse the OpenAI-compatible response through the one OpenAI-style parser (TASK-716): this copy read no
+        /// <c>finish_reason</c> (a call cut off by the length limit was run) and no <c>usage</c>, and failed on
+        /// <c>"error": null</c> (all measured). A missing tool-call id is still filled in.
         /// </summary>
         protected virtual LlmResponse ParseResponse(string responseJson)
-        {
-            var result = JsonSerializer.Deserialize<JsonElement>(responseJson);
-            var llmResponse = new LlmResponse { Content = [] };
-
-            // Check for errors
-            if (result.TryGetProperty("error", out var error))
-            {
-                var errorMessage = error.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
-                var errorMsg = $"{ProviderName} returned error: {errorMessage}";
-                SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg);
-            }
-
-            // OpenAI-compatible format uses choices array
-            if (!result.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
-            {
-                var errorMsg = $"{ProviderName}: Invalid response format - missing choices array";
-                SendMessage("error", errorMsg);
-                return LlmResponse.Error(errorMsg, new LlmFailure(LlmFailureKind.InvalidResponse));
-            }
-
-            var choice = choices[0];
-            var message = choice.GetProperty("message");
-
-            // Check for tool calls (vLLM can return tool_calls: null instead of an array)
-            if (message.TryGetProperty("tool_calls", out var toolCalls)
-                && toolCalls.ValueKind == JsonValueKind.Array
-                && toolCalls.GetArrayLength() > 0)
-            {
-                llmResponse.StopReason = "tool_use";
-                foreach (var toolCall in toolCalls.EnumerateArray())
-                {
-                    var function = toolCall.GetProperty("function");
-                    var argumentsJson = function.GetProperty("arguments").GetString();
-                    var args = argumentsJson is not null
-                        ? JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson)
-                        : [];
-                    llmResponse.Content.Add(new ContentBlock
-                    {
-                        Type = "tool_use",
-                        // Some local servers don't return tool_call IDs, generate one if missing
-                        Id = toolCall.TryGetProperty("id", out var idProp) ? idProp.GetString() : Guid.NewGuid().ToString(),
-                        Name = function.GetProperty("name").GetString(),
-                        Input = args
-                    });
-                }
-            }
-            else
-            {
-                // Regular text response
-                llmResponse.StopReason = "end_turn";
-                if (message.TryGetProperty("content", out var textContent))
-                {
-                    var text = textContent.GetString();
-                    if (!string.IsNullOrEmpty(text))
-                    {
-                        llmResponse.Content.Add(new ContentBlock { Type = "text", Text = text });
-                    }
-                }
-            }
-
-            return llmResponse;
-        }
+            => ParseOpenAiStyleResponse(responseJson, MessageCallback, ProviderName);
 
         public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {

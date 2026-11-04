@@ -44,6 +44,15 @@
 ### GitHubCopilotProvider.cs
 - `GitHubCopilotProvider` — GitHub Copilot API (OAuth device flow)
 
+## Response parsing (TASK-716)
+
+One OpenAI-style parser: `OpenAiCompatibleProviderBase.ParseResponse` is `LlmProviderBase.ParseOpenAiStyleResponse`
+(with the provider name), so `finish_reason`, `usage` and `"error": null` read the same on every OpenAI-shaped provider.
+A streamed or sync response whose output was cut by the token limit returns **no tool call** (its arguments are cut
+off). A failure that arrives after the stream opened (Claude's `error` event, a blocked Gemini stream) is a
+`FinalResponse` built with `LlmResponse.Error`, so the agent reports its message. Ollama's `arguments` may be an object
+(`/api/chat`) or a string.
+
 ## Turn order (TASK-546)
 
 The agent's conversation can hold a text user turn right after a tool-result user turn (a hook's

@@ -1665,17 +1665,17 @@ API key and model (OpenAI, Claude, Gemini), API key and deployment (Azure — th
 - **Then** `Error = "Not configured"`, `FinalResponse` is null and `GetStreamAsync` faults with
   `InvalidOperationException`; the agent turns the error into `InvalidOperationException("Streaming failed: Not configured")`
 
-### Requirement: OpenAI-compatible providers share a base with its own parser
+### Requirement: OpenAI-compatible providers share a base and the OpenAI-style parser
 
 The system SHALL build llama.cpp, vLLM, SGLang, Mistral, DeepSeek, Groq, LM Studio and OpenRouter on
 `OpenAiCompatibleProviderBase`, whose `Name` is `"{ProviderName} ({Model})"`, whose `HttpClient` timeout is 5 minutes,
 which sends `Authorization: Bearer {apiKey}` only when a key is given, and which posts to `ChatCompletionsUrl`: the
 base URL as-is when it already ends in `/chat/completions` (case-insensitive), otherwise `{baseUrl}/v1/chat/completions`
 (CR-H004). Payloads SHALL carry `model`, the OpenAI-style messages and tools, `temperature` (default 0.7) and
-`max_tokens` (default 8192; llama.cpp `-1`). Its sync parser `ParseResponse` SHALL NOT use `ParseOpenAiStyleResponse`:
-it reads `tool_calls` (an array with at least one entry → `"tool_use"`, generating a `Guid` id when a call has none)
-or else the text (`"end_turn"`, an empty text adds no block), ignores `finish_reason` and `usage`, and drops a text
-block that accompanies tool calls. Its streaming path SHALL use `ParseOpenAiStreamChunksWithToolCapture`.
+`max_tokens` (default 8192; llama.cpp `-1`). Its sync parser `ParseResponse` SHALL be `ParseOpenAiStyleResponse` with
+the provider's `ProviderName` naming an error (`"{ProviderName} returned error: …"`) (TASK-716: it was a parser of its
+own that ignored `finish_reason` and `usage` and failed on `"error": null`, measured). The shared parser SHALL give a
+tool call that carries no id a new `Guid` id. Its streaming path SHALL use `ParseOpenAiStreamChunksWithToolCapture`.
 
 #### Scenario: Bare host gets the path appended
 
@@ -1684,18 +1684,18 @@ block that accompanies tool calls. Its streaming path SHALL use `ParseOpenAiStre
 - **Then** it goes to `http://localhost:8000/v1/chat/completions`, while a `MistralProvider` keeps
   `https://api.mistral.ai/v1/chat/completions` unchanged
 
-#### Scenario: A truncated sync completion reads as finished
+#### Scenario: A truncated sync completion says so (TASK-716)
 
-- **Given** a compatible provider answering `finish_reason = "length"` with text only
+- **Given** a compatible provider answering `finish_reason = "length"`, with tool calls, and a `usage` object
 - **When** `SendMessageAsync` parses it
-- **Then** `StopReason` is `"end_turn"` (not `"max_tokens"`) and `Usage` is null, so a `TrackedLlmProvider` records no usage
+- **Then** `StopReason` is `"max_tokens"`, no tool_use block is returned, and `Usage` carries the token counts (it read
+  `"end_turn"` or failed on the cut-off arguments, and never read usage, measured)
 
-#### Scenario: A null error field fails the call
+#### Scenario: A null error field is no error (TASK-716)
 
 - **Given** a compatible server that sends `"error": null` beside a valid completion
 - **When** `ParseResponse` reads it
-- **Then** `TryGetProperty("message")` on the null value throws, and the call becomes
-  `"Error calling {ProviderName} API: …"` with `Failure.Kind = InvalidResponse`
+- **Then** the completion is returned (the call used to fail with `"Error calling {ProviderName} API: …"`, measured)
 
 #### Scenario: Mistral gets a placeholder between a tool result and a user turn
 
@@ -1718,7 +1718,10 @@ by its `type` (`rate_limit_error` RateLimited, `overloaded_error`/`api_error` Se
 `"Error parsing Claude response: …"` (`InvalidResponse`). The streaming parser SHALL yield `text_delta` text,
 assemble each `tool_use` block from `input_json_delta` fragments at `content_block_stop` (falling back to
 `{"_raw": …}` when they do not parse), take `stop_reason` from `message_delta` and token counts from `message_start` /
-`message_delta`, and default the stop reason to `"end_turn"` when none arrived.
+`message_delta`, and default the stop reason to `"end_turn"` when none arrived. An `error` event SHALL end the stream
+with `FinalResponse = LlmResponse.Error("Claude API returned error: {type} - {message}")`, classified as the sync
+parser classifies a body error, and `Error` set; a `"max_tokens"` stop SHALL return no tool_use block, as its input is
+cut off (TASK-716: the event was ignored and the cut-off call kept, both measured).
 
 #### Scenario: Claude stop reasons pass through
 
@@ -1727,17 +1730,18 @@ assemble each `tool_use` block from `input_json_delta` fragments at `content_blo
 - **Then** `StopReason` is `"max_tokens"`, the tool_use block is still in `Content`, and the agent ends the run as
   `Truncated` without executing it
 
-#### Scenario: A stream that ends without a message_delta reads as finished
+#### Scenario: A mid-stream error event fails the turn (TASK-716)
 
-- **Given** a Claude stream that delivers text deltas and then an `error` event (or simply ends) with no `message_delta`
+- **Given** a Claude stream that delivers text deltas and then `{"type":"error","error":{"type":"overloaded_error",…}}`
 - **When** the stream completes
-- **Then** the `error` event is ignored and `FinalResponse.StopReason` is `"end_turn"`
+- **Then** `FinalResponse.StopReason` is `"error"` with a `ServerError` failure (it read `"end_turn"`); a stream that
+  simply ends with no `message_delta` still reads `"end_turn"`
 
-#### Scenario: A streamed truncated tool call is still returned
+#### Scenario: A streamed tool call cut off by the token limit is not returned (TASK-716)
 
-- **Given** a Claude stream whose tool input fragments do not form valid JSON and whose `stop_reason` is `"max_tokens"`
+- **Given** a Claude stream whose tool input fragments are cut off and whose `stop_reason` is `"max_tokens"`
 - **When** the stream completes
-- **Then** the tool_use block carries `{"_raw": …}` and `StopReason` is `"max_tokens"`
+- **Then** `StopReason` is `"max_tokens"` and no tool_use block is returned (it carried `{"_raw": …}`)
 
 ### Requirement: Gemini translates the conversation into alternating contents
 
@@ -1748,11 +1752,12 @@ a tool result a `functionResponse` part whose `name` is the function name looked
 conversation's assistant turns, or the id itself when no such call is present (TASK-554). Consecutive messages mapped
 to the same role (`assistant` → `model`, anything else → `user`) SHALL be merged into one content in the request only
 (TASK-546), and a message contributing no part SHALL be skipped. Gemini supplies no call ids, so each parsed
-`functionCall` SHALL get a new `Guid` id. A `finishReason` of `SAFETY` or `RECITATION` SHALL be an error
-(`"Gemini blocked response: {reason}"`, `Unknown` failure) in the sync parser and a bare `StopReason = "error"` in the
-streaming parser. The sync stop reason SHALL be set per part in order — `"end_turn"` for a text part, `"tool_use"`
-for a `functionCall` part — so the last part decides it; the streaming stop reason SHALL be `"tool_use"` whenever any
-call was captured.
+`functionCall` SHALL get a new `Guid` id and its `args` object deserialised whole, streaming as well as sync
+(TASK-716: the stream flattened a nested argument to its JSON text, measured). A `finishReason` of `SAFETY` or
+`RECITATION` with no call SHALL be an error `"Gemini blocked response: {reason}"` (`Unknown` failure) in both parsers;
+the streaming one also sets `Error` (TASK-716: it was a bare `StopReason = "error"`, measured). The stop reason SHALL be
+`"tool_use"` whenever any `functionCall` part was read, else `"end_turn"` (TASK-716: the sync parser let the last part
+decide, measured).
 
 #### Scenario: A tool result names the function, not the id
 
@@ -1760,24 +1765,25 @@ call was captured.
 - **When** the Gemini payload is built
 - **Then** the `functionResponse.name` is `"read_file"`
 
-#### Scenario: Text after a function call hides the call
+#### Scenario: Text after a function call keeps the call (TASK-716)
 
 - **Given** a sync Gemini response whose parts are `[functionCall read_file, text "done"]`
 - **When** it is parsed
-- **Then** `StopReason` is `"end_turn"`, so the agent ends the run as `Completed` and never executes the call
+- **Then** `StopReason` is `"tool_use"` and both blocks are returned (it was `"end_turn"`, and the call never ran)
 
-#### Scenario: A blocked stream fails with no message
+#### Scenario: A blocked stream says why (TASK-716)
 
 - **Given** a Gemini stream ending with `finishReason = "SAFETY"` and no function call
 - **When** the agent handles it
-- **Then** `StopReason = "error"` with no `ErrorMessage` or `Failure`, so the run ends `LlmFailed` with
-  `Detail = "Unknown LLM error"` and a null `Failure`
+- **Then** `StopReason = "error"` with `ErrorMessage = "Gemini blocked response: SAFETY"` (there was no message, and the
+  run ended with `Detail = "Unknown LLM error"`)
 
 ### Requirement: Ollama, Z.AI and GitHub Copilot add provider-specific behaviour
 
 The system SHALL post Ollama requests to `{baseUrl}/api/chat` with `stream = false` and `num_predict = -1`, a 5-minute
 timeout and `Name = "Ollama ({model})"`, parse `message.tool_calls` with a new `Guid` id per call and
-`function.arguments` read as a JSON string, and otherwise `message.content` as `"end_turn"`. Z.AI SHALL post to
+`function.arguments` read as the JSON object `/api/chat` sends or as a JSON string, in the sync and the streaming parser
+(TASK-716: only a string was read, measured), and otherwise `message.content` as `"end_turn"`. Z.AI SHALL post to
 `{baseUrl}/chat/completions` where the base URL is the given one (trailing `/` trimmed), else
 `https://api.z.ai/api/coding/paas/v4` when `useCodingEndpoint`, else `https://api.z.ai/api/paas/v4`; add
 `thinking: {type: "enabled"}` when deep thinking is on; send `max_tokens` per model (131 072 for GLM-5.1/5.1 Turbo/5.3,
@@ -1785,16 +1791,18 @@ timeout and `Name = "Ollama ({model})"`, parse `message.tool_calls` with a new `
 from the first of `thinking_content`, `reasoning_content`, `thinking` present on a text turn; map `finish_reason =
 "length"` to `"max_tokens"`; and replace unparseable tool arguments by an empty input after an `"error"` message.
 GitHub Copilot SHALL obtain an OAuth token through its `IOAuthClient` (re-fetched when within 60 s of expiry), answer
-a failed authentication with `NotConfigured()` (sync) or `Error = "Authentication failed"` (streaming), send
+no token with `NotConfigured()` (sync) or `Error = "Authentication failed"` (streaming), and a sign-in that throws with
+an error reply (sync) or a streaming failure `"GitHub Copilot sign-in failed: …"` (TASK-716: the exception reached the
+caller, measured), send
 `Editor-Version` / `Editor-Plugin-Version` headers on every request (CR-H005), and on a 401 refresh the token once and
 retry — in streaming by reading the `Unauthorized` classification from `ConnectStreamingAsync` (TASK-531).
 
-#### Scenario: Ollama's native arguments object fails the parse
+#### Scenario: Ollama's native arguments object is read (TASK-716)
 
 - **Given** an Ollama `/api/chat` response whose `function.arguments` is a JSON object (Ollama's native shape)
-- **When** `ParseResponse` calls `GetString()` on it
-- **Then** `InvalidOperationException` is thrown and the call becomes `"Error calling Ollama API: …"` with
-  `Failure.Kind = InvalidResponse`
+- **When** it is parsed, sync or streaming
+- **Then** a `"tool_use"` block carries those arguments (the call used to become `"Error calling Ollama API: …"`, and
+  the stream threw)
 
 #### Scenario: Copilot refreshes a rejected token once
 
@@ -1845,10 +1853,12 @@ when the resolved type is a coding agent and the key is absent, then create the 
 
 The system SHALL give `OrchestratorAgent` an opt-in `GetOrchestratorGuidance()` text, a three-band depth guidance of
 its own, and two static helpers. `ExtractTextFromContent(content)` SHALL return a string as-is; a single
-`ContentBlock`'s `Text` whatever its `Type`; the newline-join of non-empty `text` blocks of a block list, of a
-`JsonElement` array or of an object list (a `ContentBlock`, a string, or any object with `Type`/`type` and
-`Text`/`text` properties); a `JsonElement` string's value; the empty string for a `List<>` or enumerable it could not
-read; and `ToString()` of anything else. `ExtractJson(content)` SHALL throw `InvalidOperationException` for blank
+`ContentBlock`'s `Text` when its `Type` is `"text"`, else the empty string; the newline-join of non-empty `text` blocks
+of a block list, of a `JsonElement` array or of an object list (a `ContentBlock`, a string, or any object with
+`Type`/`type` and `Text`/`text` properties); a `JsonElement` string's value; a single `JsonElement` block object's
+`text` when it is a text block, else the empty string (TASK-716: a single non-text block's text, and a JSON block's
+raw JSON, came back, measured); the empty string for a `List<>` or enumerable it could not read; and `ToString()` of
+anything else. `ExtractJson(content)` SHALL throw `InvalidOperationException` for blank
 content or content starting with `Error:`, and otherwise return the first brace-balanced object — from the start when
 the trimmed content starts with `{`, else from a fenced (```` ```json ```` or ```` ``` ````) block that starts with `{`,
 else from the first `{` anywhere — honouring string literals and escapes, and SHALL throw when braces never balance or
@@ -1866,11 +1876,11 @@ no `{` exists (naming the first 100 characters).
 - **When** `ExtractJson` runs
 - **Then** `InvalidOperationException("LLM request failed: Error: …")` is thrown
 
-#### Scenario: A tool_use block is read as text
+#### Scenario: A single non-text block has no text (TASK-716)
 
 - **Given** a single `ContentBlock { Type = "tool_use", Text = "x" }`
 - **When** `ExtractTextFromContent` runs
-- **Then** it returns `"x"`, unlike `MessageText.From`, which returns the empty string for a non-text block
+- **Then** it returns the empty string, as `MessageText.From` does (it returned `"x"`)
 
 ### Requirement: A tracked provider waits for rate limits, refuses over budget and records usage
 
