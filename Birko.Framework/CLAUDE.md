@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Fluent IsUnique, IsRequired and Ignore act as the attributes do (2026-11-04)
+[[TASK-712]]. A fluent `IsUnique` on a nullable column got no `ux_` index, so SQLite took a duplicate, and `Ignore()`
+left the property a column (measured). Both, with `IsRequired`, are now registered before the table loads
+(`DataBase.RegisterColumnFlags`), as lengths are. A flag or `HasColumnName` on a property that is no column is refused
+instead of skipped; a second `Property()` call reuses the member's descriptor, so one index declared twice is refused;
+`RegisterPrecision(…, null, null)` removes a registration.
 ### REST, SSE and SOAP read tokens by one rule (2026-11-04)
 [[TASK-709]]. REST passed a `Basic …` `Authorization` value whole as the token, and SSE stopped at one, so a valid
 `?token=` was refused (measured). An `Authorization` header now yields a token only under its scheme (default `Bearer`),

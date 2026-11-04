@@ -122,6 +122,7 @@ namespace Birko.Models.SQL.Mapping
             {
                 RegisterMaxLengths(type, GetPropertyMaps(type));
                 RegisterPrecisions(type, GetPropertyMaps(type));
+                RegisterColumnFlags(type, GetPropertyMaps(type));
             }
 
             foreach (var (type, _) in _maps)
@@ -148,11 +149,10 @@ namespace Birko.Models.SQL.Mapping
 
                     // TASK-567: through DeclarePrimary, so a fluent key replaces the implicit Guid key.
                     if (field.IsPrimary) table.DeclarePrimary(sqlField);
-                    if (field.IsUnique) sqlField.IsUnique = true;
-                    if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
 
-                    // MaxLength, Precision and Scale were registered before the load (TASK-691, TASK-692).
+                    // MaxLength, Precision and Scale were registered before the load (TASK-691, TASK-692), and
+                    // IsUnique, IsRequired and Ignore too (TASK-712).
                 }
 
                 if (renamed.Count > 0) RenameColumns(table, renamed);
@@ -243,6 +243,40 @@ namespace Birko.Models.SQL.Mapping
                     throw new InvalidOperationException($"{where}: the property is not a column (ignored, or it has no setter).");
                 }
                 Birko.Data.SQL.DataBase.RegisterPrecision(type, field.Name, field.Precision, field.Scale);
+            }
+        }
+
+        /// <summary>
+        /// Registers each <c>IsUnique</c> / <c>IsRequired</c> / <c>Ignore</c> of <paramref name="type"/>'s mapping before the
+        /// table loads (TASK-712), and refuses a declaration on a property that is no column (rule 55), which the apply
+        /// loop used to skip.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">
+        /// <c>IsUnique</c>, <c>IsRequired</c>, <c>IsPrimary</c>, <c>IsAutoIncrement</c> or <c>HasColumnName</c> on a property
+        /// that is ignored (fluently or by <c>[IgnoreField]</c>) or has no setter.
+        /// </exception>
+        private static void RegisterColumnFlags(Type type, IReadOnlyList<FieldDescriptor> properties)
+        {
+            foreach (var field in properties)
+            {
+                var declared = new List<string>();
+                if (field.IsUnique) declared.Add("IsUnique");
+                if (field.IsRequired) declared.Add("IsRequired");
+                if (field.IsPrimary) declared.Add("IsPrimary");
+                if (field.IsAutoIncrement) declared.Add("IsAutoIncrement");
+                if (!string.IsNullOrEmpty(field.ColumnName)) declared.Add($"HasColumnName(\"{field.ColumnName}\")");
+                if (declared.Count > 0)
+                {
+                    var where = $"{string.Join(".", declared)} on {type.Name}.{field.Name}";
+                    var property = DeclaredProperty(type, field.Name)
+                        ?? throw new InvalidOperationException($"{where}: {type.Name} has no such public property.");
+                    if (field.IsIgnored || !property.CanWrite
+                        || property.IsDefined(typeof(Birko.Data.SQL.Attributes.IgnoreField), true))
+                    {
+                        throw new InvalidOperationException($"{where}: the property is not a column (ignored, or it has no setter).");
+                    }
+                }
+                Birko.Data.SQL.DataBase.RegisterColumnFlags(type, field.Name, field.IsUnique, field.IsRequired, field.IsIgnored);
             }
         }
 

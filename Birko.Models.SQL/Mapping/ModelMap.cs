@@ -42,8 +42,14 @@ namespace Birko.Models.SQL.Mapping
         public FieldBuilder<T> Property<TProp>(Expression<Func<T, TProp>> propertyExpression)
         {
             var memberName = GetMemberName(propertyExpression);
-            var field = new FieldDescriptor(memberName);
-            Properties.Add(field);
+            // TASK-712: a second call for one member configures the same descriptor, as HasUnique and Ignore already did.
+            // A fresh one each time let one index be declared twice past FieldBuilder's refusal.
+            var field = Properties.Find(p => p.Name == memberName);
+            if (field == null)
+            {
+                field = new FieldDescriptor(memberName);
+                Properties.Add(field);
+            }
             return new FieldBuilder<T>(this, field);
         }
 

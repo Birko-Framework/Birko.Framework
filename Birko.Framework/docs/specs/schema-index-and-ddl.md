@@ -838,7 +838,8 @@ property is never read, and one for another CLR type reaches `CreateAbstractFiel
 The system SHALL expose `DataBase.RegisterPrecision(modelType, propertyName, precision, scale)` for fluent mapping
 systems (`HasPrecision` / `HasScale`, TASK-692), throwing `ArgumentNullException` for a null type, `ArgumentException`
 for a null or empty property name, and `ArgumentOutOfRangeException` for a precision that is not positive or a
-negative scale; a call with both values null SHALL register nothing and leave any earlier registration in place.
+negative scale; a call with both values null SHALL remove any earlier registration, dropping the type's caches when
+there was one (TASK-712: it left an earlier registration in place, measured).
 `LoadField` SHALL find a registration through the **same** lookup `RegisterMaxLength` uses (model type then reflected
 type, each with base types, most derived first) and append a `PrecisionField` for a non-null precision and a
 `ScaleField` for a non-null scale **after** the property's own attributes and after any registered length, so the
@@ -861,13 +862,27 @@ length fallback when no positive `MaxLengthField` is present (type checking is `
 - **When** the field is created
 - **Then** its precision is `10` and its scale `3`
 
-#### Scenario: Invalid values are refused, an empty registration is ignored
+#### Scenario: Invalid values are refused, an empty registration removes one
 
 - **Given** any model type and property
 - **When** `RegisterPrecision(type, "Rate", 0, null)` or `RegisterPrecision(type, "Rate", 5, -1)` is called, and
-  separately `RegisterPrecision(type, "Rate", null, null)`
-- **Then** the first two throw `ArgumentOutOfRangeException`; the third returns without registering or dropping any
-  cache
+  separately `RegisterPrecision(type, "Rate", null, null)` after `RegisterPrecision(type, "Rate", 8, 2)`
+- **Then** the first two throw `ArgumentOutOfRangeException`; after the third the field's precision and scale are the
+  attributes' again
+
+### Requirement: Registered unique, required and ignored flags act as the attributes do
+
+The system SHALL expose `DataBase.RegisterColumnFlags(modelType, propertyName, unique, required, ignored)` (TASK-712),
+registered and looked up as `RegisterMaxLength` is, appending `UniqueField`, `RequiredField` and `IgnoreField` after the
+property's own attributes at load, so a nullable unique column gets its `ux_{table}_{column}` index, a required one is
+NOT NULL, and an ignored property is no field. All three false SHALL remove a registration; a changed one drops the
+type's caches, the same one changes nothing. The flags add to the attributes and never remove one.
+
+#### Scenario: A registered ignore
+
+- **Given** `RegisterColumnFlags(typeof(M), "Draft", false, false, true)`
+- **When** the table loads
+- **Then** it has no field for `Draft`
 
 ### Requirement: Cross-assembly field attributes are rebuilt by short type name
 
@@ -1126,8 +1141,8 @@ rather than being skipped.
 - **Given** repeated `DataBase.Write(entity)` / `DataBase.Read(reader, entity)` calls for the same CLR type
 - **When** they run
 - **Then** `LoadFields` serves the field list from the static `_fieldsCache` `ConcurrentDictionary`, whose entry
-  for a type is dropped only when `RegisterMaxLength` registers a different length, or `RegisterPrecision` a
-  different precision/scale, for one of its properties
+  for a type is dropped only when `RegisterMaxLength` registers a different length, `RegisterPrecision` a
+  different precision/scale or removes one, or `RegisterColumnFlags` different flags, for one of its properties
 
 ### Requirement: A field reports the stored form of an unassigned value
 
@@ -1768,8 +1783,9 @@ columns disagree on uniqueness SHALL be refused. Applying the registry twice SHA
 ### Requirement: Fluent model maps collect portable descriptors per model type
 
 The system SHALL let an `IModelMapping<T>.Configure(ModelMap<T>)` describe a model: `ToTable(name)` and
-`ToTable(name, schema)` set `TableName` / `TableSchema`; `Property(x => x.P)` SHALL always append a **new**
-`FieldDescriptor` named after the member and return a `FieldBuilder<T>` whose `HasColumnName`, `IsUnique`,
+`ToTable(name, schema)` set `TableName` / `TableSchema`; `Property(x => x.P)` SHALL return a `FieldBuilder<T>` over the
+member's existing descriptor, appending one only when none exists (TASK-712: it always appended one, so one index could be
+declared twice past the builder's refusal), whose `HasColumnName`, `IsUnique`,
 `IsPrimary`, `IsRequired`, `IsAutoIncrement`, `IsIgnored`, `HasPrecision`, `HasScale`, `HasMaxLength`, `HasIndex` and
 `HasUniqueIndex` set that descriptor and return the builder (`And()` returning the map); and `HasUnique`,
 `HasPrimary` and `Ignore` SHALL set the flag on the first existing descriptor for the member, appending one only
@@ -1780,12 +1796,13 @@ non-interface type implementing `IModelMapping<>` through its parameterless cons
 it maps; `GetMap<T>`, `HasMap`, `GetTableNames` (only maps with a non-empty table name) and `GetPropertyMaps` (an
 empty list for an unregistered type) SHALL read the registered maps.
 
-#### Scenario: Property appends, HasUnique reuses
+#### Scenario: Property and HasUnique reuse the member's descriptor
 
-- **Given** `map.Property(x => x.Code).HasMaxLength(20)` followed by `map.HasUnique(x => x.Code)`
+- **Given** `map.Property(x => x.Code).HasMaxLength(20)` followed by `map.HasUnique(x => x.Code)` and
+  `map.Property(x => x.Code).IsRequired()`
 - **When** `map.Properties` is read
-- **Then** it holds one descriptor for `Code` with `MaxLength == 20` and `IsUnique == true`; a further
-  `map.Property(x => x.Code)` would append a second descriptor for the same member
+- **Then** it holds one descriptor for `Code` with `MaxLength == 20`, `IsUnique` and `IsRequired`; a second
+  `HasIndex("IX")` on it through another `Property` call is refused
 
 #### Scenario: An unregistered type has no property maps
 
@@ -1797,14 +1814,17 @@ empty list for an unregistered type) SHALL read the registered maps.
 
 The system SHALL, on `ModelMapRegistry.ApplyToDatabase`, first register every map's table name
 (`DataBase.RegisterTableNames`) and, for a map with both a table name and a schema, the schema; then, for every map,
-register its `HasMaxLength` and `HasPrecision` / `HasScale` values **before any table loads**; then, for every map with
-at least one descriptor, load the table and per descriptor whose property maps to a field: apply `HasColumnName`
-(recording the rename), `IsPrimary` through `Table.DeclarePrimary`, and set `IsUnique`, `IsNotNull` (from
-`IsRequired`) and `IsAutoincrement`; then re-key the table's `Fields` by the new column names and rename every index
-column and predicate column that named an old one; then apply the fluent indexes. A descriptor whose property maps to
-no field SHALL be skipped silently for these flags. The flags SHALL be set on the already-loaded field, after
-`LoadIndexes` ran, so a fluent `IsUnique` on a nullable column receives no synthesised `ux_{table}_{column}` index
-and no inline `UNIQUE` (which needs `IsNotNull` or `IsPrimary`).
+register its `HasMaxLength`, `HasPrecision` / `HasScale` and `IsUnique` / `IsRequired` / `Ignore` values **before any
+table loads** (the flags through `DataBase.RegisterColumnFlags`, TASK-712); then, for every map with at least one
+descriptor, load the table and per descriptor whose property maps to a field: apply `HasColumnName` (recording the
+rename), `IsPrimary` through `Table.DeclarePrimary`, and set `IsAutoincrement`; then re-key the table's `Fields` by the
+new column names and rename every index column and predicate column that named an old one; then apply the fluent
+indexes. `IsUnique`, `IsRequired`, `IsPrimary`, `IsAutoIncrement` or `HasColumnName` on a property that is no column
+(ignored fluently or by `[IgnoreField]`, or without a setter) SHALL be refused with `InvalidOperationException` naming the
+calls, the type and the property, before any table loads (TASK-712: skipped silently, measured). A fluent `IsUnique` on
+a nullable column SHALL get the synthesised `ux_{table}_{column}` index a `[UniqueField]` gets (TASK-712: it got none
+and no inline `UNIQUE`, and SQLite took a duplicate, measured), and an ignored property SHALL be no column (it stayed
+one, measured).
 
 #### Scenario: A fluent column rename keeps indexes and lookups consistent
 
@@ -1814,13 +1834,12 @@ and no inline `UNIQUE` (which needs `IsNotNull` or `IsPrimary`).
 - **Then** the field's `Name` is `"sku_code"`, `table.Fields` is keyed `"sku_code"`, and `IX_Sku`'s column is
   `"sku_code"`, so `CREATE INDEX` names a column the table has
 
-#### Scenario: A fluent unique flag on a nullable column constrains nothing
+#### Scenario: A fluent unique flag on a nullable column (TASK-712)
 
-- **Given** a mapping `Property(x => x.ExternalId).IsUnique()` on a nullable `string` with no `IsRequired()`
-- **When** `ApplyToDatabase` runs and the table is created
-- **Then** the field has `IsUnique == true`, but no `ux_…` filtered index was synthesised and
-  `UsesInlineUniqueConstraint` is `false`, so the DDL carries no uniqueness for the column; with `IsRequired()` the
-  column gets an inline `UNIQUE`
+- **Given** a mapping `Property(x => x.Email).IsUnique()` on a nullable `string` with no `IsRequired()`
+- **When** `ApplyToDatabase` runs and the table is created on SQLite
+- **Then** `ux_{table}_Email` exists, two rows with a null `Email` are taken and a second `"a@x"` is refused; with
+  `IsRequired()` the column gets an inline `UNIQUE`
 
 ### Requirement: A fluent length or precision that cannot be honoured is refused
 

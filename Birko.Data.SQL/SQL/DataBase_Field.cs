@@ -22,6 +22,9 @@ namespace Birko.Data.SQL
         // ScaleField after the property's own attributes, for the same reason.
         private static readonly ConcurrentDictionary<(Type Model, string Property), (int? Precision, int? Scale)> _precisionOverrides = new();
 
+        /// <summary>The fluent unique / required / ignored flags (TASK-712), applied as the attributes are, at load.</summary>
+        private static readonly ConcurrentDictionary<(Type Model, string Property), (bool Unique, bool Required, bool Ignored)> _flagOverrides = new();
+
         /// <summary>
         /// Bounds <paramref name="propertyName"/> of <paramref name="modelType"/> to <paramref name="maxLength"/>, as a
         /// <c>[MaxLengthField]</c> on the property would, and winning over one (used by fluent mapping systems:
@@ -71,16 +74,54 @@ namespace Birko.Data.SQL
             ArgumentException.ThrowIfNullOrEmpty(propertyName);
             if (precision is int p) ArgumentOutOfRangeException.ThrowIfNegativeOrZero(p, nameof(precision));
             if (scale is int s) ArgumentOutOfRangeException.ThrowIfNegative(s, nameof(scale));
+            var key = (modelType, propertyName);
             if (precision == null && scale == null)
             {
+                // TASK-712: neither part overridden means no registration; an earlier one used to stay.
+                if (_precisionOverrides.TryRemove(key, out _))
+                {
+                    _fieldsCache.TryRemove(modelType, out _);
+                    _tableCache.TryRemove(modelType, out _);
+                }
                 return;
             }
-            var key = (modelType, propertyName);
             if (_precisionOverrides.TryGetValue(key, out var registered) && registered == (precision, scale))
             {
                 return;
             }
             _precisionOverrides[key] = (precision, scale);
+            _fieldsCache.TryRemove(modelType, out _);
+            _tableCache.TryRemove(modelType, out _);
+        }
+
+        /// <summary>
+        /// Marks <paramref name="propertyName"/> of <paramref name="modelType"/> unique, required or ignored as
+        /// <c>[UniqueField]</c>, <c>[RequiredField]</c> or <c>[IgnoreField]</c> would (fluent mapping systems: <c>IsUnique</c>,
+        /// <c>IsRequired</c>, <c>Ignore</c>), in addition to the property's own attributes. TASK-712: set at load, so a
+        /// nullable unique column gets its <c>ux_</c> index and an ignored property is no column; written onto the loaded
+        /// field afterwards they did neither. All three false removes a registration. Same lifetime and inheritance as
+        /// <see cref="RegisterMaxLength"/>.
+        /// </summary>
+        public static void RegisterColumnFlags(Type modelType, string propertyName, bool unique, bool required, bool ignored)
+        {
+            ArgumentNullException.ThrowIfNull(modelType);
+            ArgumentException.ThrowIfNullOrEmpty(propertyName);
+            var key = (modelType, propertyName);
+            var flags = (unique, required, ignored);
+            if (flags == (false, false, false))
+            {
+                if (_flagOverrides.TryRemove(key, out _))
+                {
+                    _fieldsCache.TryRemove(modelType, out _);
+                    _tableCache.TryRemove(modelType, out _);
+                }
+                return;
+            }
+            if (_flagOverrides.TryGetValue(key, out var registered) && registered == flags)
+            {
+                return;
+            }
+            _flagOverrides[key] = flags;
             _fieldsCache.TryRemove(modelType, out _);
             _tableCache.TryRemove(modelType, out _);
         }
@@ -161,6 +202,12 @@ namespace Birko.Data.SQL
                 // Last, as above: the fluent precision and scale win over the property's own attributes.
                 if (precision is int p) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.PrecisionField(p)).ToArray();
                 if (scale is int s) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.ScaleField(s)).ToArray();
+            }
+            if (Registered(_flagOverrides, field, modelType) is { } flags)
+            {
+                if (flags.Unique) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.UniqueField()).ToArray();
+                if (flags.Required) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.RequiredField()).ToArray();
+                if (flags.Ignored) fieldAttrs = fieldAttrs.Append(new Birko.Data.SQL.Attributes.IgnoreField()).ToArray();
             }
 
             var tableField = Fields.AbstractField.CreateAbstractField(field, fieldAttrs);

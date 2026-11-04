@@ -177,7 +177,9 @@ public class FluentMaxLengthTests
         public void Configure(ModelMap<Untouched> map)
         {
             map.ToTable("test_fluent_untouched");
-            map.Property(x => x.Code).IsRequired();
+            // An index is applied to the loaded table; IsRequired is registered before the load since TASK-712, as a
+            // length is, so it would rebuild the fields the first time.
+            map.Property(x => x.Code).HasIndex("IX_test_fluent_untouched_code");
         }
     }
 

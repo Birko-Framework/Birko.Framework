@@ -3,7 +3,7 @@ id: TASK-712
 parent: STORY-064
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -28,10 +28,10 @@ Evidence: Birko.Models.SQL/Mapping/ModelMapRegistry.cs:130,142; DataBase_Table.c
 
 ## Acceptance criteria
 
-- [ ] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
+- [x] Reproduce each claim (a test or a live measurement) and record the result; a claim that does not reproduce is
       closed with its evidence, never quietly dropped (rule 54).
-- [ ] Each reproduced defect fixed, with a regression test that fails without the fix.
-- [ ] The spec area that describes the behaviour updated to the fixed behaviour.
+- [x] Each reproduced defect fixed, with a regression test that fails without the fix.
+- [x] The spec area that describes the behaviour updated to the fixed behaviour.
 
 ## Out of scope
 
@@ -41,6 +41,32 @@ Evidence: Birko.Models.SQL/Mapping/ModelMapRegistry.cs:130,142; DataBase_Table.c
 
 N/A — covered by automated tests once reproduced.
 
+## Measured (2026-11-04, before the fix)
+
+`tests/Birko.Models.SQL.Tests/Task712FluentFlagTests.cs` against the shipped registry.
+
+| Claim | Result |
+|---|---|
+| A fluent `IsUnique` on a nullable column creates no `ux_` index and no inline UNIQUE | **reproduced:** no index on the loaded table, and on SQLite a second `"a@x"` was taken |
+| Flags on a property with no mapped field are dropped silently | **reproduced** for `IsUnique`, `IsRequired`, `IsPrimary` and `HasColumnName` on a get-only or `[IgnoreField]` property, and for `IsUnique` on a property the same map ignores |
+| The duplicate-index refusal can be bypassed through a second `Property()` | **reproduced:** two descriptors for one member, no refusal |
+| `RegisterPrecision(null, null)` cannot unregister | **reproduced:** precision stayed 8 instead of the attribute's 12 |
+
+Also found: `Ignore(x => x.P)` / `IsIgnored()` was never applied, so the property stayed a column (no consumer uses it:
+grepped Birko\Consumers).
+
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-712` — leave empty until then._
+As TASK-691 did for lengths: `DataBase.RegisterColumnFlags(type, property, unique, required, ignored)` appends
+`UniqueField` / `RequiredField` / `IgnoreField` at load, so the attribute path builds the nullable-unique index and drops
+the ignored property; the registry registers them before any table loads and no longer writes `IsUnique` / `IsNotNull`
+onto the loaded field. A declaration on a property that is no column is refused (rule 55), as `HasMaxLength` already
+was. `Property()` reuses the member's descriptor. `RegisterPrecision(…, null, null)` removes a registration.
+
+## Built (2026-11-04)
+
+11 tests, all failing on the old code. `FluentMaxLengthTests.A_type_without_a_fluent_length_keeps_its_fields` declared
+`IsRequired`, which is now registered before the load and so rebuilds the fields once, as a length does; it declares an
+index instead. The consumer maps (FisData, WorkoutTracker) declare `HasPrimary` / `HasUnique` on `Guid` and lengths:
+nothing newly refused, same DDL. 29 suites importing Birko.Models.SQL green. Spec `schema-index-and-ddl.md` updated
+(scoped; `generated-at` left).
