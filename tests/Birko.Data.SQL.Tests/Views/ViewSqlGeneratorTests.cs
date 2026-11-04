@@ -83,11 +83,12 @@ public class ViewSqlGeneratorTests
     }
 
     [Fact]
-    public void GenerateCreateViewSql_CustomerOrderView_ContainsCreateOrReplace()
+    public void GenerateCreateViewSql_CustomerOrderView_IsAPlainCreate()
     {
+        // TASK-717: a plain CREATE VIEW, which every provider runs; it was CREATE OR REPLACE VIEW.
         var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
 
-        sql.Should().StartWith("CREATE OR REPLACE VIEW ");
+        sql.Should().StartWith("CREATE VIEW ");
         sql.Should().Contain(" AS ");
         sql.Should().Contain("SELECT ");
     }
@@ -127,7 +128,7 @@ public class ViewSqlGeneratorTests
     {
         // CR-M151: ViewSqlGenerator no longer duplicates the ~140-line view-SELECT builder; it calls
         // the shared ViewSelectSqlBuilder. This asserts the generated statement equals exactly
-        // "CREATE OR REPLACE VIEW <name> AS <shared-builder-body>", so any future drift is caught.
+        // "CREATE VIEW <name> AS <shared-builder-body>", so any future drift is caught.
         var view = Birko.Data.SQL.DataBase.LoadView(typeof(CustomerOrderView));
         view.Should().NotBeNull();
 
@@ -137,6 +138,6 @@ public class ViewSqlGeneratorTests
 
         var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
 
-        sql.Should().Be("CREATE OR REPLACE VIEW " + Quote(name) + " AS " + expectedBody);
+        sql.Should().Be("CREATE VIEW " + Quote(name) + " AS " + expectedBody);
     }
 }

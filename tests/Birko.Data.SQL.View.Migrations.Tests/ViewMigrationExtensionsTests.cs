@@ -20,9 +20,9 @@ namespace Birko.Data.SQL.View.Migrations.Tests;
 /// SqlMigrationContext — asserting the generated CommandText and that the context's transaction is
 /// propagated onto the command — plus the wrong-context-type guard and the argument guards.
 ///
-/// A recording fake (not a live SQLite connection) is used because ViewSqlGenerator emits
-/// <c>CREATE OR REPLACE VIEW</c>, which SQLite does not accept; the fake lets us assert the DDL and
-/// transaction wiring independent of provider dialect (the finding's sanctioned "at minimum" approach).
+/// A recording fake (not a live SQLite connection) lets us assert the DDL and transaction wiring independent of
+/// provider dialect. Since TASK-717 the create is a DROP VIEW IF EXISTS then a CREATE VIEW (it was
+/// <c>CREATE OR REPLACE VIEW</c>, which SQLite refuses); Task717MigrationViewLiveTests runs it on SQLite.
 /// </summary>
 public class ViewMigrationExtensionsTests
 {
@@ -72,7 +72,7 @@ public class ViewMigrationExtensionsTests
 
         ctx.CreateView(typeof(CustomerOrderView));
 
-        conn.LastCommand!.CommandText.Should().StartWith("CREATE OR REPLACE VIEW");
+        conn.LastCommand!.CommandText.Should().StartWith("CREATE VIEW");
         conn.LastCommand.CommandText.Should().Contain("\"CustomerOrders\"");
         conn.LastCommand.DbTransactionRef.Should().BeSameAs(tx);
         conn.LastCommand.ExecuteNonQueryCount.Should().Be(1);
@@ -85,7 +85,7 @@ public class ViewMigrationExtensionsTests
 
         await ctx.CreateViewAsync(typeof(CustomerOrderView));
 
-        conn.LastCommand!.CommandText.Should().StartWith("CREATE OR REPLACE VIEW");
+        conn.LastCommand!.CommandText.Should().StartWith("CREATE VIEW");
         conn.LastCommand.ExecuteNonQueryCount.Should().Be(1);
     }
 

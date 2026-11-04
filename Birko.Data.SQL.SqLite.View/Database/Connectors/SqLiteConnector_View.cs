@@ -3,18 +3,18 @@ namespace Birko.Data.SQL.Connectors
     public partial class SqLiteConnector
     {
         /// <summary>
-        /// Builds the CREATE VIEW SQL for SQLite. SQLite does not support CREATE OR REPLACE VIEW, so this
-        /// emits <c>CREATE VIEW IF NOT EXISTS</c>.
+        /// Builds the CREATE VIEW SQL for SQLite, which has no <c>CREATE OR REPLACE VIEW</c>: the old definition is
+        /// dropped and the new one created in one command, which <c>CreateView</c> runs in its own transaction, so a
+        /// refused definition leaves the old one in place.
         /// <para>
-        /// NOTE (CR-L193): unlike the base <c>CREATE OR REPLACE VIEW</c> (PostgreSQL/MySQL), this is a
-        /// no-op when a view of the same name already exists — <c>CreateView</c>/<c>CreateViewAsync</c> will
-        /// NOT update an outdated view body on SQLite and give no error. Call <c>RecreateView</c> to replace
-        /// an existing definition.
+        /// TASK-717: this was <c>CREATE VIEW IF NOT EXISTS</c> (CR-L193 documented it), so a second definition under
+        /// one name was kept as the first with no error (measured) while every other provider replaced it.
         /// </para>
         /// </summary>
         protected override string BuildCreateViewSql(string viewName, string selectSql)
         {
-            return "CREATE VIEW IF NOT EXISTS " + QuoteIdentifier(viewName) + " AS " + selectSql;
+            var name = QuoteIdentifier(viewName);
+            return "DROP VIEW IF EXISTS " + name + "; CREATE VIEW " + name + " AS " + selectSql;
         }
 
         /// <summary>

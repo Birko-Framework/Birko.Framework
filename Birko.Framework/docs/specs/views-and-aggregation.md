@@ -854,8 +854,9 @@ appears (TASK-129). The `FROM` SHALL list the tables no join brings in, each fol
 grouped by right table and join type, the keyword from `Join.Keyword` (which refuses a `Cross` join with
 conditions and an `Inner`/`LeftOuter` join without), and `ON (…)` conditions joined by `AND`: a
 field-to-field condition as `"Left".Column = "Right".Column`, a constant condition as `"Table".Column =
-<literal>` — `TRUE`/`FALSE` for a bool, an invariant-culture number, or a single-quoted string with its
-quotes doubled — and a constant condition with a null value omitted. An aggregate view SHALL end with
+<literal>` — a bool through the caller's `boolLiteral` (default `TRUE`/`FALSE`; the connector passes its
+`ViewBoolLiteral`, `1`/`0` on SQL Server, which refused `TRUE`, measured, TASK-717), an invariant-culture number, or
+a single-quoted string with its quotes doubled — and a constant condition with a null value omitted. An aggregate view SHALL end with
 `GROUP BY` over its non-aggregate projections. `qualifyTableName` SHALL change only the `FROM`/`JOIN`
 table token; the connector passes `ViewRelation`, which renders a schema-placed table as its relation
 aliased by the quoted logical name (TASK-272).
@@ -870,7 +871,7 @@ aliased by the quoted logical name (TASK-272).
 
 - **Given** a `[View]` whose right property is the string constant `"O'Brien"` rather than a mapped property
 - **When** the body is built
-- **Then** the condition is `"Table".Column = 'O''Brien'`; a `true` constant renders `TRUE` and `1.5` renders `1.5` under any culture
+- **Then** the condition is `"Table".Column = 'O''Brien'`; a `true` constant renders `TRUE` (`1` on SQL Server) and `1.5` renders `1.5` under any culture
 
 #### Scenario: A view with no table is refused
 
@@ -908,8 +909,9 @@ The system SHALL decide per read and per count whether to query the persistent v
 answers true. In `Auto` it SHALL cache only a positive answer, per connector instance and view name, so a
 `false` (absent, or a swallowed transient failure) is re-checked on the next query (CR-M149).
 `CreateView`, `DropView`, `CreateIndexedView` and `DropIndexedView` SHALL invalidate the name's cache
-entry; `ClearViewExistsCache` and `InvalidateViewExistsCache` SHALL be public. Both the sync and the
-async read and count funnels SHALL use the **synchronous** `ViewExists` for this check. A null view SHALL
+entry; `ClearViewExistsCache` and `InvalidateViewExistsCache` SHALL be public. The sync read and count funnels
+SHALL use `ViewExists` for this check and the async ones `ViewExistsAsync` with the caller's token (TASK-717: the
+async funnels called the sync check, measured). A null view SHALL
 make the read yield nothing and the count return `0`.
 
 #### Scenario: Auto falls back while the view is absent, then uses it
@@ -953,14 +955,17 @@ the on-the-fly count (the read throws).
 The system SHALL offer on both connector families: `CreateView(Async)` from a view type (throwing
 `InvalidOperationException` when `LoadView` yields no tables) or from `Tables.View` (throwing
 `ArgumentNullException` for null and `InvalidOperationException` when neither the `viewName` argument nor
-`View.Name` is non-blank), issuing `BuildCreateViewSql(name, BuildViewSelectSql(view))` as DDL —
-`CREATE OR REPLACE VIEW <quoted> AS …` by default; `CreateViews(Async)` over a list (a null list a
+`View.Name` is non-blank), issuing `BuildCreateViewSql(name, BuildViewSelectSql(view))` as DDL in its own
+transaction — `CREATE OR REPLACE VIEW <quoted> AS …` by default, so an existing definition is replaced on every
+provider; `CreateViews(Async)` over a list (a null list a
 no-op); `DropView(Async)` by type or name as `DROP VIEW IF EXISTS <quoted>` (a blank name
 `ArgumentException`, an unnamed type `InvalidOperationException`); `DropViews(Async)` skipping blank
 names; `RecreateView(Async)` as drop then create; and `CreateViewIfNotExists(Async)`, creating only when
 `ViewExists(Async)` answers false. The base `ViewExists(Async)` SHALL throw `ArgumentException` for a
-blank name, run `SELECT 1 FROM <quoted> WHERE 1=0`, and answer `false` on **any** exception — so it
-answers `true` for a table of that name as well as a view.
+blank name, run `SELECT 1 FROM <quoted> WHERE 1=0`, and answer `false` only when that query is refused
+(`DbException`); any other failure, a cancelled token among them, propagates (TASK-717: every exception answered
+`false`, measured). It answers `true` for a table of that name as well as a view, which is why every shipped
+provider overrides both forms with a catalogue lookup.
 
 #### Scenario: Default CREATE VIEW replaces
 
@@ -968,36 +973,38 @@ answers `true` for a table of that name as well as a view.
 - **When** `CreateView(typeof(CustomerOrders))` runs
 - **Then** `CREATE OR REPLACE VIEW "<name>" AS <body>` is executed and the name's existence-cache entry is removed
 
-#### Scenario: The base existence check swallows every failure
+#### Scenario: The base existence check answers only a refused probe (TASK-717)
 
-- **Given** a connector without a provider override and a lost connection
-- **When** `ViewExists("order_summary")` runs
-- **Then** `false` is returned and no exception escapes
+- **Given** a connector without a provider override and a cancelled token, or a lost connection
+- **When** `ViewExistsAsync("order_summary", token)` runs
+- **Then** the cancellation (or the connection's failure) propagates; `false` means only that the probe was refused
 
 ### Requirement: Provider view DDL and existence overrides
 
 The system SHALL override view DDL and existence per provider: **SQL Server** creates with
 `CREATE OR ALTER VIEW` and checks `sys.views WHERE name = @viewName`; **SQLite** creates with
-`CREATE VIEW IF NOT EXISTS` — so an existing view of that name is kept, not replaced — and checks
-`sqlite_master WHERE type = 'view'`; **MySQL** keeps `CREATE OR REPLACE VIEW` and checks
-`information_schema.VIEWS` in `DATABASE()`; **PostgreSQL** keeps `CREATE OR REPLACE VIEW` and checks
+`DROP VIEW IF EXISTS <quoted>; CREATE VIEW <quoted> AS …` in the command's own transaction, so an existing view is
+replaced (TASK-717: it was `CREATE VIEW IF NOT EXISTS`, which kept the old definition with no error, measured), and
+checks `sqlite_master WHERE type = 'view'`; **MySQL** keeps `CREATE OR REPLACE VIEW` and checks
+`information_schema.VIEWS` in `DATABASE()`; **PostgreSQL** keeps `CREATE OR REPLACE VIEW` — which refuses a
+definition whose columns differ (`42P16`, measured), so such a change goes through `RecreateView` — and checks
 `information_schema.views` in `current_schema()` (CR-L191). Every override binds the name as the
 parameter `@viewName`, throws `ArgumentException` for a blank name, and lets a database error propagate
-rather than answering `false`. SQLite and MySQL override both `ViewExists` and `ViewExistsAsync`; SQL
-Server and PostgreSQL override only the synchronous `ViewExists`, their `ViewExistsAsync` being the
-base relation probe.
+rather than answering `false`. All four override both `ViewExists` and `ViewExistsAsync` (TASK-717: SQL Server and
+PostgreSQL used the base probe for the async form, which answered `true` for a same-named table and `false` for a
+cancelled token, measured).
 
-#### Scenario: SQLite does not replace an existing view
+#### Scenario: SQLite replaces an existing view (TASK-717)
 
 - **Given** a SQLite view `"order_summary"` created from an older definition
 - **When** `CreateView` is called with a new definition
-- **Then** `CREATE VIEW IF NOT EXISTS` keeps the old view; only `SqlViewManager.EnsureAsync`'s drop-then-create (or `RecreateView`) brings the new definition in
+- **Then** the new definition is in place (it used to keep the old one with no error)
 
 #### Scenario: A same-named table is not a view on SQLite, MySQL and PostgreSQL
 
 - **Given** a table, not a view, named `"order_summary"`
 - **When** the provider's `ViewExists("order_summary")` runs
-- **Then** SQLite, MySQL, PostgreSQL and SQL Server answer `false` from their catalogue queries, whereas the base probe used by SQL Server's and PostgreSQL's `ViewExistsAsync` answers `true`
+- **Then** SQLite, MySQL, PostgreSQL and SQL Server answer `false` from their catalogue queries, sync and async
 
 ### Requirement: SQL Server indexed views
 
@@ -1009,8 +1016,9 @@ existence-cache entry (CR-H090). It SHALL refuse an aggregate view with `NotSupp
 (SCHEMABINDING aggregates need `COUNT_BIG(*)`, which the builder does not emit), and throw
 `InvalidOperationException` for a type with no view tables, an empty name, or no field to index. The key
 columns SHALL be the primary-key fields of the first table that has any, else the unique fields of the
-first table that has any, else the first table's first field, each rendered as quoted
-`"Table"."Column"`. `DropIndexedView(Async)` SHALL issue `DROP VIEW IF EXISTS` and invalidate the cache;
+first table that has any, else the first table's first field, each rendered as the view's own column — the field's
+view property, as the view's DDL aliases it — quoted (TASK-717: a table-qualified `"Table"."Column"`, which SQL
+Server refused, measured). `DropIndexedView(Async)` SHALL issue `DROP VIEW IF EXISTS` and invalidate the cache;
 `IndexedViewExists(Async)` SHALL answer whether a non-shipped view of that name has a clustered index. The
 async forms SHALL use the connector's async primitives with the token (CR-M139).
 
@@ -1024,7 +1032,7 @@ async forms SHALL use the connector's async primitives with the token (CR-M139).
 
 - **Given** a non-aggregate view over `Orders` whose primary key is `Guid`
 - **When** `CreateIndexedView(typeof(OrderView), "order_view")` runs
-- **Then** the index statement is `CREATE UNIQUE CLUSTERED INDEX [IX_order_view] ON [order_view] ([Orders].[Guid])` — a table-qualified source column, although the view's own column is aliased by its view property
+- **Then** the index statement is `CREATE UNIQUE CLUSTERED INDEX [IX_order_view] ON [order_view] ([OrderId])` when the view exposes `Orders.Guid` as `OrderId`
 
 ### Requirement: PostgreSQL materialized views
 

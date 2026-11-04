@@ -10,7 +10,7 @@ Integration layer connecting SQL View definitions (from Birko.Data.SQL.View attr
 
 ### ViewSqlGenerator
 Static class for generating DDL strings from view attributes:
-- `GenerateCreateViewSql(viewType, viewName?, quoteChar)` — reads `ViewAttribute`/`ViewFieldAttribute` to produce a `CREATE OR REPLACE VIEW` statement
+- `GenerateCreateViewSql(viewType, viewName?, quoteChar)` — reads `ViewAttribute`/`ViewFieldAttribute` to produce a `CREATE VIEW` statement; `ViewMigrationExtensions.CreateView` runs `DROP VIEW IF EXISTS` first, as a separate command, so a view is replaced on every provider (TASK-717; `CREATE OR REPLACE VIEW` was refused by SQLite and SQL Server)
 - `GenerateDropViewSql(viewType, viewName?, quoteChar)` — produces a `DROP VIEW IF EXISTS` statement
 - `quoteChar` parameter — a single `char` (default `"`) applied **symmetrically** on both sides of an identifier. Supports ANSI/PostgreSQL (`"`) and MySQL (`` ` ``) symmetric quoting only. **Asymmetric bracket quoting (SQL Server `[ ]`) and T-SQL `CREATE OR ALTER VIEW` are out of scope** — use `Birko.Data.SQL.MSSql.View` for SQL Server view DDL.
 

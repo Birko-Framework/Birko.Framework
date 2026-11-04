@@ -136,8 +136,10 @@ namespace Birko.Data.SQL.Connectors
                 });
                 return true;
             }
-            catch
+            catch (System.Data.Common.DbException)
             {
+                // TASK-717: only the probe being refused means "no such view"; anything else (a lost connection,
+                // a timeout) is not an answer, and used to be read as one.
                 return false;
             }
         }

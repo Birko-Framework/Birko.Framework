@@ -39,7 +39,7 @@ SQL view generation framework for creating database views from entity attributes
 - **Birko.Data.SQL.MSSql.View** — `CREATE OR ALTER VIEW`, `sys.views` catalog
 - **Birko.Data.SQL.PostgreSQL.View** — `information_schema.views`, materialized view support
 - **Birko.Data.SQL.MySQL.View** — `information_schema.VIEWS` with `TABLE_SCHEMA` scoping
-- **Birko.Data.SQL.SqLite.View** — `CREATE VIEW IF NOT EXISTS`, `sqlite_master` catalog
+- **Birko.Data.SQL.SqLite.View** — drop-then-create, `sqlite_master` catalog
 
 ### DataBase
 - `DataBase_View.cs` — View metadata loading and caching

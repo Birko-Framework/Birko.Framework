@@ -36,9 +36,9 @@ public class AddCustomerOrdersView : SqlMigration
 ### Provider-Specific Quoting
 
 The `ViewSqlGenerator` accepts a single `char quoteChar` used **symmetrically** on both sides of an
-identifier, and emits `CREATE OR REPLACE VIEW`. This supports ANSI/PostgreSQL (`"`) and MySQL (`` ` ``)
-symmetric quoting only — **asymmetric bracket quoting (SQL Server `[ ]`) and T-SQL `CREATE OR ALTER VIEW`
-are out of scope** here (use `Birko.Data.SQL.MSSql.View` for SQL Server view DDL).
+identifier, and emits a plain `CREATE VIEW`; the migration's `CreateView` drops the view first, so it replaces on
+every provider. Symmetric quoting only — **asymmetric bracket quoting (SQL Server `[ ]`) is out of scope**, and a
+bool join constant renders `TRUE`, which SQL Server refuses (use `Birko.Data.SQL.MSSql.View`'s connector there).
 
 ```csharp
 // PostgreSQL / ANSI: "column_name"  (default)

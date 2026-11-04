@@ -1796,10 +1796,14 @@ The system SHALL provide `CreateView(viewType, viewName?, quoteChar)`, `DropView
 and `DropView(viewName, quoteChar)` extension methods on `IMigrationContext`, each with an `…Async` twin taking a
 `CancellationToken`. They SHALL throw `ArgumentNullException` for a null context or view type and `ArgumentException`
 for a null or whitespace view name, SHALL throw `InvalidOperationException` (`"Expected SqlMigrationContext but got
-{type}."`) on a non-SQL context, and SHALL execute the generated statement as one non-query on the context's
-`Connection` with its `Transaction`. `ViewSqlGenerator.GenerateCreateViewSql` SHALL load the view through
-`DataBase.LoadView`, throw `InvalidOperationException` when the type has no tables, and return
-`CREATE OR REPLACE VIEW {quoted name} AS {select}`, the SELECT rendered by the shared `ViewSelectSqlBuilder`.
+{type}."`) on a non-SQL context, and SHALL execute the generated statements as non-queries on the context's
+`Connection` with its `Transaction`: a drop is one, a create is `DROP VIEW IF EXISTS` then `CREATE VIEW` — two
+commands, as SQL Server takes `CREATE VIEW` only as a batch of its own — so it replaces a view on every provider.
+`ViewSqlGenerator.GenerateCreateViewSql` SHALL load the view through `DataBase.LoadView`, throw
+`InvalidOperationException` when the type has no tables, and return `CREATE VIEW {quoted name} AS {select}`, the
+SELECT rendered by the shared `ViewSelectSqlBuilder` (TASK-717: it was `CREATE OR REPLACE VIEW`, which SQLite and SQL
+Server refuse; measured on SQLite, `near "OR": syntax error`). A bool join constant renders `TRUE`/`FALSE`, as the
+generator has no dialect.
 `GenerateDropViewSql` SHALL return `DROP VIEW IF EXISTS {quoted name}`. The view name SHALL be `viewName` when given,
 else the first `ViewAttribute.Name`, else the distinct table names concatenated, else the type name. Identifiers SHALL
 be quoted with the single `quoteChar` (default `"`) on both sides, an embedded `quoteChar` doubled; no connector is
@@ -1824,9 +1828,9 @@ consulted, so bracket quoting is not expressible.
 - **When** it runs
 - **Then** `InvalidOperationException` is thrown after the SQL is generated and before anything is executed
 
-#### Scenario: The statement form is fixed, whatever the provider
+#### Scenario: A view migration runs on SQLite and replaces when run again (TASK-717)
 
-- **Given** `CreateView` on a SQL Server or SQLite migration
-- **When** the statement executes
-- **Then** it is still `CREATE OR REPLACE VIEW …`, which neither of those providers accepts, so the migration fails;
-  the generator offers no per-provider form
+- **Given** `CreateView(typeof(OrderTotals))` and then `CreateView` of a wider definition under the same name, in one
+  SQLite migration
+- **When** it runs
+- **Then** the view has the wider definition's columns (the first `CREATE OR REPLACE VIEW` failed, measured)

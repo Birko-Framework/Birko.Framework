@@ -34,7 +34,7 @@ public class MSSqlIndexedViewApiTests
     }
 
     [Fact]
-    public void GetIndexedViewKeyColumns_ReturnsTableQualifiedColumns()
+    public void GetIndexedViewKeyColumns_ReturnsTheViewsOwnColumns()
     {
         var connector = NewConnector();
         var view = DataBase.LoadView(typeof(SbCustomerOrderView));
@@ -45,10 +45,11 @@ public class MSSqlIndexedViewApiTests
 
         var columns = ((IEnumerable<string>)method!.Invoke(connector, new object[] { view! })!).ToList();
 
-        // The fallback ladder (primary -> unique -> first-field) must yield at least one
-        // Table.Field-qualified key column for a well-formed view.
+        // The fallback ladder (primary -> unique -> first-field) must yield at least one key column, and it is the
+        // VIEW's column (its property). TASK-717: this pinned a Table.Field-qualified name, which the clustered index
+        // on a view refused (measured live: "Incorrect syntax near '.'").
         columns.Should().NotBeEmpty();
-        columns.Should().OnlyContain(c => c.Contains('.'));
+        columns.Should().OnlyContain(c => !c.Contains('.'));
     }
 
     [Fact]

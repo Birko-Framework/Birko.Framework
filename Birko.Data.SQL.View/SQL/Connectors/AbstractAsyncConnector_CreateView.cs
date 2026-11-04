@@ -138,11 +138,13 @@ namespace Birko.Data.SQL.Connectors
                 }, async (command) =>
                 {
                     await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }).ConfigureAwait(false);
+                }, false, ct).ConfigureAwait(false);
                 return true;
             }
-            catch
+            catch (System.Data.Common.DbException)
             {
+                // TASK-717: only the probe being refused means "no such view". A cancelled token answered false
+                // (measured); it now throws. PostgreSQL and SQL Server override this with a catalog lookup.
                 return false;
             }
         }

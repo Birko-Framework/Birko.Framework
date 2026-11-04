@@ -18,12 +18,15 @@ namespace Birko.Data.SQL.View.Migrations
         public const char DefaultQuoteChar = '"';
 
         /// <summary>
-        /// Generates a CREATE OR REPLACE VIEW SQL statement from a view type's metadata.
+        /// Generates a <c>CREATE VIEW</c> statement from a view type's metadata. It creates; to replace a view, run
+        /// <see cref="GenerateDropViewSql(Type, string?, char)"/> first, as <c>ViewMigrationExtensions.CreateView</c> does.
+        /// TASK-717: this was <c>CREATE OR REPLACE VIEW</c>, which SQLite and SQL Server refuse (measured on SQLite:
+        /// <c>near "OR": syntax error</c>); a plain create runs on every provider.
         /// </summary>
         /// <param name="viewType">The type decorated with ViewAttribute(s) and ViewFieldAttribute(s).</param>
         /// <param name="viewName">Optional custom view name. If null, derives from type metadata.</param>
         /// <param name="quoteChar">Quote character for identifiers. Defaults to ANSI SQL double quote.</param>
-        /// <returns>The CREATE OR REPLACE VIEW SQL statement.</returns>
+        /// <returns>The CREATE VIEW SQL statement.</returns>
         public static string GenerateCreateViewSql(Type viewType, string? viewName = null, char quoteChar = DefaultQuoteChar)
         {
             if (viewType == null)
@@ -58,7 +61,7 @@ namespace Birko.Data.SQL.View.Migrations
                     + "it. Create the view through the connector's CreateView instead.");
             }
             var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar));
-            return "CREATE OR REPLACE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
+            return "CREATE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
         }
 
         /// <summary>

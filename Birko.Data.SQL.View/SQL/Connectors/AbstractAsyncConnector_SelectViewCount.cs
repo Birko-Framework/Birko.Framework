@@ -20,7 +20,7 @@ namespace Birko.Data.SQL.Connectors
                 return 0;
             }
 
-            var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+            var usePersistent = await ShouldUsePersistentViewAsync(view, name => ViewExistsAsync(name, ct)).ConfigureAwait(false);
             // TASK-639: a persistent view's WHERE names its own columns, not the source ones.
             conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
 

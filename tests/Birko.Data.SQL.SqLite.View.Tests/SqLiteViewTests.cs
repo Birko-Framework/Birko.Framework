@@ -13,8 +13,8 @@ namespace Birko.Data.SQL.SqLite.View.Tests;
 
 /// <summary>
 /// CR-L194: the SQLite view overrides had no test project. Covers the ViewExists argument guard, the
-/// CREATE VIEW IF NOT EXISTS DDL string, and a real round-trip (present vs absent view) against an on-disk
-/// SQLite database. CR-L193: CreateView is non-replacing on SQLite (documented on BuildCreateViewSql).
+/// create-view DDL string, and a real round-trip (present vs absent view) against an on-disk SQLite database.
+/// CR-L193 recorded CreateView as non-replacing on SQLite; TASK-717 made it replace (drop, then create).
 /// </summary>
 public class SqLiteViewTests : IDisposable
 {
@@ -65,7 +65,7 @@ public class SqLiteViewTests : IDisposable
     }
 
     [Fact]
-    public void BuildCreateViewSql_EmitsIfNotExists()
+    public void BuildCreateViewSql_DropsThenCreates()
     {
         var connector = NewConnector();
         var method = typeof(SqLiteConnector).GetMethod(
@@ -74,7 +74,8 @@ public class SqLiteViewTests : IDisposable
 
         var sql = (string)method!.Invoke(connector, new object[] { "MyView", "SELECT 1 AS X" })!;
 
-        sql.Should().Be("CREATE VIEW IF NOT EXISTS \"MyView\" AS SELECT 1 AS X");
+        // TASK-717: CREATE VIEW IF NOT EXISTS kept an older definition; CreateView now replaces it.
+        sql.Should().Be("DROP VIEW IF EXISTS \"MyView\"; CREATE VIEW \"MyView\" AS SELECT 1 AS X");
     }
 
     [Fact]

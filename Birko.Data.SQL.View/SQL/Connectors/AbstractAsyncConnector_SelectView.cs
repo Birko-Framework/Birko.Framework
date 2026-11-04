@@ -29,7 +29,7 @@ namespace Birko.Data.SQL.Connectors
                 yield break;
             }
 
-            var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+            var usePersistent = await ShouldUsePersistentViewAsync(view, name => ViewExistsAsync(name, ct)).ConfigureAwait(false);
 
             // TASK-128: resolve here, after usePersistent is known — see the sync twin in
             // AbstractConnector_SelectView.cs for why this is the single resolution point.

@@ -4,14 +4,14 @@ SQLite-specific view DDL support for the Birko.Data.SQL.View framework.
 
 ## Features
 
-- **CREATE VIEW IF NOT EXISTS** syntax (SQLite does not support CREATE OR REPLACE VIEW)
+- **Drop-then-create** view DDL in one transaction, so `CreateView` replaces a view (SQLite has no CREATE OR REPLACE VIEW)
 - **ViewExists** check via `sqlite_master` catalog
 - Inherits all base view operations from Birko.Data.SQL.View (CreateView, DropView, RecreateView, CreateViewIfNotExists, CreateViews, DropViews)
 
 ## Usage
 
 ```csharp
-// Create a persistent view (uses IF NOT EXISTS)
+// Create (or replace) a persistent view
 connector.CreateView(typeof(CustomerOrderView));
 
 // Check existence via sqlite_master

@@ -49,6 +49,32 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// The async twin of <see cref="ViewExists"/>: the same catalog lookup. TASK-717: without it the base probe ran,
+        /// which answered true for a same-named table and false for a cancelled token (both measured).
+        /// </summary>
+        public override async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            bool exists = false;
+            await DoCommandAsync((command) =>
+            {
+                command.CommandText = "SELECT 1 FROM information_schema.views WHERE table_name = @viewName AND table_schema = current_schema()";
+                var param = command.CreateParameter();
+                param.ParameterName = "@viewName";
+                param.Value = viewName;
+                command.Parameters.Add(param);
+                return Task.CompletedTask;
+            }, async (command) =>
+            {
+                using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                exists = reader.HasRows;
+            }, false, ct).ConfigureAwait(false);
+            return exists;
+        }
+
+        /// <summary>
         /// Checks if a materialized view exists in PostgreSQL using pg_matviews.
         /// </summary>
         public bool MaterializedViewExists(string viewName)

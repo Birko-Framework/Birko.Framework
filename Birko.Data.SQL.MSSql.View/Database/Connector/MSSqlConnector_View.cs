@@ -41,6 +41,35 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// The async twin of <see cref="ViewExists"/>: the same catalog lookup. TASK-717: without it the base probe ran,
+        /// which answered true for a same-named table and false for a cancelled token (both measured).
+        /// </summary>
+        public override async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            bool exists = false;
+            await DoCommandAsync((command) =>
+            {
+                command.CommandText = "SELECT 1 FROM sys.views WHERE name = @viewName";
+                var param = command.CreateParameter();
+                param.ParameterName = "@viewName";
+                param.Value = viewName;
+                command.Parameters.Add(param);
+                return Task.CompletedTask;
+            }, async (command) =>
+            {
+                using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                exists = reader.HasRows;
+            }, false, ct).ConfigureAwait(false);
+            return exists;
+        }
+
+        /// <summary>SQL Server has no boolean literal; a bool join constant is <c>1</c> / <c>0</c> (TASK-717).</summary>
+        protected override string ViewBoolLiteral(bool value) => value ? "1" : "0";
+
+        /// <summary>
         /// Gets the schema name used for SCHEMABINDING two-part names. Defaults to "dbo"; override in a
         /// derived connector for databases whose target tables live in a non-dbo schema (CR-L180).
         /// </summary>
@@ -82,12 +111,15 @@ namespace Birko.Data.SQL.Connectors
             return ViewSelectSqlBuilder.BuildViewSelectSql(
                 view,
                 QuoteIdentifier,
-                table => QuoteIdentifier(PhysicalTable(table).Schema ?? GetSchemaName()) + "." + QuoteIdentifier(table));
+                table => QuoteIdentifier(PhysicalTable(table).Schema ?? GetSchemaName()) + "." + QuoteIdentifier(table),
+                ViewBoolLiteral);
         }
 
         /// <summary>
         /// Gets the columns for the clustered index from the view's primary key or first unique fields.
-        /// Falls back to the first field if no primary/unique fields are found.
+        /// Falls back to the first field if no primary/unique fields are found. Each is the VIEW's column — the
+        /// field's view property, as the view's DDL aliases it — not its source: TASK-717, the index named
+        /// <c>[Table].[Column]</c>, which a view does not have, so every indexed view failed at step 2 (measured).
         /// </summary>
         private IEnumerable<string> GetIndexedViewKeyColumns(Tables.View view)
         {
@@ -97,7 +129,7 @@ namespace Birko.Data.SQL.Connectors
                 var primaryFields = table.GetPrimaryFields();
                 if (primaryFields != null && primaryFields.Any())
                 {
-                    return primaryFields.Select(f => f.Table.Name + "." + f.Name);
+                    return primaryFields.Select(ViewColumn);
                 }
             }
 
@@ -107,7 +139,7 @@ namespace Birko.Data.SQL.Connectors
                 var uniqueFields = table.Fields?.Values.Where(f => f.IsUnique);
                 if (uniqueFields != null && uniqueFields.Any())
                 {
-                    return uniqueFields.Select(f => f.Table.Name + "." + f.Name);
+                    return uniqueFields.Select(ViewColumn);
                 }
             }
 
@@ -116,11 +148,13 @@ namespace Birko.Data.SQL.Connectors
             var firstField = firstTable.Fields?.Values.FirstOrDefault();
             if (firstField != null)
             {
-                return new[] { firstTable.Name + "." + firstField.Name };
+                return new[] { ViewColumn(firstField) };
             }
 
             throw new System.InvalidOperationException("Cannot determine index columns for indexed view. View must have at least one field.");
         }
+
+        private static string ViewColumn(Fields.AbstractField field) => field.Property?.Name ?? field.Name;
 
         /// <summary>
         /// Creates an indexed view in SQL Server with SCHEMABINDING and a unique clustered index.
@@ -157,14 +191,7 @@ namespace Birko.Data.SQL.Connectors
             }, true);
 
             // Step 2: Create the unique clustered index
-            var columnsSql = string.Join(", ", keyColumns.Select(c =>
-            {
-                if (c.Contains('.'))
-                {
-                    return string.Join(".", c.Split('.').Select(p => QuoteIdentifier(p)));
-                }
-                return QuoteIdentifier(c);
-            }));
+            var columnsSql = string.Join(", ", keyColumns.Select(c => QuoteIdentifier(c)));
 
             DoDdlCommand((command) =>
             {
@@ -218,14 +245,7 @@ namespace Birko.Data.SQL.Connectors
             }, true, ct).ConfigureAwait(false);
 
             // Step 2: Create the unique clustered index
-            var columnsSql = string.Join(", ", keyColumns.Select(c =>
-            {
-                if (c.Contains('.'))
-                {
-                    return string.Join(".", c.Split('.').Select(p => QuoteIdentifier(p)));
-                }
-                return QuoteIdentifier(c);
-            }));
+            var columnsSql = string.Join(", ", keyColumns.Select(c => QuoteIdentifier(c)));
 
             await DoDdlCommandAsync(async (command) =>
             {

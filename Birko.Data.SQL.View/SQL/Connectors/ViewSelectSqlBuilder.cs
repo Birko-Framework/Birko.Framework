@@ -28,10 +28,15 @@ namespace Birko.Data.SQL.Connectors
         /// <paramref name="quoteIdentifier"/> (plain quoted name); SQL Server's SCHEMABINDING path
         /// overrides it to emit a two-part <c>[dbo].[Table]</c> name.
         /// </param>
+        /// <param name="boolLiteral">
+        /// Renders a bool constant of a join condition. Defaults to <c>TRUE</c> / <c>FALSE</c>; SQL Server, which has no
+        /// boolean literal, passes <c>1</c> / <c>0</c> (TASK-717: it refused <c>TRUE</c> as a column name, measured).
+        /// </param>
         public static string BuildViewSelectSql(
             Tables.View view,
             Func<string, string> quoteIdentifier,
-            Func<string, string>? qualifyTableName = null)
+            Func<string, string>? qualifyTableName = null,
+            Func<bool, string>? boolLiteral = null)
         {
             if (view == null)
             {
@@ -139,7 +144,7 @@ namespace Birko.Data.SQL.Connectors
                         if (joingroup.Value.Any())
                         {
                             sql += " ON (";
-                            sql += BuildViewJoinConditionSql(joingroup.Value, quoteIdentifier);
+                            sql += BuildViewJoinConditionSql(joingroup.Value, quoteIdentifier, boolLiteral);
                             sql += ")";
                         }
                     }
@@ -163,7 +168,7 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// Builds join condition SQL for view creation (field = field comparisons).
         /// </summary>
-        private static string BuildViewJoinConditionSql(IEnumerable<Conditions.Condition> conditions, Func<string, string> quoteIdentifier)
+        private static string BuildViewJoinConditionSql(IEnumerable<Conditions.Condition> conditions, Func<string, string> quoteIdentifier, Func<bool, string>? boolLiteral)
         {
             var parts = new List<string>();
             foreach (var condition in conditions)
@@ -184,7 +189,7 @@ namespace Birko.Data.SQL.Connectors
                     if (value != null)
                     {
                         var left = QuoteFieldReference(condition.Name, quoteIdentifier);
-                        parts.Add(left + " = " + FormatJoinConditionValue(value));
+                        parts.Add(left + " = " + FormatJoinConditionValue(value, boolLiteral));
                     }
                 }
             }
@@ -197,11 +202,11 @@ namespace Birko.Data.SQL.Connectors
         /// everything else is a single-quoted string with embedded quotes doubled (CR-L196). CREATE VIEW
         /// cannot be parameterized, so view-definition constants must be trusted (not user input).
         /// </summary>
-        internal static string FormatJoinConditionValue(object value)
+        internal static string FormatJoinConditionValue(object value, Func<bool, string>? boolLiteral = null)
         {
             return value switch
             {
-                bool b => b ? "TRUE" : "FALSE",
+                bool b => boolLiteral?.Invoke(b) ?? (b ? "TRUE" : "FALSE"),
                 byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
                     => System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!,
                 _ => "'" + SqlLiteral.EscapeLiteral(value.ToString()!) + "'",

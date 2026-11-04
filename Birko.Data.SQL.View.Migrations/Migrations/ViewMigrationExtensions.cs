@@ -34,6 +34,9 @@ namespace Birko.Data.SQL.View.Migrations
 
             var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar);
             var (connection, transaction) = GetSqlConnection(context);
+            // TASK-717: drop, then create — two commands, as SQL Server runs CREATE VIEW only as a batch of its own —
+            // so a view is replaced on every provider, inside the migration's transaction.
+            ExecuteSql(connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar));
             ExecuteSql(connection, transaction, sql);
         }
 
@@ -59,6 +62,8 @@ namespace Birko.Data.SQL.View.Migrations
 
             var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar);
             var (connection, transaction) = GetSqlConnection(context);
+            // TASK-717: drop, then create (see CreateView).
+            await ExecuteSqlAsync(connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar), ct).ConfigureAwait(false);
             await ExecuteSqlAsync(connection, transaction, sql, ct).ConfigureAwait(false);
         }
 

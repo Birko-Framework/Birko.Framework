@@ -23,22 +23,12 @@ namespace Birko.Data.SQL.Connectors
         /// <returns>True if the persistent view should be queried directly; false for on-the-fly SELECT.</returns>
         protected bool ShouldUsePersistentView(Tables.View view, Func<string, bool> checkViewExists)
         {
-            if (view.QueryMode == ViewQueryMode.OnTheFly)
+            if (PersistentViewDecided(view) is { } decided)
             {
-                return false;
+                return decided;
             }
 
-            if (view.QueryMode == ViewQueryMode.Persistent)
-            {
-                return true;
-            }
-
-            // Auto mode: check cache, then database.
-            var viewName = view.Name;
-            if (string.IsNullOrEmpty(viewName))
-            {
-                return false;
-            }
+            var viewName = view.Name!;
 
             // CR-M149: only cache a definitive positive result. ViewExists swallows every exception and
             // returns false, so a transient failure (connection blip, lock timeout) is indistinguishable
@@ -56,6 +46,49 @@ namespace Birko.Data.SQL.Connectors
                 _viewExistsCache[viewName!] = true;
             }
             return exists;
+        }
+
+        /// <summary>
+        /// The async twin of <see cref="ShouldUsePersistentView"/>: an async read asks <paramref name="checkViewExists"/>
+        /// (the connector's <c>ViewExistsAsync</c>). TASK-717: the async reads called the sync <c>ViewExists</c>, blocking
+        /// the calling thread on a database round-trip (measured). The cache and its positive-only rule are shared.
+        /// </summary>
+        protected async System.Threading.Tasks.Task<bool> ShouldUsePersistentViewAsync(Tables.View view, Func<string, System.Threading.Tasks.Task<bool>> checkViewExists)
+        {
+            if (PersistentViewDecided(view) is { } decided)
+            {
+                return decided;
+            }
+
+            var viewName = view.Name!;
+            if (_viewExistsCache.TryGetValue(viewName, out var cached))
+            {
+                return cached;
+            }
+
+            var exists = await checkViewExists(viewName).ConfigureAwait(false);
+            if (exists)
+            {
+                _viewExistsCache[viewName] = true;
+            }
+            return exists;
+        }
+
+        /// <summary>What the query mode decides without asking the database; null when an Auto view must be looked up.</summary>
+        private static bool? PersistentViewDecided(Tables.View view)
+        {
+            if (view.QueryMode == ViewQueryMode.OnTheFly)
+            {
+                return false;
+            }
+
+            if (view.QueryMode == ViewQueryMode.Persistent)
+            {
+                return true;
+            }
+
+            // Auto mode with no name has nothing to look up.
+            return string.IsNullOrEmpty(view.Name) ? false : null;
         }
 
         /// <summary>
@@ -172,8 +205,14 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected string BuildViewSelectSql(Tables.View view)
         {
-            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation);
+            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation, ViewBoolLiteral);
         }
+
+        /// <summary>
+        /// A bool constant in a view's join condition. <c>TRUE</c> / <c>FALSE</c>; SQL Server overrides it with
+        /// <c>1</c> / <c>0</c>, as it has no boolean literal (TASK-717).
+        /// </summary>
+        protected virtual string ViewBoolLiteral(bool value) => value ? "TRUE" : "FALSE";
 
         /// <summary>
         /// A view's FROM / JOIN entry for a LOGICAL table name (TASK-272). A table in a schema, or stored under a

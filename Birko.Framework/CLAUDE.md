@@ -292,6 +292,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL views are created and replaced on every provider (2026-11-04)
+[[TASK-717]]. A migration's `CreateView` sent `CREATE OR REPLACE VIEW`, which SQLite refuses (measured); it now drops,
+then creates. SQLite's connector `CreateView` kept an old definition with no error; it now replaces it. On SQL Server a
+bool join constant (`TRUE`) and every indexed view's clustered index (it named `[Table].[Column]`) were refused.
+PostgreSQL's and SQL Server's `ViewExistsAsync` answered true for a same-named table and false for a cancelled token,
+and async view reads checked existence synchronously. PostgreSQL still refuses a replace that changes the columns
+(`RecreateView`).
 ### LLM providers read tool calls, errors and usage they dropped (2026-11-04)
 [[TASK-716]]. Every Ollama tool call failed: `/api/chat` sends `arguments` as an object, read as a string (measured).
 Gemini let a text part after a function call end the turn, and a blocked stream had no message; Claude's stream ignored
@@ -365,14 +372,6 @@ interval that did not parse went into `time_bucket('…')` as written (measured 
 resolved against the table's columns or refused with `ArgumentException`; the interval is parsed and rendered as seconds.
 Time buckets are TimescaleDB's: other SQL providers refuse them with `NotSupportedException` (they failed at the
 database). One of `TimeBucketInterval` / `TimeColumn` alone is refused, as the in-memory aggregation already did.
-### Login sessions: a row per signed-in device (2026-11-02)
-[[TASK-805]], for Symbio TASK-1035. `UserLogin` held one refresh token, so every sign-in, refresh or tenant switch
-signed the other devices out, and the token was stored in plain text. New `UserSession` (Birko.Models.Users) and
-`UserSessionService`: SHA-256 of the token on the row, rotation on every refresh as a claim (two tabs at once: one wins,
-nothing revoked), a rotated token presented again revokes the session, the tenant kept on the row while the user is a
-member and the app's hook agrees. Logout of one device or everywhere. An old `UserLogin.RefreshToken` is redeemed once
-onto a session; nobody is signed out at the upgrade. `UserSessionMapping` in Birko.Models.Users.SQL. Birko.Models.Users
-now imports Birko.Data.Stores (every consumer aggregator already does). Measured on SQLite.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
