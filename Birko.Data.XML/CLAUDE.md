@@ -67,6 +67,13 @@ public class Customer : Models.AbstractModel
 2. **Separate Files** (XmlSeparateStore): Each entity in its own XML file (`{Name}-{Guid}.xml`)
 3. **Batched Files** (XmlBatchStore): Entities grouped into batch files based on `BatchSize`
 
+### Writes, Destroy and loading (TASK-721)
+- Every file is written through `Birko.Helpers.AtomicFile`: a temp file `.{name}.{random}.tmp` beside it, then moved over
+  it, so a failed write leaves the previous file. A killed process can leave a temp file; no store reads it.
+- `Destroy` on a separate or batch store deletes the store's own files, then its directory only if nothing else is in it.
+- The XML batch save writes every batch, then deletes the batch files no longer
+  written (atomic per file, not across files). Loaders skip a null record. The async stores read the disk once (`_loaded`), and again after `Destroy`.
+
 ### Path Validation
 
 All stores use `Birko.Helpers.PathValidator` for:

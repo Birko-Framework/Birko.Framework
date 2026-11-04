@@ -97,7 +97,7 @@ namespace Birko.Data.JSON.Stores
                     {
                         foreach (var item in items)
                         {
-                            if (item.Guid.HasValue)
+                            if (item?.Guid.HasValue == true)   // TASK-721: a null record is skipped
                             {
                                 _items.Add(item.Guid.Value, item);
                             }
@@ -185,17 +185,7 @@ namespace Birko.Data.JSON.Stores
 
             AddFile(new Guid(bytes), path);
 
-            await Task.Run(() => File.Delete(path), ct);
-
-            using var fileStream = new FileStream(
-                path,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true);
-
-            await WriteToStreamAsync(fileStream, batchFiles, ct);
+            await Birko.Helpers.AtomicFile.WriteAsync(path, stream => WriteToStreamAsync(stream, batchFiles, ct), ct);   // TASK-721
 
             if (removedFiles.ContainsKey(path))
             {

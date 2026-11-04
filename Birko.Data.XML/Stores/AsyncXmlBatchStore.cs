@@ -80,11 +80,9 @@ namespace Birko.Data.XML.Stores
                 Directory.CreateDirectory(PathDirectory!);
             }
 
-            foreach (var file in Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml"))
-            {
-                File.Delete(file);
-            }
-
+            // TASK-721: each batch is written atomically and the batches no longer needed are deleted afterwards; the
+            // stale files used to be deleted first, so a failed write lost every batch.
+            var stale = Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml").ToHashSet(StringComparer.OrdinalIgnoreCase);
             var all = _items.Values.ToList();
             var size = _batchSize > 0 ? _batchSize : 1024;
             for (int offset = 0, batchIndex = 0; offset < all.Count; offset += size, batchIndex++)
@@ -92,9 +90,12 @@ namespace Birko.Data.XML.Stores
                 var chunk = all.Skip(offset).Take(size).ToList();
                 var fileName = $"{_settings.Name}-{batchIndex}.xml";
                 var filePath = PathValidator.CombineAndValidate(PathDirectory!, fileName);
-                using FileStream fileStream = new FileStream(
-                    filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
-                await WriteToStreamAsync(fileStream, chunk, ct);
+                await Birko.Helpers.AtomicFile.WriteAsync(filePath, stream => WriteToStreamAsync(stream, chunk, ct), ct);
+                stale.Remove(filePath);
+            }
+            foreach (var file in stale)
+            {
+                File.Delete(file);
             }
         }
 
@@ -231,7 +232,7 @@ namespace Birko.Data.XML.Stores
                     {
                         foreach (var item in items)
                         {
-                            if (item.Guid.HasValue)
+                            if (item?.Guid.HasValue == true)   // TASK-721: a null record is skipped
                             {
                                 _items.Add(item.Guid.Value, item);
                             }

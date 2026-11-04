@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-10-24 — A translation model can derive from a log model
+[[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
+model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and
+your own models declare `DateTime`. An older SQL table reports `UpdatedAt` nullability drift, and a NULL there fails the
+read (measured on MySQL); fill it with an `UPDATE` (README). Measured on all four SQL providers.
+
+## 2026-10-24 — RegisterFromAssembly skips open generic mappings
+[[TASK-766]]. `ModelMapRegistry.RegisterFromAssembly` threw on any assembly holding `EntityTranslationMapping<TTranslation>`:
+it instantiated every `IModelMapping<>` type, and an open generic cannot be. A consumer compiling
+Birko.Data.Localization.SQL into its own assembly could not boot (Symbio). Open generics are now skipped; register them
+closed with `LocalizationSqlMappings.Register<TTranslation>(registry, table)`.
+
 ## 2026-10-21 — SMTP sends keep their timeout and say whether to retry
 [[TASK-675]]. `SmtpEmailSender` ignored `EmailSettings.Timeout` on async sends (Symbio measured 2000 ms taking 4096 ms).
 The whole send now returns at the deadline as a `Transient` failure; the caller's cancellation still throws. New

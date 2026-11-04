@@ -145,6 +145,7 @@ namespace Birko.Data.JSON.Stores
         protected override async Task DestroyCoreAsync(CancellationToken ct = default)
         {
             _items?.Clear();
+            _loaded = false;
             var path = Path;
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
@@ -243,7 +244,7 @@ namespace Birko.Data.JSON.Stores
             {
                 foreach (var item in items)
                 {
-                    if (item.Guid.HasValue)
+                    if (item?.Guid.HasValue == true)   // TASK-721: a null record is skipped
                     {
                         _items.Add(item.Guid.Value, item);
                     }
@@ -260,18 +261,9 @@ namespace Birko.Data.JSON.Stores
                 return;
             }
 
-            // Delete and recreate file
-            await Task.Run(() => File.Delete(path), ct);
-
-            using var fileStream = new FileStream(
-                path,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true);
-
-            await WriteToStreamAsync(fileStream, _items.Values, ct);
+            // TASK-721: written to a temp file and moved over the old one; delete-then-write lost the data when the
+            // write failed.
+            await Birko.Helpers.AtomicFile.WriteAsync(path, stream => WriteToStreamAsync(stream, _items.Values, ct), ct);
         }
 
         #endregion

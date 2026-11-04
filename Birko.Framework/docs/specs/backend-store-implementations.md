@@ -497,16 +497,22 @@ ambient session, so they do not see a transaction's uncommitted writes.
 
 The system SHALL, on the JSON and XML stores, keep entities in a non-concurrent `Dictionary<Guid, T>` holding the
 caller's own instances (no copy on write or read), and persist as follows:
-- single-file JSON: delete the file, then write it (not atomic).
-- single-file XML: write `{path}.tmp`, then move it over the file (atomic replace).
+- every file a JSON or XML store writes is written through `Birko.Helpers.AtomicFile`: to `.{name}.{random}.tmp` beside
+  it, then moved over it, so a failed write leaves the previous file and no temp file (TASK-721; JSON used to delete the
+  file first, measured: an empty file after a failed write).
 - JSON separate-file: rewrite every entity's file on every write and delete matching files not in memory.
 - XML separate-file: write only the touched entity's file.
+- XML batch: write every batch, then delete the batch files no longer written (they were deleted first, so a failed
+  write lost them all: measured). Atomic per file, not across files.
 - JSON and XML batch stores: require `BatchSettings`, refusing plain `Settings` with `InvalidDataException`.
-- `JsonSeparateBulkStore` keeps its files directly in `Location` (not a `Name` subdirectory), and its `Destroy` deletes
-  the `Location` directory itself, which fails if other files remain there.
+- `JsonSeparateBulkStore` keeps its files directly in `Location` (not a `Name` subdirectory), as do the async separate
+  and batch stores; the sync `JsonSeparateStore` uses `Location/Name` (TASK-811).
+- `Destroy` on a separate or batch store deletes its own files, then its directory only if nothing else is in it
+  (TASK-721: it threw `IOException` when anything else was there, measured).
 
-The async JSON stores SHALL reload from disk whenever the in-memory set is empty; the async XML stores load once
-(`_loaded`).
+Every loader SHALL skip a null record (the async JSON, the sync and async single-file XML and the XML and async JSON batch
+loaders threw `NullReferenceException`: measured). The async JSON and XML stores SHALL load from disk once (`_loaded`),
+again after `Destroy`; the async JSON stores re-read whenever they held no rows (measured: 4 reads for 3 calls).
 
 #### Scenario: Mutating an entity after creating it in a JSON store
 
@@ -514,11 +520,17 @@ The async JSON stores SHALL reload from disk whenever the in-memory set is empty
 - **When** the caller changes a property without calling `Update`
 - **Then** `Read(guid)` returns the changed instance, though the file still holds the old value (`AbstractJsonStore.cs:95`)
 
-#### Scenario: Crash during a JSON save
+#### Scenario: A failed JSON save (TASK-721)
 
-- **Given** a `JsonStore<T>` writing its file
-- **When** the process stops after `File.Delete(Path)` and before the write completes
-- **Then** the data file is gone or partial (`JsonStore.cs:249`), where `XmlStore` would keep the previous file
+- **Given** a `JsonStore<T>`, `JsonSeparateStore<T>` or `JsonBatchStore<T>` (or an async one) holding a record
+- **When** the next save's write throws
+- **Then** every file is as it was before the save, and no temp file is left
+
+#### Scenario: Destroy beside a foreign file (TASK-721)
+
+- **Given** a separate or batch store whose directory also holds `keep.txt`
+- **When** `Destroy` runs
+- **Then** the store's files are deleted, `keep.txt` and the directory stay, and nothing throws
 
 ### Requirement: Backend repositories destroy their store twice
 

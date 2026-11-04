@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### JSON and XML stores write atomically and destroy only their own files (2026-11-04)
+[[TASK-721]]. A failed JSON save left an empty file (measured on the single, separate and batch stores), and an XML batch
+save deleted every batch before writing any. Each file is now written through the new `Birko.Helpers.AtomicFile` (temp
+file, then move). A separate or batch store's `Destroy` threw `IOException` when anything else was in its directory; it
+now leaves that, and the directory. Loaders skip a null record (six threw), and the async JSON stores read the disk
+once, not on every call while empty. Found: sync and async JSON separate stores use different directories ([[TASK-811]]).
 ### MQTT sends work on the default 3.1.1 connection (2026-11-03)
 [[TASK-711]]. Every `SendAsync` on an MQTT 3.1.1 connection, the default, threw `Feature UserProperties requires MQTT
 version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands among them): the headers always went as a
@@ -365,16 +371,6 @@ Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vector
 `XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
 shows the result as `b-json-diff`'s tree or side by side ([[TASK-772]], [[TASK-773]]); new `TagInput` ports `b-tag-input`, and the
 Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). `Expander` takes `b-accordion`'s look ([[TASK-775]]). Signed off in the Gallery.
-### A translation model can derive from a log model (2026-10-24)
-[[TASK-767]]. `IEntityTranslation.UpdatedAt` is now `DateTime`, as on `AbstractLogModel` (decided by the user), so a
-model on a log model implements it by inheritance (Symbio's `TenantEntity`). **Breaking:** `EntityTranslationModel` and
-your own models declare `DateTime`. An older SQL table reports `UpdatedAt` nullability drift, and a NULL there fails the
-read (measured on MySQL); fill it with an `UPDATE` (README). Measured on all four SQL providers.
-### RegisterFromAssembly skips open generic mappings (2026-10-24)
-[[TASK-766]]. `ModelMapRegistry.RegisterFromAssembly` threw on any assembly holding `EntityTranslationMapping<TTranslation>`:
-it instantiated every `IModelMapping<>` type, and an open generic cannot be. A consumer compiling
-Birko.Data.Localization.SQL into its own assembly could not boot (Symbio). Open generics are now skipped; register them
-closed with `LocalizationSqlMappings.Register<TTranslation>(registry, table)`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

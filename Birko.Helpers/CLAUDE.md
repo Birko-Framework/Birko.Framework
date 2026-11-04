@@ -12,6 +12,7 @@ General-purpose utility classes for the Birko Framework — string manipulation,
 - **HtmlHelper.cs** — Static methods: `StripTagsRegexCompiled`, `StripATagsRegexCompiled`, `StripImgTagsRegexCompiled`
 - **ObjectHelper.cs** — Static methods: `Compare` (null-safe IComparable), `CompareHash` (constant-time byte[] comparison)
 - **PathValidator.cs** — Path security: `ValidatePath`, `CombineAndValidate`, `ValidateUserPath`, `NormalizePath`, `SanitizePath`, `ValidateDirectory`, `CombineAndValidateUnchecked`
+- **Path/AtomicFile.cs** — `Write(path, Action<Stream>)` / `WriteAsync(path, Func<Stream, Task>, ct)`: temp file beside the target, then moved over it, so a failed write keeps the previous file (the one producer for the JSON and XML stores, TASK-721); `DeleteDirectoryIfEmpty(dir)`
 - **CsvParser.cs** — RFC 4180-compliant CSV parser with lazy `IEnumerable<IList<string>>`, configurable delimiter/enclosure/encoding, BOM-aware
 - **ExpressionBuilder.cs** — Generic `ExpressionBuilder<T>` for composing LINQ expression predicates with `And`, `Or`, `AndIf`, `OrIf`, `Not`, `Build`
 - **EnumerableHelper.cs** — Collection utilities:

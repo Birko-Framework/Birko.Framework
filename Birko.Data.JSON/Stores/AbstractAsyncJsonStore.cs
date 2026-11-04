@@ -29,6 +29,13 @@ namespace Birko.Data.JSON.Stores
         protected Dictionary<Guid, T> _items = new();
 
         /// <summary>
+        /// Whether the backing file(s) have been read into <see cref="_items"/>. TASK-721 (as CR-M182 for XML): loading was
+        /// gated on <c>_items.Count == 0</c>, so a store holding no rows re-read the disk on every call (measured: 4 reads
+        /// for 3 calls). Reset by Destroy, so the next access reads again.
+        /// </summary>
+        protected bool _loaded;
+
+        /// <summary>
         /// The JSON serializer instance.
         /// </summary>
         protected ISerializer _serializer;
@@ -131,9 +138,10 @@ namespace Birko.Data.JSON.Stores
         /// <param name="ct">Cancellation token.</param>
         protected virtual async Task EnsureDataLoadedAsync(CancellationToken ct)
         {
-            if (_items == null || _items.Count == 0)
+            if (!_loaded)
             {
                 await LoadDataAsync(ct);
+                _loaded = true;
             }
         }
 

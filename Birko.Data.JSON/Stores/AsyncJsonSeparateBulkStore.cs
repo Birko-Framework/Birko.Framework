@@ -55,6 +55,7 @@ namespace Birko.Data.JSON.Stores
         {
             _items?.Clear();
             _files.Clear();
+            _loaded = false;
 
             var pathDirectory = PathDirectory;
             if (string.IsNullOrEmpty(pathDirectory) || !Directory.Exists(pathDirectory) || string.IsNullOrEmpty(_settings?.Name))
@@ -71,7 +72,7 @@ namespace Birko.Data.JSON.Stores
                 }
             }
 
-            await Task.Run(() => Directory.Delete(pathDirectory), ct);
+            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(pathDirectory);   // TASK-721: never what else is there
         }
 
         #endregion
@@ -160,17 +161,8 @@ namespace Birko.Data.JSON.Stores
                     _files.Add(item.Key, path);
                 }
 
-                await Task.Run(() => File.Delete(_files[item.Key]), ct);
-
-                using var fileStream = new FileStream(
-                    _files[item.Key],
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None,
-                    bufferSize: 4096,
-                    useAsync: true);
-
-                await WriteToStreamAsync(fileStream, item.Value, ct);
+                var target = _files[item.Key];
+                await Birko.Helpers.AtomicFile.WriteAsync(target, stream => WriteToStreamAsync(stream, item.Value, ct), ct);   // TASK-721
 
                 if (removedFiles.ContainsKey(_files[item.Key]))
                 {

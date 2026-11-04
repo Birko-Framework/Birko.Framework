@@ -70,7 +70,7 @@ namespace Birko.Data.XML.Stores
                     await Task.Run(() => File.Delete(file), ct);
                 }
             }
-            await Task.Run(() => Directory.Delete(PathDirectory!), ct);
+            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(PathDirectory);   // TASK-721: never what else is there
         }
 
         #endregion
@@ -162,8 +162,8 @@ namespace Birko.Data.XML.Stores
             {
                 // File.Create truncates; File.OpenWrite would leave trailing bytes of a stale/longer
                 // file, corrupting the XML (CR-H111).
-                using FileStream fileStream = File.Create(filePath);
-                WriteToStream(fileStream, data);
+                // TASK-721: and atomically, so a failed write leaves no half-written file.
+                Birko.Helpers.AtomicFile.Write(filePath, stream => WriteToStream(stream, data));
             }, ct);
 
             return data.Guid.Value;
@@ -186,9 +186,7 @@ namespace Birko.Data.XML.Stores
                 var filePath = _files[data.Guid.Value];
                 await Task.Run(() =>
                 {
-                    File.Delete(filePath);
-                    using FileStream fileStream = File.OpenWrite(filePath);
-                    WriteToStream(fileStream, data);
+                    Birko.Helpers.AtomicFile.Write(filePath, stream => WriteToStream(stream, data));   // TASK-721: was delete-then-write
                 }, ct);
             }
         }

@@ -246,12 +246,12 @@ namespace Birko.Data.JSON.Stores
             {
                 return;
             }
-            File.Delete(Path);
-            using FileStream fileStream = File.OpenWrite(Path);
+            // TASK-721: written to a temp file and moved over the old one; delete-then-write lost the data when the
+            // write failed.
             // Write the values as a JSON array so it round-trips with LoadData's ReadFromStream<List<T>>.
             // Serializing the Dictionary<Guid,T> directly would emit a JSON object and break reload
             // (see CODE-REVIEW-AUDIT CR-C07); mirrors AsyncJsonStore.SaveDataAsync which writes _items.Values.
-            WriteToStream(fileStream, _items.Values);
+            Birko.Helpers.AtomicFile.Write(Path, stream => WriteToStream(stream, _items.Values));
         }
 
         #endregion

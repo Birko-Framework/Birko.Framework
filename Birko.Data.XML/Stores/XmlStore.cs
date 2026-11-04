@@ -262,7 +262,7 @@ namespace Birko.Data.XML.Stores
             {
                 foreach (var item in items)
                 {
-                    if (item.Guid.HasValue)
+                    if (item?.Guid.HasValue == true)   // TASK-721: a null record is skipped
                     {
                         _items.Add(item.Guid.Value, item);
                     }
@@ -283,23 +283,9 @@ namespace Birko.Data.XML.Stores
             // failure (non-serializable property, cancellation, process kill) between the delete and
             // a complete write left the data file gone or partial — total data loss. A temp-then-move
             // keeps the previous file intact until the new one is fully written.
-            var tempPath = Path + ".tmp";
-            try
-            {
-                using (FileStream fileStream = File.Create(tempPath))
-                {
-                    WriteToStream(fileStream, _items.Values.ToList());
-                }
-                File.Move(tempPath, Path, overwrite: true);
-            }
-            catch
-            {
-                if (File.Exists(tempPath))
-                {
-                    try { File.Delete(tempPath); } catch { /* best-effort temp cleanup */ }
-                }
-                throw;
-            }
+            // TASK-721: the temp-then-move is Birko.Helpers.AtomicFile's, shared with every JSON and XML store.
+            var items = _items.Values.ToList();
+            Birko.Helpers.AtomicFile.Write(Path, stream => WriteToStream(stream, items));
         }
 
         #endregion

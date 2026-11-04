@@ -109,6 +109,12 @@ File locking ensures safe concurrent access.
 ### Auto-save
 Changes are written immediately to disk.
 
+### Writes, Destroy and loading (TASK-721)
+- Every file is written through `Birko.Helpers.AtomicFile`: a temp file `.{name}.{random}.tmp` beside it, then moved over
+  it, so a failed write leaves the previous file. A killed process can leave a temp file; no store reads it.
+- `Destroy` on a separate or batch store deletes the store's own files, then its directory only if nothing else is in it.
+- Loaders skip a null record. The async stores read the disk once (`_loaded`), and again after `Destroy`.
+
 ### Pretty Print
 JSON output can be formatted for readability.
 

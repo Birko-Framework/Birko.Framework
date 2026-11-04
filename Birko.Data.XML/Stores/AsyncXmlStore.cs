@@ -267,7 +267,7 @@ namespace Birko.Data.XML.Stores
             {
                 foreach (var item in items)
                 {
-                    if (item.Guid.HasValue)
+                    if (item?.Guid.HasValue == true)   // TASK-721: a null record is skipped
                     {
                         _items.Add(item.Guid.Value, item);
                     }
@@ -288,29 +288,9 @@ namespace Birko.Data.XML.Stores
             // mid-write can't destroy the existing data file (the old delete-then-recreate left a
             // total-data-loss window). File.Delete before FileMode.Create was also redundant —
             // FileMode.Create already truncates.
-            var tempPath = path + ".tmp";
-            try
-            {
-                using (var fileStream = new FileStream(
-                    tempPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None,
-                    bufferSize: 4096,
-                    useAsync: true))
-                {
-                    await WriteToStreamAsync(fileStream, _items.Values.ToList(), ct);
-                }
-                File.Move(tempPath, path, overwrite: true);
-            }
-            catch
-            {
-                if (File.Exists(tempPath))
-                {
-                    try { File.Delete(tempPath); } catch { /* best-effort temp cleanup */ }
-                }
-                throw;
-            }
+            // TASK-721: the temp-then-move is Birko.Helpers.AtomicFile's, shared with every JSON and XML store.
+            var items = _items.Values.ToList();
+            await Birko.Helpers.AtomicFile.WriteAsync(path, stream => WriteToStreamAsync(stream, items, ct), ct);
         }
 
         #endregion

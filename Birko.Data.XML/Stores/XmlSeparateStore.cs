@@ -66,7 +66,7 @@ namespace Birko.Data.XML.Stores
                     File.Delete(file);
                 }
             }
-            Directory.Delete(PathDirectory!);
+            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(PathDirectory);   // TASK-721: never what else is there
         }
 
         #endregion
@@ -149,8 +149,8 @@ namespace Birko.Data.XML.Stores
             // Use File.Create (truncating): File.OpenWrite opens at offset 0 WITHOUT truncating, so a
             // shorter payload over a stale/longer {Name}-{Guid}.xml (crash re-create / reused Guid)
             // left trailing bytes → malformed XML silently skipped on load (CR-H111).
-            using FileStream fileStream = File.Create(filePath);
-            WriteToStream(fileStream, data);
+            // TASK-721: and atomically, so a failed write leaves no half-written file the loader would skip.
+            Birko.Helpers.AtomicFile.Write(filePath, stream => WriteToStream(stream, data));
 
             return data.Guid.Value;
         }
@@ -170,9 +170,7 @@ namespace Birko.Data.XML.Stores
             if (_files.ContainsKey(data.Guid.Value))
             {
                 var filePath = _files[data.Guid.Value];
-                File.Delete(filePath);
-                using FileStream fileStream = File.OpenWrite(filePath);
-                WriteToStream(fileStream, data);
+                Birko.Helpers.AtomicFile.Write(filePath, stream => WriteToStream(stream, data));   // TASK-721: was delete-then-write
             }
         }
 

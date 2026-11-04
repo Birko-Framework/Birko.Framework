@@ -66,7 +66,7 @@ namespace Birko.Data.JSON.Stores
                     File.Delete(file);
                 }
             }
-            Directory.Delete(PathDirectory!);
+            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(PathDirectory);   // TASK-721: never what else is there
         }
 
         #endregion
@@ -143,11 +143,7 @@ namespace Birko.Data.JSON.Stores
                     _files.Add(item.Key, path);
                 }
 
-                File.Delete(_files[item.Key]);
-                using (FileStream fileStream = File.OpenWrite(_files[item.Key]))
-                {
-                    WriteToStream(fileStream, item.Value);
-                }
+                Birko.Helpers.AtomicFile.Write(_files[item.Key], stream => WriteToStream(stream, item.Value));   // TASK-721
 
                 if (removedFiles.ContainsKey(_files[item.Key]))
                 {

@@ -153,9 +153,7 @@ namespace Birko.Data.JSON.Stores
             // Validate the combined path even though fileName is constructed internally
             var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
             AddFile(new Guid(bytes), path);
-            File.Delete(path);
-            using FileStream fileStream = File.OpenWrite(path);
-            WriteToStream(fileStream, batchFiles);
+            Birko.Helpers.AtomicFile.Write(path, stream => WriteToStream(stream, batchFiles));   // TASK-721
 
             if (removedFiles.ContainsKey(path))
             {
