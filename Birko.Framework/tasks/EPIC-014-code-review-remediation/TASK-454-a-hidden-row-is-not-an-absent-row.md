@@ -32,6 +32,15 @@ hidden.** Every caller that treats `null` as "no such row" is therefore wrong in
 - The tenant case is caught: `TenantStoreWrapper.Update` re-reads **unscoped** and throws
   `TenantMismatchException` (SH-H047). Soft delete has no such guard.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** the resurrection. [[TASK-159]] (`ebb0c1e7`) makes `SoftDeleteStoreWrapper.Update` (sync and async) throw
+`EntityNotFoundException` for a soft-deleted row, and [[TASK-649]] refuses `Save` of one and adds `Restore`.
+**Remaining, and this is the task now:** the comment in `AbstractViewModelRepository.LoadModelInstanceForUpdate`
+(and its async twin) still says "no backend REPORTS a missing row", which [[TASK-555]] made untrue. Correct it, and
+check that a view-model update of a hidden row surfaces `EntityNotFoundException` rather than returning quietly.
+Coordinate with [[TASK-453]], which changes the same method to skip an unchanged save.
+
 ## Acceptance criteria
 
 - [ ] Reproduced as observed state — a soft-deleted row, updated through a ViewModel repository, read back

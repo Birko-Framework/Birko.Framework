@@ -57,6 +57,14 @@ The same question applies to any other `Microsoft.Extensions.*` declaration in t
 became part of the shared framework in .NET 8–10, so a declaration written against an earlier target may now
 be exactly this defect.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** the `Birko.Data.Repositories` question. [[TASK-462]] (`865f60be`) measured that package as needed and
+suppressed `NU1510` there with the reason (`Birko.Data.Repositories.projitems`).
+**Remaining, and this is the task now:** the census by `NU1510` across every project was never run, and test projects
+still declare packages .NET 10 provides (e.g. `tests/Birko.Communication.WebSocket.Tests`, and the CQRS, Data.Tagging
+and MessageQueue test projects).
+
 ## Acceptance criteria
 
 - [ ] A sweep reports every project emitting `NU1510`, by building with `-warnaserror` and matching the

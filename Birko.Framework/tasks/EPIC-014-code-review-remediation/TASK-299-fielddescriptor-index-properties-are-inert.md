@@ -65,6 +65,15 @@ length. That makes honouring these properties worth more than it first looks.
 
 Option 1 is worth more than the others because of the `IsIndexed` consequence above.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** the fluent model-map path. [[TASK-595]] (`8e4559c2`) and [[TASK-695]] (`aec23d9e`) added
+`FieldDescriptor.Indexes`, which `ModelMapRegistry.ApplyIndexes` builds indexes from; `IndexName`, `IndexOrder` and
+`IndexDescending` are now read-only views over it.
+**Remaining, and this is the task now:** the migrations path. `SqlSchemaBuilder.WithField(FieldDescriptor)` still
+ignores `Indexes`, so an index declared on a descriptor handed to a migration is still silently dropped. It must build
+it or refuse it (rule 55).
+
 ## Acceptance criteria
 
 - [ ] The three properties either produce an index, or are gone, or are refused when set — not accepted

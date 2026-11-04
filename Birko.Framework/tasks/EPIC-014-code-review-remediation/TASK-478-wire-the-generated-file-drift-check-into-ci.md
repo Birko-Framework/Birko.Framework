@@ -45,6 +45,13 @@ leave it as a manual pre-release check.
 ⚠ **Decide it with `--fail-on-finding`, not separately.** Two tools with the same shape landing on
 opposite sides of "does this run in CI" is the kind of split nobody can explain later.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** [[TASK-481]] wired `gen-cold-table-probes --check` into CI, in `.github/workflows/helper-scripts.yml`.
+**Remaining, and this is the task now:** that job runs only when `Birko.Framework/tools/**` changes, plus nightly, so a
+hand edit of a `.g.cs` file is caught only at night. Decide whether the check also runs in `build-and-test.yml`,
+whether `--fail-on-finding` is wired, and record the answer in `CLAUDE-maintenance.md`.
+
 ## Acceptance criteria
 
 - [ ] A decision is recorded (either way) — in `CLAUDE-maintenance.md` beside the audits

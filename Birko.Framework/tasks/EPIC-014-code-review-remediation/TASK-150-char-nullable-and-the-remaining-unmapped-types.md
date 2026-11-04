@@ -61,6 +61,13 @@ holds, `char` is *already* broken on read and mapping `char?` onto the same clas
 broken mapping. Verify it by hand (TASK-112's step 3 found the finding's own cost model wrong; do not
 trust this paragraph either) and fix `char` in the same pass if it does.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** a non-nullable `char` reads back correctly (`CharField.cs`, [[TASK-154]], `7b1e59c2`).
+**Remaining, and this is the task now:** `AbstractField.cs` still matches only `typeof(char)`, so a `char?` property
+still has no column mapping; `TimeSpan` and `DateTimeOffset` still have neither a mapping nor a recorded decision.
+The criteria below that concern plain `char` are met.
+
 ## Acceptance criteria
 
 - [ ] `char`'s existing read path is verified by hand and fixed if the `GetString` → `char` mismatch is

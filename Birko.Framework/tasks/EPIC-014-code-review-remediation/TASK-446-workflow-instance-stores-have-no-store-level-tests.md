@@ -46,6 +46,13 @@ work, it names no owner, and 5d's rule is that such a bullet gets an id rather t
 - `Birko.Workflow.JSON.Tests/JsonWorkflowInstanceStoreOwnershipTests.cs` — the one end-to-end store
   suite, on the offline-reachable backend, asserting observed row state.
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** Elasticsearch has a store-level suite (`ElasticSearchWorkflowInstanceStoreLiveTests`, [[TASK-615]],
+`94b27333`), and JSON has its ownership suite.
+**Remaining, and this is the task now:** store-level tests for the SQL, XML, MongoDB, RavenDB and Cosmos DB workflow
+instance stores, which still test only the model.
+
 ## Acceptance criteria
 
 - [ ] Each of the seven backends has a store-level suite covering the `IWorkflowInstanceStore` contract

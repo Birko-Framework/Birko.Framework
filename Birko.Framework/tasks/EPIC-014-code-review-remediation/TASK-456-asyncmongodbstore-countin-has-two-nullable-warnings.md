@@ -56,6 +56,13 @@ miss.
 `SetSettings`, so `Collection` is in practice non-null. This is rulebook hygiene, not a live defect —
 but it should be established by measurement rather than assumed (see criterion 1).
 
+## Rescoped 2026-11-04 — part of this was done by later work
+
+Found re-checking EPIC-014's open tasks against the code. **Done:** the two CS8602 warnings in `CountIn`. It now takes a collection and is null-guarded ([[TASK-462]], `865f60be`).
+**Remaining, and this is the task now:** a `--no-incremental` build of `Birko.Data.MongoDB.Tests` still shows five
+CS8629 warnings on `.Guid.Value` (`AsyncMongoDBStore.cs` 221, 293, 444; `MongoDBStore.cs` 185, 306). They break the
+same zero-warning rule this task enforces, so they are this task's scope now.
+
 ## Acceptance criteria
 
 - [ ] Establish whether `Collection` can actually be null at `CountIn` — i.e. whether any public entry
