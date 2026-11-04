@@ -46,21 +46,35 @@ are mandatory — each has a **live test already in the tree** that fails on the
    persisted even when the write throws, so the caller's retry sees "nothing changed" and loses the
    update. Pinned by `An_update_retried_after_a_failed_write_still_lands` (+ its async twin).
 
-## Decision — 2026-11-04, by the user: always write; delete the hash and remove `ReadMode`
+## Decision — 2026-11-04, by the user: skip an unchanged save, judged against the row just read; delete the hash and `ReadMode`
 
-**Approved: no skip.** Every save keeps reaching the store, so the audit stamp, the `UpdatedAt` bump, the domain
-event and the version check keep running. The hash apparatus is deleted: `_modelHash`, `StoreHash`, `CalculateHash`,
-`CheckHashChange` and the hash-removal on delete, in the sync and async repositories and the bulk read path. Today it
-serializes and hashes every model on every read, feeds nothing, and holds one entry per entity read for the
-repository's lifetime.
+**Approved: a save of a view model that changes nothing does not reach the store.** "Unchanged" is decided by
+comparing the incoming view model against **the row the update path reads from the store right before writing**
+(`LoadModelInstanceForUpdate`), not against a hash cached at the caller's earlier read. (First recorded the same day
+as "every save writes". The user corrected it: unchanged view models must not land in the store.)
 
-**`ReadMode` is removed too, not kept as an inert property.** Its only job was to switch the hashing off. That is a
-breaking change for **Affiliate** (`RepositoryProvider.InitReadMode`, `Startup.cs:61`, `AdminCategoryController`
-around its admin writes), which is being moved into Symbio gradually. Affiliate's calls are deleted when it next builds
-against the framework, and the change is recorded as breaking in the Recent Updates entry. Symbio does not use it.
+Why this shape avoids both traps above without extra machinery:
 
-This task is now the implementation: the "If not skipping" criteria below apply, and TASK-316's two
-`…_STILL_issues_its_write` tests stay as the pins that every save writes (renamed to drop "STILL").
+1. The baseline **is** the row as just read, so a caller restoring a value someone else changed differs from the
+   current row and is written. `An_update_that_restores_a_concurrently_changed_row_is_not_skipped` must stay green.
+2. Nothing is recorded as persisted ahead of the write, so a retry after a failed write still sees a difference and
+   lands. `An_update_retried_after_a_failed_write_still_lands` (+ async twin) must stay green.
+
+**Accepted consequence, in writing:** a skipped save produces no audit stamp, no `UpdatedAt` bump, no domain event
+and no optimistic version check, because nothing was written. A save that changed nothing changed nothing.
+
+**The hash apparatus is deleted:** `_modelHash`, `StoreHash`, `CalculateHash`, `CheckHashChange` and the
+hash-removal on delete, in the sync and async repositories and the bulk read path. Today it serializes and hashes
+every model on every read and holds one entry per entity read for the repository's lifetime.
+
+**`ReadMode` is removed, not kept inert.** Its only job was to switch the hashing off. Breaking for **Affiliate**
+(`RepositoryProvider.InitReadMode`, `Startup.cs:61`, `AdminCategoryController`), which is being moved into Symbio
+gradually: its calls are deleted when it next builds against the framework, and the change is recorded as breaking
+in the Recent Updates entry. Symbio does not use it.
+
+This task is now the implementation. The "If skipping" criteria below apply, with the comparison against the row
+just read in place of the hash. TASK-316's two `…_STILL_issues_its_write` pins are inverted (rule 56) to assert that
+an unchanged save writes nothing, and a changed save still writes.
 
 ## Acceptance criteria
 
