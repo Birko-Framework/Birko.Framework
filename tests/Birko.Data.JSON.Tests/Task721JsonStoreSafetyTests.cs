@@ -53,7 +53,8 @@ public class Task721JsonStoreSafetyTests : IDisposable
         {
             store.SetSettings(new Settings(_location, name));
         }
-        return (store, kind.EndsWith("bulk") ? store.PathDirectory! : store.Path!);
+        // TASK-811: every separate and batch store keeps its files in the location (the sync ones used Location/Name/).
+        return (store, store.PathDirectory!);
     }
 
     [Theory]

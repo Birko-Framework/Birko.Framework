@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-03 — MQTT sends work on the default 3.1.1 connection
+[[TASK-711]]. Every `SendAsync` on an MQTT 3.1.1 connection, the default, threw `Feature UserProperties requires MQTT
+version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands among them): the headers always went as a
+user property. On 3.1.1 none is sent now; a `CorrelationId`, `ReplyTo`, `GroupId`, `Custom` header or foreign
+`ContentType`, which only one could carry, is refused. Before `ConnectAsync` the settings' protocol decides a
+`TimeToLive`, and a null message is `ArgumentNullException`.
+
 ## 2026-11-03 — Outbox marks carry the claim; a stale reclaim is won once
 [[TASK-710]]. Two processors reclaiming one stale SQL outbox row both published it, and a slow processor whose
 entry was reclaimed put it back to `Pending` under the new holder or a `Published` row back to `Pending`

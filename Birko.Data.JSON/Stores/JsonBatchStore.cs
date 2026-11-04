@@ -66,12 +66,12 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void LoadData()
         {
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 _items ??= new();
                 return;
             }
-            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
+            var files = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToArray();
             if (files.Any())
             {
                 _items = new();
@@ -99,12 +99,12 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void SaveData()
         {
-            if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
 
-            var removedFiles = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
+            var removedFiles = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToDictionary(x => x);
 
             int batch = 1;
             List<T> batchFiles = new();
@@ -141,9 +141,9 @@ namespace Birko.Data.JSON.Stores
         /// <param name="removedFiles">Dictionary of files to remove after saving.</param>
         private void SaveBatch(int batch, List<T> batchFiles, Dictionary<string, string> removedFiles)
         {
-            if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
+            if (!string.IsNullOrEmpty(PathDirectory) && !Directory.Exists(PathDirectory))
             {
-                Directory.CreateDirectory(Path);
+                Directory.CreateDirectory(PathDirectory);
             }
 
             byte[] bytes = new byte[16];
@@ -151,7 +151,7 @@ namespace Birko.Data.JSON.Stores
             var guid = new Guid(bytes);
             var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", guid.ToString("D")) : $"{_settings.Name}-{guid.ToString("D")}";
             // Validate the combined path even though fileName is constructed internally
-            var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
+            var path = PathValidator.CombineAndValidate(PathDirectory ?? throw new InvalidOperationException("PathDirectory cannot be null"), fileName);
             AddFile(new Guid(bytes), path);
             Birko.Helpers.AtomicFile.Write(path, stream => WriteToStream(stream, batchFiles));   // TASK-721
 

@@ -41,9 +41,9 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void InitCore()
         {
-            if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
+            if (!string.IsNullOrEmpty(PathDirectory) && !Directory.Exists(PathDirectory))
             {
-                Directory.CreateDirectory(Path);
+                Directory.CreateDirectory(PathDirectory);
             }
             _files = new Dictionary<Guid, string>();
         }
@@ -53,11 +53,11 @@ namespace Birko.Data.JSON.Stores
         {
             _items?.Clear();
             _files.Clear();
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
-            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
+            var files = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToArray();
             if (files.Any())
             {
                 foreach (var file in files)
@@ -65,7 +65,7 @@ namespace Birko.Data.JSON.Stores
                     File.Delete(file);
                 }
             }
-            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(Path);   // TASK-721: never what else is there
+            Birko.Helpers.AtomicFile.DeleteDirectoryIfEmpty(PathDirectory);   // TASK-721: never what else is there
         }
 
         #endregion
@@ -90,13 +90,13 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void LoadData()
         {
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 _items ??= new();
                 return;
             }
 
-            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
+            var files = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToArray();
             if (!files.Any())
             {
                 return;
@@ -117,17 +117,17 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override void SaveData()
         {
-            if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
 
-            if (!Directory.Exists(Path))
+            if (!Directory.Exists(PathDirectory))
             {
-                Directory.CreateDirectory(Path);
+                Directory.CreateDirectory(PathDirectory);
             }
 
-            var removedFiles = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
+            var removedFiles = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToDictionary(x => x);
 
             foreach (var item in _items)
             {
@@ -139,7 +139,7 @@ namespace Birko.Data.JSON.Stores
                 {
                     var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key.ToString("D")}";
                     // Validate the combined path even though fileName is constructed internally
-                    var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
+                    var path = PathValidator.CombineAndValidate(PathDirectory ?? throw new InvalidOperationException("PathDirectory cannot be null"), fileName);
                     _files.Add(item.Key, path);
                 }
 

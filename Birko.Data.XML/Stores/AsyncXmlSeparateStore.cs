@@ -62,7 +62,7 @@ namespace Birko.Data.XML.Stores
             {
                 return;
             }
-            var files = Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml").ToArray();
+            var files = Birko.Helpers.RecordFiles.List(PathDirectory!, _settings.Name + "-*.xml", Birko.Helpers.RecordFiles.IsGuid).ToArray();
             if (files.Any())
             {
                 foreach (var file in files)
@@ -101,7 +101,7 @@ namespace Birko.Data.XML.Stores
                 return;
             }
 
-            var files = await Task.Run(() => Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml").ToArray(), ct);
+            var files = await Task.Run(() => Birko.Helpers.RecordFiles.List(PathDirectory!, _settings.Name + "-*.xml", Birko.Helpers.RecordFiles.IsGuid).ToArray(), ct);
             if (!files.Any())
             {
                 _items = new();

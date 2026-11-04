@@ -22,6 +22,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)DiffResult.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Path\PathHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Path\AtomicFile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Path\RecordFiles.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Process\ProcessRunner.cs" />
   </ItemGroup>
 </Project>

@@ -520,8 +520,13 @@ caller's own instances (no copy on write or read), and persist as follows:
 - XML batch: write every batch, then delete the batch files no longer written (they were deleted first, so a failed
   write lost them all: measured). Atomic per file, not across files.
 - JSON and XML batch stores: require `BatchSettings`, refusing plain `Settings` with `InvalidDataException`.
-- `JsonSeparateBulkStore` keeps its files directly in `Location` (not a `Name` subdirectory), as do the async separate
-  and batch stores; the sync `JsonSeparateStore` uses `Location/Name` (TASK-811).
+- every JSON and XML separate and batch store, sync and async, keeps its files directly in `Location` (TASK-811: the
+  sync `JsonSeparateStore` and `JsonBatchStore` used `Location/Name/` — the single-file store's data-file path — so a
+  sync and an async store on one settings did not see each other's records, measured; decided 2026-11-04, one flat
+  layout). A file is a store's only when it is its template (`{Name}-*`, `{Name}-*.xml`, or a `Name` holding `*`) with
+  exactly one key in place of the `*`: a Guid, or an XML batch number (`Birko.Helpers.RecordFiles`). The bare glob also
+  matched `items-archive-{guid}`, so a store named `items` read, rewrote and destroyed another's records (measured on the
+  JSON and XML stores).
 - `Destroy` on a separate or batch store deletes its own files, then its directory only if nothing else is in it
   (TASK-721: it threw `IOException` when anything else was there, measured).
 

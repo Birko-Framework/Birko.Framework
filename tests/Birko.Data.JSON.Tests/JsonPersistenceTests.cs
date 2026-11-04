@@ -76,8 +76,9 @@ public class JsonPersistenceTests : IDisposable
         Action create = () => store.Create(new TestModel { Name = "beta", Value = 7 });
         create.Should().NotThrow();
 
-        // The per-entity file must actually be on disk (files are named "{Name}-{guid}").
-        var dir = store.GetPath()!;
+        // The per-entity file must actually be on disk (files are named "{Name}-{guid}"), in the location itself:
+        // TASK-811 — it was a folder at GetPath(), the single-file store's data file, unlike every other separate store.
+        var dir = store.GetDirectory()!;
         Directory.Exists(dir).Should().BeTrue();
         Directory.GetFiles(dir, "sep-*").Should().ContainSingle();
     }

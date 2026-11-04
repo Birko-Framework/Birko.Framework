@@ -65,7 +65,7 @@ namespace Birko.Data.JSON.Stores
                 _items ??= new();
                 return;
             }
-            var files = Directory.GetFiles(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
+            var files = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToArray();
             if (files.Any())
             {
                 _items = new();
@@ -98,7 +98,7 @@ namespace Birko.Data.JSON.Stores
                 return;
             }
 
-            var removedFiles = Directory.GetFiles(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
+            var removedFiles = Birko.Helpers.RecordFiles.List(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name), Birko.Helpers.RecordFiles.IsGuid).ToDictionary(x => x);
 
             int batch = 1;
             List<T> batchFiles = new();

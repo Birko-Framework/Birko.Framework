@@ -82,7 +82,7 @@ namespace Birko.Data.XML.Stores
 
             // TASK-721: each batch is written atomically and the batches no longer needed are deleted afterwards; the
             // stale files used to be deleted first, so a failed write lost every batch.
-            var stale = Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml").ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var stale = Birko.Helpers.RecordFiles.List(PathDirectory!, _settings.Name + "-*.xml", Birko.Helpers.RecordFiles.IsIndex).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var all = _items.Values.ToList();
             var size = _batchSize > 0 ? _batchSize : 1024;
             for (int offset = 0, batchIndex = 0; offset < all.Count; offset += size, batchIndex++)
@@ -207,7 +207,7 @@ namespace Birko.Data.XML.Stores
                 _items ??= new();
                 return;
             }
-            var files = await Task.Run(() => Directory.GetFiles(PathDirectory!, _settings.Name + "-*.xml").ToArray(), ct);
+            var files = await Task.Run(() => Birko.Helpers.RecordFiles.List(PathDirectory!, _settings.Name + "-*.xml", Birko.Helpers.RecordFiles.IsIndex).ToArray(), ct);
             if (!files.Any())
             {
                 _items = new();

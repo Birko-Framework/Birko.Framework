@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### JSON and XML file stores: one folder, and only their own files (2026-11-04)
+[[TASK-811]]. The sync `JsonSeparateStore` and `JsonBatchStore` kept their files in `Location/Name/`, every other separate
+or batch store in `Location/`, so sync and async stores on one settings missed each other's records (measured). All use
+`Location/` now (the user's decision). In a shared folder a store named `items` also read and destroyed the files of one
+named `items-archive`; a file is a store's only when the key in its name is exactly one Guid (or batch number), through
+the new `Birko.Helpers.RecordFiles`.
 ### Cosmos serializer hands a stream over open; MongoDBLogModel is a log entity (2026-11-04)
 [[TASK-723]]. `CosmosGuidIdSerializer.FromStream<Stream>` returned the stream disposed (measured). `MongoDBLogModel`
 implements `ILogEntity` now, so the timestamp decorator stamps it, and a copy or load between two Mongo log models keeps
@@ -366,12 +372,6 @@ save deleted every batch before writing any. Each file is now written through th
 file, then move). A separate or batch store's `Destroy` threw `IOException` when anything else was in its directory; it
 now leaves that, and the directory. Loaders skip a null record (six threw), and the async JSON stores read the disk
 once, not on every call while empty. Found: sync and async JSON separate stores use different directories ([[TASK-811]]).
-### MQTT sends work on the default 3.1.1 connection (2026-11-03)
-[[TASK-711]]. Every `SendAsync` on an MQTT 3.1.1 connection, the default, threw `Feature UserProperties requires MQTT
-version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands among them): the headers always went as a
-user property. On 3.1.1 none is sent now; a `CorrelationId`, `ReplyTo`, `GroupId`, `Custom` header or foreign
-`ContentType`, which only one could carry, is refused. Before `ConnectAsync` the settings' protocol decides a
-`TimeToLive`, and a null message is `ArgumentNullException`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
