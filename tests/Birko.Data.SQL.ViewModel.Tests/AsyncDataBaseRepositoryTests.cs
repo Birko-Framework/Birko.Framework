@@ -111,7 +111,7 @@ public class AsyncDataBaseRepositoryTests
         }
         finally
         {
-            try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+            TestTempDirectory.Delete(root);
         }
     }
 }

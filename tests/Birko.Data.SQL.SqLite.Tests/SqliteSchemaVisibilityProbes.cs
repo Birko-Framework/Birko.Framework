@@ -55,7 +55,7 @@ public class SqliteSchemaVisibilityProbes : IDisposable
     /// </remarks>
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     private string Db(string name) => Path.Combine(_root, name);

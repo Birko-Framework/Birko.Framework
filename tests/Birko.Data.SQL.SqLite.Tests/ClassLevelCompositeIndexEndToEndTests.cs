@@ -28,7 +28,7 @@ public class ClassLevelCompositeIndexEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     // TenantGuid is declared on the base class — this is exactly what per-property [IndexedField] cannot cover.

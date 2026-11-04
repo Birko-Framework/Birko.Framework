@@ -21,7 +21,7 @@ public sealed class GitServiceTests : IDisposable
     {
         foreach (var file in Directory.EnumerateFiles(_repo, "*", SearchOption.AllDirectories))
             File.SetAttributes(file, FileAttributes.Normal); // git's object files are read-only on Windows
-        try { Directory.Delete(_repo, recursive: true); } catch { /* not the assertion */ }
+        TestTempDirectory.Delete(_repo);
     }
 
     private async Task Commit(string file, string content, string message)

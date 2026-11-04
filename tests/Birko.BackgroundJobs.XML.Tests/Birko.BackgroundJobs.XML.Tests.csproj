@@ -32,4 +32,8 @@
   <Import Project="..\..\Birko.BackgroundJobs\Birko.BackgroundJobs.projitems" Label="Shared" />
   <Import Project="..\..\Birko.BackgroundJobs.XML\Birko.BackgroundJobs.XML.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

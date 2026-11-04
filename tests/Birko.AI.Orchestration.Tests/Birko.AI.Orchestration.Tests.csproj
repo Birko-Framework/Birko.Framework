@@ -22,4 +22,8 @@
   <Import Project="..\..\Birko.AI.Contracts\Birko.AI.Contracts.projitems" Label="Shared" />
   <Import Project="..\..\Birko.AI.Orchestration\Birko.AI.Orchestration.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

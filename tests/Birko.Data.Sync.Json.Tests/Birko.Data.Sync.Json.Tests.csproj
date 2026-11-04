@@ -33,4 +33,8 @@
   <Import Project="..\..\Birko.Data.Sync\Birko.Data.Sync.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Sync.Json\Birko.Data.Sync.Json.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

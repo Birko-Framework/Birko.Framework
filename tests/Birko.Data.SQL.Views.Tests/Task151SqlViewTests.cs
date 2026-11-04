@@ -27,7 +27,7 @@ public class Task151SqlViewTests : IDisposable
     public void Dispose()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     public class T151Person : AbstractModel

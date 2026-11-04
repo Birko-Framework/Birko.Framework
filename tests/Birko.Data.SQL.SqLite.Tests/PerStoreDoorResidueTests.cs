@@ -83,7 +83,7 @@ public class PerStoreDoorResidueTests : IDisposable
     /// </remarks>
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     public class DoorRow : AbstractModel

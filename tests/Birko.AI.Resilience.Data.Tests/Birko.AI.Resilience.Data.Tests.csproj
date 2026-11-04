@@ -44,4 +44,8 @@
   <Import Project="..\..\Birko.AI.Resilience\Birko.AI.Resilience.projitems" Label="Shared" />
   <Import Project="..\..\Birko.AI.Resilience.Data\Birko.AI.Resilience.Data.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

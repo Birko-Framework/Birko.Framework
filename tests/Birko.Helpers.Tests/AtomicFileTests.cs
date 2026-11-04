@@ -16,7 +16,7 @@ public class AtomicFileTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private string File1 => Path.Combine(_dir, "data.json");

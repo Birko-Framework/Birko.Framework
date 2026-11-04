@@ -26,7 +26,7 @@ public sealed class BulkPrimaryKeyFallbackTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Fact]

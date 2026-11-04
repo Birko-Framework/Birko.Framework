@@ -34,7 +34,7 @@ public class SchemaBuilderBoundaryLeakTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     /// <summary>

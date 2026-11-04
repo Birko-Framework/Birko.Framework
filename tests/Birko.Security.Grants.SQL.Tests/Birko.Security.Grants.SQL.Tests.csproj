@@ -45,4 +45,8 @@
   <Import Project="..\..\Birko.Security.Grants\Birko.Security.Grants.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Grants.SQL\Birko.Security.Grants.SQL.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

@@ -77,6 +77,6 @@ public sealed class Task718UnitOfWorkRollbackOnlyTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearPool(new SqliteConnection($"Data Source={Path.Combine(_root, "uow.db")}"));
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 }

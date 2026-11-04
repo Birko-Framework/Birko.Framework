@@ -22,4 +22,8 @@
   <Import Project="..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
   <Import Project="..\..\Birko.BackgroundJobs\Birko.BackgroundJobs.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

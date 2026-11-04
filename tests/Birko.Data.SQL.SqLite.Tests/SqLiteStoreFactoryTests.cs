@@ -27,17 +27,7 @@ public class SqLiteStoreFactoryTests : IDisposable
 
     public void Dispose()
     {
-        try
-        {
-            if (Directory.Exists(_root))
-            {
-                Directory.Delete(_root, recursive: true);
-            }
-        }
-        catch
-        {
-            // Best-effort temp cleanup.
-        }
+        TestTempDirectory.Delete(_root);
     }
 
     public class Widget : AbstractModel

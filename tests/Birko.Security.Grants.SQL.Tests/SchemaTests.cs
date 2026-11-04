@@ -76,7 +76,7 @@ public sealed class SqliteGrantsFixture : IDisposable
         // Only this database's pool: a process-wide ClearAllPools breaks parallel siblings (rule 61).
         using (var probe = new SqliteConnection(Settings.GetConnectionString()))
             SqliteConnection.ClearPool(probe);
-        try { Directory.Delete(Root, recursive: true); } catch { }
+        TestTempDirectory.Delete(Root);
     }
 }
 

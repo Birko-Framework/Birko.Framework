@@ -147,7 +147,7 @@ public sealed class SqlitePoolIsolationTests
         }
         finally
         {
-            try { Directory.Delete(root, recursive: true); } catch { }
+            TestTempDirectory.Delete(root);
         }
     }
 

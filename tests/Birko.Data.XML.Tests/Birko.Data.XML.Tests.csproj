@@ -41,4 +41,8 @@
     <Compile Include="..\Shared\LocalizationContract\TranslationRaceContract.cs" Link="Shared\TranslationRaceContract.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

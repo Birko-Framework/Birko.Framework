@@ -26,7 +26,7 @@ public class Task811JsonLayoutTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(Dir)) Directory.Delete(Dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(Dir);
     }
 
     public static TheoryData<string> Kinds => new() { "separate", "separate-bulk", "batch", "batch-bulk" };

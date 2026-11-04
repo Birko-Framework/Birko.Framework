@@ -35,7 +35,7 @@ public class Task706AggregateIdentifierTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearForDirectory(_root);
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Table("AggRows")]

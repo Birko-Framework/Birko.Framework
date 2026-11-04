@@ -35,7 +35,7 @@ public class Task158TransitionRaceTests : IDisposable
     public void Dispose()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private sealed class Interleaving : AsyncDataBaseBulkStore<SqLiteConnector, JobDescriptorModel>

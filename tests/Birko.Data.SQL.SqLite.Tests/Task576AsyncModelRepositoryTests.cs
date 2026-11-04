@@ -30,7 +30,7 @@ public class Task576AsyncModelRepositoryTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearForDirectory(_root, 2);
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Table("T576Rows")]

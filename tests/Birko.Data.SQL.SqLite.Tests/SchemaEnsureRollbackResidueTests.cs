@@ -58,7 +58,7 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearForDirectory(_root);   // TASK-276: never process-wide
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     public class Seed : AbstractModel

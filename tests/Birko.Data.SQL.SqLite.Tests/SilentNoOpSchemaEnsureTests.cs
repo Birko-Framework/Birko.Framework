@@ -46,7 +46,7 @@ public class SilentNoOpSchemaEnsureTests : IDisposable
     /// <remarks>No process-wide a process-wide pool clear — see [[TASK-276]].</remarks>
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     /// <summary>

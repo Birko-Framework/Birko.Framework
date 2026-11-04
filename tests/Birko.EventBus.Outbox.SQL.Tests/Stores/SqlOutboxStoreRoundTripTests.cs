@@ -41,7 +41,7 @@ public sealed class SqlOutboxStoreRoundTripTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { /* the temp dir is not the assertion */ }
+        TestTempDirectory.Delete(_dir);
     }
 
     /// <summary>

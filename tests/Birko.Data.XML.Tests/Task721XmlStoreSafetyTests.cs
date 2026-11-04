@@ -27,7 +27,7 @@ public class Task721XmlStoreSafetyTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(Dir)) Directory.Delete(Dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(Dir);
     }
 
     private const string Nil = "<TestModel xsi:nil=\"true\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" />";

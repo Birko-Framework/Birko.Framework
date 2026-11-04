@@ -25,7 +25,7 @@ internal sealed class TempDirs : IDisposable
     {
         foreach (var d in _dirs)
         {
-            try { Directory.Delete(d, recursive: true); } catch { }
+            TestTempDirectory.Delete(d);
         }
     }
 }

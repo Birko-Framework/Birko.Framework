@@ -71,7 +71,7 @@ public class Task712FluentFlagTests
         {
             using (var probe = new Microsoft.Data.Sqlite.SqliteConnection(settings.GetConnectionString()))
                 Microsoft.Data.Sqlite.SqliteConnection.ClearPool(probe);
-            try { System.IO.Directory.Delete(root, recursive: true); } catch { }
+            TestTempDirectory.Delete(root);
         }
     }
 

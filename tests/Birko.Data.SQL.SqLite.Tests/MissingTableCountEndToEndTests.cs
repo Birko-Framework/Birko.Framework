@@ -44,7 +44,7 @@ public class MissingTableCountEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     public class Row : AbstractModel
@@ -199,7 +199,7 @@ public class SchemaEscapeDiagnosticTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     private SqLiteConnector Connector()

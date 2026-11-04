@@ -48,7 +48,7 @@ public class CompositeKeyRoundTripTests : IDisposable
         {
             try { using var probe = new SqliteConnection(cs); SqliteConnection.ClearPool(probe); } catch { }
         }
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     /// <summary>

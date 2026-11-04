@@ -76,7 +76,7 @@ public class UnconfiguredStoreRefusalTests
                 : new Birko.Configuration.Settings(dir, "items"));
             ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
         }
-        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
+        finally { TestTempDirectory.Delete(dir); }
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class UnconfiguredStoreRefusalTests
         }
         finally
         {
-            try { System.IO.Directory.Delete(dir, recursive: true); } catch { /* ignored */ }
+            TestTempDirectory.Delete(dir);
         }
     }
 

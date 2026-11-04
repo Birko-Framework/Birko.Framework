@@ -44,7 +44,7 @@ public class SparseIndexBuilderTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private SqLiteSettings Settings() => new(_dir, Path.GetFileName(_dbPath));

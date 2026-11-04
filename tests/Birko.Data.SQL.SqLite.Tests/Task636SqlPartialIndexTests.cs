@@ -33,7 +33,7 @@ public class Task636SqlPartialIndexTests : IDisposable
                 using (own) Microsoft.Data.Sqlite.SqliteConnection.ClearPool(own);
         }
         catch { }
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     public class T636Currency : AbstractModel

@@ -80,7 +80,7 @@ public class PartialIndexEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        try { SqlitePool.ClearForDirectory(_root); Directory.Delete(_root, true); } catch { }   // TASK-276
+        TestTempDirectory.Delete(_root);   // TASK-276
     }
 
     [Fact]

@@ -42,4 +42,8 @@
   <Import Project="..\..\Birko.Health\Birko.Health.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Health.Data.SQL\Birko.Health.Data.SQL.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

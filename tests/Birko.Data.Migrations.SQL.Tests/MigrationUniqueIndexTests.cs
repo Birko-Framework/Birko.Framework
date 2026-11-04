@@ -56,7 +56,7 @@ public class MigrationUniqueIndexTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private AbstractConnector Connector()

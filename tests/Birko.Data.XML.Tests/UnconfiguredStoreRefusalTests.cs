@@ -87,7 +87,7 @@ public class UnconfiguredStoreRefusalTests
                 : new Birko.Configuration.Settings(dir, "items"));
             ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
         }
-        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
+        finally { TestTempDirectory.Delete(dir); }
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class UnconfiguredStoreRefusalTests
             store.SetSettings(new Birko.Configuration.Settings(dir, "items"));
             store.Count().Should().Be(0);
         }
-        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
+        finally { TestTempDirectory.Delete(dir); }
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class UnconfiguredStoreRefusalTests
             store.SetSettings(new Birko.Configuration.Settings(dir, "items"));
             (await store.CountAsync()).Should().Be(0);
         }
-        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
+        finally { TestTempDirectory.Delete(dir); }
     }
 
     /// <summary>

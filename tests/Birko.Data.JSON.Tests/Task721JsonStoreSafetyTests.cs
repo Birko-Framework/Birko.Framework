@@ -28,7 +28,7 @@ public class Task721JsonStoreSafetyTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(Dir)) Directory.Delete(Dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(Dir);
     }
 
     // ---- Destroy keeps what is not the store's ----

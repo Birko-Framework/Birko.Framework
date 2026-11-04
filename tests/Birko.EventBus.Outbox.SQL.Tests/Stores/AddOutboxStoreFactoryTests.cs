@@ -43,7 +43,7 @@ public sealed class AddOutboxStoreFactoryTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { /* not the assertion */ }
+        TestTempDirectory.Delete(_dir);
     }
 
     private IOutboxStore BuildSqlStore(IServiceProvider _)

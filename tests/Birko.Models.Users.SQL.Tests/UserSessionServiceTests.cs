@@ -78,7 +78,7 @@ public sealed class UserSessionServiceTests : IAsyncLifetime
     {
         using (var probe = new Microsoft.Data.Sqlite.SqliteConnection(_settings.GetConnectionString()))
             Microsoft.Data.Sqlite.SqliteConnection.ClearPool(probe);
-        try { System.IO.Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
         return Task.CompletedTask;
     }
 

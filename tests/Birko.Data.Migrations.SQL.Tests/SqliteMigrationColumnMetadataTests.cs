@@ -43,7 +43,7 @@ public class SqliteMigrationColumnMetadataTests : IDisposable
     // per-class teardowns calling it taking the SQL suite from clean to 1-2 failures per 6 runs.
     public void Dispose()
     {
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private AbstractConnector Connector()

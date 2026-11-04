@@ -44,4 +44,8 @@
   <Import Project="..\..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.EventSourcing.SQL\Birko.Data.EventSourcing.SQL.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

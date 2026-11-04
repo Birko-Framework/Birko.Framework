@@ -37,7 +37,7 @@ public class UnbuildableIndexEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     /// <summary>The table as it exists in a deployment that predates the index declaration.</summary>

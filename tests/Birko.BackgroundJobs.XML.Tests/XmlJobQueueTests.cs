@@ -33,7 +33,7 @@ public class XmlJobQueueTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private XmlJobQueue NewQueue() =>

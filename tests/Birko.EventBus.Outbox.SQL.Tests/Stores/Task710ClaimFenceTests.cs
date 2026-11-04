@@ -32,7 +32,7 @@ public sealed class Task710ClaimFenceTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_dir, recursive: true); } catch { /* the temp dir is not the assertion */ }
+        TestTempDirectory.Delete(_dir);
     }
 
     private sealed class GapStore : AsyncSQLiteStore<OutboxEntryModel>

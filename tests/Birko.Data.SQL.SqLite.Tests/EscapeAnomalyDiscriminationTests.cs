@@ -46,7 +46,7 @@ public class EscapeAnomalyDiscriminationTests : IDisposable
     /// </remarks>
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     // The name pair that matters: one is a proper substring of the other, which is the relation three of

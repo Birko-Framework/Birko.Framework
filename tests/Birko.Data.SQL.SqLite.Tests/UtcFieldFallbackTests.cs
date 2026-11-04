@@ -58,7 +58,7 @@ public class UtcFieldFallbackTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearForDirectory(_root);   // TASK-276: never process-wide
-        try { Directory.Delete(_root, true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Table(TableName)]

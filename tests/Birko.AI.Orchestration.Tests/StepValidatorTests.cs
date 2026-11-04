@@ -16,7 +16,7 @@ namespace Birko.AI.Orchestration.Tests
 
         public void Dispose()
         {
-            try { Directory.Delete(_dir, recursive: true); } catch { /* not the assertion */ }
+            TestTempDirectory.Delete(_dir);
         }
 
         private string Write(string name, string content)

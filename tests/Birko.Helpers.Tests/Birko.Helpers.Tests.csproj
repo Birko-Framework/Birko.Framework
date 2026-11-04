@@ -20,4 +20,8 @@
 
   <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

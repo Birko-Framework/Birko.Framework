@@ -25,7 +25,7 @@ public class BulkFilterTriageSqlTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearForDirectory(_root, 2);
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Table("Bf170")]

@@ -33,7 +33,7 @@ public class AsyncJsonSyncKnowledgeStoreTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+        TestTempDirectory.Delete(_dir);
     }
 
     private AsyncJsonSyncKnowledgeStore NewStore(string file = "sync.json")

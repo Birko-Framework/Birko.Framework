@@ -35,7 +35,7 @@ public class SqLiteDecimalConnectionTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     private string NextName() => $"decimal{Interlocked.Increment(ref _seq)}.db";

@@ -67,7 +67,7 @@ public class SchemaDriftOperatorViewTests : IDisposable
         {
             try { using var probe = new SqliteConnection(cs); SqliteConnection.ClearPool(probe); } catch { }
         }
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     /// <summary>The model as it stands today. The drifted database below predates two of its columns.</summary>

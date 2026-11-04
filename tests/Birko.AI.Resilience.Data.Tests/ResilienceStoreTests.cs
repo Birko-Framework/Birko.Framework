@@ -231,7 +231,7 @@ public sealed class SqLiteResilienceStoreTests : ResilienceStoreTests, IDisposab
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_dir, recursive: true); } catch { /* not the assertion */ }
+        TestTempDirectory.Delete(_dir);
     }
 
     // A new store object each call over the same file: a second process, as far as the store can tell.

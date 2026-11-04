@@ -35,7 +35,7 @@ public sealed class SqlEventStoreTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
-        try { Directory.Delete(_dir, recursive: true); } catch { /* not the assertion */ }
+        TestTempDirectory.Delete(_dir);
     }
 
     // A fresh store instance each call — a second writer, as in a second process.

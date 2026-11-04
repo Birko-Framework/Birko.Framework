@@ -50,4 +50,8 @@
   <Import Project="..\..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus.Outbox.SQL\Birko.EventBus.Outbox.SQL.projitems" Label="Shared" />
 
+  <ItemGroup>
+    <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+  </ItemGroup>
+
 </Project>

@@ -42,7 +42,7 @@ public sealed class Task724AsyncConnectorTests : IDisposable
     public void Dispose()
     {
         SqliteConnection.ClearPool(new SqliteConnection($"Data Source={Path.Combine(_root, "t724.db")}"));
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     [Fact]

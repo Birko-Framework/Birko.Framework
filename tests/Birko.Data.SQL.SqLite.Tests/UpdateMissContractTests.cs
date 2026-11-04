@@ -35,7 +35,7 @@ public sealed class SQLiteUpdateMissContractTests : StoreContract<UpdateMissRow>
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 }
 
@@ -59,6 +59,6 @@ public sealed class AsyncSQLiteUpdateMissContractTests : AsyncStoreContract<Upda
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 }

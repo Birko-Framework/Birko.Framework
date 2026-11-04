@@ -52,7 +52,7 @@ public class PropertyUpdateStorageConversionTests : IDisposable
     public void Dispose()
     {
         SqlitePool.ClearFor(_settings);
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        TestTempDirectory.Delete(_root);
     }
 
     private static readonly DateTime Instant = new(2026, 10, 14, 9, 30, 15, 123, DateTimeKind.Utc);
