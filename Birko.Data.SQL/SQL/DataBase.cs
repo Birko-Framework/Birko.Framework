@@ -813,7 +813,7 @@ namespace Birko.Data.SQL
                                 return new[] { condition };
                             }
                     }
-                    if (methodExpression.Arguments != null && methodExpression.Arguments.Any())
+                    if (methodExpression.Arguments.Any())
                     {
                         // For the string pattern methods (Contains/StartsWith/EndsWith on
                         // System.String) only the FIRST argument is the search pattern. The
