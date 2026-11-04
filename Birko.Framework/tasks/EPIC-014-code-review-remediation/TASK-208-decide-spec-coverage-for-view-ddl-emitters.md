@@ -3,7 +3,7 @@ id: TASK-208
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: human
 created: 2026-08-14
@@ -83,6 +83,16 @@ the answer here should not contradict it.
 - [ ] The unmapped count for the `Birko.Data.SQL.View` tree is reported before and after, so the change's
       effect is a number rather than a claim
 - [ ] Consistent with [[TASK-131]]'s direction, or that conflict is stated explicitly
+
+## Outcome
+
+**Closed 2026-11-04 as superseded by [[TASK-689]]** (`bd55010f`), found during a re-check of EPIC-014's open tasks
+against the code. TASK-689 put the whole of `Birko.Data.SQL.View` in the spec map, under `views-and-aggregation`,
+emitters included (`docs/specs/.map.yml`), as the user decided there. That answers this task's question: the
+excluded part is now covered.
+
+Not done here: FEATURE-014's `decisions.md` has no row recording the decision, and the human test plan below (revert a
+TASK-129 line, regen, and see the spec diff show it) was not run.
 
 ## Out of scope
 

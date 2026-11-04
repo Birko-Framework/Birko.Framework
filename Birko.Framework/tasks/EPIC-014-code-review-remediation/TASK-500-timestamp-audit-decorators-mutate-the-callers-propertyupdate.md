@@ -2,7 +2,7 @@
 id: TASK-500
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-09-26
@@ -40,6 +40,17 @@ Consequences:
 - [ ] A regression test per decorator asserts the caller's `Assignments` count is unchanged after `Update`, and that
       the stamp still lands.
 - [ ] `PropertyUpdate<T>` gains whatever copy it needs without exposing `Assignments` publicly.
+
+## Outcome
+
+**Closed 2026-11-04: fixed by [[TASK-159]]** (`ebb0c1e7`, finding SH-M322), found during a re-check of EPIC-014's open
+tasks. All four bulk wrappers now send the inner store `updates.Clone().Set(...)`: `TimestampBulkStoreWrapper`,
+`AsyncTimestampBulkStoreWrapper`, `AuditBulkStoreWrapper` and `AsyncAuditBulkStoreWrapper`. `PropertyUpdate<T>.Clone()`
+was added for it, and `Assignments` was not exposed.
+
+The regression tests cover **two of the four**: `DecoratorCompositionTriageTests` pins the sync Audit and the async
+Timestamp wrapper, so the sync Timestamp and async Audit wrappers have no test of their own. They share the one-line
+shape of the tested pair.
 
 ## Out of scope
 

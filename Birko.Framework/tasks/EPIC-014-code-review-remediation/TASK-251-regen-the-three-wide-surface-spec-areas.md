@@ -3,7 +3,7 @@ id: TASK-251
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: unassigned
 created: 2026-08-18
@@ -69,6 +69,17 @@ hurried pass cannot answer.
 - [ ] `/roadmap --check` reports **DV7: none** afterwards, and the run is recorded here with the count.
 - [ ] `shaped-by` re-derived for the three areas (the evidence pass already ran project-wide on
       2026-08-18; re-run it so the values reflect any newly-attributed tasks).
+
+## Outcome
+
+**Closed 2026-11-04: the three areas were regenerated after this task was filed**, found during a re-check of
+EPIC-014's open tasks. `bulk-filter-operations` was regenerated in the batched regen `09df1538` (2026-10-16, with the
+user confirming each diff), stamped `generated-at 4b5bf7e6`. `filter-expression-translation` and
+`unit-of-work-and-transactions` were regenerated in that batch and again in [[TASK-696]], stamped `generated-at 50828c68`
+(2026-10-21).
+
+Not re-measured here: whether `/roadmap --check` reports DV7: none today. Code has changed since 2026-10-21 (EPIC-023),
+so the areas may be stale again; that is a new regen, not this task.
 
 ## Out of scope
 

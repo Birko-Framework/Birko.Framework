@@ -3,7 +3,7 @@ id: TASK-451
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-17
@@ -80,6 +80,14 @@ doors.
 - [ ] [[TASK-316]]'s repository-level fix keeps working either way, and its
       `ViewModelUpdateMergeTests` stay green — the repository applies the transform itself now, so option
       1 must not cause it to be applied twice
+
+## Outcome
+
+**Closed 2026-11-04: fixed by [[TASK-557]]** (`022d4773`), found during a re-check of EPIC-014's open tasks. That task
+took option 1: `StoreDelegates.Apply` (`Birko.Data.Stores/StoreDelegates.cs`) returns `storeDelegate(data) ?? data`,
+and every store's call site persists what it returns. [[TASK-714]] added the guard refusing a returned copy with a
+different Guid. The only delegate uses left that do not go through `Apply` are pass-throughs to an inner store
+(`StoreSave`, the localization wrappers), which apply it there.
 
 ## Out of scope
 
