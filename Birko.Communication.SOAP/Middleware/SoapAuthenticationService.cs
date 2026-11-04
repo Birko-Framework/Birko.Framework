@@ -8,7 +8,7 @@ namespace Birko.Communication.SOAP.Middleware
     /// <summary>
     /// SOAP-specific authentication adapter that extracts tokens from SOAP envelopes
     /// </summary>
-    public class SoapAuthenticationService
+    public class SoapAuthenticationService : IDisposable   // TASK-709: Dispose() existed, nothing could call it
     {
         private readonly AuthenticationService _authService;
         private readonly SoapAuthenticationConfiguration _config;
@@ -93,26 +93,8 @@ namespace Birko.Communication.SOAP.Middleware
                 return null;
             }
 
-            try
-            {
-                var parameters = queryString.TrimStart('?').Split('&');
-                foreach (var param in parameters)
-                {
-                    // Split on the first '=' only so a token whose value contains '=' (base64 padding
-                    // like "abc==") isn't rejected by the old parts.Length == 2 guard (CR-L088).
-                    var idx = param.IndexOf('=');
-                    if (idx > 0 && param[..idx] == _config.QueryTokenName)
-                    {
-                        return Uri.UnescapeDataString(param[(idx + 1)..]);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error extracting token from query string");
-            }
-
-            return null;
+            // TASK-709: the parser SSE uses too (a value may hold '=', CR-L088; the name matches exactly).
+            return AuthenticationService.TokenFromQueryString(queryString, _config.QueryTokenName);
         }
 
         /// <summary>

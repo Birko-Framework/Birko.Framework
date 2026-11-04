@@ -2143,20 +2143,24 @@ SHALL compare `UserGuid` — for a string owner in its `"D"` form — through `O
 The system SHALL make `RestAuthenticationService`, `SoapAuthenticationService`, `SseAuthenticationService` and
 `WebSocketAuthenticationService` each wrap one `AuthenticationService` over their configuration (a subclass of
 `AuthenticationConfiguration`, a null one replaced by defaults), delegate `ValidateToken` and
-`IsAuthenticationEnabled` to it, resolve the client IP with `ResolveClientIp`, and dispose it. Each SHALL extract the
-token as follows:
+`IsAuthenticationEnabled` to it, resolve the client IP with `ResolveClientIp`, and dispose it; each is `IDisposable`
+(`SoapAuthenticationService` was not: TASK-709). An `Authorization` header yields a token only under its scheme, through
+`AuthenticationService.TokenFromAuthorizationHeader` (scheme matched in any case, value trimmed); a header of another
+scheme yields none and extraction goes on to the next source. A raw query string is read through
+`AuthenticationService.TokenFromQueryString`: the first pair whose name equals the configured name exactly, split on the
+first `=` and URL-unescaped. Each SHALL extract the token as follows:
 
-- REST: the `AuthorizationHeader` (default `Authorization`) value, with a leading `Bearer ` (case-insensitive)
-  stripped and any other value returned whole; else the `ApiKeyHeader` (default `X-API-Key`); else, when
+- REST: the `AuthorizationHeader` (default `Authorization`) bearer token (TASK-709: any other value, such as a `Basic`
+  credential, was returned whole as the token); else the `ApiKeyHeader` (default `X-API-Key`); else, when
   `AllowQueryToken` (default true), the `QueryTokenName` (default `token`) query parameter. `RestAuthenticationMiddleware`
   SHALL answer `RestResponse.Unauthorized` when validation fails.
 - SOAP: the text of `soap:Header/{SoapHeaderName}/{TokenElementName}` (defaults `Authentication` / `Token`, matched by
-  local name), null — logged, never thrown — for unparseable XML; from a query string, the first `name=value` pair
-  whose name equals `QueryTokenName` exactly, split on the first `=` and URL-unescaped. `CreateAuthenticationFault`
+  local name), null — logged, never thrown — for unparseable XML; from a query string, the `QueryTokenName` pair.
+  `CreateAuthenticationFault`
   builds a `Client` SOAP fault.
-- SSE: the `ApiKeyHeader` value; else, when an `Authorization` header is present, its value after
-  `{AuthorizationHeaderPrefix} ` (default `Bearer`, case-insensitive) or null; else, when `AllowQueryToken`, the
-  `QueryTokenName` pair matched case-insensitively, split on the first `=` and URL-unescaped.
+- SSE: the `ApiKeyHeader` value; else the `Authorization` token under `AuthorizationHeaderPrefix` (default `Bearer`);
+  else, when `AllowQueryToken`, the `QueryTokenName` pair (TASK-709: matched in any case before, and never reached when
+  an `Authorization` header of another scheme was present).
 - WebSocket: only the `token` query parameter.
 
 #### Scenario: Bearer header on REST
@@ -2171,11 +2175,17 @@ token as follows:
 - **When** `ExtractTokenFromQueryString` is called
 - **Then** `"abc=="` is returned
 
-#### Scenario: SSE Authorization header with another scheme
+#### Scenario: SSE Authorization header with another scheme (TASK-709)
 
 - **Given** an SSE request with `Authorization: Basic xyz` and `?token=good`
 - **When** the connection is authenticated
-- **Then** the extracted token is null — the query string is not consulted — and the connection is refused 401
+- **Then** the query token is read and the connection is accepted
+
+#### Scenario: A Basic credential on REST (TASK-709)
+
+- **Given** a REST request with `Authorization: Basic xyz` and `X-API-Key: key`
+- **When** the token is extracted
+- **Then** it is `"key"`; the Basic credential is never passed to the validator
 
 ### Requirement: An SSE connection is allowed without a token only when authentication is switched off
 

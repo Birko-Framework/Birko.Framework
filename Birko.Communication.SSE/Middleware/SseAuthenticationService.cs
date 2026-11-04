@@ -146,10 +146,12 @@ namespace Birko.Communication.SSE.Middleware
                 return apiKey;
             }
 
-            // Try Authorization header
-            if (headers != null && headers.TryGetValue("Authorization", out var authHeader))
+            // Try Authorization header. TASK-709: a header of another scheme is not ours, and the search goes on to the
+            // query string (it used to end here, so a proxy's Basic header hid a valid query token).
+            if (headers != null && headers.TryGetValue("Authorization", out var authHeader)
+                && ExtractTokenFromAuthorizationHeader(authHeader) is { } bearer)
             {
-                return ExtractTokenFromAuthorizationHeader(authHeader);
+                return bearer;
             }
 
             // Try query parameter
@@ -165,13 +167,7 @@ namespace Birko.Communication.SSE.Middleware
         /// Extracts token from Authorization header
         /// </summary>
         private string? ExtractTokenFromAuthorizationHeader(string authHeader)
-        {
-            if (authHeader.StartsWith($"{_config.AuthorizationHeaderPrefix} ", StringComparison.OrdinalIgnoreCase))
-            {
-                return authHeader.Substring(_config.AuthorizationHeaderPrefix.Length + 1);
-            }
-            return null;
-        }
+            => AuthenticationService.TokenFromAuthorizationHeader(authHeader, _config.AuthorizationHeaderPrefix);
 
         /// <summary>
         /// Extracts token from query string
@@ -182,17 +178,8 @@ namespace Birko.Communication.SSE.Middleware
             // into "?token" and miss the match; split each pair with a limit of 2 so a value that
             // itself contains '=' (e.g. base64 JWT '=' padding) is preserved rather than rejected
             // — both previously caused spurious 401s (CR-M069).
-            var pairs = queryString.TrimStart('?').Split('&');
-            foreach (var pair in pairs)
-            {
-                var parts = pair.Split('=', 2);
-                if (parts.Length >= 2 &&
-                    string.Equals(parts[0], _config.QueryTokenName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return Uri.UnescapeDataString(parts[1]);
-                }
-            }
-            return null;
+            // TASK-709: one parser for SSE and SOAP, and the name matches exactly (it matched in any case here only).
+            return AuthenticationService.TokenFromQueryString(queryString, _config.QueryTokenName);
         }
 
         /// <summary>

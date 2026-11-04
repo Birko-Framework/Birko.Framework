@@ -292,6 +292,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### REST, SSE and SOAP read tokens by one rule (2026-11-04)
+[[TASK-709]]. REST passed a `Basic …` `Authorization` value whole as the token, and SSE stopped at one, so a valid
+`?token=` was refused (measured). An `Authorization` header now yields a token only under its scheme (default `Bearer`),
+and otherwise the next source is tried. The query-token name matches exactly on all three (SSE matched any case). New
+`AuthenticationService.TokenFromAuthorizationHeader` / `TokenFromQueryString` hold both rules. `SoapAuthenticationService`
+is `IDisposable`.
 ### JSON and XML stores write atomically and destroy only their own files (2026-11-04)
 [[TASK-721]]. A failed JSON save left an empty file (measured on the single, separate and batch stores), and an XML batch
 save deleted every batch before writing any. Each file is now written through the new `Birko.Helpers.AtomicFile` (temp
@@ -363,14 +369,6 @@ turns it off for a host that frames the viewer itself. Asked for by the FinStat 
 [[TASK-768]]. The Birko Avalonia `TextBox` template passed its presenter only the text, so every password field showed
 its value (the FinStat tester's "Private Key"), no placeholder showed, selections were not drawn, and a long value ran
 out of the box. It now passes what Avalonia's own template does, with a watermark and a scroll viewer.
-### Birko.Xaml compares JSON and XML as the web does (2026-10-26)
-[[TASK-770]] (FEATURE-020). New `Birko.Xaml.Core.Diff`: `JsonDiff.Diff(a, b, options)` ports Birko.Web.Core's `diffJson`
-for the FinStat desktop tester: changes by path, a merged tree and counts, with ignore, normalize and array pairing.
-Both engines run one set of shared vectors (`Birko.Web.Core/src/diff/diff-vectors.json`,
-[[TASK-769]]); all 39 JSON cases pass on both. New `diff-parity.yml` runs the C# side in CI.
-`XmlTree.ToTree` / `ToLines` read XML as the web does ([[TASK-771]], 37 cases). Birko.Xaml.Avalonia's new `JsonDiffViewer`
-shows the result as `b-json-diff`'s tree or side by side ([[TASK-772]], [[TASK-773]]); new `TagInput` ports `b-tag-input`, and the
-Form's Tags field uses it, so a duplicate tag is refused ([[TASK-774]]). `Expander` takes `b-accordion`'s look ([[TASK-775]]). Signed off in the Gallery.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

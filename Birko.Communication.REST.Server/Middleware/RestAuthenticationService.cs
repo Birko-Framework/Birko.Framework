@@ -52,14 +52,11 @@ namespace Birko.Communication.REST.Middleware
             // Try Authorization header first (Bearer token)
             if (!string.IsNullOrEmpty(_config.AuthorizationHeader))
             {
-                var authHeader = request.GetHeader(_config.AuthorizationHeader);
-                if (!string.IsNullOrEmpty(authHeader))
+                // TASK-709: only a bearer token is a token; any other value (a Basic credential) was passed whole to the
+                // validator, and the API key and query token after it were never read.
+                if (AuthenticationService.TokenFromAuthorizationHeader(request.GetHeader(_config.AuthorizationHeader)) is { } bearer)
                 {
-                    if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return authHeader.Substring(7);
-                    }
-                    return authHeader;
+                    return bearer;
                 }
             }
 

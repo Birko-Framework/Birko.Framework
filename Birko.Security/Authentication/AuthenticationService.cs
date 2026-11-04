@@ -227,6 +227,47 @@ namespace Birko.Security.Authentication
         }
 
         /// <summary>
+        /// The token an <c>Authorization</c> header carries under <paramref name="scheme"/> (matched in any case), or null
+        /// when the header uses another scheme or none. TASK-709: the one rule for the REST, SSE and SOAP adapters. REST
+        /// passed a <c>Basic</c> credential whole as the token; SSE stopped looking when it met one, so a valid query token
+        /// was never read. A caller treats null as "not here" and goes on to its next source.
+        /// </summary>
+        public static string? TokenFromAuthorizationHeader(string? headerValue, string scheme = "Bearer")
+        {
+            if (string.IsNullOrEmpty(headerValue) || string.IsNullOrEmpty(scheme)
+                || headerValue.Length <= scheme.Length + 1
+                || !headerValue.StartsWith(scheme, StringComparison.OrdinalIgnoreCase)
+                || headerValue[scheme.Length] != ' ')
+            {
+                return null;
+            }
+            var token = headerValue[(scheme.Length + 1)..].Trim();
+            return token.Length == 0 ? null : token;
+        }
+
+        /// <summary>
+        /// The value of the query parameter <paramref name="name"/> in a raw query string (with or without its leading
+        /// <c>?</c>), unescaped; the first one wins and a value may contain <c>=</c>. The name matches exactly, as the REST
+        /// server's parsed query does (TASK-709: SSE matched it in any case, SOAP exactly).
+        /// </summary>
+        public static string? TokenFromQueryString(string? queryString, string? name)
+        {
+            if (string.IsNullOrEmpty(queryString) || string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+            foreach (var pair in queryString.TrimStart('?').Split('&'))
+            {
+                var idx = pair.IndexOf('=');
+                if (idx > 0 && string.Equals(pair[..idx], name, StringComparison.Ordinal))
+                {
+                    return Uri.UnescapeDataString(pair[(idx + 1)..]);
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// The client address of a request, believing forwarding headers only from this configuration's
         /// <see cref="AuthenticationConfiguration.TrustedProxies"/>.
         /// </summary>

@@ -22,9 +22,9 @@ namespace Birko.Security.Grants.AspNetCore.Authorization;
 /// <remarks>
 /// A stored type-wide grant whose role or resource type is no longer in the table is <b>skipped here</b> rather than
 /// thrown. This runs inside a middleware on every authenticated request, so throwing would turn every endpoint into
-/// a 500 for that user, anonymous ones included, the moment a deploy retires a role. The grant is not silently
-/// honoured either: it contributes nothing, and <c>IGrantService</c> still refuses loudly wherever that type or role
-/// is actually checked.
+/// a 500 for that user, anonymous ones included, the moment a deploy retires a role. It contributes nothing, as
+/// <c>IGrantService</c> resolves it since TASK-641: a stored grant with a retired role grants nothing (no longer an
+/// exception), and <c>StaleGrantDetector</c> / the stale-grant health check report it (TASK-654).
 /// </remarks>
 public sealed class GrantAwareUserPermissionResolver : IUserPermissionResolver
 {
