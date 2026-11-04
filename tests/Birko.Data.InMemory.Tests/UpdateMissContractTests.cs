@@ -8,6 +8,7 @@ namespace Birko.Data.InMemory.Tests;
 public class InMemoryUpdateMissContractTests : StoreContract<TestModel>
 {
     protected override IBulkStore<TestModel> NewStore() => new InMemoryStore<TestModel>();
+    protected override bool NeedsSettings => false;   // TASK-812: an in-memory store needs none
     protected override TestModel NewEntity(string name) => new() { Name = name };
     protected override string NameOf(TestModel entity) => entity.Name;
     protected override void Rename(TestModel entity, string name) => entity.Name = name;
@@ -17,6 +18,7 @@ public class InMemoryUpdateMissContractTests : StoreContract<TestModel>
 public class AsyncInMemoryUpdateMissContractTests : AsyncStoreContract<TestModel>
 {
     protected override IAsyncBulkStore<TestModel> NewStore() => new AsyncInMemoryStore<TestModel>();
+    protected override bool NeedsSettings => false;   // TASK-812: an in-memory store needs none
     protected override TestModel NewEntity(string name) => new() { Name = name };
     protected override string NameOf(TestModel entity) => entity.Name;
     protected override void Rename(TestModel entity, string name) => entity.Name = name;

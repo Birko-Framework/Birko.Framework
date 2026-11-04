@@ -98,6 +98,10 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override void InitCore()
         {
+            // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+            if (Client == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no MongoDB client: call SetSettings with the store's settings first.");
             // MongoDB is schema-less, so no initialization needed
             // Collections are created automatically on first write
         }

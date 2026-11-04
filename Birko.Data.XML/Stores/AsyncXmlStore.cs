@@ -43,7 +43,7 @@ namespace Birko.Data.XML.Stores
         /// </remarks>
         protected Settings RequireSettings()
             => _settings ?? throw new InvalidOperationException(
-                $"{GetType().Name} has no settings, so it cannot write. Call "
+                $"{GetType().Name} has no settings, so it can neither read nor write. Call "
                 + "SetSettings(new Settings(location, name)) before using the store.");
 
 
@@ -131,6 +131,8 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override async Task InitCoreAsync(CancellationToken ct = default)
         {
+            // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+            RequireSettings();
             var path = Path;
             if (!string.IsNullOrEmpty(path) && !File.Exists(path) && (_settings is Settings settings))
             {

@@ -3,7 +3,7 @@ id: TASK-812
 parent: STORY-064
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -37,11 +37,11 @@ it, and an `InvalidOperationException` ("call SetSettings first") when not. Elas
 
 ## Acceptance criteria
 
-- [ ] Measure the current answer of each provider's unconfigured store for create, update, delete, save and read
+- [x] Measure the current answer of each provider's unconfigured store for create, update, delete, save and read
       (a contract test over every provider, like `tests/Shared/StoreContract`).
-- [ ] Decide reads as well as writes (an unconfigured read answering empty is the same false answer) and record it.
-- [ ] Every provider refuses the same way, with the contract test failing on the old code.
-- [ ] Consumers checked (Symbio, FisData, WorkoutTracker): nothing relies on an unconfigured store being a no-op.
+- [x] Decide reads as well as writes (an unconfigured read answering empty is the same false answer) and record it.
+- [x] Every provider refuses the same way, with the contract test failing on the old code.
+- [x] Consumers checked (Symbio, FisData, WorkoutTracker): nothing relies on an unconfigured store being a no-op.
 
 ## Out of scope
 
@@ -51,6 +51,35 @@ it, and an `InvalidOperationException` ("call SetSettings first") when not. Elas
 
 N/A — covered by automated tests.
 
+## Decision (2026-11-04, the user)
+
+Reads refuse as writes do. Recorded because it reverses TASK-464, which kept JSON and XML reads answering empty so that
+something probing a store before configuring it would not fail at start-up; that answer was false all the same.
+
+## Measured (2026-11-04, before the fix)
+
+New cross-provider contract `tests/Shared/StoreContract/UnconfiguredContract.cs` (sync and async, on the 12 provider
+suites, live), plus `tests/Birko.Data.InfluxDB.Tests/Task812UnconfiguredTests.cs` (InfluxDB has no contract suite).
+
+| Provider | Before |
+|---|---|
+| MongoDB, RavenDB, Cosmos DB, InfluxDB | **answered:** `Create` → `Guid.Empty`, `Update` / `Delete` silent, reads `null` / empty / `0` |
+| JSON, XML | writes refused (TASK-464); **reads answered empty**, and the sync `Read(Guid)` skipped the gate |
+| SQL (every provider), Elasticsearch | **already refused** — the context's claim about SQL (`if (Connector == null) return Guid.Empty;` in the `*Core`) did not hold: `InitCore` refuses first (TASK-170), so the `*Core` guard is never reached |
+| In-memory | needs no settings |
+
+Consumers: Symbio's Cosmos and Mongo connection factories and the Sandbox's JSON and XML probes call `SetSettings` on
+the line after construction; FisData and WorkoutTracker construct none of these stores.
+
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-812` — leave empty until then._
+The SQL stores' pattern: a refusal at the top of `InitCore(Async)` in MongoDB, RavenDB, Cosmos DB, InfluxDB (both
+twins) and every JSON and XML store with an `InitCore` (`RequireSettings()`). The public overrides that answered without
+the gate open it: sync JSON / XML `Read(Guid)`, MongoDB `SaveAsync` and `ReadAllAsync`.
+
+## Built (2026-11-04)
+
+2 contract cases on 12 providers and 2 InfluxDB tests: 16 runs failing on the old code. Inverted (rule 56): 22 tests
+pinning an unconfigured store's empty answers (InfluxDB 2, Cosmos DB 7, JSON 3 + 3, XML 3 + 4) and MongoDB's 4 null-filter
+opt-out tests, which proved the guard let the opt-out through by its silence and now prove it by reaching the refusal.
+Spec `backend-store-implementations.md` updated (scoped; `generated-at` left).

@@ -66,7 +66,17 @@ public class UnconfiguredStoreRefusalTests
 
         // The defect this replaces: Create returned a Guid, Count said 1, and nothing reached disk.
         // Asserting the count is what distinguishes "refused" from "accepted and lost".
-        ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
+        // TASK-812: Count refuses an unconfigured store too, so the row is looked for once the store is configured.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "birko-812-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            store.SetSettings(name.Contains("Batch")
+                ? new Birko.Data.JSON.Stores.BatchSettings { Location = dir, Name = "items" }
+                : new Birko.Configuration.Settings(dir, "items"));
+            ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
+        }
+        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -77,15 +87,20 @@ public class UnconfiguredStoreRefusalTests
         var act = async () => await store.CreateAsync(new TestModel { Name = "orphan" });
 
         (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*SetSettings*");
-        (await store.CountAsync()).Should().Be(0);
+        // TASK-812: a read refuses too.
+        await FluentActions.Awaiting(() => store.CountAsync()).Should().ThrowAsync<InvalidOperationException>();
     }
 
+    /// <summary>
+    /// TASK-812 (rule 56, inverted; decided 2026-11-04 by the user): a read refuses as a write does. TASK-464 kept reads
+    /// answering empty on purpose; an empty answer from a store that cannot look is as false as a write reported done.
+    /// </summary>
     [Fact]
-    public void A_read_on_an_unconfigured_store_still_answers_empty()
+    public void A_read_on_an_unconfigured_store_is_refused_too()
     {
         var store = new JsonSeparateStore<TestModel>();
 
-        store.Invoking(s => s.Read(null, null, null, null).ToList()).Should().NotThrow();
+        store.Invoking(s => s.Read(null, null, null, null).ToList()).Should().Throw<InvalidOperationException>().WithMessage("*SetSettings*");
     }
 
     [Fact]

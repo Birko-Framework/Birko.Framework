@@ -57,27 +57,30 @@ public class CosmosDBStoreTests
     }
 
     [Fact]
-    public void Read_WithEmptyGuid_ShouldReturnNull()
+    public void Read_WithEmptyGuid_IsRefused()
     {
         var store = new CosmosDBStore<TestModel>();
-        var result = store.Read(Guid.Empty);
-        result.Should().BeNull();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Read(Guid.Empty)).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Read_WithNoContainer_ShouldReturnEmpty()
+    public void Read_WithNoContainer_IsRefused()
     {
         var store = new CosmosDBStore<TestModel>();
-        var result = store.Read();
-        result.Should().BeEmpty();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Read()).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Count_WithNoContainer_ShouldReturnZero()
+    public void Count_WithNoContainer_IsRefused()
     {
         var store = new CosmosDBStore<TestModel>();
-        var result = store.Count();
-        result.Should().Be(0);
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Count()).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]

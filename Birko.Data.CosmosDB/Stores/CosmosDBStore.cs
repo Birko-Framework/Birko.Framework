@@ -139,6 +139,10 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override void InitCore()
     {
+        // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+        if (_container == null && _cosmosClient == null)
+            throw new InvalidOperationException(
+                $"{GetType().Name} has no Cosmos DB client: call SetSettings with the store's settings first.");
         EnsureDatabaseAndContainerExist();
     }
 

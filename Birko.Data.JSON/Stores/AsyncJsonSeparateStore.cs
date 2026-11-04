@@ -41,6 +41,8 @@ namespace Birko.Data.JSON.Stores
         /// <inheritdoc />
         protected override Task InitCoreAsync(CancellationToken ct = default)
         {
+            // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+            RequireSettings();
             var pathDirectory = PathDirectory;
             if (!string.IsNullOrEmpty(pathDirectory) && !Directory.Exists(pathDirectory))
             {

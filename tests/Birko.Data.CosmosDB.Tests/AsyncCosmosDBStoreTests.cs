@@ -42,27 +42,30 @@ public class AsyncCosmosDBStoreTests
     }
 
     [Fact]
-    public async Task ReadAsync_WithEmptyGuid_ShouldReturnNull()
+    public async Task ReadAsync_WithEmptyGuid_IsRefused()
     {
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.ReadAsync(Guid.Empty);
-        result.Should().BeNull();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        await FluentActions.Awaiting(() => store.ReadAsync(Guid.Empty)).Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
-    public async Task CountAsync_WithNoContainer_ShouldReturnZero()
+    public async Task CountAsync_WithNoContainer_IsRefused()
     {
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.CountAsync();
-        result.Should().Be(0);
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        await FluentActions.Awaiting(() => store.CountAsync()).Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
-    public async Task SaveAsync_WithNullData_ShouldReturnEmptyGuid()
+    public async Task SaveAsync_WithNullData_IsRefused()
     {
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.SaveAsync(null!);
-        result.Should().Be(Guid.Empty);
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        await FluentActions.Awaiting(() => store.SaveAsync(null!)).Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
@@ -80,10 +83,11 @@ public class AsyncCosmosDBStoreTests
     }
 
     [Fact]
-    public async Task ReadAsync_BulkWithNoContainer_ShouldReturnEmpty()
+    public async Task ReadAsync_BulkWithNoContainer_IsRefused()
     {
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.ReadAsync(filter: null);
-        result.Should().BeEmpty();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        await FluentActions.Awaiting(() => store.ReadAsync(filter: null)).Should().ThrowAsync<InvalidOperationException>();
     }
 }

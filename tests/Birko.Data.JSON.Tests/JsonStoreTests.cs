@@ -22,26 +22,29 @@ public class JsonStoreTests
     }
 
     [Fact]
-    public void Read_WithNoInit_ShouldReturnEmpty()
+    public void Read_WithNoInit_IsRefused()
     {
         var store = new Birko.Data.JSON.Stores.JsonStore<TestModel>();
-        var result = store.Read();
-        result.Should().BeEmpty();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Read()).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Count_WithNoInit_ShouldReturnZero()
+    public void Count_WithNoInit_IsRefused()
     {
         var store = new Birko.Data.JSON.Stores.JsonStore<TestModel>();
-        var result = store.Count();
-        result.Should().Be(0);
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Count()).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Read_WithEmptyGuid_ShouldReturnNull()
+    public void Read_WithEmptyGuid_IsRefused()
     {
         var store = new Birko.Data.JSON.Stores.JsonStore<TestModel>();
-        var result = store.Read(Guid.Empty);
-        result.Should().BeNull();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Read(Guid.Empty)).Should().Throw<InvalidOperationException>();
     }
 }

@@ -77,7 +77,17 @@ public class UnconfiguredStoreRefusalTests
 
         // TASK-464 measured the shipped behaviour: Create returned a Guid, Count said 1, and nothing
         // reached disk. Asserting the count is what separates "refused" from "accepted and lost".
-        ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
+        // TASK-812: Count refuses an unconfigured store too, so the row is looked for once the store is configured.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "birko-812-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            store.SetSettings(name.Contains("Batch")
+                ? new Birko.Data.XML.Stores.BatchSettings { Location = dir, Name = "items" }
+                : new Birko.Configuration.Settings(dir, "items"));
+            ((long)store.Count()).Should().Be(0, "{0} must not hold a row it could not persist", name);
+        }
+        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -147,7 +157,15 @@ public class UnconfiguredStoreRefusalTests
         // old code added to the dictionary and then threw, so a caller catching the failure was left
         // with an in-memory row that no file backed. Moving the guard after the Add would still
         // produce the right exception and still fail this test.
-        store.Count().Should().Be(0);
+        // TASK-812: Count refuses an unconfigured store too, so the row is looked for once the store is configured.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "birko-812-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            store.SetSettings(new Birko.Configuration.Settings(dir, "items"));
+            store.Count().Should().Be(0);
+        }
+        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
     }
 
     [Fact]
@@ -164,24 +182,31 @@ public class UnconfiguredStoreRefusalTests
             // expected
         }
 
-        (await store.CountAsync()).Should().Be(0);
+        // TASK-812: Count refuses an unconfigured store too, so the row is looked for once the store is configured.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "birko-812-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            store.SetSettings(new Birko.Configuration.Settings(dir, "items"));
+            (await store.CountAsync()).Should().Be(0);
+        }
+        finally { try { System.IO.Directory.Delete(dir, true); } catch { } }
     }
 
     /// <summary>
-    /// Reads answer empty rather than refusing, and that asymmetry is deliberate.
+    /// TASK-812 (rule 56, inverted; decided 2026-11-04 by the user): a read refuses as a write does.
     /// </summary>
     /// <remarks>
-    /// § Conventions: a write that cannot be applied must never report success, so it throws. A read
-    /// has no such obligation and every other path in these stores already returns empty for an
-    /// unconfigured store — unifying the two from symmetry would turn a working degrade into a
-    /// start-up failure for anything that probes a store before configuring it.
+    /// TASK-464 kept reads answering empty on purpose, so that something probing a store before configuring it would not
+    /// fail at start-up. The answer it gave was still false — "no rows" from a store that could not look — and no
+    /// consumer probes a store that way (checked: Symbio, FisData, WorkoutTracker).
     /// </remarks>
     [Fact]
-    public void A_read_on_an_unconfigured_store_still_answers_empty()
+    public void A_read_on_an_unconfigured_store_is_refused_too()
     {
         var store = new XmlSeparateStore<TestModel>();
 
         store.Invoking(s => s.Read(null, null, null, null).ToList())
-            .Should().NotThrow();
+            .Should().Throw<InvalidOperationException>().WithMessage("*SetSettings*");
     }
 }

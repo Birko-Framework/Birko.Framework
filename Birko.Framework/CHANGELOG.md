@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — JSON and XML stores write atomically and destroy only their own files
+[[TASK-721]]. A failed JSON save left an empty file (measured on the single, separate and batch stores), and an XML batch
+save deleted every batch before writing any. Each file is now written through the new `Birko.Helpers.AtomicFile` (temp
+file, then move). A separate or batch store's `Destroy` threw `IOException` when anything else was in its directory; it
+now leaves that, and the directory. Loaders skip a null record (six threw), and the async JSON stores read the disk
+once, not on every call while empty. Found: sync and async JSON separate stores use different directories ([[TASK-811]]).
+
 ## 2026-11-03 — MQTT sends work on the default 3.1.1 connection
 [[TASK-711]]. Every `SendAsync` on an MQTT 3.1.1 connection, the default, threw `Feature UserProperties requires MQTT
 version 5.0.0` (measured against MQTTnet's broker; Symbio's device commands among them): the headers always went as a

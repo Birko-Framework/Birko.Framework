@@ -42,6 +42,8 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void InitCore()
         {
+            // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+            RequireSettings();
             if (!string.IsNullOrEmpty(PathDirectory) && !Directory.Exists(PathDirectory))
             {
                 Directory.CreateDirectory(PathDirectory!);

@@ -62,6 +62,9 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         public override T? Read(Guid guid)
         {
+            // TASK-812: this overrides the public wrapper, so it opens the gate itself — which refuses an unconfigured
+            // store and loads the data before the first read.
+            EnsureInitialized();
             if (_items != null && guid != Guid.Empty && _items.ContainsKey(guid))
             {
                 return _items[guid];

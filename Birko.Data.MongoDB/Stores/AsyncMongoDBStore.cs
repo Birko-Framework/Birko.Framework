@@ -160,6 +160,7 @@ namespace Birko.Data.MongoDB.Stores
         /// </summary>
         public async Task<IEnumerable<T>> ReadAllAsync(CancellationToken ct = default)
         {
+            await EnsureInitializedAsync(ct);   // TASK-812: the gate, which refuses an unconfigured store
             if (Collection == null)
             {
                 return await Task.FromResult(Enumerable.Empty<T>());
@@ -269,6 +270,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override async Task<Guid> SaveAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
+            await EnsureInitializedAsync(ct);   // TASK-812: the gate first, so an unconfigured store refuses
             if (Collection == null || data == null)
             {
                 return await Task.FromResult(Guid.Empty);
@@ -309,6 +311,10 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override async Task InitCoreAsync(CancellationToken ct = default)
         {
+            // TASK-812: every public operation passes through Init first, so a store that was never configured refuses here (reads too: an empty answer from a store that cannot look is a false one), as the SQL stores do (TASK-170).
+            if (Client == null)
+                throw new InvalidOperationException(
+                    $"{GetType().Name} has no MongoDB client: call SetSettings with the store's settings first.");
             // MongoDB is schema-less, so no initialization needed
             // Collections are created automatically on first write
             await Task.CompletedTask;

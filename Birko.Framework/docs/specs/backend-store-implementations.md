@@ -172,23 +172,25 @@ The system SHALL give the backends these optional surfaces, and no others:
 - **When** any CRUD or filtered write runs
 - **Then** it runs on that ambient session
 
-### Requirement: An unconfigured store fails loudly on some backends and silently on others
+### Requirement: An unconfigured store refuses every operation, reads included
 
-The system SHALL, when a store has no client because settings were never applied or were of the wrong type:
-- Elasticsearch: refuse a non-Elasticsearch `ISettings` in `SetSettings` with `ArgumentException`, and throw
-  `InvalidOperationException` from `RequireConnector` on reads and at initialization.
-- JSON and XML: throw `InvalidOperationException` from `EnsureWritable` on every write; `SetSettings(ISettings)` with a
-  foreign type throws `ArgumentException`.
-- MongoDB, RavenDB, Cosmos DB and InfluxDB: ignore a foreign settings type, and then answer reads with `null` / empty /
-  `0`, return `Guid.Empty` from `Create`, and return silently from `Update` and `Delete` — no `EntityNotFoundException`.
-  The SQL stores answer the same way when they have no connector. (Measured as TASK-719's finding and moved to
-  [[TASK-812]], which decides one refusal for every provider.)
+The system SHALL, on every backend but the in-memory one, refuse every public operation of a store that has no client
+because settings were never applied — create, update, delete, save, read and count — with `InvalidOperationException`
+naming `SetSettings`. The refusal is in `InitCore(Async)`, which every public operation reaches first (public overrides
+that answered without it — the sync JSON and XML `Read(Guid)`, MongoDB's `SaveAsync` and `ReadAllAsync` — now open the
+gate). Decided 2026-11-04 (the user) and measured by `tests/Shared/StoreContract/UnconfiguredContract.cs` on every
+provider: MongoDB, RavenDB, Cosmos DB and InfluxDB answered reads with `null` / empty / `0`, returned `Guid.Empty` from
+`Create` and returned silently from `Update` and `Delete`; JSON and XML refused writes but answered reads empty, which
+TASK-464 had kept on purpose (TASK-812 reverses it: an empty answer from a store that cannot look is as false as a write
+reported done). The SQL stores (TASK-170) and Elasticsearch already refused. `SetSettings(ISettings)` with a foreign type
+throws `ArgumentException` on Elasticsearch, JSON and XML; MongoDB, RavenDB, Cosmos DB and InfluxDB ignore it, and the
+store then refuses as unconfigured.
 
-#### Scenario: Update on an unconfigured MongoDB store
+#### Scenario: Update on an unconfigured MongoDB store (TASK-812)
 
-- **Given** an `AsyncMongoDBStore<T>` whose `SetSettings` was never called (`Collection == null`)
-- **When** `UpdateAsync(entity)` is called for an entity that is not stored
-- **Then** it returns without writing and without throwing (`AsyncMongoDBStore.cs:226`)
+- **Given** an `AsyncMongoDBStore<T>` whose `SetSettings` was never called
+- **When** `UpdateAsync(entity)` or `ReadAsync(guid)` is called
+- **Then** `InvalidOperationException` names `SetSettings` (it returned without writing, or answered `null`)
 
 #### Scenario: Wrong settings type on Elasticsearch
 
@@ -206,7 +208,8 @@ The system SHALL implement `Read(Guid)` / `ReadAsync(Guid)` per backend as follo
 - InfluxDB: a public override that opens the initialization and cancellation gate and then runs a Flux query; a
   failure other than a cancellation is wrapped in `InvalidOperationException` (TASK-720: it skipped the gate and wrapped
   a cancellation too, measured).
-- JSON and XML (sync): a public override answering from the in-memory dictionary without opening the gate.
+- JSON and XML (sync): a public override answering from the in-memory dictionary, after the gate (TASK-812: it skipped
+  it, so an unconfigured store answered `null` and a configured one was read before its data loaded).
 
 #### Scenario: InfluxDB read as the first operation (TASK-720)
 

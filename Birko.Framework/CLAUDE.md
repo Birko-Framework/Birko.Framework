@@ -292,6 +292,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A store with no settings refuses reads and writes (2026-11-04)
+[[TASK-812]]. An unconfigured MongoDB, RavenDB, Cosmos DB or InfluxDB store returned `Guid.Empty` from `Create`, nothing
+from `Update` / `Delete`, and empty reads; JSON and XML refused writes but answered reads empty (measured by a new
+contract on every provider). Each now refuses every operation with `InvalidOperationException` naming `SetSettings`, at
+`InitCore`, as SQL and Elasticsearch already did. **Reads refuse too** (the user's decision; it reverses TASK-464).
 ### JSON and XML file stores: one folder, and only their own files (2026-11-04)
 [[TASK-811]]. The sync `JsonSeparateStore` and `JsonBatchStore` kept their files in `Location/Name/`, every other separate
 or batch store in `Location/`, so sync and async stores on one settings missed each other's records (measured). All use
@@ -366,12 +371,6 @@ instead of skipped; a second `Property()` call reuses the member's descriptor, s
 and otherwise the next source is tried. The query-token name matches exactly on all three (SSE matched any case). New
 `AuthenticationService.TokenFromAuthorizationHeader` / `TokenFromQueryString` hold both rules. `SoapAuthenticationService`
 is `IDisposable`.
-### JSON and XML stores write atomically and destroy only their own files (2026-11-04)
-[[TASK-721]]. A failed JSON save left an empty file (measured on the single, separate and batch stores), and an XML batch
-save deleted every batch before writing any. Each file is now written through the new `Birko.Helpers.AtomicFile` (temp
-file, then move). A separate or batch store's `Destroy` threw `IOException` when anything else was in its directory; it
-now leaves that, and the directory. Loaders skip a null record (six threw), and the async JSON stores read the disk
-once, not on every call while empty. Found: sync and async JSON separate stores use different directories ([[TASK-811]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

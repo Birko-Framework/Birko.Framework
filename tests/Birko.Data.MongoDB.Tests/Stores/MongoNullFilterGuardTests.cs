@@ -138,7 +138,10 @@ public class MongoNullFilterGuardTests
 
         var act = () => store.DeleteAll();
 
-        act.Should().NotThrow();
+        // TASK-812 (rule 56): an offline, unconfigured store now refuses at Init — which every operation reaches only after
+        // the filter guard — so a refusal naming SetSettings is the proof the guard let the opt-out through. It used to be
+        // a silent no-op here.
+        act.Should().Throw<InvalidOperationException>().WithMessage("*SetSettings*");
     }
 
     [Fact]
@@ -148,7 +151,10 @@ public class MongoNullFilterGuardTests
 
         var act = () => store.UpdateAll(Updates());
 
-        act.Should().NotThrow();
+        // TASK-812 (rule 56): an offline, unconfigured store now refuses at Init — which every operation reaches only after
+        // the filter guard — so a refusal naming SetSettings is the proof the guard let the opt-out through. It used to be
+        // a silent no-op here.
+        act.Should().Throw<InvalidOperationException>().WithMessage("*SetSettings*");
     }
 
     [Fact]
@@ -158,7 +164,10 @@ public class MongoNullFilterGuardTests
 
         var act = () => store.DeleteAllAsync();
 
-        await act.Should().NotThrowAsync();
+        // TASK-812 (rule 56): an offline, unconfigured store now refuses at Init — which every operation reaches only after
+        // the filter guard — so a refusal naming SetSettings is the proof the guard let the opt-out through. It used to be
+        // a silent no-op here.
+        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*SetSettings*");
     }
 
     [Fact]
@@ -168,6 +177,9 @@ public class MongoNullFilterGuardTests
 
         var act = () => store.UpdateAllAsync(Updates());
 
-        await act.Should().NotThrowAsync();
+        // TASK-812 (rule 56): an offline, unconfigured store now refuses at Init — which every operation reaches only after
+        // the filter guard — so a refusal naming SetSettings is the proof the guard let the opt-out through. It used to be
+        // a silent no-op here.
+        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage("*SetSettings*");
     }
 }

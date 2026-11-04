@@ -31,19 +31,21 @@ public class InfluxDBStoreTests
     }
 
     [Fact]
-    public void Read_WithNoClient_ShouldReturnNull()
+    public void Read_WithNoClient_IsRefused()
     {
         var store = new InfluxDBStore<TestModel>();
-        var result = store.Read(Guid.NewGuid());
-        result.Should().BeNull();
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Read(Guid.NewGuid())).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
-    public void Count_WithNoClient_ShouldReturnZero()
+    public void Count_WithNoClient_IsRefused()
     {
         var store = new InfluxDBStore<TestModel>();
-        var result = store.Count();
-        result.Should().Be(0);
+
+        // TASK-812 (rule 56, inverted): a store that was never configured refuses, reads included; it answered empty.
+        FluentActions.Invoking(() => store.Count()).Should().Throw<InvalidOperationException>();
     }
 
     // --- CR-H049: the store owns an IDisposable InfluxDBClient and must release it ---
