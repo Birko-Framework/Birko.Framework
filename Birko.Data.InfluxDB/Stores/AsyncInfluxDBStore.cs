@@ -98,6 +98,9 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         {
+            // TASK-720: this overrides the public wrapper, so it runs the lazy-init and cancellation gate itself; it skipped
+            // it (measured).
+            await EnsureInitializedAsync(ct);
             if (Client == null || _settings == null)
             {
                 return null;
@@ -123,7 +126,7 @@ namespace Birko.Data.InfluxDB.Stores
                     return null;
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to read from InfluxDB. Guid: {guid}", ex);
             }
@@ -162,7 +165,7 @@ namespace Birko.Data.InfluxDB.Stores
                     return null;
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to read from InfluxDB", ex);
             }
@@ -208,7 +211,7 @@ namespace Birko.Data.InfluxDB.Stores
                     return 0L;
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to count in InfluxDB", ex);
             }
@@ -234,7 +237,7 @@ namespace Birko.Data.InfluxDB.Stores
                     await writeApi.WritePointAsync(point, _settings.Bucket, _settings.Organization, ct);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to create in InfluxDB. Guid: {data.Guid}", ex);
             }
@@ -267,7 +270,7 @@ namespace Birko.Data.InfluxDB.Stores
                     await writeApi.WritePointAsync(point, _settings.Bucket, _settings.Organization, ct);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to update in InfluxDB. Guid: {data.Guid}", ex);
             }
@@ -296,7 +299,7 @@ namespace Birko.Data.InfluxDB.Stores
                         ct);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to delete from InfluxDB. Guid: {data.Guid}", ex);
             }
@@ -349,7 +352,7 @@ namespace Birko.Data.InfluxDB.Stores
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to initialize InfluxDB bucket '{_settings.Bucket}'", ex);
             }
@@ -372,7 +375,7 @@ namespace Birko.Data.InfluxDB.Stores
                     await bucketsApi.DeleteBucketAsync(bucket, ct);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to destroy InfluxDB bucket '{_settings.Bucket}'", ex);
             }
@@ -393,30 +396,8 @@ namespace Birko.Data.InfluxDB.Stores
                 return await Task.FromResult(Enumerable.Empty<T>());
             }
 
-            var flux = $"from(bucket: \"{_settings.Bucket}\") " +
-                       $"|> range(start: 0) " +
-                       $"|> filter(fn: (r) => r._measurement == \"{MeasurementName}\") " +
-                       $"|> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") " +
-                       $"|> group() " +
-                       $"|> sort(columns: [\"_time\"], desc: true) " +
-                       $"|> unique(column: \"Guid\")";
-
-            if (orderBy?.Fields.Count > 0)
-            {
-                var columns = string.Join(", ", orderBy.Fields.Select(f => $"\"{f.PropertyName}\""));
-                var desc = orderBy.Fields[0].Descending ? "true" : "false";
-                flux += $" |> sort(columns: [{columns}], desc: {desc})";
-            }
-
-            if (offset.HasValue)
-            {
-                flux += $" |> limit(n: {int.MaxValue}, offset: {offset.Value})";
-            }
-
-            if (limit.HasValue)
-            {
-                flux += $" |> limit(n: {limit.Value})";
-            }
+            // TASK-720: the server runs only its share of the read; see InfluxReadPlan.
+            var flux = InfluxReadPlan.Flux(_settings.Bucket, MeasurementName, filter, orderBy, limit, offset);
 
             try
             {
@@ -440,15 +421,10 @@ namespace Birko.Data.InfluxDB.Stores
                         }
                     }
 
-                    if (filter != null)
-                    {
-                        var compiled = filter.Compile();
-                        return (IEnumerable<T>)items.Where(compiled).ToList();
-                    }
-                    return (IEnumerable<T>)items;
+                    return InfluxReadPlan.Finish(items, filter, orderBy, limit, offset);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to read bulk from InfluxDB", ex);
             }
@@ -489,7 +465,7 @@ namespace Birko.Data.InfluxDB.Stores
                     await writeApi.WritePointsAsync(points, _settings.Bucket, _settings.Organization, ct);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to bulk create in InfluxDB", ex);
             }
@@ -529,7 +505,7 @@ namespace Birko.Data.InfluxDB.Stores
                     await writeApi.WritePointsAsync(points, _settings.Bucket, _settings.Organization, ct);
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to bulk update in InfluxDB", ex);
             }
@@ -571,7 +547,7 @@ namespace Birko.Data.InfluxDB.Stores
                     }
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to bulk delete from InfluxDB", ex);
             }
@@ -778,7 +754,7 @@ namespace Birko.Data.InfluxDB.Stores
                         {
                             if (value is string dateStr)
                             {
-                                prop.SetValue(model, DateTime.Parse(dateStr));
+                                prop.SetValue(model, InfluxReadPlan.ParseDateTime(dateStr));   // TASK-720
                             }
                             else
                             {
@@ -931,7 +907,7 @@ namespace Birko.Data.InfluxDB.Stores
                     return (IReadOnlyList<Data.Stores.AggregateResult>)results.AsReadOnly();
                 }, ct);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)   // TASK-720: a cancellation stays one
             {
                 throw new InvalidOperationException($"Failed to execute aggregation in InfluxDB", ex);
             }

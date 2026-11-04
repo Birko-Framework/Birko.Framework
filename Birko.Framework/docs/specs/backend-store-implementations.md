@@ -203,15 +203,16 @@ The system SHALL implement `Read(Guid)` / `ReadAsync(Guid)` per backend as follo
 - RavenDB: a load by document id `{collection}/{guid}` (`RavenDocumentId.For`), after the gate, on the active session
   if there is one.
 - MongoDB, Elasticsearch and the SQL stores: no override; the base filter read.
-- InfluxDB: a public override that runs a Flux query **without** opening the initialization gate or checking the token
-  first, and wraps every failure (including cancellation) in `InvalidOperationException`.
+- InfluxDB: a public override that opens the initialization and cancellation gate and then runs a Flux query; a
+  failure other than a cancellation is wrapped in `InvalidOperationException` (TASK-720: it skipped the gate and wrapped
+  a cancellation too, measured).
 - JSON and XML (sync): a public override answering from the in-memory dictionary without opening the gate.
 
-#### Scenario: InfluxDB read as the first operation
+#### Scenario: InfluxDB read as the first operation (TASK-720)
 
-- **Given** a configured `AsyncInfluxDBStore<T>` that has never been initialized
-- **When** `ReadAsync(guid)` is the first call
-- **Then** the bucket-ensure in `InitCoreAsync` does not run before the query (`AsyncInfluxDBStore.cs:99`)
+- **Given** a configured `AsyncInfluxDBStore<T>` (or `InfluxDBStore<T>`) that has never been initialized
+- **When** `ReadAsync(guid)` is the first call, or is called with a cancelled token
+- **Then** `InitCoreAsync` runs before the query, and a cancelled token throws `OperationCanceledException`
 
 #### Scenario: Cosmos DB point read of a missing item
 
@@ -242,7 +243,9 @@ SHALL use a realtime GET (`.Realtime()`), set `Guid` from the id when the source
 ### Requirement: Duplicate-create refusal is detected per backend, and InfluxDB has none
 
 The system SHALL refuse a create of a key already stored with `StoreUniqueViolationException` on every backend except
-InfluxDB, by these mechanisms:
+InfluxDB, where a point for a stored Guid is a newer version of it and refusing would cost a query on every create
+(TASK-720, recorded, not changed: a decision for the user, as TimescaleDB's acceptance was, TASK-567), by these
+mechanisms:
 - MongoDB: `IsDuplicateKeyException` recognises `MongoWriteException` / `MongoBulkWriteException` with category
   `DuplicateKey`.
 - Cosmos DB: `IsDuplicateKeyException` recognises `CosmosException` 409, also inside an `AggregateException`.
@@ -365,18 +368,20 @@ same way. A 404 `document_missing_exception` becomes `EntityNotFoundException`; 
 
 The system SHALL write each Create/Update as a point in measurement `typeof(T).Name`, tagged `Guid`, timestamped
 `DateTime.UtcNow`, with public properties as fields (null properties skipped; decimals as double; `DateTime` as an ISO
-string; other types as `ToString()`). Reads SHALL query `range(start: 0)`, pivot fields per timestamp, and keep the newest
-row per Guid. A filter SHALL be evaluated in memory after the query; for the bulk read, ordering, offset and limit are
-applied in Flux **before** that in-memory filter. A filtered count SHALL read all rows and count in memory. Delete SHALL
+round-trip string, read back with its kind — a UTC value comes back UTC; TASK-720: it came back local, measured; other
+types as `ToString()`). Reads SHALL query `range(start: 0)`, pivot fields per timestamp, and keep the newest row per Guid.
+A filter SHALL be evaluated in memory after the query. The bulk read's plan is `InfluxReadPlan`, shared by the sync and
+async stores: with a filter, or a sort whose fields do not share one direction, the sort, offset and limit run in memory
+after the filter; otherwise they run in Flux (TASK-720: they always ran in Flux, before the filter, and the sort took
+the first field's direction for all, measured). A filtered count SHALL read all rows and count in memory. Delete SHALL
 use the delete API with predicate `_measurement` + `Guid` over epoch to now + 1 year. Every operation SHALL be retried on
 transient failures per `RetryPolicy` and any failure rethrown as `InvalidOperationException`.
 
-#### Scenario: Paging with a filter on InfluxDB
+#### Scenario: Paging with a filter on InfluxDB (TASK-720)
 
 - **Given** 10 entities of which 5 match a filter
 - **When** `ReadAsync(filter, limit: 3)` is called
-- **Then** Flux returns the first 3 entities of all 10 and the filter then removes the non-matching ones, so fewer than 3
-  may come back (`AsyncInfluxDBStore.cs:404-447`)
+- **Then** the Flux carries no `limit`, and the first 3 of the 5 matching entities come back
 
 #### Scenario: Updating an InfluxDB entity
 

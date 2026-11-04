@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\InfluxDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncInfluxDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\InfluxReadPlan.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\InfluxDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncInfluxDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\InfluxDbUnitOfWork.cs" />

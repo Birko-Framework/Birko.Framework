@@ -89,6 +89,13 @@ using (var table = Client.GetQueryApi().Query(
 }
 ```
 
+## Read plan (TASK-720)
+
+`Stores/InfluxReadPlan.cs` is the one producer of the sync and async bulk read: with a C# filter (run on the returned
+rows) or a sort whose fields do not share one direction, the sort, offset and limit run in memory after the filter;
+otherwise they go into the Flux. It also parses a `DateTime` field with its kind (`RoundtripKind`), so UTC stays UTC.
+`Read(Guid)` opens the lazy-init gate, and no operation rewraps a cancellation.
+
 ## Flux Query Language
 
 InfluxDB uses Flux for queries:
