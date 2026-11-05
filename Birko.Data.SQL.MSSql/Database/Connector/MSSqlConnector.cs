@@ -56,6 +56,21 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// TASK-305: 1205, deadlock victim. SQL Server has rolled the victim's transaction back ("Rerun the transaction"),
+        /// so it applied nothing. A timeout (-2) or a dropped connection is transient but may come after the write
+        /// applied, so it is not here; nor are the Azure service errors, which do not say what ran.
+        /// </summary>
+        public override bool IsNotAppliedException(Exception ex)
+        {
+            if (ex is SqlException sqlEx)
+            {
+                foreach (SqlError error in sqlEx.Errors)
+                    if (error.Number == 1205) return true;
+            }
+            return false;
+        }
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;

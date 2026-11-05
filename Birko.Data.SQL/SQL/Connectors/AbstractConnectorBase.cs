@@ -73,10 +73,33 @@ namespace Birko.Data.SQL.Connectors
         public PasswordSettings Settings => _settings;
 
         /// <summary>
-        /// Retry policy for transient failures (deadlocks, timeouts, connection drops).
-        /// Set to <see cref="RetryPolicy.None"/> to disable retries. Default is no retries.
+        /// Retry policy for a statement the server guarantees it did not apply. Default
+        /// <see cref="DefaultRetryPolicy"/>: two retries, 50 ms then 100 ms, with jitter. Set
+        /// <see cref="RetryPolicy.None"/> to turn retrying off.
         /// </summary>
-        public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.None;
+        /// <remarks>
+        /// TASK-305 (the user's decision, 2026-11-04, narrowed with the user 2026-11-05). It was <c>None</c>, so a
+        /// SQL Server deadlock victim — an error that says "Rerun the transaction" — failed the write. A retry is
+        /// made only when re-running cannot apply the write twice: the failure came before the statement was sent
+        /// (the connection would not open), or <see cref="IsNotAppliedException"/> says the server rolled it back
+        /// (a deadlock victim, a serialization failure, a lock wait, SQLite busy). A command timeout or a
+        /// connection lost mid-statement is transient but is NOT retried: the write may have been applied.
+        /// A write inside a caller's transaction is never retried (TASK-242).
+        /// </remarks>
+        public RetryPolicy RetryPolicy { get; set; } = DefaultRetryPolicy();
+
+        /// <summary>The policy a connector starts with: 2 retries, 50 ms then 100 ms (±25% jitter), at most 500 ms.</summary>
+        /// <remarks>A new instance per call: a policy is mutable, and one shared instance would let a connector's
+        /// change reach every other connector (rule 36).</remarks>
+        public static RetryPolicy DefaultRetryPolicy() => new()
+        {
+            MaxRetries = 2,
+            BaseDelay = TimeSpan.FromMilliseconds(50),
+            MaxDelay = TimeSpan.FromMilliseconds(500),
+            UseExponentialBackoff = true,
+            BackoffMultiplier = 2.0,
+            AddJitter = true,
+        };
 
         /// <summary>
         /// Whether this provider's DDL can run inside a transaction without ending it. True for every
@@ -240,6 +263,19 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// Whether the server guarantees the failed statement or transaction applied <b>nothing</b>, so running it
+        /// again cannot apply it twice: a deadlock victim, a serialization failure, a lock wait that gave up, SQLite
+        /// busy. Narrower than <see cref="IsTransientException"/>, which also covers a command timeout and a lost
+        /// connection — failures that can arrive after the server applied the write.
+        /// </summary>
+        /// <remarks>
+        /// TASK-305: the only errors the retry acts on once a statement has been sent. Base: none, so a provider
+        /// that does not say retries nothing after sending. Like <see cref="IsTransientException"/> it tests the
+        /// exception itself, not its inner chain.
+        /// </remarks>
+        public virtual bool IsNotAppliedException(Exception ex) => false;
+
+        /// <summary>
         /// Determines whether an exception indicates the queried table/relation does not exist, so a
         /// reader can yield an empty result instead of faulting. The base match is SQLite's wording
         /// ("no such table"); provider-specific connectors override this to add their own phrasing
@@ -399,25 +435,41 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Executes an action with retry logic for transient failures.
+        /// One attempt of a retried action. The action calls <see cref="MarkSent"/> once its connection is open,
+        /// just before it sends anything; until then a transient failure cannot have applied anything.
         /// </summary>
-        protected void ExecuteWithRetry(Action action, string? commandText = null)
+        protected sealed class RetryAttempt
+        {
+            /// <summary>Whether a statement may have reached the server in this attempt.</summary>
+            public bool Sent { get; private set; }
+
+            /// <summary>From here on, only an <see cref="IsNotAppliedException"/> failure is retried.</summary>
+            public void MarkSent() => Sent = true;
+        }
+
+        /// <summary>
+        /// Whether a failed attempt may run again: a transient failure, and either nothing was sent yet or the
+        /// server says it applied nothing (TASK-305).
+        /// </summary>
+        private bool MayRetry(Exception ex, RetryAttempt attempt)
+            => IsTransientException(ex) && (!attempt.Sent || IsNotAppliedException(ex));
+
+        /// <summary>
+        /// Runs <paramref name="action"/>, and again under <see cref="RetryPolicy"/> when it failed in a way
+        /// <see cref="MayRetry"/> allows. Each attempt gets a fresh <see cref="RetryAttempt"/>.
+        /// </summary>
+        protected void ExecuteWithRetry(Action<RetryAttempt> action, string? commandText = null)
         {
             var policy = RetryPolicy;
-            if (policy.MaxRetries <= 0)
-            {
-                action();
-                return;
-            }
-
             for (int attempt = 0; ; attempt++)
             {
+                var state = new RetryAttempt();
                 try
                 {
-                    action();
+                    action(state);
                     return;
                 }
-                catch (Exception ex) when (attempt < policy.MaxRetries && IsTransientException(ex))
+                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state))
                 {
                     var delay = policy.GetDelay(attempt + 1);
                     Thread.Sleep(delay);
@@ -425,26 +477,19 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
-        /// <summary>
-        /// Executes an async action with retry logic for transient failures.
-        /// </summary>
-        protected async Task ExecuteWithRetryAsync(Func<Task> action, CancellationToken ct = default, string? commandText = null)
+        /// <summary>The async twin of <see cref="ExecuteWithRetry"/>.</summary>
+        protected async Task ExecuteWithRetryAsync(Func<RetryAttempt, Task> action, CancellationToken ct = default, string? commandText = null)
         {
             var policy = RetryPolicy;
-            if (policy.MaxRetries <= 0)
-            {
-                await action().ConfigureAwait(false);
-                return;
-            }
-
             for (int attempt = 0; ; attempt++)
             {
+                var state = new RetryAttempt();
                 try
                 {
-                    await action().ConfigureAwait(false);
+                    await action(state).ConfigureAwait(false);
                     return;
                 }
-                catch (Exception ex) when (attempt < policy.MaxRetries && IsTransientException(ex))
+                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state))
                 {
                     var delay = policy.GetDelay(attempt + 1);
                     await Task.Delay(delay, ct).ConfigureAwait(false);

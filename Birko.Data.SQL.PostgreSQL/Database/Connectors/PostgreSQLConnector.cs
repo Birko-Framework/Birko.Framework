@@ -70,6 +70,14 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// TASK-305: 40001 serialization_failure and 40P01 deadlock_detected — PostgreSQL aborts the transaction, so it
+        /// applied nothing. The rest of class 40 and classes 08, 53 and 57 are transient but do not say that (a
+        /// connection lost during COMMIT may have committed), so they are not here.
+        /// </summary>
+        public override bool IsNotAppliedException(Exception ex)
+            => ex is PostgresException { SqlState: "40001" or "40P01" };
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;

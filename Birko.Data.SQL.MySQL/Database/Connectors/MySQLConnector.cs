@@ -102,6 +102,14 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// TASK-305: 1213, deadlock (InnoDB rolls the transaction back), and 1205, lock wait timeout (the statement is
+        /// rolled back, and the framework's own transaction holds only that statement). 2013, lost connection during
+        /// query, and 1317, interrupted, are transient but may come after the write applied, so they are not here.
+        /// </summary>
+        public override bool IsNotAppliedException(Exception ex)
+            => ex is MySqlException mysqlEx && (int)mysqlEx.ErrorCode is 1213 or 1205;
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;

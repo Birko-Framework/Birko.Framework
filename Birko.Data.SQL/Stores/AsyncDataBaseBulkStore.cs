@@ -113,9 +113,10 @@ namespace Birko.Data.SQL.Stores
                 return;
             }
 
-            await using var connection = Connector.CreateConnection(Connector.Settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            // TASK-305: opened through the connector so a busy database at BEGIN is retried; the write below is not.
+            var (opened, begun) = await Connector.OpenOwnedTransactionAsync(ct).ConfigureAwait(false);
+            await using var connection = opened;
+            await using var transaction = begun;
             var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
             try
             {

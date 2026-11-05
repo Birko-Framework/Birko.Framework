@@ -1003,6 +1003,60 @@ namespace Birko.Data.SQL.Connectors
             bool retryWhenOwned = true)
             => RunBulkCore(label, body, ownTransaction: false, retryWhenOwned);
 
+        /// <summary>
+        /// Opens a connection of its own and begins a transaction on it, for a boundary the caller then owns (commits,
+        /// rolls back, disposes). A transient failure here is retried under <see cref="AbstractConnectorBase.RetryPolicy"/>:
+        /// nothing has been sent yet, so trying again cannot apply anything twice.
+        /// </summary>
+        /// <remarks>
+        /// TASK-305. A bulk store write opens its own transaction (<c>Atomically</c>, TASK-629) and the connector's bulk
+        /// write then participates in it — the path that never retries. So SQLite's busy database, which Microsoft.Data.Sqlite
+        /// reports at <c>BEGIN IMMEDIATE</c>, failed every store bulk write it met, whatever the connector's own bulk path
+        /// did (measured: <c>BusyRetryTests</c>). The write itself is not retried: it is the caller's, with its store
+        /// delegates, and re-running it is the boundary owner's decision.
+        /// </remarks>
+        public (DbConnection Connection, DbTransaction Transaction) OpenOwnedTransaction()
+        {
+            (DbConnection, DbTransaction)? opened = null;
+            ExecuteWithRetry(_ =>
+            {
+                var connection = CreateConnection(_settings);
+                try
+                {
+                    connection.Open();
+                    opened = (connection, connection.BeginTransaction());
+                }
+                catch
+                {
+                    connection.Dispose();
+                    throw;
+                }
+            });
+            return opened!.Value;
+        }
+
+        /// <summary>The async twin of <see cref="OpenOwnedTransaction"/>.</summary>
+        public async System.Threading.Tasks.Task<(DbConnection Connection, DbTransaction Transaction)> OpenOwnedTransactionAsync(
+            System.Threading.CancellationToken ct = default)
+        {
+            (DbConnection, DbTransaction)? opened = null;
+            await ExecuteWithRetryAsync(async _ =>
+            {
+                var connection = CreateConnection(_settings);
+                try
+                {
+                    await connection.OpenAsync(ct).ConfigureAwait(false);
+                    opened = (connection, await connection.BeginTransactionAsync(ct).ConfigureAwait(false));
+                }
+                catch
+                {
+                    await connection.DisposeAsync().ConfigureAwait(false);
+                    throw;
+                }
+            }, ct).ConfigureAwait(false);
+            return opened!.Value;
+        }
+
         private void RunBulkCore(
             string label,
             Action<DbConnection, DbTransaction?, bool> body,
@@ -1018,16 +1072,18 @@ namespace Birko.Data.SQL.Connectors
                 return;
             }
 
-            void Owned()
+            void Owned(RetryAttempt attempt)
             {
                 using var connection = CreateConnection(_settings);
                 connection.Open();
                 if (!ownTransaction)
                 {
+                    attempt.MarkSent();
                     body(connection, null, true);
                     return;
                 }
                 using var transaction = connection.BeginTransaction();
+                attempt.MarkSent();
                 body(connection, transaction, true);
             }
 
@@ -1036,7 +1092,7 @@ namespace Birko.Data.SQL.Connectors
                 ExecuteWithRetry(Owned, label);
                 return;
             }
-            Owned();
+            Owned(new RetryAttempt());
         }
 
         private IEnumerable<IEnumerable<object>> RunReaderCommandOn(DbConnection connection, DbTransaction transaction, Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction)
@@ -1106,11 +1162,12 @@ namespace Birko.Data.SQL.Connectors
 
         private void RunCommandTransaction(Action<DbCommand> createCommand, Action<DbCommand> executeCommand)
         {
-            ExecuteWithRetry(() =>
+            ExecuteWithRetry(attempt =>
             {
                 using var db = CreateConnection(_settings);
                 db.Open();
                 using var transaction = db.BeginTransaction();
+                attempt.MarkSent();
                 string? commandText = null;
                 try
                 {
@@ -1138,10 +1195,11 @@ namespace Birko.Data.SQL.Connectors
 
         private void RunCommand(Action<DbCommand> createCommand, Action<DbCommand> executeCommand)
         {
-            ExecuteWithRetry(() =>
+            ExecuteWithRetry(attempt =>
             {
                 using var db = CreateConnection(_settings);
                 db.Open();
+                attempt.MarkSent();
                 string? commandText = null;
                 try
                 {

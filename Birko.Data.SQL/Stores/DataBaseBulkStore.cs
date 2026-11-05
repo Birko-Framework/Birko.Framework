@@ -106,9 +106,10 @@ namespace Birko.Data.SQL.Stores
                 return;
             }
 
-            using var connection = Connector.CreateConnection(Connector.Settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // TASK-305: opened through the connector so a busy database at BEGIN is retried; the write below is not.
+            var (opened, begun) = Connector.OpenOwnedTransaction();
+            using var connection = opened;
+            using var transaction = begun;
             var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
             try
             {

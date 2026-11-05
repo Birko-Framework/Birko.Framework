@@ -2,7 +2,7 @@
 id: TASK-305
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-08
@@ -146,18 +146,79 @@ SQLite bulk retry) has to be re-checked, because it now does something.
 
 ## Acceptance criteria
 
-- [ ] A decision recorded on the three options, with the measurement behind it — not a preference.
-- [ ] Whatever is chosen, **CR-M144's claim is made true or corrected.** It currently reads as though
+- [x] A decision recorded on the three options, with the measurement behind it — not a preference.
+- [x] Whatever is chosen, **CR-M144's claim is made true or corrected.** It currently reads as though
       SQLite retries `SQLITE_BUSY`/`SQLITE_LOCKED` on the bulk path; that is false as shipped.
-- [ ] If a non-zero default lands, **[[TASK-258]]'s criteria 1 and 2 are answered live in this task**,
+- [x] If a non-zero default lands, **[[TASK-258]]'s criteria 1 and 2 are answered live in this task**,
       since they only become answerable here:
       - SQLite retries **and converges** — assert the retry happened *and* the resulting row set is
         correct, with no duplicate or partially-applied rows. "Did not throw" is not the assertion.
       - The three server providers make **exactly one attempt** on their own-connection bulk path, so no
         consumer silently gains or loses a retry.
-- [ ] If `None` is kept, the two alarm tests stay green and the reason is written where a reader of
+- [x] (N/A: a default landed.) If `None` is kept, the two alarm tests stay green and the reason is written where a reader of
       `RetryPolicy` will meet it.
-- [ ] Proven able to fail.
+- [x] Proven able to fail.
+
+## Outcome — 2026-11-05
+
+**Narrowed with the user before building (2026-11-05).** The decision listed "deadlock victim, timeout, dropped
+connection". A timeout or a connection lost mid-statement can arrive *after* the server applied the INSERT or the
+COMMIT, so retrying it can write twice. The user chose: retry only what the server guarantees it did not apply, plus
+anything that failed before a statement was sent. The motivating 2026-09-08 deadlock is in that set.
+
+**Built** (rule 66 records it):
+
+- `AbstractConnectorBase.RetryPolicy` defaults to `DefaultRetryPolicy()`: 2 retries, 50 ms then 100 ms, exponential,
+  ±25% jitter, at most 500 ms. A new instance per connector (rule 36). `RetryPolicy.None` still turns it off.
+- New `IsNotAppliedException` beside `IsTransientException`, narrower than it. Base: nothing. SQL Server 1205;
+  PostgreSQL 40001, 40P01; MySQL 1213, 1205; SQLite 5, 6.
+- `ExecuteWithRetry[Async]` hands each attempt a `RetryAttempt`; the wrapped paths (`RunCommand`, `RunCommandTransaction`,
+  `RunBulk` owned, sync and async) call `MarkSent()` once the connection is open and the transaction begun. Retried: a
+  transient failure before that, or an `IsNotAppliedException` after it. The participating path is unchanged: it never
+  retries (TASK-242). The server providers' bulk sites still pass `retryWhenOwned: false`.
+- **Found while answering TASK-258's criterion 1:** a *store's* bulk write never reached the connector's retried bulk
+  path. `Atomically` (TASK-629) opens the store's own transaction and the connector's bulk write participates in it. So
+  SQLite busy — reported by Microsoft.Data.Sqlite at `BEGIN IMMEDIATE` — failed every store bulk write, whatever the
+  connector did (measured: the new `BusyRetryTests` store cases were red with the default policy in place). `Atomically`
+  now opens through new `AbstractConnector.OpenOwnedTransaction[Async]`, which retries the open and BEGIN only. The
+  write itself is not re-run: it carries the caller's store delegates, so re-running it is the boundary owner's
+  decision. The server providers gain the same retry at open/BEGIN, where nothing has been sent.
+- **Falsified, not adopted (rule 54):** that `Rollback()` on a deadlock victim's already-ended transaction throws and
+  hides the 1205. A guard was written, then removed: with the plain `Rollback()` the live deadlock tests pass.
+
+**CR-M144's claim is now true.** SQLite's bulk path retries busy/locked and converges, through the connector and
+through
+the stores. The rulebook line that cited it (§ the owned path is where providers differ) needed no change.
+
+**TASK-258's criteria, answered:**
+
+1. SQLite retries and converges: `BusyRetryTests`. Another connection holds the write lock past one attempt's 1 s busy
+   timeout. Async store, sync store and the connector's own `BulkInsertAsync` each store all 25 rows, every Guid once.
+   The control with `RetryPolicy.None` fails with SQLITE_BUSY and stores nothing.
+2. The three servers make exactly one attempt on their own-connection bulk path: they pass `retryWhenOwned: false` at
+   every bulk site (read). `RetryWhenOwnedTests.WithTheSHIPPEDDefaults_TheFlagDecides_AsyncHalf` and its sync twin pin
+   true → 3 attempts and false → 1 under the shipped default. Not induced live per server.
+
+**Live** (`DeadlockRetryLiveTests`, both on real servers): SQL Server 2022 and PostgreSQL, a real deadlock with the
+framework as the victim. With the default policy: 2 attempts, both rows +1 exactly once (sync and async on SQL
+Server). With `None`: the provider's own exception (1205 / 40P01), classified not-applied, nothing applied.
+
+**The two alarm tests** were inverted, not deleted (rule 56): `WithTheSHIPPEDDefaults_…` now pin that the flag
+decides. A third pins that a timeout after sending is not retried even with `retryWhenOwned: true`.
+
+**Proven able to fail:**
+- Drop 1205 from SQL Server's `IsNotAppliedException`: all 3 SQL Server live tests red.
+- Drop 40P01 from PostgreSQL's: both PostgreSQL live tests red.
+- Without `OpenOwnedTransaction` in `Atomically`: both store `BusyRetryTests` red, which was the first run.
+
+**Regression:**
+- All 35 test projects importing `Birko.Data.SQL` green, offline.
+- Live SQL Server suites: `Birko.Data.SQL.MSSql.Tests` 224, `.MSSql.View.Tests` 22.
+- Live PostgreSQL suites: `.PostgreSQL.Tests` 187, `.PostgreSQL.View.Tests` 22.
+- MySQL not run live (no container); its codes are read from the MySQL error reference, not measured.
+
+**Not done here (candidates, not filed):** `SqlUnitOfWork`'s own BEGIN does not use `OpenOwnedTransaction`; a deadlock
+*inside* a store's bulk boundary is still not retried (re-running the write is the owner's call).
 
 ## Out of scope
 
@@ -171,5 +232,5 @@ SQLite bulk retry) has to be re-checked, because it now does something.
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is an attempt count and the resulting row set under an induced transient
+- [x] N/A — mechanical; the proof is an attempt count and the resulting row set under an induced transient
       error, per provider and per half.

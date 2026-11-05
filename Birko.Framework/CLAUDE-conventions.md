@@ -1,6 +1,6 @@
 # Birko Framework — Conventions
 
-The full rulebook: 65 rules, each carrying the measurement that earned it.
+The full rulebook: 66 rules, each carrying the measurement that earned it.
 
 Extracted from `CLAUDE.md` on 2026-09-19. That file is auto-loaded into every session and had reached
 4,359 lines, of which this section was 2,488 — so the reasoning moved here and the *statements* stayed
@@ -2599,3 +2599,26 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
   Current producers: `RequireGrantEndpointFilter` (Birko.Security.Grants.AspNetCore) and `OwnedCrudResults`
   (Birko.Communication.AspNetCore), which is this rule's private-data row; TASK-541 adopts it for its
   owner-or-admin predicate.
+
+- **A retry re-runs a write only when the server says it applied nothing, or when nothing was sent.** TASK-305.
+  The SQL connectors' default retry was `None`, so a SQL Server deadlock victim — an error that says "Rerun the
+  transaction" — failed the write (measured live). The user chose a small default retry; making it safe needed one
+  more distinction than "transient":
+  - **Transient is not the same as unapplied.** A command timeout (SQL Server `-2`), a connection lost mid-statement
+    (MySQL `2013`, PostgreSQL class `08`) are transient, and can arrive after the server applied the INSERT or the
+    COMMIT; re-running then writes it twice. A deadlock victim (`1205`, PostgreSQL `40P01`, MySQL `1213`), a
+    serialization failure (`40001`), a lock wait that gave up (MySQL `1205`) and SQLite busy/locked (`5`/`6`) come
+    with the server's guarantee that it rolled back. That guarantee is stated per provider in
+    `IsNotAppliedException`, beside `IsTransientException` and narrower than it; the base says nothing is.
+  - **Before the first statement is sent, every transient failure is retryable.** `ExecuteWithRetry` hands each
+    attempt a `RetryAttempt`; the wrapped path calls `MarkSent()` once its connection is open and its transaction
+    begun. A failure before that (the connection would not open, `BEGIN IMMEDIATE` found the database busy) applied
+    nothing, whatever its code.
+  - **A store's own boundary retries its BEGIN, not its write.** A bulk store write opens its transaction itself
+    (`Atomically`) and the connector's bulk write participates, which never retries (TASK-242). Its BEGIN goes
+    through `Connector.OpenOwnedTransaction[Async]`, so SQLite's busy database is retried there; re-running the
+    write would re-run the caller's store delegates, which is the boundary owner's call. Measured: before this, a
+    store bulk insert against a held write lock failed even with the connector's bulk retry in place.
+  - **A suspicion was falsified, not adopted (rule 54).** That `Rollback()` on the victim's already-ended
+    transaction would throw and hide the 1205: it does not, on Microsoft.Data.SqlClient against 2022, so no guard
+    was added for it.

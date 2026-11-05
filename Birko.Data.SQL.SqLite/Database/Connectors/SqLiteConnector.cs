@@ -23,7 +23,14 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Detects SQLite transient errors: database locked (5), database busy (6).
+        /// TASK-305: SQLITE_BUSY (5) and SQLITE_LOCKED (6) — the statement could not take its lock and did not run, and
+        /// a bulk write in the connector's own transaction is rolled back before the retry (CR-M144).
+        /// </summary>
+        public override bool IsNotAppliedException(Exception ex)
+            => ex is SqliteException { SqliteErrorCode: 5 or 6 };
+
+        /// <summary>
+        /// Detects SQLite transient errors: database busy (5), table locked (6).
         /// </summary>
         public override bool IsTransientException(Exception ex)
         {

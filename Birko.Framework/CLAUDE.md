@@ -3,7 +3,7 @@
 Modular .NET framework with data access, communication, AI, and model infrastructure. General-purpose across enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, and real-time domains.
 
 See also:
-- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (65 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
+- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (66 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog
 - [CLAUDE-maintenance.md](CLAUDE-maintenance.md) — Maintenance guidelines, new project checklist, solution registration
 - [CHANGELOG.md](CHANGELOG.md) — Historical architectural changes
@@ -121,7 +121,7 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 ## Conventions
 
-Day-to-day API conventions are below. **The rulebook proper — 65 rules, each with the measurement that
+Day-to-day API conventions are below. **The rulebook proper — 66 rules, each with the measurement that
 earned it — lives in [CLAUDE-conventions.md](CLAUDE-conventions.md).** The index after these bullets carries
 each rule's opening statement so you can tell whether one applies; open that file for the reasoning,
 the counter-examples and the measurements. They are not optional: every one exists because the defect
@@ -206,6 +206,7 @@ Search that file for the phrase to reach the full rule.
 63. A check that compares DECLARED against STORED asks the schema for the stored side, never the driver — and the declared side is the method that emits the DDL
 64. DDL that names something only a registration provides makes every connection a participant — the connector is its one producer, and any other connection must register or it fails
 65. A denied action answers 403 when the caller may read the resource and 404 when they may not — and "unauthenticated" is 401, decided before anything is looked up
+66. A retry re-runs a write only when the server says it applied nothing, or when nothing was sent
 
 ## Task tracking — this directory is the monorepo's aggregator
 
@@ -292,6 +293,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL writes retry what the server did not apply (2026-11-05)
+[[TASK-305]]. The SQL connectors' retry policy defaulted to `None`, so a SQL Server deadlock victim failed the write
+(measured live, as on PostgreSQL). It is now two retries, 50 then 100 ms with jitter (the user's decision), and only of
+a failure that applied nothing: before the statement was sent, or a deadlock / serialization failure / lock wait /
+SQLite busy (new `IsNotAppliedException`, per provider). A timeout or a connection lost mid-write is not retried: the
+write may have applied. A bulk store write's own BEGIN retries too (`OpenOwnedTransaction`), which is where SQLite
+reports busy; before, it failed whatever the connector did. Rule 66.
 ### The harvest's smaller findings, confirmed or closed (2026-11-04)
 [[TASK-724]], the last of EPIC-023. The async `CreateTableAsync` was a second copy without the composite key or the
 created-table record, and its own `IF NOT EXISTS` failed on SQL Server; it is the sync path now. The schema-drift check
@@ -353,24 +361,6 @@ let the call through; it now answers the first exceeded budget, then the first w
 request only when the reply carried usage, which the OpenAI-compatible providers never send (measured: a 1/minute limit
 let two calls through); every request now counts, a stream's tokens at its end (new `RecordTokens`).
 `AgentRegistration.Create` no longer writes into the caller's config.
-### A store delegate keeps the entity's key; a null entity is refused (2026-11-04)
-[[TASK-714]]. A store delegate returning a copy with its own Guid made a SQL update rewrite the original row's key
-(measured on SQLite); `StoreDelegates.Apply` now refuses it on every store. A null `Create` / `Update` is
-`ArgumentNullException` on every provider (async SQL answered `Guid.Empty`, sync threw NRE). SQL bulk writes skip a null
-element as the other stores do. A refused in-memory bulk create stores nothing and leaves the caller's Guids alone;
-`GetUnwrappedStore` refuses a wrapper cycle (it hung).
-### Event-sourced filtered writes refuse every-row filters; events carry their version and user (2026-11-04)
-[[TASK-713]]. The event-sourcing wrappers' filtered update and delete took a null filter, or one reducing to every row,
-and rewrote or deleted every row (measured); they now refuse both (`x => true` stays the explicit all-rows filter).
-`EventData` carried the previous `Version`; a bulk update holding an item without a Guid appended its siblings' events
-before the store refused it. **Breaking:** the settable `CurrentUserGuid` is gone; pass `currentUser` (a `Func<Guid?>`).
-`StoreWrapperBuilder` passes its `IAuditContext`'s user, which events never had.
-### Fluent IsUnique, IsRequired and Ignore act as the attributes do (2026-11-04)
-[[TASK-712]]. A fluent `IsUnique` on a nullable column got no `ux_` index, so SQLite took a duplicate, and `Ignore()`
-left the property a column (measured). Both, with `IsRequired`, are now registered before the table loads
-(`DataBase.RegisterColumnFlags`), as lengths are. A flag or `HasColumnName` on a property that is no column is refused
-instead of skipped; a second `Property()` call reuses the member's descriptor, so one index declared twice is refused;
-`RegisterPrecision(…, null, null)` removes a registration.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

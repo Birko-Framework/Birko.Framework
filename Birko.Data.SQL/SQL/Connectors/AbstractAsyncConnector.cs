@@ -112,16 +112,18 @@ namespace Birko.Data.SQL.Connectors
                 return;
             }
 
-            async Task Owned()
+            async Task Owned(RetryAttempt attempt)
             {
                 using var connection = CreateConnection(_settings);
                 await connection.OpenAsync(ct).ConfigureAwait(false);
                 if (!ownTransaction)
                 {
+                    attempt.MarkSent();
                     await body(connection, null, true).ConfigureAwait(false);
                     return;
                 }
                 using var transaction = connection.BeginTransaction();
+                attempt.MarkSent();
                 await body(connection, transaction, true).ConfigureAwait(false);
             }
 
@@ -130,7 +132,7 @@ namespace Birko.Data.SQL.Connectors
                 await ExecuteWithRetryAsync(Owned, ct, label).ConfigureAwait(false);
                 return;
             }
-            await Owned().ConfigureAwait(false);
+            await Owned(new RetryAttempt()).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -253,11 +255,12 @@ namespace Birko.Data.SQL.Connectors
 
         private Task RunCommandTransactionAsync(Func<DbCommand, Task> createCommand, Func<DbCommand, Task> executeCommand, CancellationToken ct)
         {
-            return ExecuteWithRetryAsync(async () =>
+            return ExecuteWithRetryAsync(async attempt =>
             {
                 await using var db = CreateConnection(_settings);
                 await db.OpenAsync(ct);
                 await using var transaction = await db.BeginTransactionAsync(ct);
+                attempt.MarkSent();
                 string? commandText = null;
                 try
                 {
@@ -285,10 +288,11 @@ namespace Birko.Data.SQL.Connectors
 
         private Task RunCommandAsync(Func<DbCommand, Task> createCommand, Func<DbCommand, Task> executeCommand, CancellationToken ct)
         {
-            return ExecuteWithRetryAsync(async () =>
+            return ExecuteWithRetryAsync(async attempt =>
             {
                 await using var db = CreateConnection(_settings);
                 await db.OpenAsync(ct);
+                attempt.MarkSent();
                 string? commandText = null;
                 try
                 {

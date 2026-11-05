@@ -4,6 +4,27 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — A store delegate keeps the entity's key; a null entity is refused
+[[TASK-714]]. A store delegate returning a copy with its own Guid made a SQL update rewrite the original row's key
+(measured on SQLite); `StoreDelegates.Apply` now refuses it on every store. A null `Create` / `Update` is
+`ArgumentNullException` on every provider (async SQL answered `Guid.Empty`, sync threw NRE). SQL bulk writes skip a null
+element as the other stores do. A refused in-memory bulk create stores nothing and leaves the caller's Guids alone;
+`GetUnwrappedStore` refuses a wrapper cycle (it hung).
+
+## 2026-11-04 — Event-sourced filtered writes refuse every-row filters; events carry their version and user
+[[TASK-713]]. The event-sourcing wrappers' filtered update and delete took a null filter, or one reducing to every row,
+and rewrote or deleted every row (measured); they now refuse both (`x => true` stays the explicit all-rows filter).
+`EventData` carried the previous `Version`; a bulk update holding an item without a Guid appended its siblings' events
+before the store refused it. **Breaking:** the settable `CurrentUserGuid` is gone; pass `currentUser` (a `Func<Guid?>`).
+`StoreWrapperBuilder` passes its `IAuditContext`'s user, which events never had.
+
+## 2026-11-04 — Fluent IsUnique, IsRequired and Ignore act as the attributes do
+[[TASK-712]]. A fluent `IsUnique` on a nullable column got no `ux_` index, so SQLite took a duplicate, and `Ignore()`
+left the property a column (measured). Both, with `IsRequired`, are now registered before the table loads
+(`DataBase.RegisterColumnFlags`), as lengths are. A flag or `HasColumnName` on a property that is no column is refused
+instead of skipped; a second `Property()` call reuses the member's descriptor, so one index declared twice is refused;
+`RegisterPrecision(…, null, null)` removes a registration.
+
 ## 2026-11-04 — REST, SSE and SOAP read tokens by one rule
 [[TASK-709]]. REST passed a `Basic …` `Authorization` value whole as the token, and SSE stopped at one, so a valid
 `?token=` was refused (measured). An `Authorization` header now yields a token only under its scheme (default `Bearer`),

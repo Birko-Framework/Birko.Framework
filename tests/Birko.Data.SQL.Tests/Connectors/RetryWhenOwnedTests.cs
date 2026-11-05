@@ -17,7 +17,13 @@ namespace Birko.Data.SQL.Tests.Connectors;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>THE FINDING THIS FILE EXISTS TO PIN — the flag is INERT as shipped.</b> Chasing the flag's behaviour
+/// <b>TASK-305 (2026-11-05) ended the finding below.</b> The default policy is now two short retries of an error the
+/// server says it did not apply, so the flag does something as shipped: SQLite's bulk paths (<c>true</c>) retry a busy
+/// database, the three server providers (<c>false</c>) make one attempt. The two tests that were the alarm for this are
+/// inverted (rule 56), not deleted: <c>WithTheSHIPPEDDefaults_…</c> now pin that the flag decides. The history follows.
+/// </para>
+/// <para>
+/// <b>THE FINDING THIS FILE EXISTED TO PIN — the flag was INERT as shipped.</b> Chasing the flag's behaviour
 /// turned up something the task did not anticipate: <see cref="AbstractConnectorBase.RetryPolicy"/> defaults
 /// to <c>RetryPolicy.None</c> (<c>MaxRetries = 0</c>), and <c>ExecuteWithRetry[Async]</c> short-circuits to a
 /// bare call when <c>MaxRetries &lt;= 0</c>. Grepped across the whole framework and the Symbio consumer,
@@ -136,6 +142,10 @@ public class RetryWhenOwnedTests
             Interlocked.Increment(ref ConnectionsOpened);
             return new FakeConnection();
         }
+
+        /// <summary>The probe's transient error stands for a deadlock victim or SQLite busy: the server applied nothing
+        /// (TASK-305), so the owned path may retry it once the statement was sent.</summary>
+        public override bool IsNotAppliedException(Exception ex) => ex is TransientException;
 
         public override string ConvertType(DbType type, SQL.Fields.AbstractField field)
             => throw new NotImplementedException();
@@ -270,43 +280,37 @@ public class RetryWhenOwnedTests
 
     #endregion
 
-    #region The flag is inert as shipped — the finding, pinned so it cannot rot silently
+    #region The flag decides as shipped — TASK-305 inverted the alarm (rule 56)
 
-    // These two are the ones that will fail the day somebody configures a default RetryPolicy, and that is
-    // the intended alarm: at that moment SQLite's bulk paths silently START retrying, and TASK-258's first
-    // criterion becomes a real question rather than a vacuous one.
+    // These two failed the day the default policy landed, as they were written to. They now pin the shipped
+    // behaviour: under the default policy `true` retries a not-applied error (SQLite's bulk paths) and `false` makes
+    // exactly one attempt (PostgreSQL, MySQL, SQL Server), so no consumer silently gains a bulk retry.
 
     [Fact]
-    public void WithTheSHIPPEDDefaults_RetryWhenOwnedTrue_DoesNotRetry_BecauseNoRetryPolicyIsEverConfigured()
+    public void WithTheSHIPPEDDefaults_RetryWhenOwnedTrue_Retries_AnErrorTheServerDidNotApply()
     {
-        var settings = new ProbeSettings(nameof(WithTheSHIPPEDDefaults_RetryWhenOwnedTrue_DoesNotRetry_BecauseNoRetryPolicyIsEverConfigured));
+        var settings = new ProbeSettings(nameof(WithTheSHIPPEDDefaults_RetryWhenOwnedTrue_Retries_AnErrorTheServerDidNotApply));
         var connector = new BulkProbeConnector(settings, allowConnections: true);
 
-        connector.RetryPolicy.MaxRetries.Should().Be(0,
-            "RetryPolicy defaults to None, and nothing in the framework or the Symbio consumer — including "
-            + "every appsettings*.json — assigns one. If this ever fails, the flag has stopped being inert "
-            + "and TASK-258's per-provider criteria need answering for real.");
+        connector.RetryPolicy.MaxRetries.Should().Be(2, "TASK-305: the default is two retries, no longer None");
 
         var attempts = 0;
         Action act = () => connector.ProbeRunBulk((_, _, _) =>
         {
             attempts++;
-            throw new TransientException("transient on the owned path");
+            throw new TransientException("not applied on the owned path");
         }, retryWhenOwned: true);
 
         act.Should().Throw<TransientException>();
-        attempts.Should().Be(1,
-            "with MaxRetries = 0 ExecuteWithRetry short-circuits, so `true` and `false` are the same "
-            + "behaviour — this is what makes 'preserves each provider's retry policy' vacuous today");
+        attempts.Should().Be(3, "the initial attempt plus the default's two retries");
+        connector.ConnectionsOpened.Should().Be(3, "each attempt on a fresh connection");
     }
 
     [Fact]
-    public async Task WithTheSHIPPEDDefaults_TheFlagMakesNoDifferenceEitherWay_AsyncHalf()
+    public async Task WithTheSHIPPEDDefaults_TheFlagDecides_AsyncHalf()
     {
-        var settings = new ProbeSettings(nameof(WithTheSHIPPEDDefaults_TheFlagMakesNoDifferenceEitherWay_AsyncHalf));
+        var settings = new ProbeSettings(nameof(WithTheSHIPPEDDefaults_TheFlagDecides_AsyncHalf));
 
-        // Asserted as an EQUIVALENCE rather than as two separate counts: the claim is that the flag is inert,
-        // and two independent "== 1" assertions would also pass if one path were broken in some other way.
         var counts = new int[2];
         for (var i = 0; i < 2; i++)
         {
@@ -315,13 +319,30 @@ public class RetryWhenOwnedTests
             Func<Task> act = () => connector.ProbeRunBulkAsync((_, _, _) =>
             {
                 counts[index]++;
-                throw new TransientException("transient on the owned path");
+                throw new TransientException("not applied on the owned path");
             }, retryWhenOwned: i == 0);
             await act.Should().ThrowAsync<TransientException>();
         }
 
-        counts[0].Should().Be(counts[1], "under the shipped default policy the flag changes nothing");
-        counts[0].Should().Be(1);
+        counts[0].Should().Be(3, "retryWhenOwned: true retries twice under the default policy");
+        counts[1].Should().Be(1, "retryWhenOwned: false is one attempt, as the server providers shipped");
+    }
+
+    [Fact]
+    public void WithTheSHIPPEDDefaults_ATimeoutAfterSending_IsNotRetried_EvenWhenRetryIsRequested()
+    {
+        var settings = new ProbeSettings(nameof(WithTheSHIPPEDDefaults_ATimeoutAfterSending_IsNotRetried_EvenWhenRetryIsRequested));
+        var connector = new BulkProbeConnector(settings, allowConnections: true);
+
+        var attempts = 0;
+        Action act = () => connector.ProbeRunBulk((_, _, _) =>
+        {
+            attempts++;
+            throw new TimeoutException("the batch may have been applied");
+        }, retryWhenOwned: true);
+
+        act.Should().Throw<TimeoutException>();
+        attempts.Should().Be(1, "a timeout is transient but not 'nothing applied'; a retry could write the batch twice");
     }
 
     #endregion
