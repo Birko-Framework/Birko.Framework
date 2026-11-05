@@ -2,7 +2,7 @@
 id: TASK-816
 parent: EPIC-001
 feature: null
-status: verify  # built on branches, human test pending
+status: done  # signed off by the user in Symbio 2026-11-05
 priority: P2
 assignee: ai
 created: 2026-11-05
@@ -37,7 +37,7 @@ panel up (29/31 on Birko.Web main, the two new checks red).
 - [x] Reproduced first: a smoke check red on main.
 - [x] A one-item tab is panelless only when that item is a plain link: no ▾ menu, toggle, gallery or field.
 - [x] A category with one one-page module keeps no panel (checked).
-- [ ] Human test in Symbio.
+- [x] Human test in Symbio. **PASS (the user, 2026-11-05).**
 
 ## Out of scope
 
@@ -45,7 +45,7 @@ panel up (29/31 on Birko.Web main, the two new checks red).
 
 ## Human test plan
 
-- [ ] Symbio, a Symbio bundle built against `task/TASK-816`: hover Administrácia — the panel shows Users with its ▾;
+- [x] Symbio, a Symbio bundle built against `task/TASK-816`: hover Administrácia — the panel shows Users with its ▾;
       the ▾ lists the user pages. Same for Služby. Pinned and unpinned.
 
 ## Built (2026-11-05), on branches, not merged
@@ -62,3 +62,7 @@ Birko.Web main ffa7291 (merge 946d1b5), tagged **v0.4.7** locally; Playground ma
 branches removed. Symbio's bundle was rebuilt by hand (its watcher had not picked up the merge); measured there with
 the e2e login: Administrácia is no longer panelless, hovering it shows Users with its ▾. Služby was not checked in the
 user's tenant (the e2e tenant has six modules under it).
+
+## Closed (2026-11-05)
+
+The user: both worked in Symbio. Birko.Web v0.4.7 is pushed (with v0.4.8).

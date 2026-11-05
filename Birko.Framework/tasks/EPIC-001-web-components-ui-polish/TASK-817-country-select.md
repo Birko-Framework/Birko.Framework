@@ -2,7 +2,7 @@
 id: TASK-817
 parent: EPIC-001
 feature: null
-status: verify  # merged as v0.4.8; Symbio human test pending
+status: done  # signed off by the user in Symbio 2026-11-05
 priority: P2
 assignee: ai
 created: 2026-11-05
@@ -31,7 +31,7 @@ The "PPL do Evropy" shipping method holds 27 codes typed one by one.
 - [x] Group shortcuts with `multiple`: EU (27) by default, extensible (`registerCountryGroup`, `groups=`).
 - [x] `b-form` `type: 'country'` (+ `multiple`, `countries`, `preferredCountries`, `countryGroups`).
 - [x] `countryName(code, locale?)` for read-only places.
-- [ ] Human test in the Playground (PASS, the user, 2026-11-05) and in Symbio.
+- [x] Human test in the Playground (PASS, the user, 2026-11-05) and in Symbio. **Symbio PASS (the user, 2026-11-05).**
 
 ## Decisions made here (the API was left to this task)
 
@@ -53,7 +53,7 @@ The "PPL do Evropy" shipping method holds 27 codes typed one by one.
 - [x] Playground → Gallery → Inputs → **Country select**: the box shows 🇸🇰 Slovakia (SK); typing "slov", "sk" and
       "reunion" finds Slovakia / Réunion; the `multiple` control shows chips and an **EU (27)** button that adds the 27
       and, pressed again, removes them. Switch the locale to Slovenčina: names change, the selection stays.
-- [ ] Symbio, once its session switches a field (e.g. a shipping method's allowed countries): the same.
+- [x] Symbio, once its session switches a field (e.g. a shipping method's allowed countries): the same.
 
 ## Built (2026-11-05), on branches, not merged
 
@@ -74,3 +74,7 @@ The shortcut's "EU" text has only an English key (`bwc.country.groupEu`); "EÚ" 
 
 Birko.Web main a79cea1 (merge 1ded891), tagged **v0.4.8** locally; Playground main 385d9e0. Not pushed. Worktrees and
 branches removed. The Symbio session (symbio-32) switches Symbio's fields in its own task.
+
+## Closed (2026-11-05)
+
+The user: it works in Symbio, after the Symbio session switched its country fields. Birko.Web v0.4.8 is pushed.
