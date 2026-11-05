@@ -78,3 +78,7 @@ branches removed. The Symbio session (symbio-32) switches Symbio's fields in its
 ## Closed (2026-11-05)
 
 The user: it works in Symbio, after the Symbio session switched its country fields. Birko.Web v0.4.8 is pushed.
+
+Symbio TASK-1065 (be9f5a85) switched the fields: several countries for shipping, payment and weight zones (preferred SK,CZ);
+one for customer addresses, hotel guests and documents, buildings and sites; `countryName` in read-only addresses and
+tables. Symbio's locales carry `bwc.country.groupEu` ("EÚ" in sk, "EU" in cs), which closes the open label point above.
