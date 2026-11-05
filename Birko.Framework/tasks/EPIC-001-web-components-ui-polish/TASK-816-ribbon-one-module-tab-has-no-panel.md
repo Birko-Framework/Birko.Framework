@@ -55,3 +55,10 @@ panel up (29/31 on Birko.Web main, the two new checks red).
   `category-ribbon-smoke` section 4, three checks. verify.mjs 0 failing (category-ribbon-smoke 31/31);
   category-ribbon-check 19/19, keyboard-check 225/225, ribbon-a11y-check 22/22, contextual-ribbon-check 7/7.
   `tsc --noEmit` on Birko.Web.Components clean.
+
+## Merged (2026-11-05)
+
+Birko.Web main ffa7291 (merge 946d1b5), tagged **v0.4.7** locally; Playground main de151b2. Not pushed. Worktrees and
+branches removed. Symbio's bundle was rebuilt by hand (its watcher had not picked up the merge); measured there with
+the e2e login: Administrácia is no longer panelless, hovering it shows Users with its ▾. Služby was not checked in the
+user's tenant (the e2e tenant has six modules under it).
