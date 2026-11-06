@@ -293,6 +293,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Concurrent first table builds publish one consistent table (2026-11-06)
+[[TASK-276]]. A table build writes into the cached field objects every build of the type shares (`field.Table`,
+`IsPrimary`, `IsIndexed`), so two concurrent first `LoadTable` calls published a table whose fields pointed at the losing
+build's copy (measured: 3,997 of 4,000 rounds with 8 threads). Builds now run under one re-entrant lock, taken only on a
+cache miss. No answer was wrong before (flags and indexes matched; the one reader reads the shared fields). The flaky
+test the task was opened for never recurred in 200 loaded runs and stays unexplained.
 ### SQL writes retry what the server did not apply (2026-11-05)
 [[TASK-305]]. The SQL connectors' retry policy defaulted to `None`, so a SQL Server deadlock victim failed the write
 (measured live, as on PostgreSQL). It is now two retries, 50 then 100 ms with jitter (the user's decision), and only of

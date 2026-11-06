@@ -3,7 +3,7 @@ id: TASK-276
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress  # narrowed 2026-09-08 to the titular Birko.Data.SQL.Tests flake; the other four instances are fixed or owned
+status: done  # narrowed 2026-09-08 to the titular Birko.Data.SQL.Tests flake; the other four instances are fixed or owned
 priority: P2
 assignee: ai
 created: 2026-08-22
@@ -770,3 +770,17 @@ asserts on `field.Table` identity (one asserts it is null on a hand-built field)
 its aggregates are wrapped in a new `FunctionField`, and its plain fields come from `LoadField`, which builds new ones.
 
 So this hypothesis cannot be how a test failed, and the failure stays unexplained.
+
+## Outcome — 2026-11-06: closed by the user's decision; the race fixed, the flake not reproducible
+
+The user chose: fix the race and close. **The race:** `TryLoadTable` builds under one lock (`_tableBuildLock`), re-checking
+both caches inside it; one lock rather than one per type, because a build may load another type's table and per-type
+locks taken in two orders could deadlock (a `Monitor` is re-entrant). Regression test
+`tests/Birko.Data.SQL.Tests/DataBase/ConcurrentTableBuildTests.cs`: 8 threads × 300 rounds on two types declared in that
+file alone (it clears their caches by reflection, so rule 61 holds: no sibling loads them). Green with the lock;
+**298 and 299 of 300 rounds red** with it replaced by a fresh lock object per call. All 35 test projects importing
+`Birko.Data.SQL` green.
+
+**The flake:** not reproduced in 200 loaded runs, no name ever captured, and the one mechanism proposed for it is now
+shown to change no result, so it was not this. Closed as not reproducible. If a `Birko.Data.SQL.Tests` failure ever
+appears again, CI's trx names it: file a new task against that name.

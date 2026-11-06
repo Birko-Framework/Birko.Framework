@@ -96,14 +96,28 @@ namespace Birko.Data.SQL
             if (_unmappedTypes.ContainsKey(type))
                 return null;
 
-            var table = ComputeTable(type);
-            if (table != null)
-                _tableCache.TryAdd(type, table);
-            else
-                _unmappedTypes.TryAdd(type, 0);
-            return table;
+            // One build at a time (TASK-276). A build writes into the CACHED field objects (`field.Table`, `IsPrimary`,
+            // `IsIndexed`) that every build of the type shares, so two concurrent first builds published one table whose
+            // fields pointed at the other's copy (measured: 3,997 of 4,000 rounds with 8 threads). One lock, not one per
+            // type: a build may load another type's table, and per-type locks taken in two orders could deadlock; a
+            // Monitor is re-entrant, and it is taken only on a cache miss.
+            lock (_tableBuildLock)
+            {
+                if (_tableCache.TryGetValue(type, out cached))
+                    return cached;
+                if (_unmappedTypes.ContainsKey(type))
+                    return null;
+
+                var table = ComputeTable(type);
+                if (table != null)
+                    _tableCache.TryAdd(type, table);
+                else
+                    _unmappedTypes.TryAdd(type, 0);
+                return table;
+            }
         }
 
+        private static readonly object _tableBuildLock = new();
         private static readonly ConcurrentDictionary<Type, byte> _unmappedTypes = new();
 
         private static Tables.Table? ComputeTable(Type type)
