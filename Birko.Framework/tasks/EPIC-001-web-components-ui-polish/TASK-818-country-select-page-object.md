@@ -57,3 +57,6 @@ The toolkit has `SelectPO` for a named `b-select`, but the picker's inner contro
 
 Merged 2026-11-06 as Birko.Web **v0.4.9** (`4ec0e3f` merge, `f73877e` version, tag local). The user closed it on the
 Playground check (`country-select-po-check.mjs`, 15/15 on main after the merge) without waiting for Symbio's specs.
+
+The specs ran 2026-11-06: the multiple pick first failed (Escape closed the b-modal around it, [[TASK-819]], fixed in
+v0.4.10); after it, all three pass 12/12 (symbio-32). The third criterion holds on measurement, not only by waiver.

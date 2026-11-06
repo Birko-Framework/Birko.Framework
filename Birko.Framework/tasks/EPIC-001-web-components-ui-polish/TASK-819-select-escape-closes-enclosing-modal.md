@@ -2,7 +2,7 @@
 id: TASK-819
 parent: EPIC-001
 feature: null
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-06
@@ -36,7 +36,7 @@ stop an Escape that closes their panel.
       `b-multi-select`'s box, search field and options; focus returns to the multi-select's box.
 - [x] With no list open, Escape still reaches the dialog (closes the modal).
 - [x] `CountrySelectPO`'s multiple pick inside a `b-modal` leaves the modal open.
-- [ ] Symbio's `eshop-shipping-methods.spec.ts` passes (symbio-32 reruns it).
+- [x] Symbio's `eshop-shipping-methods.spec.ts` passes (symbio-32 reran it: 12/12 with customers.extra and customers.more, retries=0, Symbio UI rebuilt on Web main a9e0941, 2026-11-06).
 
 ## Human test plan
 
@@ -49,3 +49,6 @@ single searchable select.
 Playground `escape-in-modal-check.mjs` (real Playwright, real `b-modal`): 6/13 before the fix, reproducing the Symbio
 failure in its `CountrySelectPO` row; 13/13 after. `country-select-po-check` 15/15, `keyboard-check` 225/225,
 `verify.mjs` all suites green, `Birko.Web.Components` typecheck clean.
+
+Closed 2026-11-06 on Symbio's rerun. The human test plan above was not run by a person; Symbio's Playwright specs drove the real
+create dialog.
