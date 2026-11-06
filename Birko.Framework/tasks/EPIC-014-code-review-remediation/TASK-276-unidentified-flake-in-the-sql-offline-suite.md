@@ -3,7 +3,7 @@ id: TASK-276
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo  # narrowed 2026-09-08 to the titular Birko.Data.SQL.Tests flake; the other four instances are fixed or owned
+status: in-progress  # narrowed 2026-09-08 to the titular Birko.Data.SQL.Tests flake; the other four instances are fixed or owned
 priority: P2
 assignee: ai
 created: 2026-08-22
@@ -721,3 +721,29 @@ The re-check of EPIC-014's open tasks proposed cancelling this under its own rul
 2026-09-08). **The user chose to keep it and fix the test instead.** So the next step is not another
 run-until-green: first capture the failing test's name (run the full suite under the CPU-load lever with a `trx`
 logger kept on every run), then fix that test's dependence on process-wide state. Any fix follows rule 61.
+
+## 2026-11-06 — the capture run the decision asked for: 0 failures in 200 loaded runs
+
+Run as the decision above says: the full suite (now **734** tests, 619 at the first sighting), `--no-build` on one
+binary, **8 CPU burners** running throughout, a `trx` kept on every run. Browser checks for TASK-818/819 ran alongside
+for part of it, adding load.
+
+| runs | failing runs |
+|---|---|
+| 200 | **0** |
+
+At the rate first seen (2 in ~19 runs, ~10%) the chance of 200 clean runs is about 10⁻⁹; at even 2% it is about 2%.
+So the failure is not occurring at anything like its old rate, and **its name is still not captured**: there is
+nothing to fix against. What was checked, so nobody repeats it:
+
+- **The six identities this file recorded 2026-08-31 are not this suite.** Every one
+  (`ComputedContainsOperandTests`, `DestructiveFilterEndToEndTests`, `LazyInitInsideBoundaryEndToEndTests`,
+  `SqLiteStoreCrudTests`, `RuleFieldResolutionEndToEndTests`, `PrimitiveTypeRoundTripTests`) lives in
+  `Birko.Data.SQL.SqLite.Tests`, the pool family fixed 2026-09-08. The titular suite has no SQLite package and
+  opens no database, so that fix cannot be what quieted it.
+- **Process-wide state it can reach** is `DataBase`'s caches (`_connectors`, `_fieldsCache`, `_tableCache`, the
+  max-length / precision / flag / table-name overrides). The suite never calls a `Register*` method or
+  `DataBase.GetConnector` (one comment mentions it), so it only fills idempotent caches; nothing in it writes shared
+  state another class reads, which is the shape rule 61 describes.
+- The suite changed in 26 commits since the first sighting; which one removed the cause, if any did, is not knowable
+  without the name.
