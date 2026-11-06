@@ -39,6 +39,18 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
         return $"{Algorithm}:{_iterations}:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(hash)}";
     }
 
+    /// <inheritdoc />
+    /// <remarks>True for a hash with fewer iterations than this hasher's, or one that is not a PBKDF2-SHA512 hash at all
+    /// (SH-L226; Verify keeps accepting the weaker one, so a caller upgrades it after a successful sign-in).</remarks>
+    public bool NeedsRehash(string hashedPassword)
+    {
+        ArgumentNullException.ThrowIfNull(hashedPassword);
+        var parts = hashedPassword.Split(':');
+        if (parts.Length != 4 || parts[0] != Algorithm || !int.TryParse(parts[1], out var iterations))
+            return true;
+        return iterations < _iterations;
+    }
+
     public bool Verify(string password, string hashedPassword)
     {
         ArgumentNullException.ThrowIfNull(password);

@@ -6105,17 +6105,23 @@ TenantId/ClientId/ClientSecret are `string?` whose setters do `Name = value!` / 
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:431`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `IsValidBCryptHash` accepted only `a`/`b` at index 2 (BCryptPasswordHasher.cs:431), so a PHP `$2y$` hash answered false from `Verify` and true from `NeedsRehash`. `y` is accepted; the output keeps the stored prefix (`salt[..29]`), so the recomputed hash matches. Tested by re-tagging a `$2a$` hash as `$2y$`.
+
 IsValidBCryptHash accepts only 'a' or 'b' at index 2. $2y$ is what PHP's password_hash and much of the ecosystem emit, and it is semantically identical to $2b$ for the <=72-byte inputs this class enforces — the class comment even argues that case for $2a$/$2b$. A migrated user store full of $2y$ hashes returns false from Verify (and true from NeedsRehash), which reads as a wrong password rather than an unsupported format.
 
 #### SH-L225 — BCrypt Verify honours a stored cost up to 31, so one hostile row costs 2^31 key schedules
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:344`
 
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-176]] (2026-11-06).** BCrypt held: `Verify` ran `1L << cost` with the cost read from the stored hash, up to 31. The PBKDF2 half was already fixed by SH-M246 (`MaxStoredIterations`). BCrypt now refuses a stored cost above `Math.Max(MaxStoredWorkFactor = 16, configured)` before any work, the same rule; a cost-18 row answers false in well under 2 s (it took ~16 s).
+
 `long rounds = 1L << cost` uses the cost parsed from the stored hash, not the hasher's configured work factor; HashPassword accepts anything in 4..31 (line 277). A single `$2a$31$…` row — from a corrupt migration or an attacker with write access to the password column — makes every login attempt against that account run ~2 billion ExpandKey pairs, pinning a CPU indefinitely. No verification-time ceiling exists, and the PBKDF2 sibling has the same shape with its iteration count.
 
 #### SH-L226 — Pbkdf2PasswordHasher exposes no NeedsRehash, so IPasswordHasher consumers cannot upgrade parameters
 
 `../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs:41`
+
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-176]] (2026-11-06).** The verify-time iteration ceiling the finding also mentions exists (SH-M246). What held: `NeedsRehash` was BCrypt-only and not on `IPasswordHasher`. It is now an interface member; `Pbkdf2PasswordHasher.NeedsRehash` answers true for fewer iterations than its own or a foreign format, and `Verify` keeps accepting the weaker hash so a caller can upgrade it. Only the two framework hashers implement the interface (Symbio only registers PBKDF2).
 
 BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHasher and Pbkdf2PasswordHasher has no equivalent. Verify also recomputes with the iteration count taken from the stored string with no floor (the constructor's 10,000 minimum is construction-only), so a hash written at 1,000 iterations verifies forever and nothing in the contract lets a caller detect it. Two implementations of one interface, two different upgrade stories.
 

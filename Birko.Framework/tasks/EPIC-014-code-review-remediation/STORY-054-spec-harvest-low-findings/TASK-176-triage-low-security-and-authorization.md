@@ -106,3 +106,6 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
 - **Static tokens and dispose** (SH-L220, SH-L238): `Task176StaticTokenTests`, **all 10 are contract pins** (green
   before and after): comparison timing is not observable in a unit test, and a double `ReaderWriterLockSlim.Dispose` was
   already harmless. They pin that the fixed-time comparison decides exactly as `==` did.
+- **Password hashers** (SH-L224, SH-L225, SH-L226): `Task176HasherTests` - the `$2y$` and ceiling tests red with their
+  fix disabled in place; the two `NeedsRehash`-through-the-interface tests do not compile against the old interface;
+  `A_hash_at_the_default_cost_still_verifies` is a contract pin.

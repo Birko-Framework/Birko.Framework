@@ -6,9 +6,10 @@ namespace Birko.Security.BCrypt.Hashing;
 
 /// <summary>
 /// BCrypt password hasher. Implements <see cref="IPasswordHasher"/> using the BCrypt adaptive hashing algorithm.
-/// Produces the standard BCrypt "$2a$" modular crypt format. Verification also accepts "$2b$"-tagged hashes from
-/// other implementations; the "$2a$"/"$2b$" semantic difference (a sign-extension wraparound for passwords &gt;=
-/// 256 bytes) cannot arise here because inputs are capped at 72 bytes, so both variants hash identically.
+/// Produces the standard BCrypt "$2a$" modular crypt format. Verification also accepts "$2b$"- and "$2y$"-tagged hashes
+/// from other implementations ("$2y$" is PHP's name for "$2b$", SH-L224); the "$2a$"/"$2b$" semantic difference (a
+/// sign-extension wraparound for passwords &gt;= 256 bytes) cannot arise here because inputs are capped at 72 bytes, so
+/// all three hash identically.
 /// </summary>
 /// <remarks>
 /// BCrypt is intentionally slow and includes a work factor that can be increased over time.
@@ -24,6 +25,14 @@ public class BCryptPasswordHasher : IPasswordHasher
 
     /// <summary>Default work factor (2^12 = 4096 iterations).</summary>
     public const int DefaultWorkFactor = 12;
+
+    /// <summary>
+    /// The highest stored cost <see cref="Verify"/> runs, unless this hasher is configured higher (SH-L225): 16, 16 times
+    /// the default's work. A stored cost is read from the hash itself, so one row tagged "$2a$31$" (a corrupt migration,
+    /// or anyone with write access to the column) made every login against it run 2^31 key schedules. PBKDF2's
+    /// iteration ceiling (SH-M246) is the same rule.
+    /// </summary>
+    public const int MaxStoredWorkFactor = 16;
 
     private readonly int _workFactor;
 
@@ -62,6 +71,11 @@ public class BCryptPasswordHasher : IPasswordHasher
         ArgumentNullException.ThrowIfNull(hashedPassword);
 
         if (!IsValidBCryptHash(hashedPassword))
+            return false;
+
+        // SH-L225: answered false before any work, as a corrupt hash is; NeedsRehash says nothing about such a row
+        // because Verify never succeeds on it.
+        if (StoredCost(hashedPassword) > Math.Max(MaxStoredWorkFactor, _workFactor))
             return false;
 
         // Extract the salt portion (first 29 characters: $2a$XX$ + 22 chars of salt)
@@ -423,12 +437,15 @@ public class BCryptPasswordHasher : IPasswordHasher
         return ((a + b) ^ c) + d;
     }
 
+    /// <summary>The cost a hash that passed <see cref="IsValidBCryptHash"/> was made with (its two digits at 4-5).</summary>
+    private static int StoredCost(string hash) => (hash[4] - '0') * 10 + (hash[5] - '0');
+
     private static bool IsValidBCryptHash(string hash)
     {
         if (hash.Length != 60
             || hash[0] != '$'
             || hash[1] != '2'
-            || (hash[2] != 'a' && hash[2] != 'b')
+            || (hash[2] != 'a' && hash[2] != 'b' && hash[2] != 'y') // SH-L224: $2y$ (PHP) is $2b$ under another name
             || hash[3] != '$'
             || hash[6] != '$')
         {
