@@ -2,7 +2,7 @@
 id: TASK-818
 parent: EPIC-001
 feature: null
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-06
@@ -32,8 +32,9 @@ The toolkit has `SelectPO` for a named `b-select`, but the picker's inner contro
       through the UI — open, search by code, click the option — and asserts the picker's `.value` holds them;
       `value(field)` reads it. `field` is a b-form field path (`[data-field]`) or a locator of the picker itself.
 - [x] Exposed as the `country` fixture of `withBirkoFixtures` and exported from `birko-web-testing/playwright`.
-- [ ] Proven by Symbio TASK-1068's three specs (they pass through it; a pick of a code the picker does not offer fails
-      loudly, not by timing out).
+- [x] Proven by Symbio TASK-1068's three specs (they pass through it; a pick of a code the picker does not offer fails
+      loudly, not by timing out). **Waived by the user (via symbio-32, 2026-11-06): the Playground check is the
+      proof; Symbio runs its three specs later and reports only a page-object failure.**
 
 ## Progress
 
@@ -51,3 +52,8 @@ The toolkit has `SelectPO` for a named `b-select`, but the picker's inner contro
 
 - The puppeteer lane (no consumer uses it for forms).
 - Changing the picker (TASK-817).
+
+## Outcome
+
+Merged 2026-11-06 as Birko.Web **v0.4.9** (`4ec0e3f` merge, `f73877e` version, tag local). The user closed it on the
+Playground check (`country-select-po-check.mjs`, 15/15 on main after the merge) without waiting for Symbio's specs.
