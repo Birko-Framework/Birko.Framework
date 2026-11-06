@@ -95,6 +95,7 @@ public static class SecurityServiceExtensions
         this IServiceCollection services,
         Action<BirkoSecurityOptions> configure)
     {
+        ArgumentNullException.ThrowIfNull(configure); // SH-L227: was a bare NullReferenceException from inside
         var options = new BirkoSecurityOptions();
         configure(options);
 

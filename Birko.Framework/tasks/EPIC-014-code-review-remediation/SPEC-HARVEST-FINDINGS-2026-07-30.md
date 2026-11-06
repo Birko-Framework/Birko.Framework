@@ -6075,11 +6075,15 @@ HasPermissionAsync only compares userId to ICurrentUser.UserId and then reads Pe
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:89`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** Neither `JwtTokenProvider.ValidateToken` (Birko.Security.Jwt/JwtTokenProvider.cs, its `TokenValidationParameters`) nor `AddBirkoJwtBearer` set `ValidAlgorithms`, so an HS512 token signed with the same secret validated (measured). Both now allow `HmacSha256` only, the one `GenerateToken` signs with.
+
 The TokenValidationParameters built at line 89 (and in AddBirkoJwtBearer, JwtBearerExtensions.cs:56) omit ValidAlgorithms, so a token signed HS384 or HS512 with the same secret validates even though GenerateToken only ever emits HS256. OidcIdTokenVerifier pins an explicit allow-list (line 35) and documents why; the symmetric paths inherit whatever the handler defaults to instead of asserting the one algorithm they mint.
 
 #### SH-L222 — AddBirkoJwtBearer validates only that Secret is non-empty, so a 4-character HMAC key passes startup
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:25`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `AddBirkoJwtBearer` checked only `IsNullOrEmpty(options.Secret)`; it now refuses a secret under `JwtBearerExtensions.MinSecretLength` (32) characters at registration. Symbio's secrets are 44-45 characters.
 
 The guard is `string.IsNullOrEmpty(options.Secret)` while JwtAuthenticationOptions.Secret's own doc says "minimum 32 characters recommended". A short secret survives registration and fails later inside IdentityModel at the first token signing (its own 128-bit floor), or — at 16-31 characters — signs successfully with a guessable key. The documented recommendation is enforced nowhere.
 
@@ -6111,11 +6115,15 @@ BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHashe
 
 `../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs:83`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `configure(options)` was called unguarded in `AddBirkoSecurity` (SecurityServiceExtensions.cs) and `AddBirkoJwtBearer` (JwtBearerExtensions.cs); both now throw `ArgumentNullException` first.
+
 `configure(options)` at SecurityServiceExtensions.cs:83 and JwtBearerExtensions.cs:23 dereference the delegate directly, so AddBirkoSecurity(null!) throws a bare NullReferenceException from inside the framework rather than the ArgumentNullException every other guarded member in the area raises (PermissionEndpointFilter:19, JwtTokenProvider:25, OidcIdTokenVerifier:66, all three configuration sources).
 
 #### SH-L228 — AddBirkoJwtBearer news up JwtTokenProvider, so a registered IDateTimeProvider is ignored
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:41`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `new Jwt.JwtTokenProvider(tokenOptions)` was built at registration with no clock, so the provider fell back to the system clock. It is now a factory registration passing `sp.GetService<IDateTimeProvider>()`; a registered fixed clock decides `ExpiresAt` (tested).
 
 `services.AddSingleton<ITokenProvider>(new Jwt.JwtTokenProvider(tokenOptions))` constructs the instance at registration time with the optional clock left null, so JwtTokenProvider falls back to SystemDateTimeProvider (line 26). An application that registers a TestDateTimeProvider or any custom IDateTimeProvider — the seam the constructor exists to offer, and which CR-L344 relies on for a single consistent iat/exp read — silently has no effect on issued tokens.
 

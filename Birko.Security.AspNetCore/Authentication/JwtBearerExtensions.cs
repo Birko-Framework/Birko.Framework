@@ -13,6 +13,9 @@ namespace Birko.Security.AspNetCore;
 /// </summary>
 public static class JwtBearerExtensions
 {
+    /// <summary>The shortest JWT secret <see cref="AddBirkoJwtBearer"/> accepts (SH-L222).</summary>
+    public const int MinSecretLength = 32;
+
     /// <summary>
     /// Adds JWT Bearer authentication using Birko.Security.Jwt.JwtTokenProvider.
     /// Configures ASP.NET Core Authentication + Authorization middleware.
@@ -21,11 +24,18 @@ public static class JwtBearerExtensions
         this IServiceCollection services,
         Action<JwtAuthenticationOptions> configure)
     {
+        ArgumentNullException.ThrowIfNull(configure); // SH-L227: was a bare NullReferenceException from inside
         var options = new JwtAuthenticationOptions();
         configure(options);
 
         if (string.IsNullOrEmpty(options.Secret))
             throw new ArgumentException("JWT Secret is required.", nameof(configure));
+        // SH-L222: the secret is the HMAC key, and its own doc asks for 32 characters. Only "non-empty" was checked, so
+        // a 4-character key passed startup and failed at the first signing (IdentityModel's 128-bit floor), and a
+        // 16-31 character one signed with a guessable key.
+        if (options.Secret.Length < MinSecretLength)
+            throw new ArgumentException(
+                $"JWT Secret must be at least {MinSecretLength} characters (it is {options.Secret.Length}).", nameof(configure));
 
         // Register options as singleton
         services.AddSingleton(options);
@@ -40,7 +50,9 @@ public static class JwtBearerExtensions
             ExpirationMinutes = options.ExpirationMinutes,
             RefreshExpirationDays = options.RefreshExpirationDays,
         };
-        services.AddSingleton<ITokenProvider>(new Jwt.JwtTokenProvider(tokenOptions));
+        // SH-L228: built when first resolved, so a registered IDateTimeProvider (a test clock, a custom one) stamps iat/exp.
+        // Constructed here at registration it always fell back to the system clock.
+        services.AddSingleton<ITokenProvider>(sp => new Jwt.JwtTokenProvider(tokenOptions, sp.GetService<Birko.Time.IDateTimeProvider>()));
 
         // Register TokenServiceAdapter (structured claims wrapper)
         services.AddSingleton<TokenServiceAdapter>();
@@ -65,6 +77,8 @@ public static class JwtBearerExtensions
                 IssuerSigningKey = key,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromSeconds(options.ClockSkewSeconds),
+                // SH-L221: only the algorithm the provider signs with (HS256); HS384/HS512 with the same secret validated.
+                ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
             };
 
             // A token from the query string for SSE (EventSource can't set headers) and WebSocket connections, and on

@@ -105,7 +105,10 @@ public class JwtTokenProvider : ITokenProvider
                 ValidateAudience = true,
                 ValidAudience = opts.Audience,
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(1)
+                ClockSkew = TimeSpan.FromMinutes(1),
+                // SH-L221: only the algorithm GenerateToken signs with. Without the list an HS384 or HS512 token made
+                // with the same secret validated too; OidcIdTokenVerifier pins its own list for the same reason.
+                ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
             };
 
             var principal = handler.ValidateToken(token, parameters, out _);

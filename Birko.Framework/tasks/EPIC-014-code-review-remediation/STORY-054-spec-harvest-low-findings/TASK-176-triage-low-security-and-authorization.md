@@ -3,7 +3,7 @@ id: TASK-176
 parent: STORY-054
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-08-09
@@ -82,3 +82,19 @@ explicitly with its reason rather than leaving the section as-is.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-176` — leave empty until then._
+
+## Progress — verified 2026-11-06
+
+All 23 checked against the code: **every one holds**; three are narrower than written (SH-L217: the option IS read,
+by `TenantHeaderClaimGuardMiddleware`, and ignored by the endpoint filter, the permission checker and owner access;
+SH-L225: the PBKDF2 half was already fixed by SH-M246, BCrypt's is not; SH-L226: the verify-time ceiling exists, the
+missing piece is `NeedsRehash`). Judgement calls made and recorded (no consumer is affected; the user can overrule):
+the wildcard option is honoured by every ASP.NET Core check and `AuthorizationContext` accepts `"*"`; the token
+adapter writes the `JwtClaimNames` (`sub`, `email`), as Symbio's own issuer does; a JWT secret under 32 characters is
+refused at startup (Symbio's are 44-45); `NeedsRehash` and key generation join their interfaces (only framework
+classes implement them; Symbio only registers the PBKDF2 hasher).
+
+Fixed in groups by root cause, each one commit with its tests, red-verified against the code before the fix:
+
+- **JWT registration** (SH-L221, SH-L222, SH-L227, SH-L228): `Task176JwtRegistrationTests`, 6 of 7 red before the fix;
+  `A_32_character_secret_is_accepted` passes either way (a contract pin).
