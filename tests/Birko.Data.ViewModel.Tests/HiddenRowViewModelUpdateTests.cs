@@ -53,6 +53,38 @@ public class HiddenRowViewModelUpdateTests
         protected override void MapToModel(PostVm source, Post target) { target.Guid = source.Guid; target.Title = source.Title; }
     }
 
+    /// <summary>
+    /// TASK-821, on the path it was found on: the view-model repository's <c>Delete</c> passes a fresh model carrying only
+    /// what <c>MapToModel</c> assigns, and the soft delete wrote it whole, so <c>Body</c> read back null (measured).
+    /// </summary>
+    [Fact]
+    public void Soft_deleting_through_a_view_model_keeps_the_columns_it_does_not_map()
+    {
+        var inner = new InMemoryStore<Post>();
+        var guid = inner.Create(new Post { Title = "t", Body = "kept" });
+        var repo = new SyncRepo(new SoftDeleteStoreWrapper<InMemoryStore<Post>, Post>(inner, new Clock()));
+
+        repo.Delete(repo.Read()!);
+
+        var row = inner.Read(guid)!;
+        row.DeletedAt.Should().NotBeNull("it is soft-deleted");
+        row.Body.Should().Be("kept", "an unmapped column survives a soft delete through a view model");
+    }
+
+    [Fact]
+    public async Task Soft_deleting_through_an_async_view_model_keeps_the_columns_it_does_not_map()
+    {
+        var inner = new AsyncInMemoryStore<Post>();
+        var guid = await inner.CreateAsync(new Post { Title = "t", Body = "kept" });
+        var repo = new AsyncRepo(new AsyncSoftDeleteStoreWrapper<AsyncInMemoryStore<Post>, Post>(inner, new Clock()));
+
+        await repo.DeleteAsync((await repo.ReadAsync())!);
+
+        var row = (await inner.ReadAsync(guid))!;
+        row.DeletedAt.Should().NotBeNull("it is soft-deleted");
+        row.Body.Should().Be("kept", "an unmapped column survives a soft delete through a view model");
+    }
+
     [Fact]
     public void Updating_a_soft_deleted_row_through_a_view_model_is_refused_and_leaves_the_row_as_it_was()
     {

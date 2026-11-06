@@ -35,6 +35,30 @@ public static class SoftDeleteFilter
         if (item is IDefaultMarker marked) marked.DefaultMarker = null;
     }
 
+    /// <summary>
+    /// What a soft delete of <paramref name="data"/> writes: a stamped COPY of the stored row, so every column the caller's
+    /// instance does not carry survives; the caller's instance is stamped too, as it always was.
+    /// </summary>
+    /// <remarks>
+    /// TASK-821: the decorators stamped and wrote the caller's instance whole. A view-model repository's <c>Delete</c>
+    /// passes a fresh model carrying only what <c>MapToModel</c> assigns, so the soft delete blanked every unmapped
+    /// column (measured), and a later <c>Restore</c> brought the row back without them. The copy is a memberwise clone
+    /// because the portable stores and caches hand back the instance they hold, and stamping that would change store
+    /// state before, and regardless of, the write (SH-H016). With no stored row the caller's instance is written, so the
+    /// store reports the missing key as before (<c>EntityNotFoundException</c>, TASK-555).
+    /// </remarks>
+    public static T ToWrite<T>(T data, T? stored, DateTime now) where T : class, ISoftDeletable
+    {
+        Stamp(data, now);
+        if (stored == null) return data;
+        var copy = (T)MemberwiseClone.Invoke(stored, null)!;
+        Stamp(copy, now);
+        return copy;
+    }
+
+    private static readonly System.Reflection.MethodInfo MemberwiseClone =
+        typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
     /// <summary>The native update of a filtered soft delete: <see cref="Stamp"/> as one statement.</summary>
     public static PropertyUpdate<T> Deletion<T>(DateTime now) where T : Birko.Data.Models.AbstractModel, ISoftDeletable
     {

@@ -61,10 +61,11 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
     public async Task DeleteAsync(T data, CancellationToken ct = default)
     {
         // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
-        if (data.Guid != null && (await _innerStore.ReadAsync(data.Guid.Value, ct))?.DeletedAt != null)
+        var stored = data.Guid != null ? await _innerStore.ReadAsync(data.Guid.Value, ct) : null;
+        if (stored?.DeletedAt != null)
             return;
-        SoftDeleteFilter.Stamp(data, _clock.UtcNow);
-        await _innerStore.UpdateAsync(data, ct: ct);
+        // TASK-821: the STORED row is stamped and written, not the caller's possibly partial instance.
+        await _innerStore.UpdateAsync(SoftDeleteFilter.ToWrite(data, stored, _clock.UtcNow), ct: ct);
     }
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)

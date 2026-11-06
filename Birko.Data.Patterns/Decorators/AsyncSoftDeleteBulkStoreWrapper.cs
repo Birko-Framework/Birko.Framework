@@ -81,9 +81,10 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
         var now = _clock.UtcNow;
         var items = data.ToList();
         var ids = items.Select(i => i.Guid).ToList();
-        var already = (await _innerStore.ReadAsync(x => ids.Contains(x.Guid) && x.DeletedAt != null, null, null, null, ct)).Select(x => x.Guid!.Value).ToHashSet();
-        var live = items.Where(i => i.Guid == null || !already.Contains(i.Guid.Value)).ToList();
-        foreach (var item in live) SoftDeleteFilter.Stamp(item, now);
+        // TASK-821: the stored rows are read whole, so each live one is stamped and written as stored, not as passed.
+        var stored = (await _innerStore.ReadAsync(x => ids.Contains(x.Guid), null, null, null, ct)).ToDictionary(x => x.Guid!.Value);
+        T? Row(T item) => item.Guid is Guid g && stored.TryGetValue(g, out var row) ? row : null;
+        var live = items.Where(i => Row(i)?.DeletedAt == null).Select(i => SoftDeleteFilter.ToWrite(i, Row(i), now)).ToList();
         if (live.Count > 0)
             await _innerStore.UpdateAsync(live, ct: ct);
     }

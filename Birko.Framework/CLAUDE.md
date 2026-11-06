@@ -293,6 +293,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A soft delete keeps every column of the stored row (2026-11-06)
+[[TASK-821]]. `SoftDeleteStoreWrapper.Delete` (sync, async, bulk) stamped and wrote the instance it was given, so
+deleting through a view-model repository, which passes a model carrying only what `MapToModel` assigns, blanked every
+unmapped column (measured) and a `Restore` brought the row back without them. It now stamps a copy of the stored row
+(`SoftDeleteFilter.ToWrite`); with no stored row the store still reports the missing key.
 ### ViewModel repositories skip an unchanged save; `ReadMode` and the hash are gone (2026-11-06)
 [[TASK-453]]. An update that changes nothing against the row it just read no longer reaches the store, single or
 bulk (`IsUnchanged`; the user's decision). It writes no audit stamp, `UpdatedAt` or event, accepted in writing. The
@@ -367,12 +372,6 @@ Gemini let a text part after a function call end the turn, and a blocked stream 
 an `error` event and kept a tool call cut off by `max_tokens`. `OpenAiCompatibleProviderBase` now parses with
 `ParseOpenAiStyleResponse`, so `"error": null`, `finish_reason` and `usage` are read. A failed Copilot sign-in is an
 error reply, not an exception. `OrchestratorAgent.ExtractTextFromContent` gives a single non-text block no text.
-### AI budgets check every scope; every request counts against the rate limit (2026-11-04)
-[[TASK-715]]. `CostTrackingService.CheckBudgetAsync` returned at a daily warning, so an exceeded monthly or project budget
-let the call through; it now answers the first exceeded budget, then the first warning. `TrackedLlmProvider` counted a
-request only when the reply carried usage, which the OpenAI-compatible providers never send (measured: a 1/minute limit
-let two calls through); every request now counts, a stream's tokens at its end (new `RecordTokens`).
-`AgentRegistration.Create` no longer writes into the caller's config.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

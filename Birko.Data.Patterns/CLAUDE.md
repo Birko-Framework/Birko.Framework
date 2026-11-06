@@ -18,7 +18,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 ### Soft Delete
 - `ISoftDeletable` - Interface with `DeletedAt` property (DateTime?)
 - `SoftDeleteFilter` - Static utility with `CombineWithNotDeleted<T>()` expression combiner
-- `SoftDeleteStoreWrapper<T>` - Wraps `IStore<T>`, intercepts `Delete()` to set `DeletedAt`
+- `SoftDeleteStoreWrapper<T>` - Wraps `IStore<T>`, intercepts `Delete()` to set `DeletedAt` on the STORED row (read, stamp a copy, write: TASK-821), so a partial instance, such as a view-model repository passes, never blanks a column; the caller's instance is stamped too
 - `SoftDeleteBulkStoreWrapper<T>` - Bulk store variant
 - `AsyncSoftDeleteStoreWrapper<T>` - Async store variant
 - `AsyncSoftDeleteBulkStoreWrapper<T>` - Async bulk store variant

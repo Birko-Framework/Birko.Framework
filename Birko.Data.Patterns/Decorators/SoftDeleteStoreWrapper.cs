@@ -61,10 +61,11 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>, IS
     public void Delete(T data)
     {
         // SH-M325 (TASK-159): an already-deleted row keeps its original deletion instant.
-        if (data.Guid != null && _innerStore.Read(data.Guid.Value)?.DeletedAt != null)
+        var stored = data.Guid != null ? _innerStore.Read(data.Guid.Value) : null;
+        if (stored?.DeletedAt != null)
             return;
-        SoftDeleteFilter.Stamp(data, _clock.UtcNow);
-        _innerStore.Update(data);
+        // TASK-821: the STORED row is stamped and written, not the caller's possibly partial instance.
+        _innerStore.Update(SoftDeleteFilter.ToWrite(data, stored, _clock.UtcNow));
     }
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)

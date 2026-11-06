@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — AI budgets check every scope; every request counts against the rate limit
+[[TASK-715]]. `CostTrackingService.CheckBudgetAsync` returned at a daily warning, so an exceeded monthly or project budget
+let the call through; it now answers the first exceeded budget, then the first warning. `TrackedLlmProvider` counted a
+request only when the reply carried usage, which the OpenAI-compatible providers never send (measured: a 1/minute limit
+let two calls through); every request now counts, a stream's tokens at its end (new `RecordTokens`).
+`AgentRegistration.Create` no longer writes into the caller's config.
+
 ## 2026-11-04 — A store delegate keeps the entity's key; a null entity is refused
 [[TASK-714]]. A store delegate returning a copy with its own Guid made a SQL update rewrite the original row's key
 (measured on SQLite); `StoreDelegates.Apply` now refuses it on every store. A null `Create` / `Update` is

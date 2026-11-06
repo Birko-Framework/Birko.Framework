@@ -2,7 +2,7 @@
 id: TASK-821
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-06
@@ -31,12 +31,31 @@ an `AbstractViewModelRepository` whose view model maps `Guid` and `Title` reads 
 
 ## Acceptance criteria
 
-- [ ] Reproduced as observed state in a committed test (the probe above), sync and async.
-- [ ] A soft delete stamps the STORED row, not the caller's instance (read, stamp, update, as the
+- [x] Reproduced as observed state in a committed test (the probe above), sync and async.
+- [x] A soft delete stamps the STORED row, not the caller's instance (read, stamp, update, as the
       already-deleted check reads it anyway), or an equivalent the measurement shows keeps every column.
-- [ ] The other decorators whose `Delete` writes the given entity are checked the same way and listed.
-- [ ] Recent Updates entry.
+- [x] The other decorators whose `Delete` writes the given entity are checked the same way and listed.
+- [x] Recent Updates entry (TASK-715 rolled to CHANGELOG to keep the budget).
 
 ## Human test plan
 
 N/A — fully covered by automated tests.
+
+## Outcome — 2026-11-06
+
+New `SoftDeleteFilter.ToWrite(data, stored, now)`: stamps the caller's instance (as before) and returns a stamped
+memberwise copy of the **stored** row to write; with no stored row it returns the caller's instance, so the store still
+reports a missing key (`EntityNotFoundException`). All four soft-delete paths use it: `SoftDeleteStoreWrapper.Delete`,
+`AsyncSoftDeleteStoreWrapper.DeleteAsync`, and the two bulk `Delete(IEnumerable)`, which now read the stored rows whole
+(they already read the deleted ones to skip them). The copy matters: the portable stores hand back the instance they
+hold, so stamping it would change store state before the write.
+
+**Other decorators checked:** of every `Delete(T)` / `DeleteAsync(T)` in `Birko.Data.*`, only the soft-delete wrappers
+write the given entity; audit, timestamp, sluggable, default, versioned, tenant and localized wrappers forward the
+delete. The filtered soft delete was already a native property update (`SoftDeleteFilter.Deletion`), which writes only
+the stamped columns.
+
+Tests: `Birko.Data.Patterns.Tests/Task821SoftDeleteKeepsColumnsTests` (single and bulk, sync and async, a stub holding
+only the Guid; the stored row asserted as observed state) plus the missing-key case; with the old `Delete` code put back,
+exactly the 4 column tests go red and the missing-key one stays green. On the path it was found:
+`HiddenRowViewModelUpdateTests.Soft_deleting_through_a_view_model_keeps_the_columns_it_does_not_map` (+ async).
