@@ -38,11 +38,11 @@ public sealed class TestTempDirectoryTests
         var file = Path.Combine(root, "locked.bin");
         try
         {
-            using (var held = new FileStream(file, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            using (var held = Unremovable(root, file))
             {
                 var removed = TestTempDirectory.DeleteOrRecord(root);
 
-                removed.Should().BeFalse("a file held open with no sharing cannot be deleted on Windows");
+                removed.Should().BeFalse("the directory was made unremovable");
                 TestTempDirectory.RecordedFailures.Should().Contain(root);
                 File.ReadAllText(TestTempDirectory.FailureLogPath).Should().Contain(root);
             }
@@ -53,5 +53,33 @@ public sealed class TestTempDirectoryTests
         }
 
         Directory.Exists(root).Should().BeFalse("once the handle is released the same helper removes it");
+    }
+
+    /// <summary>
+    /// Makes <paramref name="root"/> impossible to remove until disposed. On Windows a file held open with no sharing
+    /// does it; on Linux it does NOT (an open file can be unlinked: this test failed every CI run from TASK-302 until
+    /// TASK-820), so there the directory is made read-only, which stops a non-root user deleting its entries.
+    /// </summary>
+    private static IDisposable Unremovable(string root, string file)
+    {
+        var held = new FileStream(file, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        if (OperatingSystem.IsWindows()) return held;
+
+        held.Dispose();
+        var mode = File.GetUnixFileMode(root);
+        File.SetUnixFileMode(root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        var restore = new Restore(() => File.SetUnixFileMode(root, mode));
+        var probe = Path.Combine(root, "probe");
+        try { File.WriteAllText(probe, ""); }
+        catch (UnauthorizedAccessException) { return restore; }
+
+        restore.Dispose();
+        throw new InvalidOperationException(
+            "A read-only directory did not stop a write: running as root? This test needs a non-root user on Linux.");
+    }
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose() => undo();
     }
 }
