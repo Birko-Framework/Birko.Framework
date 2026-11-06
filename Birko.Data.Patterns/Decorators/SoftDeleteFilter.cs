@@ -51,12 +51,12 @@ public static class SoftDeleteFilter
     {
         Stamp(data, now);
         if (stored == null) return data;
-        var copy = (T)MemberwiseClone.Invoke(stored, null)!;
+        var copy = (T)CloneMethod.Invoke(stored, null)!;
         Stamp(copy, now);
         return copy;
     }
 
-    private static readonly System.Reflection.MethodInfo MemberwiseClone =
+    private static readonly System.Reflection.MethodInfo CloneMethod =
         typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
 
     /// <summary>The native update of a filtered soft delete: <see cref="Stamp"/> as one statement.</summary>
