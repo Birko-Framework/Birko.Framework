@@ -23,30 +23,9 @@ namespace Birko.Data.Repositories
     {
         #region Properties and Fields
 
-        // SH-M206 (TASK-162): one repository instance is shared by every caller (singleton registration,
-        // RepositoryLocator), and every read writes the hash table, so a plain Dictionary could be corrupted by two
-        // concurrent reads. A concurrent one, and a volatile flag the write guards read.
-        private volatile bool _isReadMode = false;
-        protected IDictionary<Guid, byte[]> _modelHash = new System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]>();
+        /// <summary>Serializes a model to decide whether an update changes it (<see cref="IsUnchanged"/>).</summary>
         protected ISerializer Serializer { get; set; }
         protected IAsyncStore<TModel>? Store { get; set; }
-
-        /// <inheritdoc />
-        public virtual bool ReadMode
-        {
-            get
-            {
-                return _isReadMode;
-            }
-            set
-            {
-                _isReadMode = value;
-                if (_isReadMode && _modelHash.Count > 0)
-                {
-                    _modelHash.Clear();
-                }
-            }
-        }
 
         #endregion
 
@@ -77,69 +56,16 @@ namespace Birko.Data.Repositories
 
         #endregion
 
-        #region Change Tracking Methods
+        #region Change Detection
 
         /// <summary>
-        /// Stores a hash of the model data for change tracking.
+        /// True when the model an update would write equals the row the update path just read, so the write would
+        /// change nothing and is skipped (TASK-453, the user's decision). The sync twin's remarks give the reasoning:
+        /// the baseline is the row just read, never a value cached earlier, and a skipped save has no audit stamp,
+        /// <c>UpdatedAt</c> bump, domain event or version check. No row is never "unchanged".
         /// </summary>
-        /// <param name="data">The model to hash.</param>
-        protected virtual void StoreHash(TModel data)
-        {
-            if (!ReadMode && data != null && data.Guid.HasValue)
-            {
-                var hash = CalculateHash(data);
-                _modelHash[data.Guid.Value] = hash;
-            }
-        }
-
-        /// <summary>
-        /// Calculates a hash of the model data.
-        /// </summary>
-        /// <param name="data">The model to hash.</param>
-        /// <returns>The hash bytes.</returns>
-        protected virtual byte[] CalculateHash(TModel data)
-        {
-            return Helpers.StringHelper.CalculateSHA256Hash(Serializer.Serialize(data));
-        }
-
-        /// <summary>
-        /// Removes the hash for a model.
-        /// </summary>
-        /// <param name="data">The model to remove the hash for.</param>
-        protected virtual void RemoveHash(TModel data)
-        {
-            if (!ReadMode && data != null && data.Guid.HasValue)
-            {
-                _modelHash.Remove(data.Guid.Value);
-            }
-        }
-
-        /// <summary>
-        /// Checks if the model data has changed by comparing hashes.
-        /// </summary>
-        /// <param name="data">The model to check.</param>
-        /// <param name="update">Whether to update the stored hash.</param>
-        /// <returns>True if the data has changed, false otherwise.</returns>
-        protected virtual bool CheckHashChange(TModel data, bool update = true)
-        {
-            var result = true;
-            if (data != null && data.Guid.HasValue)
-            {
-                var hash = CalculateHash(data);
-                if (_modelHash.TryGetValue(data.Guid.Value, out byte[]? storedHash)
-                    && Helpers.ObjectHelper.CompareHash(storedHash, hash))
-                {
-                    result = false;
-                }
-            }
-
-            if (update && data != null)
-            {
-                StoreHash(data);
-            }
-
-            return result;
-        }
+        protected virtual bool IsUnchanged(TModel item, TModel? stored)
+            => stored != null && Serializer.Serialize(item) == Serializer.Serialize(stored);
 
         #endregion
 
@@ -170,7 +96,6 @@ namespace Birko.Data.Repositories
             }
             TViewModel result = CreateInstance();
             result.LoadFrom(model);
-            StoreHash(model);
             return result;
         }
 
@@ -216,10 +141,11 @@ namespace Birko.Data.Repositories
             TModel? row = await Store.ReadAsync(result.Guid.Value, ct).ConfigureAwait(false);
             if (row == null)
             {
-                // Nothing to merge ONTO, so this behaves exactly as it did before the merge existed.
-                // NB no backend REPORTS a missing row, and null does not mean "absent" -- the soft-delete
-                // and tenant wrappers answer null for a row that exists and is hidden. See the
-                // synchronous twin; distinguishing the two is [[TASK-454]].
+                // Nothing to merge ONTO, so the fresh model is written and the STORE reports the missing row:
+                // UpdateAsync throws EntityNotFoundException for a key a backend does not hold (TASK-555), and
+                // SoftDeleteStoreWrapper does the same for a soft-deleted row, which its Read hides (TASK-159). So a
+                // hidden row is refused, never resurrected (TASK-454); a tenant-hidden one is refused by
+                // TenantStoreWrapper with TenantMismatchException. See the synchronous twin.
                 return new MergedModel(result, null);
             }
 
@@ -306,7 +232,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<Guid> CreateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null) throw NoStore();
             if (data == null) return Guid.Empty;
 
@@ -315,19 +240,14 @@ namespace Birko.Data.Repositories
             // return value (96 invocation sites, 0 consumers), so a delegate that returned a
             // REPLACEMENT instance used to be dropped and the pre-transform model persisted. Apply it
             // here, before the store sees the item -- the same fix the bulk path already carries
-            // (CR-H110). StoreHash stays inside the store delegate because CreateCore assigns
-            // data.Guid before invoking it, and the hash is keyed by Guid.
+            // (CR-H110).
             // The store's CreateCoreAsync assigns the identity (AbstractModel.EnsureGuid) *before* it invokes the store
             // delegate, so a ProcessDataDelegate used to be able to read the newly assigned key. Hoisting the transform
             // out would have silently taken that away, so the key is assigned here first; every store keeps a
             // pre-assigned Guid (TASK-556 made that true of the SQL and RavenDB bulk paths too).
             item.EnsureGuid();
             item = processDelegate?.Invoke(item) ?? item;
-            var guid = await Store.CreateAsync(item, (x) =>
-            {
-                StoreHash(x);
-                return x;
-            }, ct);
+            var guid = await Store.CreateAsync(item, null, ct);
             data.LoadFrom(item);
             return guid;
         }
@@ -335,7 +255,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task UpdateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null) throw NoStore();
             if (data == null) return;
 
@@ -345,33 +264,23 @@ namespace Birko.Data.Repositories
             // SH-H035: honour the transform's result (see CreateAsync).
             item = processDelegate?.Invoke(item) ?? item;
 
-            // SH-H035, the half this task deliberately does NOT enable. The `return null!` that used to
-            // come back from the store delegate was intended as "skip this write"; no backend reads that
-            // value, so it suppressed nothing and every Update reached the store. Making it real would
-            // have been a behaviour change far wider than the finding: AuditStoreWrapper,
-            // TimestampStoreWrapper and EventSourcingStoreWrapper all sit INSIDE Store.Update in
-            // StoreWrapperBuilder's recommended chain, so a suppressed write silently drops the audit
-            // stamp, the UpdatedAt bump and the domain event -- and VersionedStoreWrapper's optimistic
-            // check would stop seeing the caller's intent. Whether an unchanged save should be skipped is
-            // a design decision with those consequences attached, and it is [[TASK-453]]. The write
-            // therefore stays unconditional, exactly as it has always behaved.
-            await Store.UpdateAsync(item, null, ct).ConfigureAwait(false);
-            // The hash tracker's contract is unchanged: the stored hash is refreshed on a successful
-            // update, as CheckHashChange(x) did inside the delegate. Nothing gates a write on it.
-            StoreHash(item);
+            // TASK-453 (the user's decision): a save that changes nothing does not reach the store, judged against the
+            // row just read (see IsUnchanged).
+            if (!IsUnchanged(item, merged.Stored))
+            {
+                await Store.UpdateAsync(item, null, ct).ConfigureAwait(false);
+            }
             data.LoadFrom(item);
         }
 
         /// <inheritdoc />
         public virtual async Task DeleteAsync(TViewModel data, CancellationToken ct = default)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null) throw NoStore();
             if (data == null) return; // SH-M216 (TASK-162)
             // SH-M220 (TASK-162): through the LoadModelInstance hook, as every other path is; inlining it skipped an override.
             TModel item = LoadModelInstance(data);
             await Store.DeleteAsync(item, ct);
-            RemoveHash(item); // SH-M207 (TASK-162)
         }
 
         #endregion

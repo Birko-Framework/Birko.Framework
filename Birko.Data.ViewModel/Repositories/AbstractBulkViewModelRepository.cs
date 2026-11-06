@@ -68,7 +68,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Create(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel>)
             {
@@ -89,7 +88,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel>)
             {
@@ -98,21 +96,20 @@ namespace Birko.Data.Repositories
             // SH-H034: map onto the STORED row. Materialized deliberately, so every read happens
             // before any write rather than interleaving with the batch under lazy evaluation -- and so
             // the N-reads cost this carries is visible here rather than hidden in a Select.
+            // TASK-453: an item that changes nothing against the row just read is left out of the batch, as a single
+            // Update skips it; a batch with nothing left is not sent.
             var items = data.Select(x =>
             {
-                // The stored row itself is not needed here: the bulk path has never run the no-op hash
-                // check, and adding one would change bulk semantics beyond this fix.
-                TModel item = LoadModelInstanceForUpdate(x, out _);
+                TModel item = LoadModelInstanceForUpdate(x, out var stored);
                 item = processDelegate?.Invoke(item) ?? item;  // honor the transform result (CR-H110)
-                return item;
-            }).ToList();
-            (Store as IBulkStore<TModel>)?.Update(items);
+                return (item, unchanged: IsUnchanged(item, stored));
+            }).Where(x => !x.unchanged).Select(x => x.item).ToList();
+            if (items.Count > 0) (Store as IBulkStore<TModel>)?.Update(items);
         }
 
         /// <inheritdoc />
         public virtual void Update(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -123,7 +120,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(Expression<Func<TModel, bool>> filter, PropertyUpdate<TModel> updates)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -134,7 +130,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Delete(Expression<Func<TModel, bool>> filter)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -145,7 +140,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Delete(IEnumerable<TViewModel> data)
         {
-            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-M180 / CR-L239
             if (data == null) return; // SH-M216 (TASK-162): as the async twins do
             if (Store is not IBulkStore<TModel> bulkStore)
             {
@@ -153,7 +147,6 @@ namespace Birko.Data.Repositories
             }
             var models = data.Select(LoadModelInstance).ToList();
             bulkStore.Delete(models);
-            foreach (var model in models) RemoveHash(model); // TASK-646: as the async twin and the single delete do
         }
 
         #endregion

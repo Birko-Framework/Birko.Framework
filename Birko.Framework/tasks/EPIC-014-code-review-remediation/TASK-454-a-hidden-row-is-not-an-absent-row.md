@@ -2,7 +2,7 @@
 id: TASK-454
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-17
@@ -43,15 +43,28 @@ Coordinate with [[TASK-453]], which changes the same method to skip an unchanged
 
 ## Acceptance criteria
 
-- [ ] Reproduced as observed state — a soft-deleted row, updated through a ViewModel repository, read back
+- [x] Reproduced as observed state — a soft-deleted row, updated through a ViewModel repository, read back
       with `DeletedAt` cleared and an unmapped column blanked. Never as "no exception was thrown"
-- [ ] A decision on the contract: refuse the update, keep it hidden (no-op), or resurrect deliberately.
+- [x] A decision on the contract: refuse the update, keep it hidden (no-op), or resurrect deliberately.
       Whichever is chosen applies to **every** caller that reads a decorated store by key, not just this
       one — enumerate them first
-- [ ] `SoftDeleteStoreWrapper` gets the guard, or it is recorded why the tenant wrapper needs one and this
+- [x] `SoftDeleteStoreWrapper` gets the guard, or it is recorded why the tenant wrapper needs one and this
       does not
-- [ ] TASK-316's comment in `LoadModelInstanceForUpdate` is updated to point at whatever is decided
+- [x] TASK-316's comment in `LoadModelInstanceForUpdate` is updated to point at whatever is decided
 
 ## Human test plan
 
 `N/A — fully covered by automated tests.`
+
+## Outcome — 2026-11-06 (with [[TASK-453]])
+
+The contract was already decided by TASK-159 / TASK-649: refuse. `SoftDeleteStoreWrapper.Update` (sync and async)
+throws `EntityNotFoundException` for a soft-deleted row, and every backend's `Update` throws it for a key it does not hold
+(TASK-555); `TenantStoreWrapper.Update` refuses another tenant's row with `TenantMismatchException`. Pinned through the
+view-model path: `HiddenRowViewModelUpdateTests` (sync and async) soft-delete a row, update it through a view-model
+repository, and assert the refusal **and** the stored row as observed state: `DeletedAt` kept, mapped and unmapped
+columns intact. The comment in `LoadModelInstanceForUpdate[Async]` ("no backend REPORTS a missing row") now says what
+happens instead.
+
+Writing the test's setup found [[TASK-821]]: soft-deleting with a partial entity, which is what a view-model
+repository's `Delete` passes, blanks every column it does not carry.

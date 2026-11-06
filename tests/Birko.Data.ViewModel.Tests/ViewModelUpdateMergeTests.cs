@@ -298,17 +298,17 @@ public class ViewModelUpdateMergeTests
     // ---- SH-H035: decisions the store cannot take are taken in the repository ----
 
     [Fact]
-    public void An_unchanged_update_STILL_issues_its_write()
+    public void An_unchanged_update_does_not_reach_the_store()
     {
         var store = new ProbeStore();
         Seed(store);
         var repo = new SyncRepo(store);
 
-        var vm = repo.Read()!;   // records the hash
+        var vm = repo.Read()!;
         repo.Update(vm);         // nothing changed
 
-        store.UpdateCalls.Should().Be(1,
-            "SH-H035's skip half is deliberately NOT enabled. The `return null!` suppressed nothing because no backend reads a StoreDataDelegate's return value, and making it real would silently drop the audit stamp, the UpdatedAt bump and the domain event -- AuditStoreWrapper, TimestampStoreWrapper and EventSourcingStoreWrapper all sit inside Store.Update in StoreWrapperBuilder's recommended chain. That decision is TASK-453; until it is taken, the write stays unconditional exactly as it has always behaved.");
+        store.UpdateCalls.Should().Be(0,
+            "TASK-453, the user's decision (inverted from TASK-316's pin, rule 56): a save that changes nothing against the row just read does not reach the store; its audit stamp, UpdatedAt bump and domain event go with it, accepted in writing");
     }
 
     [Fact]
@@ -322,12 +322,50 @@ public class ViewModelUpdateMergeTests
         vm.Name = "edited";
         repo.Update(vm);
 
-        store.UpdateCalls.Should().Be(1, "a changed update must persist; with the skip deliberately unimplemented this is a contract pin rather than a bound on a guard");
+        store.UpdateCalls.Should().Be(1, "a changed update must persist: the bound on the TASK-453 skip");
         store.Read(vm.Guid!.Value)!.Name.Should().Be("edited");
     }
 
     [Fact]
-    public async Task An_unchanged_async_update_STILL_issues_its_write_and_a_changed_one_persists()
+    public void A_bulk_update_sends_only_the_items_that_changed_and_nothing_when_none_did()
+    {
+        var store = new ProbeStore();
+        Seed(store, "a");
+        Seed(store, "b");
+        var repo = new SyncBulkRepo(store);
+
+        var vms = repo.Read().ToList();
+        repo.Update(vms);
+        store.UpdateCalls.Should().Be(0, "TASK-453: no item changed against the row just read, so no batch is sent");
+
+        vms[0].Name = "a-edited";
+        repo.Update(vms);
+        store.UpdateCalls.Should().Be(1, "only the changed item is written");
+        store.Read(vms[0].Guid!.Value)!.Name.Should().Be("a-edited");
+        store.Read(vms[1].Guid!.Value)!.Name.Should().Be(vms[1].Name);
+    }
+
+    [Fact]
+    public async Task An_async_bulk_update_sends_only_the_items_that_changed_and_nothing_when_none_did()
+    {
+        var store = new AsyncProbeStore();
+        await SeedAsync(store, "a");
+        await SeedAsync(store, "b");
+        var repo = new AsyncBulkRepo(store);
+
+        var vms = new List<Vm>();
+        await foreach (var vm in repo.ReadAsync()) vms.Add(vm);
+        await repo.UpdateAsync(vms);
+        store.UpdateCalls.Should().Be(0, "TASK-453: no item changed against the row just read, so no batch is sent");
+
+        vms[1].Name = "b-edited";
+        await repo.UpdateAsync(vms);
+        store.UpdateCalls.Should().Be(1, "only the changed item is written");
+        (await store.ReadAsync(vms[1].Guid!.Value))!.Name.Should().Be("b-edited");
+    }
+
+    [Fact]
+    public async Task An_unchanged_async_update_does_not_reach_the_store_and_a_changed_one_persists()
     {
         var store = new AsyncProbeStore();
         await SeedAsync(store);
@@ -335,11 +373,11 @@ public class ViewModelUpdateMergeTests
 
         var vm = (await repo.ReadAsync())!;
         await repo.UpdateAsync(vm);
-        store.UpdateCalls.Should().Be(1, "see the synchronous twin -- the skip half is deliberately not enabled (TASK-453)");
+        store.UpdateCalls.Should().Be(0, "see the synchronous twin (TASK-453)");
 
         vm.Name = "edited";
         await repo.UpdateAsync(vm);
-        store.UpdateCalls.Should().Be(2);
+        store.UpdateCalls.Should().Be(1);
         (await store.ReadAsync(vm.Guid!.Value))!.Name.Should().Be("edited");
     }
 

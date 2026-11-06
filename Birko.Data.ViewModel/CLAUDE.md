@@ -13,8 +13,7 @@ the abstract repositories + interfaces **only** — the ViewModel base classes t
 
 - **ViewModel Repositories**: abstract sync/async (+ bulk) repositories and their interfaces
 - **ViewModel↔Model mapping**: `MapToModel` (abstract) + `LoadInstance` / `LoadModelInstance`
-- **Change Tracking**: SHA-256 model hash so a no-op update is skipped
-- **ReadMode guard**: write methods throw `InvalidOperationException` when the repository is read-only (CR-L239)
+- **Unchanged saves skipped**: an update that changes nothing against the row it just read does not reach the store (`IsUnchanged`, TASK-453); no audit stamp, `UpdatedAt` bump or event for it. The SHA-256 tracker and `ReadMode` were removed then
 - **Async Support**: full async/await pattern support
 
 > The `ViewModel`, `ModelViewModel`, `AbstractLogViewModel`, `LogViewModel` base classes are **not**

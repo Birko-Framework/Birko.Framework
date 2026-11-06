@@ -2,6 +2,8 @@
 area: repository-contract
 generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
 generated-on: 2026-10-16
+amended-on: 2026-11-06
+amended-by: "TASK-453/454 by hand, to match the code: the ViewModel change tracker and ReadMode removed, the unchanged-save skip, the hidden-row refusal. Not a regen."
 sources:
   - ../Birko.Data.Core/ViewModels/AbstractLogViewModel.cs
   - ../Birko.Data.Core/ViewModels/LogViewModel.cs
@@ -69,9 +71,8 @@ one store and forwards `Read`/`Create`/`Update`/`Delete`/`Count`/`Save` to it, a
 refusal when no store is present and a `CreateInstance` fallback. The **ViewModel repository** family
 (`Birko.Data.ViewModel`, plus the SQL specialisation in `Birko.Data.SQL.ViewModel`) sits over the same
 stores but presents a *presentation* type (`TViewModel`) instead of the persisted `TModel`. It owns the
-ViewModel↔Model mapping, a SHA-256 hash-based change tracker (which does not gate writes), a
-`ReadMode` switch that turns the repository read-only, and a filter contract expressed as
-`IFilter<TModel>` rather than a raw LINQ expression.
+ViewModel↔Model mapping, a skip of an update that changes nothing against the row just read (TASK-453),
+and a filter contract expressed as `IFilter<TModel>` rather than a raw LINQ expression.
 
 Consumers reach repositories either directly (constructed with a store), through the process-wide
 `RepositoryLocator` cache, or through the `AddRepository*` DI registration extensions. The
@@ -495,8 +496,7 @@ The system SHALL express the ViewModel-repository contract in terms of `IFilter<
 `Filter()` yields `Expression<Func<TModel, bool>>?`) rather than a raw expression, SHALL constrain
 `TViewModel : Models.ILoadable<TModel>` and `TModel : Models.AbstractModel`, and SHALL declare
 `CreateInstance()` (ViewModel) alongside `CreateModelInstance()` (Model) on both
-`IViewModelRepository<T, TModel>` and `IAsyncViewModelRepository<TViewModel, TModel>`; `ReadMode` SHALL
-be declared on the async interface only.
+`IViewModelRepository<T, TModel>` and `IAsyncViewModelRepository<TViewModel, TModel>`.
 
 #### Scenario: Filters are translated at the boundary
 
@@ -504,14 +504,6 @@ be declared on the async interface only.
 - **When** `Read(filter)` or `CountAsync(filter, ct)` runs
 - **Then** the repository passes `filter?.Filter()` to the store, so a `null` filter and a filter whose
   `Filter()` returns `null` are indistinguishable to the store
-
-#### Scenario: ReadMode is reachable only through the async interface
-
-- **Given** a caller holding `IViewModelRepository<TViewModel, TModel>`
-- **When** it looks for `ReadMode`
-- **Then** the member is absent from the sync interface (it exists as a public virtual property on
-  `AbstractViewModelRepository` and is declared only on `IAsyncViewModelRepository`), so the caller
-  cannot toggle the flag that the sync write methods enforce
 
 #### Scenario: Two instance factories exist side by side
 
@@ -528,23 +520,22 @@ The system SHALL require each concrete ViewModel repository to implement
 **create** through `LoadModelInstance` (create a fresh model, then `MapToModel`), SHALL build a Model for
 an **update** through `LoadModelInstanceForUpdate` / `LoadModelInstanceForUpdateAsync` (read the stored
 row by `Guid`, then `MapToModel` onto it, falling back to the fresh model when no such row exists), and
-SHALL build a ViewModel from a Model through `LoadInstance` (create a fresh ViewModel,
-`result.LoadFrom(model)`, then `StoreHash(model)`), returning `default` when the supplied model is
-`null`. Because an update maps onto a populated target, `MapToModel` SHALL assign the fields it owns
+SHALL build a ViewModel from a Model through `LoadInstance` (create a fresh ViewModel, then
+`result.LoadFrom(model)`), returning `default` when the supplied model is `null`. Because an update maps onto a populated target, `MapToModel` SHALL assign the fields it owns
 rather than accumulate into them.
 
-#### Scenario: Reading maps model to viewmodel and seeds change tracking
+#### Scenario: Reading maps model to viewmodel
 
 - **Given** a store that returns a non-null `TModel`
 - **When** `Read(filter)` runs
-- **Then** a new `TViewModel` is created, `LoadFrom(model)` is invoked on it, the model's hash is
-  recorded, and the ViewModel is returned
+- **Then** a new `TViewModel` is created, `LoadFrom(model)` is invoked on it, and the ViewModel is
+  returned; the repository keeps no per-entity state from the read
 
 #### Scenario: A null model yields a null viewmodel
 
 - **Given** `Store.Read(...)` returns `null`
 - **When** `LoadInstance(null)` runs
-- **Then** `default` is returned and no hash is stored
+- **Then** `default` is returned
 
 #### Scenario: Creating maps viewmodel to a fresh model
 
@@ -575,7 +566,16 @@ rather than accumulate into them.
 - **Given** a `TViewModel` whose `Guid` matches no stored row
 - **When** `Update(data)` runs
 - **Then** the freshly mapped model is handed to the store unchanged, so the store reports the missing
-  row exactly as it did before, rather than the repository raising a different failure
+  row (`EntityNotFoundException`, TASK-555) rather than the repository raising a different failure
+
+#### Scenario: Updating a row a decorator hides is refused, not resurrected
+
+- **Given** a row soft-deleted through `SoftDeleteStoreWrapper` (its `Read` answers `null`) and a
+  `TViewModel` carrying its `Guid`
+- **When** `Update(data)` / `UpdateAsync(data, ct)` runs through that wrapper
+- **Then** the fresh model reaches the wrapper's `Update`, which throws `EntityNotFoundException`; the
+  stored row keeps its `DeletedAt` and every column (TASK-454). A tenant-hidden row is refused by
+  `TenantStoreWrapper.Update` with `TenantMismatchException`
 
 #### Scenario: The viewmodel is refreshed from the persisted model
 
@@ -587,121 +587,71 @@ rather than accumulate into them.
 #### Scenario: Delete of a null viewmodel is a no-op
 
 - **Given** `Delete(null)` / `DeleteAsync(null)` on an `AbstractViewModelRepository` /
-  `AbstractAsyncViewModelRepository` with a non-null store and `ReadMode == false`
+  `AbstractAsyncViewModelRepository` with a non-null store
 - **When** the call runs
 - **Then** it returns early without reaching `MapToModel` or the store, as `Create` and `Update` do on
   `data == null`; a non-null ViewModel is mapped through `LoadModelInstance` on both the sync and async
   paths, so an override of that hook applies to deletes too
 
-### Requirement: ViewModel repositories track a SHA-256 model hash that does not gate the write
+### Requirement: An update that changes nothing does not reach the store
 
-The system SHALL maintain `IDictionary<Guid, byte[]> _modelHash` keyed by the model's `Guid`, backed by
-a `ConcurrentDictionary<Guid, byte[]>` (with the `ReadMode` flag `volatile`) because one repository
-instance is shared by every caller of a singleton registration or the locator, SHALL populate it from
-`StoreHash` (only when `ReadMode` is false and `data.Guid.HasValue`) using
-`StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, SHALL refresh the stored hash on a
-successful `Update`, and SHALL drop a model's hash through `RemoveHash` after a successful delete. The
-hash SHALL NOT decide whether the write happens: a single-item `Update` always reaches the store.
+The system SHALL, on the single-item `Update` / `UpdateAsync` and the bulk `Update(IEnumerable<TViewModel>)` /
+`UpdateAsync(IEnumerable<TViewModel>)`, compare the model it would write (after `MapToModel` and the transform) with
+the row `LoadModelInstanceForUpdate` / `LoadModelInstanceForUpdateAsync` read right before, through the protected
+virtual `IsUnchanged(item, stored)` (`Serializer.Serialize` of both, equal strings), and SHALL NOT call the store for
+an item that is unchanged; a bulk update SHALL send only the changed items and SHALL send no batch when none changed.
+A model with no stored row (`stored` null) SHALL always be written. The repository SHALL keep no per-entity state
+between calls: the SHA-256 tracker (`_modelHash`, `StoreHash`, `CalculateHash`, `CheckHashChange`, `RemoveHash`) and
+`ReadMode` are removed (TASK-453, the user's decision, 2026-11-04; breaking for Affiliate and FisData.Stock.Core).
 
-No store can take that decision — `StoreDataDelegate<T>`'s return value is read by no backend, so the
-`null!` that once expressed "skip this write" suppressed nothing. Taking the decision in the repository
-instead is a behavioural change rather than a repair, because `AuditStoreWrapper`,
-`TimestampStoreWrapper` and `EventSourcingStoreWrapper` all sit inside `Store.Update` in the recommended
-decorator chain, so a suppressed write would also drop the audit stamp, the `UpdatedAt` bump and the
-domain event. Whether to make that change is deferred.
+A skipped save produces no audit stamp, no `UpdatedAt` bump, no domain event and no optimistic version check, because
+`AuditStoreWrapper`, `TimestampStoreWrapper`, `EventSourcingStoreWrapper` and `VersionedStoreWrapper` run inside
+`Store.Update` and nothing was written. That consequence is accepted in writing.
 
-#### Scenario: An unchanged entity is written anyway
+#### Scenario: An unchanged entity is not written
 
-- **Given** an entity read through the repository (hash recorded) and re-submitted unmodified
-- **When** `Update(data)` runs
-- **Then** the store write is issued regardless, and the decorators inside it run as they always have
+- **Given** an entity read through the repository and re-submitted unmodified
+- **When** `Update(data)` / `UpdateAsync(data, ct)` runs
+- **Then** the store's `Update` is not called, and `data.LoadFrom(item)` still runs
 
 #### Scenario: A changed entity is written
 
 - **Given** an entity read through the repository and then mutated
 - **When** `Update(data)` runs
-- **Then** the model is handed to the store to persist and the recorded hash is refreshed afterwards
+- **Then** the merged model is handed to the store and persisted
 
-#### Scenario: An untracked entity is always considered changed
+#### Scenario: A restore of a concurrently changed value is written
 
-- **Given** a model whose `Guid` is absent from `_modelHash` (or is `null`)
-- **When** `CheckHashChange(data)` runs
-- **Then** it returns `true`, so the update proceeds
+- **Given** a caller who read a row, another writer who then changed it, and the caller re-submitting the value
+  they read
+- **When** `Update(data)` runs
+- **Then** the write happens, because the baseline is the row as read during this update, not at the caller's read
+
+#### Scenario: A retry after a failed write lands
+
+- **Given** an update whose store write threw
+- **When** the caller retries the same update
+- **Then** the write is issued again, because nothing was recorded as persisted ahead of the write
+
+#### Scenario: A bulk update sends only what changed
+
+- **Given** two entities read through a bulk ViewModel repository, one of them edited
+- **When** `Update(items)` / `UpdateAsync(items, storeDelegate, ct)` runs
+- **Then** only the edited entity is passed to the bulk store; with neither edited, the bulk store is not called
 
 #### Scenario: The serializer is pluggable with a JSON default
 
 - **Given** `AbstractViewModelRepository(store, serializer: null)`
-- **When** hashes are computed
-- **Then** `Serializer` is a `SystemJsonSerializer`; supplying an `ISerializer` replaces it and changes
-  the hash input
+- **When** `IsUnchanged` compares two models
+- **Then** `Serializer` is a `SystemJsonSerializer`; supplying an `ISerializer` replaces it and changes what counts as
+  equal
 
-#### Scenario: Change tracking survives a bulk read
+#### Scenario: There is no read mode
 
-- **Given** an `AbstractAsyncBulkViewModelRepository` and a bulk `ReadAsync(filter, limit, offset, ct)`
-- **When** each model is projected
-- **Then** `LoadInstance(model)` is used, so `StoreHash` runs for every bulk-read entity and a later
-  single-item `UpdateAsync` can still detect a no-op
-
-#### Scenario: Bulk writes do not update the hash table
-
-- **Given** a bulk `Create(data, processDelegate)` on `AbstractBulkViewModelRepository`
-- **When** the models are projected via `LoadModelInstance`
-- **Then** `StoreHash` is not called for them (unlike the single-item `Create`, whose store delegate
-  calls `StoreHash(x)`), so the entities remain untracked until read back
-
-#### Scenario: A deleted model is no longer tracked
-
-- **Given** a model whose hash was recorded by a read
-- **When** it is deleted through the single-item `Delete(vm)` / `DeleteAsync(vm)` or the bulk
-  `Delete(IEnumerable<TViewModel>)` / `DeleteAsync(IEnumerable<TViewModel>)`, and the store call returns
-- **Then** `RemoveHash` drops its entry from `_modelHash` (the sync bulk delete did not until TASK-646)
-
-#### Scenario: Concurrent reads share the hash table safely
-
-- **Given** one ViewModel repository instance used by several threads at once
-- **When** their reads each call `StoreHash`
-- **Then** the writes go to a `ConcurrentDictionary`, so concurrent recording cannot corrupt the table
-
-### Requirement: ReadMode makes a ViewModel repository read-only and clears change tracking
-
-The system SHALL, when `ReadMode` is set to `true`, clear `_modelHash` if it is non-empty, SHALL make
-`StoreHash` and `RemoveHash` no-ops while it stays `true`, and SHALL throw
-`InvalidOperationException("Repository is in Read Mode")` from every write entry point — single-item
-`Create`/`Update`/`Delete` (sync and async) and every bulk create/update/delete overload, including the
-filter-based ones — checking the flag *before* any store or null-argument check.
-
-#### Scenario: Enabling read mode drops tracked hashes
-
-- **Given** a repository with two tracked models
-- **When** `ReadMode = true` is assigned
-- **Then** `_modelHash.Clear()` runs and the count becomes zero
-
-#### Scenario: Writes are rejected in read mode
-
-- **Given** `ReadMode == true`
-- **When** `Create(vm)`, `Update(vm)`, `Delete(vm)`, `Update(filter, action)`, `Update(filter, updates)`
-  or `Delete(filter)` is called on the sync or async ViewModel repository
-- **Then** `InvalidOperationException` with message `Repository is in Read Mode` is thrown
-
-#### Scenario: The read-mode check precedes the store check
-
-- **Given** `ReadMode == true` and `Store == null`
-- **When** `CreateAsync(vm)` is awaited
-- **Then** the `Repository is in Read Mode` exception is thrown rather than the no-store exception
-
-#### Scenario: Reads remain available in read mode
-
-- **Given** `ReadMode == true`
-- **When** `Read(filter)` / `ReadAsync(filter, ct)` / `Count(filter)` is called
-- **Then** the operation proceeds normally, but `LoadInstance` records no hash because `StoreHash`
-  is gated on `!ReadMode`
-
-#### Scenario: Plain model repositories have no read mode
-
-- **Given** `AbstractRepository<T>` and `AbstractAsyncRepository<T>`
-- **When** their members are inspected
-- **Then** no `ReadMode` property or read-mode guard exists, so the non-ViewModel repositories can
-  always write
+- **Given** any ViewModel repository
+- **When** its members are inspected
+- **Then** no `ReadMode` property and no read-mode guard exist; a write is refused only for a missing store
+  (`NoStore()`) or a store that refuses it
 
 ### Requirement: ViewModel repositories refuse to operate without a store
 
@@ -709,12 +659,12 @@ The system SHALL throw, from `AbstractViewModelRepository` and `AbstractAsyncVie
 `InvalidOperationException` built by their protected `NoStore()` helper (message
 `{GetType().Name} has no store; construct it with one.`) whenever `Store` is `null` on `Read`,
 `ReadOne` (both forms), `Count`, `Create`, `Update` and `Delete` and their async counterparts — checked
-after the read-mode guard and before the `data == null` early return — and SHALL keep `Destroy` /
+before the `data == null` early return — and SHALL keep `Destroy` /
 `DestroyAsync` a silent no-op and `CreateModelInstance()` on its `Activator` fallback.
 
 #### Scenario: A store-less ViewModel repository refuses a create
 
-- **Given** an `AbstractViewModelRepository` whose `Store` is `null` and `ReadMode == false`
+- **Given** an `AbstractViewModelRepository` whose `Store` is `null`
 - **When** `Create(vm)` is called
 - **Then** `InvalidOperationException` containing `has no store` is thrown rather than `Guid.Empty`
   being returned
@@ -751,13 +701,6 @@ instance produced there would be discarded and the pre-transform model persisted
 - **Given** a `ProcessDataDelegate<TModel>` returning `null`
 - **When** `item = processDelegate?.Invoke(item) ?? item` executes
 - **Then** the pre-delegate `item` is used
-
-#### Scenario: The single-item create path stores the hash inside the store delegate
-
-- **Given** a single-item `Create(vm, processDelegate)`
-- **When** the store invokes the repository's `StoreDataDelegate`
-- **Then** `StoreHash(x)` is called on the model the store is persisting — the delegate is retained for
-  this alone, because `CreateCore` assigns `data.Guid` before invoking it and the hash is keyed by `Guid`
 
 #### Scenario: A single-item replacement instance reaches storage
 
@@ -798,13 +741,13 @@ The system SHALL check `Store is not IBulkStore<TModel>` in every `AbstractBulkV
 method and throw `ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}")`; SHALL
 perform that check in `Read(filter, limit, offset)` itself, which validates and then returns a separate
 `yield return` iterator, so the exception surfaces when `Read` is called; and SHALL return early, after
-the read-mode guard and before the store check, from the collection `Create`, `Update` and `Delete` when
+before the store check, from the collection `Create`, `Update` and `Delete` when
 `data` is `null`.
 
 #### Scenario: Bulk create against a non-bulk store throws ArgumentException
 
 - **Given** an `AbstractBulkViewModelRepository` whose `Store` is a plain `IStore<TModel>`
-- **When** `Create(items)` is called with `ReadMode == false`
+- **When** `Create(items)` is called
 - **Then** `ArgumentException` is thrown (not the `InvalidOperationException` used by the non-ViewModel
   `AbstractBulkRepository` for the same condition)
 
@@ -822,7 +765,7 @@ the read-mode guard and before the store check, from the collection `Create`, `U
 
 #### Scenario: Null data on a sync bulk write is silently ignored
 
-- **Given** `ReadMode == false`
+- **Given** any bulk ViewModel repository
 - **When** `Create((IEnumerable<TViewModel>)null!)`, `Update(null!)` or `Delete(null!)` is called
 - **Then** the method returns without checking or calling the store, as the async twins do
 
@@ -856,7 +799,7 @@ early (no exception) only when `data` is `null` on a valid bulk store.
 
 #### Scenario: Missing bulk store refuses a bulk write
 
-- **Given** the same repository with `ReadMode == false`
+- **Given** the same repository
 - **When** `await UpdateAsync(filter, updates)` or `await DeleteAsync(filter)` is awaited
 - **Then** `InvalidOperationException` is thrown and nothing is written
 
@@ -870,7 +813,7 @@ early (no exception) only when `data` is `null` on a valid bulk store.
 
 #### Scenario: Null data on an async bulk write is silently ignored
 
-- **Given** `ReadMode == false` and a valid `BulkStore`
+- **Given** a valid `BulkStore`
 - **When** `await CreateAsync((IEnumerable<TViewModel>)null!)` is awaited
 - **Then** the method returns without calling the store and without throwing
 
@@ -881,12 +824,12 @@ early (no exception) only when `data` is `null` on a valid bulk store.
 - **Then** `data.Select(LoadModelInstance)` is passed to `BulkStore.CreateAsync` unmaterialised — no
   intermediate `ToList()` — and the store drives the enumeration
 
-#### Scenario: Deleted models are materialised so their hashes can be dropped
+#### Scenario: Deleted models are materialised before the store call
 
 - **Given** `DeleteAsync(IEnumerable<TViewModel> data, ct)`
 - **When** it runs
 - **Then** `data.Select(LoadModelInstance).ToList()` is passed to `BulkStore.DeleteAsync`, and after it
-  returns `RemoveHash` runs for each of those models
+  returns nothing else runs (the hash pruning went with the tracker, TASK-453)
 
 #### Scenario: The bulk update materialises the merged models before writing
 
@@ -894,7 +837,7 @@ early (no exception) only when `data` is `null` on a valid bulk store.
 - **When** it runs
 - **Then** each ViewModel is awaited through `LoadModelInstanceForUpdateAsync` (one stored-row read per
   entity) into a `List<TModel>`, and only after every read has completed is the list passed to
-  `BulkStore.UpdateAsync(items, storeDelegate, ct)`
+  `BulkStore.UpdateAsync(items, storeDelegate, ct)`, holding only the items that changed (none: no call, TASK-453)
 
 ### Requirement: SQL ViewModel repositories validate the store type through wrappers and expose the connector
 

@@ -21,29 +21,9 @@ namespace Birko.Data.Repositories
     {
         #region Properties and Fields
 
-        // SH-M206 (TASK-162): one repository instance is shared by every caller (singleton registration,
-        // RepositoryLocator), and every read writes the hash table, so a plain Dictionary could be corrupted by two
-        // concurrent reads. A concurrent one, and a volatile flag the write guards read.
-        private volatile bool _isReadMode = false;
-        protected IDictionary<Guid, byte[]> _modelHash = new System.Collections.Concurrent.ConcurrentDictionary<Guid, byte[]>();
+        /// <summary>Serializes a model to decide whether an update changes it (<see cref="IsUnchanged"/>).</summary>
         protected ISerializer Serializer { get; set; }
         protected IStore<TModel>? Store { get; set; }
-
-        /// <summary>
-        /// Gets or sets read mode. When enabled, change tracking is disabled.
-        /// </summary>
-        public virtual bool ReadMode
-        {
-            get => _isReadMode;
-            set
-            {
-                _isReadMode = value;
-                if (_isReadMode && _modelHash.Count > 0)
-                {
-                    _modelHash.Clear();
-                }
-            }
-        }
 
         #endregion
 
@@ -77,50 +57,28 @@ namespace Birko.Data.Repositories
 
         #endregion
 
-        #region Change Tracking Methods
+        #region Change Detection
 
-        protected virtual void StoreHash(TModel data)
-        {
-            if (!ReadMode && data != null && data.Guid.HasValue)
-            {
-                var hash = CalculateHash(data);
-                _modelHash[data.Guid.Value] = hash;
-            }
-        }
-
-        protected virtual byte[] CalculateHash(TModel data)
-        {
-            return Helpers.StringHelper.CalculateSHA256Hash(Serializer.Serialize(data));
-        }
-
-        protected virtual void RemoveHash(TModel data)
-        {
-            if (!ReadMode && data != null && data.Guid.HasValue)
-            {
-                _modelHash.Remove(data.Guid.Value);
-            }
-        }
-
-        protected virtual bool CheckHashChange(TModel data, bool update = true)
-        {
-            var result = true;
-            if (data != null && data.Guid.HasValue)
-            {
-                var hash = CalculateHash(data);
-                if (_modelHash.TryGetValue(data.Guid.Value, out byte[]? storedHash)
-                    && Helpers.ObjectHelper.CompareHash(storedHash, hash))
-                {
-                    result = false;
-                }
-            }
-
-            if (update && data != null)
-            {
-                StoreHash(data);
-            }
-
-            return result;
-        }
+        /// <summary>
+        /// True when the model an update would write equals the row the update path just read, so the write would
+        /// change nothing and is skipped (TASK-453, the user's decision).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The baseline is <paramref name="stored"/>, the row <see cref="LoadModelInstanceForUpdate"/> read right before
+        /// the write, never a value cached at the caller's earlier read. That keeps the two traps TASK-316 measured
+        /// shut: a caller restoring a value someone else changed differs from the CURRENT row and is written; and
+        /// nothing is recorded as persisted ahead of a write, so a retry after a failed write still differs and lands.
+        /// It replaces the SHA-256 tracker, which hashed every model on every read and gated nothing.
+        /// </para>
+        /// <para>
+        /// Accepted in writing: a skipped save produces no audit stamp, no <c>UpdatedAt</c> bump, no domain event and no
+        /// optimistic version check, because nothing was written. No row (<paramref name="stored"/> null) is never
+        /// "unchanged": the write goes ahead as it always did.
+        /// </para>
+        /// </remarks>
+        protected virtual bool IsUnchanged(TModel item, TModel? stored)
+            => stored != null && Serializer.Serialize(item) == Serializer.Serialize(stored);
 
         #endregion
 
@@ -146,7 +104,6 @@ namespace Birko.Data.Repositories
             }
             TViewModel result = CreateInstance();
             result.LoadFrom(model);
-            StoreHash(model);
             return result;
         }
 
@@ -201,9 +158,11 @@ namespace Birko.Data.Repositories
             TModel? row = Store.Read(result.Guid.Value);
             if (row == null)
             {
-                // Nothing to merge with, so this behaves exactly as it did before the merge existed.
-                // NB no backend REPORTS a missing row -- SQL updates zero rows, the portable stores
-                // silently do nothing -- so do not read this path as a failure surfacing anywhere.
+                // Nothing to merge with, so the fresh model is written and the STORE reports the missing row:
+                // every backend's Update throws EntityNotFoundException for a key it does not hold (TASK-555), and
+                // SoftDeleteStoreWrapper does the same for a soft-deleted row, which its Read hides (TASK-159). So a
+                // hidden row is refused here, never resurrected (TASK-454). A tenant-hidden row is refused by
+                // TenantStoreWrapper.Update with TenantMismatchException.
                 return result;
             }
 
@@ -324,10 +283,6 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual Guid Create(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
-            if (ReadMode)
-            {
-                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            }
             if (Store == null) throw NoStore();
             if (data == null) return Guid.Empty;
 
@@ -336,19 +291,14 @@ namespace Birko.Data.Repositories
             // return value (96 invocation sites, 0 consumers), so a delegate that returned a
             // REPLACEMENT instance used to be dropped and the pre-transform model persisted. Apply it
             // here, before the store sees the item -- the same fix the bulk path already carries
-            // (CR-H110). StoreHash stays inside the store delegate because CreateCore assigns
-            // data.Guid before invoking it, and the hash is keyed by Guid.
+            // (CR-H110).
             // The store's CreateCore assigns the identity (AbstractModel.EnsureGuid) *before* it invokes the store
             // delegate, so a ProcessDataDelegate used to be able to read the newly assigned key. Hoisting the transform
             // out would have silently taken that away, so the key is assigned here first; every store keeps a
             // pre-assigned Guid (TASK-556 made that true of the SQL and RavenDB bulk paths too).
             item.EnsureGuid();
             item = processDelegate?.Invoke(item) ?? item;
-            var guid = Store.Create(item, (x) =>
-            {
-                StoreHash(x);
-                return x;
-            });
+            var guid = Store.Create(item);
             data.LoadFrom(item);
             return guid;
         }
@@ -356,47 +306,30 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
-            if (ReadMode)
-            {
-                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            }
             if (Store == null) throw NoStore();
             if (data == null) return;
 
             // SH-H034: map onto a detached copy of the STORED row, never onto a fresh instance.
-            TModel item = LoadModelInstanceForUpdate(data, out _);
+            TModel item = LoadModelInstanceForUpdate(data, out var stored);
             // SH-H035: honour the transform's result (see Create).
             item = processDelegate?.Invoke(item) ?? item;
 
-            // SH-H035, the half this task deliberately does NOT enable. The `return null!` that used to
-            // come back from the store delegate was intended as "skip this write"; no backend reads that
-            // value, so it suppressed nothing and every Update reached the store. Making it real would
-            // have been a behaviour change far wider than the finding: AuditStoreWrapper,
-            // TimestampStoreWrapper and EventSourcingStoreWrapper all sit INSIDE Store.Update in
-            // StoreWrapperBuilder's recommended chain, so a suppressed write silently drops the audit
-            // stamp, the UpdatedAt bump and the domain event -- and VersionedStoreWrapper's optimistic
-            // check would stop seeing the caller's intent. Whether an unchanged save should be skipped is
-            // a design decision with those consequences attached, and it is [[TASK-453]]. The write
-            // therefore stays unconditional, exactly as it has always behaved.
-            Store.Update(item);
-            // The hash tracker's contract is unchanged: the stored hash is refreshed on a successful
-            // update, as CheckHashChange(x) did inside the delegate. Nothing gates a write on it.
-            StoreHash(item);
+            // TASK-453 (the user's decision): a save that changes nothing does not reach the store, judged against the
+            // row just read. Its audit stamp, UpdatedAt bump, domain event and version check go with it, in writing.
+            if (!IsUnchanged(item, stored))
+            {
+                Store.Update(item);
+            }
             data.LoadFrom(item);
         }
 
         /// <inheritdoc />
         public virtual void Delete(TViewModel data)
         {
-            if (ReadMode)
-            {
-                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
-            }
             if (Store == null) throw NoStore();
             if (data == null) return; // SH-M216 (TASK-162): as Create and Update do
             TModel item = LoadModelInstance(data);
             Store.Delete(item);
-            RemoveHash(item); // SH-M207 (TASK-162): a deleted model is no longer tracked
         }
 
         #endregion

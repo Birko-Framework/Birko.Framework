@@ -131,11 +131,6 @@ namespace Birko.Data.Repositories
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>
-        /// Gets or sets a value indicating whether the repository is in read-only mode.
-        /// </summary>
-        bool ReadMode { get; set; }
-
-        /// <summary>
         /// Creates a new instance of the view model type.
         /// </summary>
         /// <returns>A new instance of type TViewModel.</returns>

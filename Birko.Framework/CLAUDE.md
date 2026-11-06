@@ -293,6 +293,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### ViewModel repositories skip an unchanged save; `ReadMode` and the hash are gone (2026-11-06)
+[[TASK-453]]. An update that changes nothing against the row it just read no longer reaches the store, single or
+bulk (`IsUnchanged`; the user's decision). It writes no audit stamp, `UpdatedAt` or event, accepted in writing. The
+SHA-256 tracker, which hashed every model on every read and gated nothing, is deleted. **Breaking:** `ReadMode` is
+removed with it, write guard included; Affiliate and FisData.Stock.Core stop compiling until their calls go.
+[[TASK-454]]: a view-model update of a soft-deleted row is refused (`EntityNotFoundException`), pinned.
 ### Concurrent first table builds publish one consistent table (2026-11-06)
 [[TASK-276]]. A table build writes into the cached field objects every build of the type shares (`field.Table`,
 `IsPrimary`, `IsIndexed`), so two concurrent first `LoadTable` calls published a table whose fields pointed at the losing

@@ -31,7 +31,6 @@ public class ViewModelRepositoryTriageTests
     private sealed class Repo : AbstractBulkViewModelRepository<Vm, Model>
     {
         public Repo(IBulkStore<Model>? store) : base(store) { }
-        public int Tracked => _modelHash.Count;
         protected override void MapToModel(Vm source, Model target) { target.Guid = source.Guid; target.Name = source.Name; }
     }
 
@@ -53,47 +52,6 @@ public class ViewModelRepositoryTriageTests
             LastOrder = orderBy;
             return base.Read(filter, orderBy, limit, offset);
         }
-    }
-
-    /// <summary>SH-M207: a deleted model stayed tracked for the repository's lifetime; nothing pruned the hash table.</summary>
-    [Fact]
-    public void Deleting_a_view_model_stops_tracking_it()
-    {
-        var repo = new Repo(new InMemoryStore<Model>());
-        repo.Create(new Vm { Name = "a" });
-        var read = repo.Read().Single();
-        repo.Tracked.Should().Be(1);
-
-        repo.Delete(read);
-
-        repo.Tracked.Should().Be(0);
-    }
-
-    /// <summary>TASK-646: the sync bulk delete pruned nothing, unlike its async twin and the single delete.</summary>
-    [Fact]
-    public void Deleting_a_batch_of_view_models_stops_tracking_them()
-    {
-        var repo = new Repo(new InMemoryStore<Model>());
-        repo.Create(new Vm { Name = "a" });
-        repo.Create(new Vm { Name = "b" });
-        var read = repo.Read().ToList();
-        repo.Tracked.Should().Be(2);
-
-        repo.Delete(read);
-
-        repo.Tracked.Should().Be(0);
-    }
-
-    /// <summary>SH-M206 (pin): one repository serves concurrent readers; the hash table must survive them.</summary>
-    [Fact]
-    public void Concurrent_reads_on_one_repository_track_every_row_once()
-    {
-        var repo = new Repo(new InMemoryStore<Model>());
-        for (var i = 0; i < 50; i++) repo.Create(new Vm { Name = "n" + i });
-
-        Parallel.For(0, 32, _ => repo.Read().ToList());
-
-        repo.Tracked.Should().Be(50);
     }
 
     /// <summary>SH-M214: a page read sent no order, so consecutive pages could repeat and skip rows.</summary>

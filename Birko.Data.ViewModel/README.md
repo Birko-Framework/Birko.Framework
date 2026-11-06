@@ -12,8 +12,7 @@ with built-in change tracking.
 ## Features
 
 - Abstract sync/async ViewModel repositories with ViewModel↔Model mapping (`MapToModel` / `LoadInstance`)
-- Change tracking (SHA-256 model hash) so a no-op update is skipped
-- `ReadMode` guard — write methods throw `InvalidOperationException` when the repo is read-only
+- An update that changes nothing against the row it just read does not reach the store (single and bulk; TASK-453). No audit stamp, `UpdatedAt` bump or domain event is produced for it
 - Bulk operation support (`Create`/`Update`/`Delete` over `IEnumerable<TViewModel>` + filter-based overloads)
 
 ## Installation

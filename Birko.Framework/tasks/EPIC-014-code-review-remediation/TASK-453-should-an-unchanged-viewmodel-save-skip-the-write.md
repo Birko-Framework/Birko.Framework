@@ -2,7 +2,7 @@
 id: TASK-453
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-09-17
@@ -78,15 +78,41 @@ an unchanged save writes nothing, and a changed save still writes.
 
 ## Acceptance criteria
 
-- [ ] A decision is taken and recorded: skip, or keep the write unconditional and **delete** the hash
+- [x] A decision is taken and recorded: skip, or keep the write unconditional and **delete** the hash
       apparatus rather than leaving it computing a hash nothing reads
-- [ ] If skipping: both traps above are implemented and their existing tests still pass, and the audit /
+- [x] If skipping: both traps above are implemented and their existing tests still pass, and the audit /
       timestamp / event-sourcing consequence is either accepted **in writing** or avoided by moving the
       decision below those decorators
-- [ ] If not skipping: `CalculateHash` / `StoreHash` / `CheckHashChange` / `_modelHash` are removed or
+- [x] (n/a, skipping chosen) If not skipping: `CalculateHash` / `StoreHash` / `CheckHashChange` / `_modelHash` are removed or
       given a stated purpose, and `TASK-316`'s two `…_STILL_issues_its_write` pins are updated to say so
-- [ ] `docs/specs/repository-contract.md` matches whichever answer is taken
+- [x] `docs/specs/repository-contract.md` matches whichever answer is taken
 
 ## Human test plan
 
 `N/A — fully covered by automated tests.`
+
+## Outcome — 2026-11-06
+
+Done as decided. `Update` / `UpdateAsync`, single and bulk, compare the model they would write (after `MapToModel` and
+the transform) with the row `LoadModelInstanceForUpdate[Async]` read right before, via a protected virtual
+`IsUnchanged(item, stored)` (the repository's serializer on both sides, as the hash used). Unchanged: no store call;
+a bulk batch sends only changed items, and nothing when none changed (applied to bulk because the decision says an
+unchanged save never reaches the store and does not exempt it). No stored row is never unchanged. Deleted: `_modelHash`,
+`StoreHash`, `CalculateHash`, `CheckHashChange`, `RemoveHash` (single, bulk, async), and `ReadMode` (property, the
+async interface member, and all 18 write guards).
+
+**Found before removing `ReadMode`, and put to the user:** it was not only the hash switch, it also made every write
+throw. Affiliate uses that (public site read-only via `InitReadMode`, admin controllers toggle it around writes). The
+user chose to remove it anyway. **FisData.Stock.Core** (`SimpleService`, `TreeService`) uses it the same way and also
+stops compiling; it was not named in the decision, has had no commit since 2026-03-28, and is being folded into Symbio.
+
+Tests (`Birko.Data.ViewModel.Tests`, 38): TASK-316's two `…_STILL_issues_its_write` pins inverted (rule 56) to
+`An_unchanged_update_does_not_reach_the_store` and its async twin; new bulk tests, sync and async. Both traps' tests
+(`An_update_that_restores_a_concurrently_changed_row_is_not_skipped`, `An_update_retried_after_a_failed_write_still_lands`
++ async) unchanged and green. With `IsUnchanged` forced to `false`, exactly the four skip tests go red. The ReadMode
+tests are deleted (`SingleItemViewModelRepositoryReadModeTests`) or reduced to the CR-M179 hook test
+(`AsyncBulkReadThroughLoadInstanceTests`); the three hash-bookkeeping tests in the triage file are deleted. All 37 test
+projects importing `Birko.Data.ViewModel` green (offline). Spec `repository-contract.md` amended by hand to match, and
+stamped as such (not a regen).
+
+Spawned: [[TASK-821]] (P1): soft-deleting through a view-model repository blanks every unmapped column, measured.
