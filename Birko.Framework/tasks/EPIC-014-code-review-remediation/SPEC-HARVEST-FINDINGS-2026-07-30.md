@@ -6227,6 +6227,8 @@ Dispose reads and writes the plain bool `_disposed` with no lock, Interlocked or
 
 `../Birko.Security.Jwt/OpenIdConnect/HttpOidcSigningKeySource.cs:53`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** The cache was keyed by provider only (HttpOidcSigningKeySource.cs `_cache[provider]`) and the fetch had no gate. It is keyed by provider and `JwksUri`, and a per-key `SemaphoreSlim` lets one fetch run while concurrent callers wait and then read the cache (a forced refresh takes only a fetch made after it asked). Measured: 20 concurrent first logins made 20 GETs, now 1; a provider moved to a new endpoint gets the new keys.
+
 The ConcurrentDictionary is keyed by provider with OidcProviderOptions.JwksUri excluded, so reconfiguring a provider's JWKS endpoint keeps serving keys fetched from the old URI for up to the cache duration. There is also no per-provider lock around the fetch, so every concurrent login at expiry issues its own GET — the two behaviours together mean the cache neither invalidates on configuration change nor collapses a burst.
 
 ### area: serialization

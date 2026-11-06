@@ -113,3 +113,4 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
 - **Vault and Key Vault** (SH-L223, SH-L231, SH-L232, SH-L233, SH-L234): `Task176VaultTests` + `Task176AzureKeyVaultSettingsTests`,
   6 red with each fix disabled in place; four contract pins (KvVersion 1 and 2, a timeout still unhealthy, a caller's
   client left open).
+- **JWKS cache** (SH-L239): `Task176JwksCacheTests`, 2 of 3 red against the original; cache reuse is a contract pin.

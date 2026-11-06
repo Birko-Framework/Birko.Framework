@@ -34,8 +34,16 @@ public class HttpOidcSigningKeySource : IOidcSigningKeySource
     private readonly TimeSpan _cacheDuration;
     private readonly TimeSpan _maxStaleAge;
     private readonly IDateTimeProvider _clock;
+    // SH-L239: keyed by provider AND JWKS URI, so a provider reconfigured to another endpoint is fetched afresh rather than
+    // served the old endpoint's keys for the rest of the cache window.
     private readonly ConcurrentDictionary<string, CacheEntry> _cache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    // SH-L239: one fetch per key at a time; a burst of logins at expiry waits for it instead of each issuing a GET.
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static string CacheKey(string provider, OidcProviderOptions options) => provider + "|" + options.JwksUri;
 
     private sealed record CacheEntry(IReadOnlyCollection<SecurityKey> Keys, DateTimeOffset FetchedAt);
 
@@ -69,14 +77,38 @@ public class HttpOidcSigningKeySource : IOidcSigningKeySource
     public async Task<IReadOnlyCollection<SecurityKey>> GetSigningKeysAsync(
         string provider, OidcProviderOptions options, bool forceRefresh, CancellationToken ct = default)
     {
+        var key = CacheKey(provider, options);
+        var asked = _clock.OffsetUtcNow;
         if (!forceRefresh
-            && _cache.TryGetValue(provider, out var cached)
-            && _clock.OffsetUtcNow - cached.FetchedAt < _cacheDuration)
+            && _cache.TryGetValue(key, out var cached)
+            && asked - cached.FetchedAt < _cacheDuration)
         {
             LastServedStale = false;
             return cached.Keys;
         }
 
+        var gate = _gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Another caller may have fetched while this one waited. A forced refresh takes only a fetch made after it
+            // was asked for; an ordinary call takes any fresh one.
+            if (_cache.TryGetValue(key, out var fetched)
+                && (forceRefresh ? fetched.FetchedAt >= asked : _clock.OffsetUtcNow - fetched.FetchedAt < _cacheDuration))
+            {
+                LastServedStale = false;
+                return fetched.Keys;
+            }
+            return await FetchAsync(key, options, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<IReadOnlyCollection<SecurityKey>> FetchAsync(string key, OidcProviderOptions options, CancellationToken ct)
+    {
         try
         {
             var json = await _httpClient.GetStringAsync(options.JwksUri, ct).ConfigureAwait(false);
@@ -93,7 +125,7 @@ public class HttpOidcSigningKeySource : IOidcSigningKeySource
 
             LastFetchError = null;
             LastServedStale = false;
-            _cache[provider] = new CacheEntry(keys, _clock.OffsetUtcNow);
+            _cache[key] = new CacheEntry(keys, _clock.OffsetUtcNow);
             return keys;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -104,7 +136,7 @@ public class HttpOidcSigningKeySource : IOidcSigningKeySource
             // are still provider-published, so nothing is accepted that the provider did not sign. SH-M259: but
             // not for ever. A key the provider revoked (a compromised one) stayed accepted for as long as the
             // endpoint was down, so past the maximum stale age a failed fetch answers no keys.
-            if (_cache.TryGetValue(provider, out var stale) && _clock.OffsetUtcNow - stale.FetchedAt < _maxStaleAge)
+            if (_cache.TryGetValue(key, out var stale) && _clock.OffsetUtcNow - stale.FetchedAt < _maxStaleAge)
             {
                 LastServedStale = true;
                 return stale.Keys;
