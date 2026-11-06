@@ -64,7 +64,7 @@ public sealed class ClaimsCurrentUser : ICurrentUser
             .SelectMany(c => c.Value.Split(_options.SplitsPermissionsOnSpace ? ScopeSeparators : ClaimSeparators,
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToHashSet()
-        ?? new HashSet<string>(), _security);
+        ?? new HashSet<string>(), Principal, _security);
 
     private static readonly char[] ClaimSeparators = [',', ';'];
 

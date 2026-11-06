@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Security.AspNetCore;
 using Birko.Security.AspNetCore.Authorization;
 using Birko.Security.Grants.Models;
 using Birko.Security.Grants.Stores;
@@ -16,6 +17,9 @@ namespace Birko.Security.Grants.AspNetCore.Authorization;
 /// <item>a holder of the reserved admin grant gets <c>"*"</c>, so <c>RequirePermission</c> lets them through everywhere;</item>
 /// <item>every type-wide grant adds <c>"{type}:{action}"</c> for each action of its role, and <c>"{type}:{role}"</c> as a role.</item>
 /// </list>
+/// With <see cref="BirkoSecurityOptions.WildcardPermissionEnabled"/> off, a <c>"*"</c> the host's resolver answers is
+/// dropped and the admin grant's is kept (TASK-823, the user's decision): the option distrusts the host's own data, not an
+/// admin Birko granted. It therefore implements <see cref="IAppliesWildcardOption"/>, so the middleware keeps its answer.
 /// Per-resource grants are deliberately <b>not</b> surfaced: there is one per resource, unboundedly many, and
 /// <c>RequireGrant</c> checks them where the resource id is known.
 /// </summary>
@@ -26,15 +30,18 @@ namespace Birko.Security.Grants.AspNetCore.Authorization;
 /// <c>IGrantService</c> resolves it since TASK-641: a stored grant with a retired role grants nothing (no longer an
 /// exception), and <c>StaleGrantDetector</c> / the stale-grant health check report it (TASK-654).
 /// </remarks>
-public sealed class GrantAwareUserPermissionResolver : IUserPermissionResolver
+public sealed class GrantAwareUserPermissionResolver : IAppliesWildcardOption
 {
     private readonly IUserPermissionResolver _inner;
     private readonly IResourceGrantStore _store;
     private readonly GrantRoleTable _table;
     private readonly HashSet<string> _types;
     private readonly HashSet<string> _roles;
+    private readonly BirkoSecurityOptions? _security;
 
-    public GrantAwareUserPermissionResolver(IUserPermissionResolver inner, IResourceGrantStore store, GrantRoleTable table)
+    /// <param name="security">Its <see cref="BirkoSecurityOptions.WildcardPermissionEnabled"/> is applied to what
+    /// <paramref name="inner"/> answers (TASK-823).</param>
+    public GrantAwareUserPermissionResolver(IUserPermissionResolver inner, IResourceGrantStore store, GrantRoleTable table, BirkoSecurityOptions? security = null)
     {
         if (inner is GrantAwareUserPermissionResolver)
             throw new ArgumentException("The grant-aware resolver is already in place; decorating it twice adds nothing.", nameof(inner));
@@ -43,13 +50,15 @@ public sealed class GrantAwareUserPermissionResolver : IUserPermissionResolver
         _table = table ?? throw new ArgumentNullException(nameof(table));
         _types = new HashSet<string>(table.ResourceTypes, StringComparer.Ordinal);
         _roles = new HashSet<string>(table.Roles, StringComparer.Ordinal);
+        _security = security;
     }
 
     public async Task<IReadOnlySet<string>> GetAsync(Guid userId, Guid? tenantId, CancellationToken ct = default)
     {
-        var permissions = new HashSet<string>(await _inner.GetAsync(userId, tenantId, ct).ConfigureAwait(false), StringComparer.Ordinal);
+        var host = await _inner.GetAsync(userId, tenantId, ct).ConfigureAwait(false);
+        var permissions = new HashSet<string>(WildcardPermission.Apply(host, _security), StringComparer.Ordinal);
         if (await _store.HasAdminGrantAsync(userId, tenantId, ct).ConfigureAwait(false))
-            permissions.Add("*");
+            permissions.Add(WildcardPermission.Value);
         foreach (var grant in await DeclaredTypeWideAsync(userId, tenantId, ct).ConfigureAwait(false))
         {
             foreach (var action in _table.ActionsOf(grant.Role))

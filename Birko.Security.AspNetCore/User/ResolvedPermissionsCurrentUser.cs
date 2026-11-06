@@ -21,15 +21,11 @@ public sealed class ResolvedPermissionsCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ClaimMappingOptions _options;
-    private readonly BirkoSecurityOptions? _security;
 
-    /// <param name="security">Its <see cref="BirkoSecurityOptions.WildcardPermissionEnabled"/> is applied to
-    /// <see cref="Permissions"/> (SH-L217).</param>
-    public ResolvedPermissionsCurrentUser(IHttpContextAccessor httpContextAccessor, ClaimMappingOptions options, BirkoSecurityOptions? security = null)
+    public ResolvedPermissionsCurrentUser(IHttpContextAccessor httpContextAccessor, ClaimMappingOptions options)
     {
         _httpContextAccessor = httpContextAccessor;
         _options = options;
-        _security = security;
     }
 
     private ClaimsPrincipal? Principal => _httpContextAccessor.HttpContext?.User;
@@ -75,10 +71,12 @@ public sealed class ResolvedPermissionsCurrentUser : ICurrentUser
     // emits ';'); split on both so the reader is robust regardless.
     private static readonly char[] RoleSeparators = [',', ';'];
 
-    public IReadOnlySet<string> Permissions => WildcardPermission.Apply(
+    // WildcardPermissionEnabled is applied by the middleware that fills the slot (SH-L217, TASK-823): only it knows
+    // whether a "*" came from the host's resolver or was granted by Birko.
+    public IReadOnlySet<string> Permissions =>
         _httpContextAccessor.HttpContext?.Items[PermissionResolutionMiddleware.ItemsKey]
             as IReadOnlySet<string>
-        ?? new HashSet<string>(), _security);
+        ?? new HashSet<string>();
 
     public string? GetClaim(string claimType) => Principal?.FindFirstValue(claimType);
 }

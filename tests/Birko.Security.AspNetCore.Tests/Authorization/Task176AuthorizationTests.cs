@@ -65,14 +65,53 @@ public class Task176AuthorizationTests
     }
 
     [Fact]
-    public void The_resolved_permissions_user_applies_the_option_too()
+    public async Task The_resolution_middleware_applies_the_option_to_the_hosts_resolver()
     {
-        var http = new DefaultHttpContext { User = Principal(true) };
-        http.Items[PermissionResolutionMiddleware.ItemsKey] = (IReadOnlySet<string>)new HashSet<string> { "*", "a" };
-        var user = new ResolvedPermissionsCurrentUser(new HttpContextAccessor { HttpContext = http }, new ClaimMappingOptions(),
-            new BirkoSecurityOptions { WildcardPermissionEnabled = false });
+        // TASK-823 moved this from ResolvedPermissionsCurrentUser to the middleware, the one place that knows the resolver.
+        var services = new ServiceCollection()
+            .AddSingleton(new BirkoSecurityOptions { WildcardPermissionEnabled = false }).BuildServiceProvider();
+        var http = new DefaultHttpContext { User = Principal(true), RequestServices = services };
 
-        user.Permissions.Should().BeEquivalentTo(new[] { "a" });
+        await new PermissionResolutionMiddleware(_ => Task.CompletedTask).InvokeAsync(http, new FixedResolver("*", "a"), new ClaimMappingOptions());
+
+        new ResolvedPermissionsCurrentUser(new HttpContextAccessor { HttpContext = http }, new ClaimMappingOptions())
+            .Permissions.Should().BeEquivalentTo(new[] { "a" });
+    }
+
+    [Fact]
+    public async Task A_resolver_that_applies_the_option_itself_keeps_its_star() // TASK-823: the grants layer's admin grant
+    {
+        var services = new ServiceCollection()
+            .AddSingleton(new BirkoSecurityOptions { WildcardPermissionEnabled = false }).BuildServiceProvider();
+        var http = new DefaultHttpContext { User = Principal(true), RequestServices = services };
+
+        await new PermissionResolutionMiddleware(_ => Task.CompletedTask).InvokeAsync(http, new GrantingResolver(), new ClaimMappingOptions());
+
+        ((IReadOnlySet<string>)http.Items[PermissionResolutionMiddleware.ItemsKey]!).Should().Contain("*");
+    }
+
+    [Fact]
+    public void With_the_wildcard_off_the_loopback_bypass_principal_keeps_its_star() // TASK-823
+    {
+        var loopback = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim(JwtClaimNames.Permission, "*"), new Claim(ClaimTypes.NameIdentifier, Guid.Empty.ToString()) },
+            LoopbackBypass.AuthenticationType));
+
+        User(loopback, new BirkoSecurityOptions { WildcardPermissionEnabled = false }).Permissions.Should().Contain("*");
+    }
+
+    private class FixedResolver : IUserPermissionResolver
+    {
+        private readonly string[] _permissions;
+        public FixedResolver(params string[] permissions) => _permissions = permissions;
+
+        public Task<IReadOnlySet<string>> GetAsync(Guid userId, Guid? tenantId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(_permissions));
+    }
+
+    private sealed class GrantingResolver : FixedResolver, IAppliesWildcardOption
+    {
+        public GrantingResolver() : base("*") { }
     }
 
     [Fact]

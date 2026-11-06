@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
+using Birko.Security.AspNetCore.Authorization;
 
 namespace Birko.Security.AspNetCore;
 
@@ -10,10 +12,14 @@ namespace Birko.Security.AspNetCore;
 /// <remarks>
 /// The option was read by one check (<c>TenantHeaderClaimGuardMiddleware</c>) and ignored by the rest
 /// (<see cref="PermissionEndpointFilter"/>, <c>ClaimsPermissionChecker</c>, <c>SeesEverything</c>), so turning it off
-/// closed the superadmin bypass in one place only. It is now applied where the permissions are produced: the
-/// <see cref="ICurrentUser"/> implementations Birko registers leave <c>"*"</c> out of
-/// <see cref="ICurrentUser.Permissions"/> when it is off, so every reader agrees without knowing the option. An
-/// <see cref="ICurrentUser"/> an application writes itself decides for itself.
+/// closed the superadmin bypass in one place only. It is applied where the HOST's permission data enters: the claims
+/// <see cref="ClaimsCurrentUser"/> reads, and what the host's <see cref="IUserPermissionResolver"/> answers
+/// (<see cref="PermissionResolutionMiddleware"/>), so every reader agrees without knowing the option.
+/// <para>
+/// TASK-823 (the user's decision): the option means "a <c>"*"</c> from the host's own data is not superadmin". A
+/// <c>"*"</c> Birko grants itself is kept: the loopback bypass principal's, and the one the grants layer gives a holder
+/// of the admin grant (a resolver implementing <see cref="IAppliesWildcardOption"/>).
+/// </para>
 /// </remarks>
 public static class WildcardPermission
 {
@@ -25,4 +31,11 @@ public static class WildcardPermission
         options is { WildcardPermissionEnabled: false } && permissions.Contains(Value)
             ? permissions.Where(p => p != Value).ToHashSet()
             : permissions;
+
+    /// <summary>
+    /// Claim-borne <paramref name="permissions"/> of <paramref name="principal"/> as the options allow. The loopback bypass
+    /// principal is Birko's own, so its <see cref="Value"/> is kept.
+    /// </summary>
+    public static IReadOnlySet<string> Apply(IReadOnlySet<string> permissions, ClaimsPrincipal? principal, BirkoSecurityOptions? options) =>
+        principal?.Identity?.AuthenticationType == LoopbackBypass.AuthenticationType ? permissions : Apply(permissions, options);
 }

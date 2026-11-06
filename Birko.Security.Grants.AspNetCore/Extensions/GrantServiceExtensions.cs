@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Birko.Security.AspNetCore;
 using Birko.Security.AspNetCore.Authorization;
 using Birko.Security.Grants.AspNetCore.Authorization;
 using Birko.Security.Grants.Services;
@@ -116,13 +117,15 @@ public static class GrantServiceExtensions
         services.Remove(original);
         services.Add(new ServiceDescriptor(typeof(HostPermissionResolver), sp => HostPermissionResolver.Create(sp, original), original.Lifetime));
         services.Add(new ServiceDescriptor(typeof(IUserPermissionResolver), sp => new GrantAwareUserPermissionResolver(
-            sp.GetRequiredService<HostPermissionResolver>().Resolver, sp.GetRequiredService<IResourceGrantStore>(), sp.GetRequiredService<GrantRoleTable>()),
+            sp.GetRequiredService<HostPermissionResolver>().Resolver, sp.GetRequiredService<IResourceGrantStore>(), sp.GetRequiredService<GrantRoleTable>(),
+            sp.GetService<BirkoSecurityOptions>()),
             original.Lifetime));
 
         foreach (var source in adminSources)
             services.Remove(source);
         services.AddScoped<IGrantAdminSource>(sp => new UserPermissionResolverAdminSource(
-            sp.GetRequiredService<HostPermissionResolver>().Resolver, sp.GetRequiredService<IResourceGrantStore>()));
+            sp.GetRequiredService<HostPermissionResolver>().Resolver, sp.GetRequiredService<IResourceGrantStore>(),
+            sp.GetService<BirkoSecurityOptions>()));
         return builder;
     }
 

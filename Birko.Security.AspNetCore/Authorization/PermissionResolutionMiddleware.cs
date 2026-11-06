@@ -2,6 +2,7 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Birko.Security.AspNetCore.Authorization;
 
@@ -44,6 +45,10 @@ public sealed class PermissionResolutionMiddleware
                 // it as "no permissions": a broken resolver looked like an unprivileged user. Refused, naming the resolver.
                 var perms = await resolver.GetAsync(userId, tenantId, context.RequestAborted)
                     ?? throw NullResult(resolver, nameof(IUserPermissionResolver.GetAsync));
+                // SH-L217 / TASK-823: a "*" from the host's resolver is not superadmin when the wildcard is off. A resolver
+                // that applies the option itself (the grants layer) answers a "*" only for Birko's own admin grant.
+                if (resolver is not IAppliesWildcardOption)
+                    perms = WildcardPermission.Apply(perms, context.RequestServices?.GetService<BirkoSecurityOptions>());
                 context.Items[ItemsKey] = perms;
 
                 // Roles are resolved server-side too (kept out of the JWT like permissions), so
