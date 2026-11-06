@@ -268,4 +268,17 @@
     <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
   </ControlTheme>
 
+  <!-- ── NumericUpDown — b-qty-stepper's desktop counterpart (TASK-822): Fluent's template (BasedOn), Birko tokens on the
+       resting surface, as the date pickers do. The inner TextBox and the spinner buttons keep Fluent's internals. -->
+  <ControlTheme x:Key="{x:Type NumericUpDown}" TargetType="NumericUpDown"
+                BasedOn="{StaticResource {x:Type NumericUpDown}}">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </ControlTheme>
+
 </ResourceDictionary>

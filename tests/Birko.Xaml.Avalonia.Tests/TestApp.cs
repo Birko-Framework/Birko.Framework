@@ -21,6 +21,10 @@ public sealed class TestApp : Application
         {
             Source = new Uri("avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml"),
         });
+        Styles.Add(new StyleInclude(new Uri("avares://Birko.Xaml.Avalonia/"))
+        {
+            Source = new Uri("avares://Birko.Xaml.Avalonia/Controls/ColorPickerStyles.axaml"),
+        });
         Resources.MergedDictionaries.Add(new ResourceInclude((Uri?)null)
         {
             Source = new Uri("avares://Birko.Xaml.Avalonia/BirkoTheme.axaml"),

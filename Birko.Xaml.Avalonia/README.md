@@ -25,6 +25,20 @@ Add any extra theme by merging its own dictionary next to the core include:
 
 Or take all four at once with `BirkoTheme.axaml`. Core+extras is ~43% lighter than the all-in bundle.
 
+`DataGrid` and `ColorPicker` ship their themes as Styles, so their Birko restyles are Styles files you add after
+`FluentTheme` (each also brings the control's own Fluent template; a `ColorPicker` without its include has none):
+
+```xml
+<Application.Styles>
+  <FluentTheme />
+  <StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml" />
+  <StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/ColorPickerStyles.axaml" />
+</Application.Styles>
+```
+
+Preformatted and code text use keyed themes on a `SelectableTextBlock`:
+`<SelectableTextBlock Theme="{StaticResource BCodeBlock}" Text="..." />` (or `BPre`).
+
 > Light **and** dark are both in the core set deliberately: `ThemeVariant.Dark` has no
 > `InheritVariant`, so a light-only app resolves no tokens at all under OS dark mode. Neon and
 > Finstat are safely omissible — they inherit Dark and Light respectively.

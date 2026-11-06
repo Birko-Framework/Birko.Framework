@@ -20,17 +20,29 @@ internal sealed class Counterparts
         typeof(Shell.ViewLocator).Assembly,
     ];
 
-    private static readonly Assembly[] AvaloniaControls = [typeof(Button).Assembly, typeof(DataGrid).Assembly];
+    // The packages a counterpart may come from: Avalonia.Controls, and the separately shipped DataGrid and ColorPicker (TASK-822).
+    private static readonly Assembly[] AvaloniaControls = [typeof(Button).Assembly, typeof(DataGrid).Assembly, typeof(ColorPicker).Assembly];
 
     private readonly ResourceDictionary _theme;
-    private readonly IReadOnlyList<string> _gridSelectors;
+    private readonly IReadOnlyList<string> _styleSelectors;
+
+    /// <summary>
+    /// The Birko Styles files: controls whose package ships its theme as Styles get their Birko restyle as a Styles file
+    /// an app adds with a StyleInclude (DataGrid, and ColorPicker since TASK-822), so a style in one of them counts.
+    /// </summary>
+    private static readonly string[] StyleFiles =
+    [
+        "avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml",
+        "avares://Birko.Xaml.Avalonia/Controls/ColorPickerStyles.axaml",
+    ];
 
     public Counterparts()
     {
         // Loaded on their own, not read off the app: there Fluent's themes answer for every control.
         _theme = (ResourceDictionary)AvaloniaXamlLoader.Load(new Uri("avares://Birko.Xaml.Avalonia/BirkoTheme.axaml"));
-        var grid = (Styles)AvaloniaXamlLoader.Load(new Uri("avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml"));
-        _gridSelectors = grid.OfType<Style>().Select(s => s.Selector?.ToString() ?? "").ToList();
+        _styleSelectors = StyleFiles
+            .SelectMany(f => ((Styles)AvaloniaXamlLoader.Load(new Uri(f))).OfType<Style>())
+            .Select(s => s.Selector?.ToString() ?? "").ToList();
     }
 
     public static IReadOnlyList<string> Names(string desktop) =>
@@ -70,7 +82,7 @@ internal sealed class Counterparts
 
     private bool IsStyled(Type control) =>
         _theme.TryGetResource(control, null, out var r) && r is ControlTheme
-        || _gridSelectors.Any(s => Regex.IsMatch(s, $@"(^|[^A-Za-z]){control.Name}($|[^A-Za-z])"));
+        || _styleSelectors.Any(s => Regex.IsMatch(s, $@"(^|[^A-Za-z]){control.Name}($|[^A-Za-z])"));
 
     private static bool ResolvesIn(Assembly[] assemblies, string name)
     {

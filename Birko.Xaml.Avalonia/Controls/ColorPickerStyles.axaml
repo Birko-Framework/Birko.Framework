@@ -1,0 +1,27 @@
+<!--
+  Birko token restyle for Avalonia ColorPicker (the `b-color-picker` equivalent, TASK-822). Like DataGrid, ColorPicker
+  ships in its own package (Avalonia.Controls.ColorPicker) and its theme is Styles, not a ResourceDictionary: its
+  per-control dictionaries are not public, so BirkoTheme.axaml cannot merge them. Add this to Application.Styles AFTER
+  FluentTheme:
+
+    <Application.Styles>
+      <FluentTheme />
+      <StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/ColorPickerStyles.axaml" />
+    </Application.Styles>
+
+  It pulls in ColorPicker's own Fluent theme (the button, flyout, spectrum and sliders), then layers Birko design
+  tokens on the button a form shows. Without this include a ColorPicker has no template at all.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+
+  <Style Selector="ColorPicker">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+  </Style>
+</Styles>

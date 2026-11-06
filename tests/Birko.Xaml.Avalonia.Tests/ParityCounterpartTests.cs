@@ -29,7 +29,7 @@ public class ParityCounterpartTests
     [InlineData("themed", "`BCard`")]
     [InlineData("themed", "`Button`")]
     [InlineData("themed", "`DataGrid`")]
-    [InlineData("needs-theme", "`NumericUpDown`")]
+    [InlineData("needs-theme", "`SplitButton`")] // was NumericUpDown, themed by TASK-822
     [InlineData("missing", "")]
     public void A_counterpart_that_exists_passes(string status, string desktop) =>
         Check(status, desktop).Should().BeEmpty();
@@ -41,7 +41,7 @@ public class ParityCounterpartTests
     [InlineData("form-only", "`TagInput`", "is not a FieldType member")]
     [InlineData("form-only", "`FieldType.NoSuchField`", "is not a FieldType member")]
     [InlineData("themed", "`BNoSuchTheme`", "is neither a Birko theme key nor an Avalonia control the Birko theme styles")]
-    [InlineData("themed", "`NumericUpDown`", "is neither a Birko theme key nor an Avalonia control the Birko theme styles")]
+    [InlineData("themed", "`SplitButton`", "is neither a Birko theme key nor an Avalonia control the Birko theme styles")]
     [InlineData("needs-theme", "`NoSuchControl`", "is not an Avalonia control")]
     [InlineData("needs-theme", "`Button`", "is already styled by the Birko theme")]
     public void A_counterpart_that_does_not_hold_is_named(string status, string desktop, string why) =>

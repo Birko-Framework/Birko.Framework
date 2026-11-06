@@ -86,6 +86,15 @@ it's a new category, to the `Controls.axaml` merge list.
 - **`BChart`** (`b-chart`, STORY-035) — `Controls/BChart.cs` over **LiveCharts2** (`LiveChartsCore.SkiaSharpView.Avalonia`, the one external UI dep beyond Avalonia — modern/animated, MVVM-first, targets Avalonia + WPF). Bind `Series` (Core `ChartSeries`), `Kind` (Line/Column), `Labels`; series colored from the token palette (`BColorPrimary`/`Info`/`Success`/`Warning`/`Danger` → `SKColor`, resolved on attach). LiveCharts animates on load, so a single headless frame captures it mid-animation.
 - **`MarkdownEditor`** + **`MarkdownRenderer`** (`b-markdown-editor`, STORY-035) — `Controls/MarkdownEditor.cs` (split editor `TextBox` two-way `Markdown` + live preview) and a dependency-free `MarkdownRenderer` (static): a common Markdown subset (ATX headings, `**bold**`/`*italic*`/`` `code` ``/`[text](url)`, unordered lists, fenced code, `---`) → token-styled Avalonia controls. Swap in Markdig later for full CommonMark
 - **DataGridStyles.axaml** (`data-table`) — token restyle of Avalonia `DataGrid`. **Styles, not resources** (DataGrid ships its theme as Styles): add `<StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml" />` to `Application.Styles` after `FluentTheme`. It includes DataGrid's Fluent theme then layers Birko tokens (header band via `--b-table-header-*`, cell text/font, grid lines). Needs the `Avalonia.Controls.DataGrid` package.
+- **ColorPickerStyles.axaml** (`b-color-picker`, TASK-822) — token restyle of Avalonia `ColorPicker`, from the
+  `Avalonia.Controls.ColorPicker` package (declared in this csproj). **Styles, not resources**, like DataGrid: the
+  package's per-control dictionaries are not public, so `BirkoTheme.axaml` cannot merge them. Add
+  `<StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/ColorPickerStyles.axaml" />` to `Application.Styles`
+  after `FluentTheme`; it brings the package's Fluent template too, and **without it a `ColorPicker` has no template**.
+- **TASK-822 themes in `BirkoTheme.axaml`:** `NumericUpDown` (`b-qty-stepper`) and `Carousel` (`b-carousel`; no arrows
+  or dots of its own) as type themes based on Fluent's; **`BPre`** and **`BCodeBlock`** (`b-pre`, `b-code-block`) as
+  KEYED `SelectableTextBlock` themes (`Theme="{StaticResource BPre}"`), monospace on a tinted box. Keyed on purpose: a
+  type theme would turn every `SelectableTextBlock`, the markdown and JSON viewers included, monospace.
 - **Blocks.axaml** + control classes — the building blocks: **`Form`** (schema-driven, `Controls/Form.cs` — code-built from `Fields`+`Model`, no XAML template), **`Drawer`** (slide-in overlay, `IsOpen`/`Placement`, backdrop-click closes), **`SplitPanel`** (master/detail over `GridSplitter`, responsive `:collapsed` below `CollapseWidth`), **`Modal`** (centered dialog over a backdrop, `IsOpen`/`Title`, backdrop-click closes — compose a "FormModal" by putting a `Form` + Save/Cancel in its content).
 
 Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="{StaticResource BCard}"`.

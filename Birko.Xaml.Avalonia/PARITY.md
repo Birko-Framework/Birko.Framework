@@ -36,7 +36,7 @@ Words outside backticks are not. By status:
 - `built` — a type or member in the Birko.Xaml assemblies;
 - `form-only` — a `FieldType` member;
 - `themed` — a Birko theme key, or an Avalonia control the Birko theme styles (a `ControlTheme` for its type in
-  `BirkoTheme.axaml`, or a style in `DataGridStyles.axaml`);
+  `BirkoTheme.axaml`, or a style in `DataGridStyles.axaml` or `ColorPickerStyles.axaml`);
 - `needs-theme` — an Avalonia control the Birko theme does **not** style yet, so the row must move to `themed` when
   its theme lands.
 
@@ -49,7 +49,7 @@ Words outside backticks are not. By status:
 | `b-command-palette` | built | `CommandPalette` | |
 | `b-badge` | themed | `BBadge` | a `ContentControl` theme |
 | `b-chart` | built | `BChart` | over LiveCharts2 |
-| `b-code-block` | needs-theme | `SelectableTextBlock` | no syntax highlighting |
+| `b-code-block` | themed | `BCodeBlock` | a `SelectableTextBlock` theme (TASK-822); no syntax highlighting |
 | `b-data-table` | themed | `DataGrid` | `DataGridStyles.axaml` |
 | `b-definition-list` | missing | | |
 | `b-editable-table` | themed | `DataGrid` | the grid edits natively |
@@ -58,7 +58,7 @@ Words outside backticks are not. By status:
 | `b-kanban` | built | `Kanban` | |
 | `b-object-tree` | built | `ObjectTree` | |
 | `b-pagination` | missing | | `DataGrid` does not page |
-| `b-pre` | needs-theme | `SelectableTextBlock` | |
+| `b-pre` | themed | `BPre` | a `SelectableTextBlock` theme (TASK-822) |
 | `b-sortable-item` | missing | | an item of `b-sortable-list` |
 | `b-sortable-list` | missing | | |
 | `b-stat` | missing | | |
@@ -74,7 +74,7 @@ Words outside backticks are not. By status:
 | `b-toast` | built | `DialogService.Notify` | |
 | `b-button` | themed | `Button` | |
 | `b-checkbox` | themed | `CheckBox` | |
-| `b-color-picker` | needs-theme | | Avalonia's `ColorPicker`, in the `Avalonia.Controls.ColorPicker` package, not referenced yet |
+| `b-color-picker` | themed | `ColorPicker` | TASK-822; `ColorPickerStyles.axaml`, added with a `StyleInclude` like the DataGrid's |
 | `b-country-select` | missing | | ISO 3166-1 alpha-2 country picker (Birko.Web v0.4.8, TASK-817); a desktop `Form` has no country field yet |
 | `b-date-picker` | themed | `CalendarDatePicker` | |
 | `b-date-range-picker` | form-only | `FieldType.DateRange` | two pickers |
@@ -86,7 +86,7 @@ Words outside backticks are not. By status:
 | `b-markdown-editor` | built | `MarkdownEditor` | |
 | `b-multi-select` | form-only | `FieldType.MultiSelect` | a multi-select `ListBox` |
 | `b-option-group` | form-only | `FieldType.OptionGroup` | a group of radio buttons |
-| `b-qty-stepper` | needs-theme | `NumericUpDown` | |
+| `b-qty-stepper` | themed | `NumericUpDown` | TASK-822 |
 | `b-radio` | themed | `RadioButton` | |
 | `b-range` | themed | `Slider` | |
 | `b-rating` | missing | | |
@@ -101,7 +101,7 @@ Words outside backticks are not. By status:
 | `b-accordion` | themed | `Expander` | |
 | `b-button-group` | skipped | | a `StackPanel` of buttons does the same |
 | `b-card` | themed | `BCard` | a `ContentControl` theme |
-| `b-carousel` | needs-theme | `Carousel` | |
+| `b-carousel` | themed | `Carousel` | TASK-822; no arrows or dots of its own: drive it with `Next()` / `Previous()` |
 | `b-chat` | missing | | may come later, e.g. for a desktop version of the agent chat |
 | `b-confirm-dialog` | built | `DialogService.ConfirmAsync` | |
 | `b-drawer` | built | `Drawer` | |

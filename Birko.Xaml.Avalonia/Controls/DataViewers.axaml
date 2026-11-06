@@ -108,4 +108,21 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── BPre / BCodeBlock — b-pre's and b-code-block's counterparts (TASK-822): keyed themes for a
+       SelectableTextBlock, applied where wanted (Theme="{StaticResource BPre}"). Not a type theme: that would put
+       every SelectableTextBlock in the library, the markdown and JSON viewers included, into a monospace box. -->
+  <ControlTheme x:Key="BPre" TargetType="SelectableTextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource BFontMono}" />
+    <Setter Property="FontSize" Value="{DynamicResource BTextSm}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource BBgSecondaryBrush}" />
+    <Setter Property="Padding" Value="12" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </ControlTheme>
+
+  <ControlTheme x:Key="BCodeBlock" TargetType="SelectableTextBlock" BasedOn="{StaticResource BPre}">
+    <Setter Property="Background" Value="{DynamicResource BBgTertiaryBrush}" />
+    <Setter Property="Padding" Value="16" />
+  </ControlTheme>
+
 </ResourceDictionary>

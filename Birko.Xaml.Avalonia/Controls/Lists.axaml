@@ -30,4 +30,14 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── Carousel — b-carousel's counterpart (TASK-822): Fluent's template, Birko text and a clipped rounded frame.
+       It has no arrows or dots of its own: drive it with Next() / Previous() or bind SelectedIndex. -->
+  <ControlTheme x:Key="{x:Type Carousel}" TargetType="Carousel"
+                BasedOn="{StaticResource {x:Type Carousel}}">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </ControlTheme>
+
 </ResourceDictionary>
