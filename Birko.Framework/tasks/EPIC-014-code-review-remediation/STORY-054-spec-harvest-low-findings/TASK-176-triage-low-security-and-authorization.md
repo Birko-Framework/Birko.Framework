@@ -109,3 +109,4 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
 - **Password hashers** (SH-L224, SH-L225, SH-L226): `Task176HasherTests` - the `$2y$` and ceiling tests red with their
   fix disabled in place; the two `NeedsRehash`-through-the-interface tests do not compile against the old interface;
   `A_hash_at_the_default_cost_still_verifies` is a contract pin.
+- **Encryption key** (SH-L230): `Task176EncryptionKeyTests` does not compile against the old interface (the member is new).

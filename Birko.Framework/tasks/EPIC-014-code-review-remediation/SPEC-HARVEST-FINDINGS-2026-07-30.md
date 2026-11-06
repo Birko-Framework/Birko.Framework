@@ -6153,6 +6153,8 @@ BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHashe
 
 `../Birko.Security/Encryption/AesEncryptionProvider.cs:72`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** Key generation was only `public static byte[] GenerateKey()` on `AesEncryptionProvider` (Encryption/AesEncryptionProvider.cs:72), absent from `IEncryptionProvider`. The interface now declares `byte[] CreateKey()` (an instance member: a static and an instance `GenerateKey()` cannot coexist, and the static stays for its callers); AES implements it. The only implementation in the framework and the consumers.
+
 `public static byte[] GenerateKey()` is the only supported way to produce the 32-byte key that Encrypt/Decrypt demand (ValidateKey line 82), but IEncryptionProvider declares no key-generation member. A consumer injected with IEncryptionProvider must either hard-cast to AesEncryptionProvider or hand-roll RandomNumberGenerator.GetBytes(32), so the abstraction cannot be used without knowing its implementation.
 
 #### SH-L231 — ResolveOptions mutates the caller's LocalVaultOptions instance in place

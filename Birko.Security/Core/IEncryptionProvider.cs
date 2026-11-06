@@ -24,4 +24,13 @@ public interface IEncryptionProvider
     /// Decrypts a base64-encoded string previously encrypted with <see cref="EncryptString"/>.
     /// </summary>
     string DecryptString(string encrypted, byte[] key);
+
+    /// <summary>
+    /// A new random key of the size and kind <see cref="Encrypt"/> and <see cref="Decrypt"/> require.
+    /// </summary>
+    /// <remarks>
+    /// SH-L230: the only way to make one was a static on the concrete class (<c>AesEncryptionProvider.GenerateKey()</c>),
+    /// so a caller injected with this interface had to cast or hand-roll the bytes, knowing the implementation.
+    /// </remarks>
+    byte[] CreateKey();
 }

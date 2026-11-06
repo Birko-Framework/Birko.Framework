@@ -74,6 +74,10 @@ public class AesEncryptionProvider : IEncryptionProvider
         return RandomNumberGenerator.GetBytes(KeySize);
     }
 
+    /// <inheritdoc />
+    /// <remarks>A 256-bit key, the same as the static <see cref="GenerateKey"/>.</remarks>
+    public byte[] CreateKey() => GenerateKey();
+
     private static void ValidateKey(byte[] key)
     {
         // CR-L335: guard null before dereferencing key.Length, so a null key gives the intended clear
