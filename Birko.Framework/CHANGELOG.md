@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — LLM providers read tool calls, errors and usage they dropped
+[[TASK-716]]. Every Ollama tool call failed: `/api/chat` sends `arguments` as an object, read as a string (measured).
+Gemini let a text part after a function call end the turn, and a blocked stream had no message; Claude's stream ignored
+an `error` event and kept a tool call cut off by `max_tokens`. `OpenAiCompatibleProviderBase` now parses with
+`ParseOpenAiStyleResponse`, so `"error": null`, `finish_reason` and `usage` are read. A failed Copilot sign-in is an
+error reply, not an exception. `OrchestratorAgent.ExtractTextFromContent` gives a single non-text block no text.
+
 ## 2026-11-04 — AI budgets check every scope; every request counts against the rate limit
 [[TASK-715]]. `CostTrackingService.CheckBudgetAsync` returned at a daily warning, so an exceeded monthly or project budget
 let the call through; it now answers the first exceeded budget, then the first warning. `TrackedLlmProvider` counted a

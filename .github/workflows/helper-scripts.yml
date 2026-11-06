@@ -23,6 +23,10 @@ on:
       - 'Birko.Framework/audit-*.cs'
       - 'Birko.Framework/install-skills.cs'
       - 'Birko.Framework/tools/**'
+      # spec-links (TASK-226): the map is its input, every CLAUDE.md its output; a new project brings a CLAUDE.md
+      - 'Birko.Framework/spec-links.cs'
+      - 'Birko.Framework/docs/specs/.map.yml'
+      - '**/CLAUDE.md'
       - '.github/workflows/helper-scripts.yml'
   schedule:
     - cron: '30 2 * * *'
@@ -186,6 +190,36 @@ jobs:
             exit 1
           fi
           echo "both profiles written, no backslash names, regeneration byte-identical"
+
+      # TASK-226: each project's CLAUDE.md carries a Specs block derived from docs/specs/.map.yml, never written by
+      # hand. --check fails when one disagrees with the map (a glob changed, a project added without re-running).
+      # The counts are asserted so a sweep that found nothing cannot pass, the writer is run so its Linux write path
+      # is exercised and must change nothing, and a planted glob proves the check can fail.
+      - name: spec-links (Specs lines agree with the map; the check can fail)
+        working-directory: birko/Framework/Birko.Framework
+        run: |
+          dotnet run spec-links.cs -- --check | tee out.txt
+          areas=$(grep -oE "^areas: [0-9]+" out.txt | grep -oE "[0-9]+")
+          files=$(grep -oE "CLAUDE.md files: [0-9]+" out.txt | grep -oE "[0-9]+")
+          expected=$(find "$GITHUB_WORKSPACE/birko/Framework" -mindepth 2 -maxdepth 3 -name CLAUDE.md \
+                     \( -path '*/Birko.*/CLAUDE.md' -o -path '*/tests/*/CLAUDE.md' \) \
+                     -not -path '*/Birko.Framework/*' -not -path '*/bin/*' -not -path '*/obj/*' | wc -l)
+          echo "areas: ${areas:-<none>}, CLAUDE.md files: ${files:-<none>}, tree has: $expected"
+          if [ "${areas:-0}" -lt 20 ]; then echo "::error::read only ${areas:-0} areas from the map"; exit 1; fi
+          if [ "${files:-0}" != "$expected" ]; then echo "::error::swept ${files:-0} CLAUDE.md files, tree has $expected"; exit 1; fi
+          dotnet run spec-links.cs
+          cd "$GITHUB_WORKSPACE/birko/Framework"
+          if ! git diff --quiet -- '*CLAUDE.md'; then
+            echo "::error::the writer changed committed CLAUDE.md files:"; git diff --stat -- '*CLAUDE.md'; exit 1
+          fi
+          cd Birko.Framework
+          cp docs/specs/.map.yml /tmp/map.bak
+          sed -i 's|^      - \.\./Birko\.Data\.Tagging/\*\*/\*\.cs$|&\n      - ../Birko.Time/**/*.cs|' docs/specs/.map.yml
+          grep -q '^      - ../Birko.Time/\*\*/\*.cs$' docs/specs/.map.yml || { echo "::error::the planted glob did not land"; exit 1; }
+          dotnet run spec-links.cs -- --check > mutated.txt && { echo "::error::a planted glob passed the check"; cat mutated.txt; exit 1; }
+          cp /tmp/map.bak docs/specs/.map.yml
+          grep -q "Birko.Time/CLAUDE.md" mutated.txt || { echo "::error::the check failed, but not on Birko.Time"; cat mutated.txt; exit 1; }
+          echo "Specs lines agree with the map; the writer changes nothing; a planted glob is caught"
 
       - name: install-skills creates a working symlink
         working-directory: birko/Framework/Birko.Framework

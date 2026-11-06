@@ -59,7 +59,8 @@
 # Measured: only 4 of 25 areas are single-repo, so that move addresses 16% of the map
 # and cannot host a cross-repo area at all. Decided 2026-11-04 (the user, TASK-226):
 # there are no per-project spec trees. Every spec lives here, and each project's
-# CLAUDE.md links to the areas that cover it, derived from this map.
+# CLAUDE.md links to the areas that cover it, derived from this map by `dotnet run spec-links.cs`: after
+# changing any `sources:` below, re-run it (CI's helper-scripts fails on a CLAUDE.md that disagrees).
 #
 # Note: test code is now CO-LOCATED, under `../tests/Birko.X.Tests/`, so a careless
 # glob CAN reach it. The test entries in `ignore:` (notably `**/*Tests*/**`) are

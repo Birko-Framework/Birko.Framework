@@ -89,6 +89,11 @@ Every project directory must contain:
 
 1. **`README.md`** — Project name, overview, features, test framework (if test project), running instructions, and License section.
 2. **`CLAUDE.md`** — Overview, project location, components, dependencies, and maintenance instructions.
+   **Its Specs block is generated, never written:** run `dotnet run spec-links.cs` from `Birko.Framework/` after
+   creating it. The block under the title names the spec areas whose `sources:` globs in `docs/specs/.map.yml` cover
+   the project (a test project: those of the project it tests), or says "none yet". To give a project a spec, add its
+   globs to an area in the map and re-run; never edit the block. CI's `helper-scripts` runs `--check` and fails on a
+   CLAUDE.md that disagrees with the map (TASK-226).
 
 > **No per-project `License.md` or `.gitignore`.** The repo has one root `LICENSE` (MIT, 2026
 > František Bereň) and one root `.gitignore`; both cover every project below them. The 266

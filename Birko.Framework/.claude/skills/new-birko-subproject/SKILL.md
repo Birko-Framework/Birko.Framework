@@ -54,6 +54,10 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 - Project-specific equivalent of root `CLAUDE.md`.
 - Required sections: **Overview**, **Project Location** (`C:\Source\Birko\Framework\Birko.X\`), **Components** (key types + their responsibilities), **Dependencies** (which `Birko.*` it depends on, which NuGet packages), **Maintenance** (link back to root `CLAUDE-maintenance.md`).
 - Copy structure from a comparable existing project's `CLAUDE.md` (e.g. `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\CLAUDE.md`).
+- **Specs block — generated, not written.** After creating the file, run `dotnet run spec-links.cs` from
+  `C:\Source\Birko\Framework\Birko.Framework\`. It inserts, under the title, the spec areas from `docs/specs/.map.yml`
+  that cover the project (or "none yet"). Do not copy the block from the project you modelled this one on: it names
+  THAT project's areas, and CI's `--check` fails on it (TASK-226).
 
 ### 4. `README.md`
 
