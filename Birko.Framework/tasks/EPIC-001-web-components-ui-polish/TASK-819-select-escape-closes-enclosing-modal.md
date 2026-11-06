@@ -2,7 +2,7 @@
 id: TASK-819
 parent: EPIC-001
 feature: null
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-06
@@ -69,4 +69,4 @@ box), and checks focus stays on the picked option. **17/25 before, 27/27 after**
 14 checks red, removing the refocus turns 2. `keyboard-check` 225/225, `country-select-po-check` 15/15, `verify.mjs`
 green, typecheck clean.
 
-- [ ] The user's human test passes in Symbio on v0.4.11.
+- [x] The user's human test passes in Symbio on v0.4.11 (2026-11-06, UI rebuilt on Web main 72d03cc: a pick then Escape closes only the list; Escape with the list closed closes the dialog).
