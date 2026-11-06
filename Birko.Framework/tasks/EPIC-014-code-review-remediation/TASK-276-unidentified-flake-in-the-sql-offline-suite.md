@@ -747,3 +747,26 @@ nothing to fix against. What was checked, so nobody repeats it:
   state another class reads, which is the shape rule 61 describes.
 - The suite changed in 26 commits since the first sighting; which one removed the cause, if any did, is not knowable
   without the name.
+
+### The last hypothesis, tested directly (2026-11-06): the race is real, and it changes no answer
+
+The user asked whether we know why it failed. For this suite we do not: two sightings on 2026-08-22, "1 failed of 619"
+each, no name, no message; quiet since 2026-08-23. The only mechanism ever proposed was this file's first one: parallel
+classes building the same table at once. Tested directly with a scratch probe (not committed): 8 threads released by
+a barrier call `LoadTable` on one type, the type's table and field caches cleared by reflection before each of 4,000
+rounds (`IpAccount`, `IpMerged`: TASK-273's types, the ones the first sighting arrived with).
+
+| threads | rounds | cached table's fields point at another `Table` copy | flags / indexes differ | exceptions |
+|---|---|---|---|---|
+| 8 | 4,000 | **3,997** | 0 | 0 |
+| 1 (control) | 4,000 | 0 | 0 | 0 |
+
+So the race exists: `LoadFields` hands every build the same cached field objects, `ComputeTable` sets
+`field.Table = table` on them, and the build that loses `TryAdd` repoints them at its own, unpublished copy. It existed
+on 2026-08-22 too (`LoadTable` had the same shape). **But it changes no result:** `IsPrimary`, `IsIndexed` and the
+index set were identical in every round, and the one production reader of `field.Table`
+(`TimescaleDBConnector.EmitsPrimaryKey`) reads `.Fields`, which on either copy holds the same shared objects. No test
+asserts on `field.Table` identity (one asserts it is null on a hand-built field). A view never writes a cached field:
+its aggregates are wrapped in a new `FunctionField`, and its plain fields come from `LoadField`, which builds new ones.
+
+So this hypothesis cannot be how a test failed, and the failure stays unexplained.
