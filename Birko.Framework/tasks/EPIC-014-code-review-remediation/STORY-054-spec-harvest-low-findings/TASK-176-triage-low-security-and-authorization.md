@@ -3,7 +3,7 @@ id: TASK-176
 parent: STORY-054
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-09
@@ -47,16 +47,16 @@ what the code *does*, defects included, which is exactly what let it find them. 
 
 ## Acceptance criteria
 
-- [ ] All 23 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
+- [x] All 23 findings are marked **confirmed**, **confirmed-narrower**, or **refuted** against the code,
       with the verdict and its evidence (`file:line` + the mechanism, not just the rule) written back into
       `SPEC-HARVEST-FINDINGS-2026-07-30.md`. Every `Verdict:` line names the specific code it traced
-- [ ] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
+- [x] Confirmed findings are fixed with a regression test, or explicitly waived with a recorded reason.
       Findings sharing a root cause are fixed **together**, not one edit each
-- [ ] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
+- [x] Each regression test is **red-verified**: reverting the fix fails it. Report the split as numbers, and
       name any test that passes either way as a contract pin rather than as evidence
-- [ ] Any behavioural fix is followed by `/specs regen security-and-authorization`, with the spec diff reviewed as the change's
+- [x] Any behavioural fix is followed by `/specs regen security-and-authorization`, with the spec diff reviewed as the change's
       evidence
-- [ ] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
+- [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
 - [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
@@ -114,3 +114,24 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
   6 red with each fix disabled in place; four contract pins (KvVersion 1 and 2, a timeout still unhealthy, a caller's
   client left open).
 - **JWKS cache** (SH-L239): `Task176JwksCacheTests`, 2 of 3 red against the original; cache reuse is a contract pin.
+
+## Outcome — 2026-11-06
+
+**23 of 23 confirmed** (20 as written, 3 narrower: SH-L217, SH-L225, SH-L226), all fixed, in seven commits by root
+cause (9f5a682a, 79c35969, b43d7bb2, fbbf4dac, 2037d3e6, a52e623e, cd13008e, 10bfc5a7). Verdicts are in
+SPEC-HARVEST-FINDINGS-2026-07-30.md under each finding. Red-verification, totalled: **31 tests red** before their fix
+(or with it disabled in place, where the old code cannot compile against a new constructor parameter; the three
+interface-member tests by not compiling against the old interface), **20 contract pins** green either way and named
+as such, 10 of them SH-L220/L238's, whose defects (comparison timing, a harmless double dispose) are not
+unit-observable. All 20 test projects importing a Birko.Security project green.
+
+**Spec:** `/specs regen security-and-authorization` (+207 −62, generated-at 10bfc5a7). Every changed requirement maps to
+these commits; reviewed. Two consequences it surfaced, recorded rather than changed:
+- the grants layer still treats `"*"` as admin when `WildcardPermissionEnabled` is off: an existing gap the fix did not
+  reach, spawned as [[TASK-823]];
+- with the option off, a loopback-bypassed request (`LoopbackBypass`, which synthesises a `"*"` claim) also holds no
+  permission. That follows from "the option off means `*` grants nothing"; raised with the user.
+
+Consumer-visible (Recent Updates): a JWT secret under 32 characters is refused at startup (Symbio's are 44-45); HS256
+only; `TokenServiceAdapter` writes `sub`/`email` (only GrantsSmoke uses it); `IPasswordHasher.NeedsRehash` and
+`IEncryptionProvider.CreateKey` are new interface members (only framework classes implement them).

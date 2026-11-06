@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — SQL views are created and replaced on every provider
+[[TASK-717]]. A migration's `CreateView` sent `CREATE OR REPLACE VIEW`, which SQLite refuses (measured); it now drops,
+then creates. SQLite's connector `CreateView` kept an old definition with no error; it now replaces it. On SQL Server a
+bool join constant (`TRUE`) and every indexed view's clustered index (it named `[Table].[Column]`) were refused.
+PostgreSQL's and SQL Server's `ViewExistsAsync` answered true for a same-named table and false for a cancelled token,
+and async view reads checked existence synchronously. PostgreSQL still refuses a replace that changes the columns
+(`RecreateView`).
+
 ## 2026-11-04 — LLM providers read tool calls, errors and usage they dropped
 [[TASK-716]]. Every Ollama tool call failed: `/api/chat` sends `arguments` as an object, read as a string (measured).
 Gemini let a text part after a function call end the turn, and a blocked stream had no message; Claude's stream ignored

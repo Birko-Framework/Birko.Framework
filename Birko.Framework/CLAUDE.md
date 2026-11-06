@@ -295,6 +295,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Security low findings: 23 verified and fixed (2026-11-06)
+[[TASK-176]]. Behaviour a consumer can notice: `AddBirkoJwtBearer` refuses a secret under 32 characters and both JWT
+paths accept HS256 only; `WildcardPermissionEnabled = false` now disables `"*"` everywhere; `TokenServiceAdapter` writes
+`sub` / `email`. **New interface members:** `IPasswordHasher.NeedsRehash`, `IEncryptionProvider.CreateKey`. Also: fixed-time
+static tokens, BCrypt `$2y$` and a stored-cost ceiling, Vault client disposal, a per-endpoint single-flight JWKS cache.
 ### Birko.Xaml themes the five `needs-theme` parity rows (2026-11-06)
 [[TASK-822]]. `NumericUpDown` and `Carousel` take Birko tokens; `BPre` / `BCodeBlock` are keyed `SelectableTextBlock`
 themes. `ColorPicker` (new package reference) needs `Controls/ColorPickerStyles.axaml` as a `StyleInclude`, like DataGrid.
@@ -369,13 +374,6 @@ Guid (now `EntityNotFoundException`, as elsewhere); a MongoDB `SaveAsync` unique
 committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it
 published (new `AmbientSqlTransaction.Enter(…, out entry)`). A `SqlSavepoint` release that threw after the write
 applied reported the write as failed, inviting a retry to repeat it; it no longer does.
-### SQL views are created and replaced on every provider (2026-11-04)
-[[TASK-717]]. A migration's `CreateView` sent `CREATE OR REPLACE VIEW`, which SQLite refuses (measured); it now drops,
-then creates. SQLite's connector `CreateView` kept an old definition with no error; it now replaces it. On SQL Server a
-bool join constant (`TRUE`) and every indexed view's clustered index (it named `[Table].[Column]`) were refused.
-PostgreSQL's and SQL Server's `ViewExistsAsync` answered true for a same-named table and false for a cancelled token,
-and async view reads checked existence synchronously. PostgreSQL still refuses a replace that changes the columns
-(`RecreateView`).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

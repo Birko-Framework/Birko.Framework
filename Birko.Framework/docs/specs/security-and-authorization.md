@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 10bfc5a75fcc20812d02cc1038560c5b76a83273
+generated-on: 2026-11-06
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnerAccess.cs
@@ -26,6 +26,7 @@ sources:
   - ../Birko.Security.AspNetCore/Authorization/IUserPermissionResolver.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionEndpointFilter.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs
+  - ../Birko.Security.AspNetCore/Authorization/WildcardPermission.cs
   - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs
@@ -104,11 +105,12 @@ sources:
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
 # source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
+# Evidence pass ran 2026-11-06 over 421 feature-linked tasks: 185 resolved, 236 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
+# task id; 9 tasks the state gate refuses have a commit leading with their id. This area's evidence is all
+# FEATURE-014 (TASK-161, 165, 176, 641, 651). Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 259
+shaped-by-unresolved: 236
 ---
 # Hashing, encryption, tokens, secrets and permission enforcement
 
@@ -222,9 +224,11 @@ output size — and SHALL reject any stored hash segment whose decoded length di
 The iteration count, by contrast, is taken from the stored string rather than from the hasher's own
 configuration, so hashes written under an older iteration count remain verifiable. There is no
 verification-time iteration minimum: a stored hash whose iteration segment is far below the constructor's
-10,000 floor still verifies successfully, and `Pbkdf2PasswordHasher` exposes no rehash-needed query. There is
-a verification-time maximum (see the well-formedness rule above), so a stored count cannot make one login
-attempt cost hours of CPU.
+10,000 floor still verifies successfully. The upgrade path is `NeedsRehash` (part of `IPasswordHasher`), which
+SHALL return `true` for a stored value that does not have 4 segments, an algorithm tag of `PBKDF2-SHA512` and an
+iteration segment that parses as an `int`, or whose iteration count is lower than the hasher's own; `false`
+otherwise; and SHALL throw `ArgumentNullException` for null. There is a verification-time maximum (see the
+well-formedness rule above), so a stored count cannot make one login attempt cost hours of CPU.
 
 Because PBKDF2 output is prefix-stable, deriving to `storedHash.Length` would let a truncated column decide
 how many bytes were compared — a 1-byte segment would match an arbitrary password roughly 1 in 256, and a
@@ -235,6 +239,13 @@ how many bytes were compared — a 1-byte segment would match an arbitrary passw
 - **Given** a stored value `"PBKDF2-SHA512:10000:{salt}:{hash}"` written by an older deployment, and a hasher constructed with 600,000 iterations
 - **When** `Verify(correctPassword, stored)` is called
 - **Then** it returns `true`, because the 10,000 from the stored string is used for the recomputation
+- **And** `NeedsRehash(stored)` returns `true`, so the caller can replace it with `Hash(correctPassword)`
+
+#### Scenario: Foreign format needs a rehash
+
+- **Given** a `Pbkdf2PasswordHasher` and a stored BCrypt `$2a$12$…` hash
+- **When** `NeedsRehash(stored)` is called
+- **Then** it returns `true`
 
 #### Scenario: Truncated hash segment rejected even for the correct password
 
@@ -267,12 +278,14 @@ at construction with `ArgumentOutOfRangeException`, and SHALL default to `Defaul
 - **When** `new BCryptPasswordHasher(32)` is constructed
 - **Then** `ArgumentOutOfRangeException` is thrown
 
-### Requirement: BCrypt verification accepts $2a$ and $2b$ and rejects anything malformed
+### Requirement: BCrypt verification accepts $2a$, $2b$ and $2y$ and rejects anything malformed
 
 The system SHALL accept, in `Verify`, only a 60-character string with `$` at indices 0, 3 and 6, `2` at index 1,
-`a` or `b` at index 2, two ASCII digits at indices 4–5 whose value lies within `MinWorkFactor` (4) …
-`MaxWorkFactor` (31), and every character in indices 7…59 drawn from the BCrypt-Base64 alphabet
-`./A-Za-z0-9`; anything else SHALL return `false` without reaching the decoder. The system SHALL re-hash the
+`a`, `b` or `y` at index 2 (`$2y$` is PHP's name for `$2b$`), two ASCII digits at indices 4–5 whose value lies
+within `MinWorkFactor` (4) … `MaxWorkFactor` (31), and every character in indices 7…59 drawn from the BCrypt-Base64
+alphabet `./A-Za-z0-9`; anything else SHALL return `false` without reaching the decoder. A well-shaped hash whose
+stored cost exceeds the larger of `MaxStoredWorkFactor` (16) and the hasher's configured work factor SHALL also
+return `false`, before any key schedule is run. The system SHALL re-hash the
 candidate against the stored 29-character salt prefix and compare with
 `CryptographicOperations.FixedTimeEquals` over the UTF-8 bytes of the two full hash strings.
 
@@ -285,6 +298,18 @@ input answers `true`.
 - **Given** a valid 60-character `$2b$12$…` hash produced elsewhere
 - **When** `Verify(correctPassword, hash)` is called
 - **Then** it returns `true` (inputs are capped at 72 bytes, so `$2a$` and `$2b$` hash identically)
+
+#### Scenario: Hash tagged $2y$ by PHP
+
+- **Given** a valid 60-character `$2y$10$…` hash of the correct password
+- **When** `Verify(correctPassword, hash)` is called
+- **Then** it returns `true`
+
+#### Scenario: Stored cost above the ceiling
+
+- **Given** a hasher with the default work factor 12 and a well-shaped stored hash reading `$2a$31$…`
+- **When** `Verify("p", hash)` is called
+- **Then** it returns `false` immediately, without running 2^31 key schedules; a hasher configured with work factor 18 would still verify a hash stored at cost 18
 
 #### Scenario: Shaped-but-corrupt hash
 
@@ -324,9 +349,10 @@ produce identical hashes and verify interchangeably.
 
 ### Requirement: BCrypt reports when a stored hash was made with a weaker work factor
 
-The system SHALL make `NeedsRehash` return `true` when the stored hash is not a valid BCrypt hash, when its
-cost digits do not parse, or when the parsed cost is lower than the hasher's configured work factor; and
-`false` when the parsed cost is greater than or equal to it.
+The system SHALL make `NeedsRehash` (part of `IPasswordHasher`) return `true` when the stored hash is not a valid
+BCrypt hash, when its cost digits do not parse, or when the parsed cost is lower than the hasher's configured work
+factor; and `false` when the parsed cost is greater than or equal to it — including a cost above the stored-cost
+ceiling, which `Verify` never accepts.
 
 #### Scenario: Cost upgrade needed
 
@@ -347,7 +373,8 @@ The system SHALL, in `AesEncryptionProvider.Encrypt`, draw a fresh 12-byte nonce
 28 bytes longer than the plaintext. The system SHALL require a key of exactly 32 bytes, throwing
 `ArgumentNullException` for a null key and `ArgumentException` for any other length, and SHALL throw
 `ArgumentNullException` for null data before its length is read. `GenerateKey()` SHALL return 32
-cryptographically random bytes.
+cryptographically random bytes, and the instance `CreateKey()` — the `IEncryptionProvider` member, so a caller
+holding only the interface can make a key — SHALL return the same.
 
 #### Scenario: Round trip
 
@@ -454,7 +481,8 @@ same UTC instant, and `TokenResult.RefreshToken` SHALL be left null.
 
 ### Requirement: JWT validation requires an issuer and audience, and returns a result object for every token failure
 
-The system SHALL make `JwtTokenProvider.ValidateToken` validate the signing key, the lifetime (with a fixed
+The system SHALL make `JwtTokenProvider.ValidateToken` validate the signing key, the algorithm (`ValidAlgorithms`
+is `HS256` only, the one `GenerateToken` signs with), the lifetime (with a fixed
 one-minute `ClockSkew`), and **always** the issuer and audience against `TokenOptions.Issuer` /
 `TokenOptions.Audience`. A `TokenOptions` (the default or a per-call override) whose `Issuer` or `Audience` is
 null or whitespace SHALL be refused before any validation with
@@ -493,6 +521,12 @@ type, and `Claims` holds one string per type with the values joined by `';'`.
 - **When** a token signed with the same secret but bearing `iss: "B"` is validated
 - **Then** a `"Token validation failed: …"` failure is returned
 
+#### Scenario: Same secret, another HMAC algorithm
+
+- **Given** a token signed HS512 with the provider's own secret, issuer and audience
+- **When** `ValidateToken(token)` is called
+- **Then** a `"Token validation failed: …"` failure is returned
+
 #### Scenario: Repeated claim types are kept
 
 - **Given** a valid token carrying two `role` claims, `"admin"` and `"auditor"`
@@ -519,14 +553,19 @@ The system SHALL make `GenerateRefreshToken` return the Base64 encoding of 32 by
 
 ### Requirement: Structured token claims are joined into single claim values
 
-The system SHALL make `TokenServiceAdapter.GenerateAccessToken` emit `ClaimTypes.NameIdentifier` for
-`TokenRequest.UserGuid` and `ClaimTypes.Email` for `TokenRequest.Email`, the configured
-`ClaimMappingOptions.TenantGuidClaim` only when `TenantGuid` has a value, and — because `ITokenProvider`
+The system SHALL make `TokenServiceAdapter.GenerateAccessToken` emit the registered JWT claim `sub`
+(`JwtClaimNames.UserId`) for `TokenRequest.UserGuid` and `email` (`JwtClaimNames.Email`) for `TokenRequest.Email`, the
+configured `ClaimMappingOptions.TenantGuidClaim` only when `TenantGuid` has a value, and — because `ITokenProvider`
 takes a single-valued dictionary — the roles and permissions sets as **one** claim each whose value is the
-members joined by `';'`, emitted only when the set is non-empty. `ValidateToken` SHALL invert this,
-splitting the role and permission claim values on `';'` with `RemoveEmptyEntries`, parsing `UserGuid` and
-`TenantGuid` with `Guid.TryParse` (null when absent or unparseable), and returning
-`new TokenValidationInfo(false)` — all other fields null — when the underlying validation failed.
+members joined by `';'`, emitted only when the set is non-empty. Before building any claim it SHALL throw
+`ArgumentNullException` for a null request, `ArgumentException` for a null or empty `Email`, and `ArgumentException`
+for any role or permission containing `','` or `';'` (the readers split on those, so such a value would not round-trip).
+The constructor SHALL throw `ArgumentNullException` for a null token provider or options. `ValidateToken` SHALL invert
+this, reading the user id from `ClaimTypes.NameIdentifier` or else `sub`, and the email from `ClaimTypes.Email` or
+else `email` (the JWT handler maps the registered names inbound), splitting the role and permission claim values on
+`';'` with `RemoveEmptyEntries`, parsing `UserGuid` and `TenantGuid` with `Guid.TryParse` (null when absent or
+unparseable), and returning `new TokenValidationInfo(false)` — all other fields null — when the underlying validation
+failed.
 
 #### Scenario: Multi-valued permissions survive a round trip
 
@@ -539,6 +578,18 @@ splitting the role and permission claim values on `';'` with `RemoveEmptyEntries
 - **Given** a validated token whose `ClaimTypes.NameIdentifier` claim is `"abc"`
 - **When** `ValidateToken` is called
 - **Then** `IsValid` is true but `UserGuid` is null
+
+#### Scenario: A permission holding a separator
+
+- **Given** a `TokenRequest` with permissions `{ "a,b" }`
+- **When** `GenerateAccessToken` is called
+- **Then** `ArgumentException` is thrown and no token is minted
+
+#### Scenario: Registered claim names on the wire
+
+- **Given** a `TokenRequest` for user G with email `u@x`
+- **When** the token is generated
+- **Then** its payload carries `sub = G` and `email = u@x`, not the `ClaimTypes` URIs, and `ValidateToken` reads both back
 
 #### Scenario: Invalid token yields an all-null info
 
@@ -574,6 +625,9 @@ type, split each value on both `','` and `';'` with `RemoveEmptyEntries | TrimEn
 as a set. Multiple same-named claims and a single joined claim are therefore equivalent to a reader. A permission
 claim value SHALL also be split on spaces when `ClaimMappingOptions.SplitPermissionsOnSpace` is true, or, when it is
 null (the default), when `PermissionClaim` is `"scope"` (RFC 6749 §3.3 forbids spaces inside a scope token) (TASK-520).
+When a `BirkoSecurityOptions` with `WildcardPermissionEnabled = false` was supplied to the constructor (as
+`AddBirkoSecurity` registers it), the wildcard `"*"` (`WildcardPermission.Value`) SHALL be removed from the returned
+`Permissions` set (`WildcardPermission.Apply`); with no options, or the option true, it is kept.
 
 #### Scenario: A space-delimited scope reads as separate permissions
 
@@ -593,6 +647,12 @@ null (the default), when `PermissionClaim` is `"scope"` (RFC 6749 §3.3 forbids 
 - **When** `Permissions` is read
 - **Then** the set contains `"*"`, `"users:user:read"` and `"users:user:write"` (whitespace trimmed)
 
+#### Scenario: Wildcard switched off
+
+- **Given** `BirkoSecurityOptions.WildcardPermissionEnabled = false` and the same claim
+- **When** `Permissions` is read
+- **Then** the set is `{ "users:user:read", "users:user:write" }` — `"*"` is left out, so no reader of `ICurrentUser.Permissions` sees it
+
 #### Scenario: Repeated claims
 
 - **Given** two `permission` claims, `"a"` and `"b"`
@@ -604,8 +664,9 @@ null (the default), when `PermissionClaim` is `"scope"` (RFC 6749 §3.3 forbids 
 The system SHALL provide `ResolvedPermissionsCurrentUser`, which reads `UserGuid`, `Email` and `TenantGuid`
 from claims exactly as `ClaimsCurrentUser` does, but takes `Permissions` **only** from
 `HttpContext.Items["birko:resolved-permissions"]`, falling back to an empty set when the item is absent or
-not an `IReadOnlySet<string>` — claim-borne permissions are ignored entirely on this path. `Roles` SHALL
-prefer `HttpContext.Items["birko:resolved-roles"]` and fall back to the role claims (split on `','`/`';'`).
+not an `IReadOnlySet<string>` — claim-borne permissions are ignored entirely on this path — and removing `"*"`
+from them when the supplied `BirkoSecurityOptions.WildcardPermissionEnabled` is false, as `ClaimsCurrentUser` does.
+`Roles` SHALL prefer `HttpContext.Items["birko:resolved-roles"]` and fall back to the role claims (split on `','`/`';'`).
 
 #### Scenario: Middleware did not run
 
@@ -625,8 +686,10 @@ The system SHALL make `PermissionResolutionMiddleware.InvokeAsync` call `IUserPe
 and `GetRolesAsync` — storing their results under `ItemsKey` and `RolesItemsKey` — only when
 `context.User?.Identity?.IsAuthenticated == true` **and** the configured `UserIdClaim` value parses as a
 `Guid`. The tenant argument SHALL be the parsed `TenantGuidClaim`, coerced to `null` when it is absent,
-unparseable, or `Guid.Empty`. The middleware SHALL always invoke the next delegate, whether or not it
-resolved anything.
+unparseable, or `Guid.Empty`. A resolver that returns null from either call SHALL fail the request with
+`InvalidOperationException` naming the resolver type and the method, rather than storing null (which the current user
+would read as "no permissions"). Otherwise the middleware SHALL always invoke the next delegate, whether or not it
+resolved anything; its constructor SHALL throw `ArgumentNullException` for a null next delegate.
 
 #### Scenario: Anonymous request
 
@@ -646,20 +709,33 @@ resolved anything.
 - **When** the middleware runs
 - **Then** the interface's default `GetRolesAsync` returns an empty set and that empty set is stored under `RolesItemsKey`
 
+#### Scenario: Resolver returns null
+
+- **Given** an authenticated, identifiable caller and a resolver whose `GetAsync` returns null
+- **When** the middleware runs
+- **Then** `InvalidOperationException` is thrown naming `{ResolverType}.GetAsync`, and the next delegate is not invoked
+
 ### Requirement: Endpoint permission filtering distinguishes 401 from 403
 
 The system SHALL make `PermissionEndpointFilter` return a JSON `401` `{ error = "Unauthorized" }` when
 `ICurrentUser` is not resolvable from request services or `IsAuthenticated` is false, and a JSON `403`
 `{ error = "Forbidden", required = <permission> }` when the caller is authenticated but the permission set
 contains neither the required permission nor the wildcard `"*"`. Otherwise it SHALL invoke the next filter.
-The wildcard SHALL be honoured unconditionally — `BirkoSecurityOptions.WildcardPermissionEnabled` is not
-consulted here.
+The filter does not read `BirkoSecurityOptions.WildcardPermissionEnabled` itself: when it is false, the
+`ICurrentUser` implementations Birko registers already leave `"*"` out of `Permissions`, so the wildcard passes
+nothing. An `ICurrentUser` the application registers itself decides for itself.
 
 #### Scenario: Superadmin passes any check
 
 - **Given** an authenticated caller whose `Permissions` contains `"*"`
 - **When** an endpoint guarded by `.RequirePermission("iot:device:write")` is invoked
 - **Then** the handler runs
+
+#### Scenario: Superadmin with the wildcard switched off
+
+- **Given** `AddBirkoSecurity` with `WildcardPermissionEnabled = false` and an authenticated caller whose permission claim is `"*"`
+- **When** an endpoint guarded by `.RequirePermission("iot:device:write")` is invoked
+- **Then** a 403 is returned
 
 #### Scenario: Authenticated but unauthorised
 
@@ -682,9 +758,9 @@ consulted here.
 ### Requirement: The claims permission checker only answers for the current caller
 
 The system SHALL make `ClaimsPermissionChecker.HasPermissionAsync(userId, permission)` return `false`, and
-`GetPermissionsAsync(userId)` return an empty list, whenever `userId` differs from `ICurrentUser.UserGuid`
-(including when the latter is null). For the matching user it SHALL return true when the permission set
-contains the permission or `"*"`. No store or database is consulted.
+`GetPermissionsAsync(userId)` return an empty list, whenever `ICurrentUser.IsAuthenticated` is false or `userId`
+differs from `ICurrentUser.UserGuid` (including when the latter is null). For the matching, authenticated user it SHALL
+return true when the permission set contains the permission or `"*"`. No store or database is consulted.
 
 #### Scenario: Asking about somebody else
 
@@ -698,14 +774,22 @@ contains the permission or `"*"`. No store or database is consulted.
 - **When** `GetPermissionsAsync(someGuid)` is called
 - **Then** an empty list is returned
 
+#### Scenario: Claims on an unauthenticated identity
+
+- **Given** a principal whose identity is not authenticated but carries user id A and a `"*"` permission claim
+- **When** `HasPermissionAsync(A, "users:read")` is called
+- **Then** `false` is returned
+
 ### Requirement: JWT bearer wiring accepts a token from the query string only where a header cannot be set
 
-The system SHALL, in `AddBirkoJwtBearer`, require a non-empty `Secret` (throwing `ArgumentException`
-otherwise), register `JwtAuthenticationOptions`, `ClaimMappingOptions`, an `ITokenProvider`
-(`JwtTokenProvider`) and `TokenServiceAdapter` as singletons, and configure JWT bearer as both the default
-authenticate and challenge scheme. The bearer handler SHALL always validate issuer, audience, signing key
-and lifetime — with `ValidIssuer = Issuer` (default `"Birko"`), `ValidAudience = Audience ?? Issuer`, and
-`ClockSkew = ClockSkewSeconds` seconds (default 60). In `OnMessageReceived` it SHALL take the token from a
+The system SHALL, in `AddBirkoJwtBearer`, throw `ArgumentNullException` for a null configure delegate, require a
+non-empty `Secret` (`ArgumentException("JWT Secret is required.")` otherwise) of at least `MinSecretLength` (32)
+characters (`ArgumentException` stating the minimum and the actual length otherwise), register
+`JwtAuthenticationOptions`, `ClaimMappingOptions`, an `ITokenProvider` (`JwtTokenProvider`, built when first resolved
+and given the container's `IDateTimeProvider` when one is registered) and `TokenServiceAdapter` as singletons, and
+configure JWT bearer as both the default authenticate and challenge scheme. The bearer handler SHALL always validate
+issuer, audience, signing key and lifetime, and accept only `HS256` (`ValidAlgorithms`) — with `ValidIssuer = Issuer`
+(default `"Birko"`), `ValidAudience = Audience ?? Issuer`, and `ClockSkew = ClockSkewSeconds` seconds (default 60). In `OnMessageReceived` it SHALL take the token from a
 non-empty `?token=` query-string parameter only when the request carries no `Authorization` header **and**
 is a WebSocket upgrade, or has an `Accept` value containing `text/event-stream` (case-insensitive), or has a
 path that starts, by segment and case-insensitively, with one of `JwtAuthenticationOptions.QueryTokenPathPrefixes`
@@ -717,6 +801,18 @@ query parameter is ignored.
 - **Given** a configure delegate that leaves `Secret` empty
 - **When** `AddBirkoJwtBearer` is called
 - **Then** `ArgumentException("JWT Secret is required.")` is thrown at startup
+
+#### Scenario: Short secret
+
+- **Given** a configure delegate setting a 16-character `Secret`
+- **When** `AddBirkoJwtBearer` is called
+- **Then** `ArgumentException` is thrown at startup stating the secret must be at least 32 characters (it is 16)
+
+#### Scenario: Registered clock stamps the token
+
+- **Given** a registered `IDateTimeProvider` returning a fixed instant
+- **When** the `ITokenProvider` resolved from the container generates a token
+- **Then** its `iat` and `exp` derive from that instant, not from the system clock
 
 #### Scenario: Audience defaults to issuer
 
@@ -750,7 +846,8 @@ query parameter is ignored.
 
 ### Requirement: One-line security registration selects a tenant resolver and defaults to strict tenancy
 
-The system SHALL, in `AddBirkoSecurity`, call `AddBirkoJwtBearer` with the nested `Jwt` options (including
+The system SHALL, in `AddBirkoSecurity`, throw `ArgumentNullException` for a null configure delegate, call
+`AddBirkoJwtBearer` with the nested `Jwt` options (including
 `QueryTokenPathPrefixes`), add `IHttpContextAccessor`, register the resolved `BirkoSecurityOptions` as a
 singleton, register `ICurrentUser` → `ClaimsCurrentUser` as scoped **only when no `ICurrentUser` is already
 registered** (`TryAddScoped`) and `IPermissionChecker` → `ClaimsPermissionChecker` as scoped,
@@ -758,7 +855,9 @@ register `Birko.Data.Tenant.Models.ITenantContext` as `Tenant.Current` plus `ITe
 `TenantContextAdapter`, and select the tenant resolver from `TenantResolverType`: `Header` →
 `HeaderTenantResolver`, `Subdomain` → `SubdomainTenantResolver` (throwing `ArgumentException` when
 `SubdomainLookup` is null), `Custom` → nothing registered. `RequireTenantHeaderMatchesClaim` SHALL default
-to `true` and `WildcardPermissionEnabled` to `true`.
+to `true` and `WildcardPermissionEnabled` to `true`; the registered options instance is what `ClaimsCurrentUser` and
+`ResolvedPermissionsCurrentUser` receive, so `WildcardPermissionEnabled = false` removes `"*"` from every caller's
+`Permissions`.
 
 The system SHALL also register an `IStartupFilter` that, after the application's pipeline has been built,
 throws `InvalidOperationException` — so the host refuses to start — when `RequireTenantHeaderMatchesClaim` is
@@ -827,7 +926,9 @@ When `BirkoSecurityOptions.LoopbackBypass` is true and `UseBirkoLoopbackBypass()
 authorization, the system SHALL run an unauthenticated request as a principal holding the `*` permission only if every
 address in the server's `IServerAddressesFeature` is loopback. Unknown, wildcard or non-loopback addresses SHALL enforce
 authentication, and an authenticated request SHALL keep its own principal. An enabled bypass without the middleware
-SHALL refuse to start (TASK-522).
+SHALL refuse to start (TASK-522). The bypass principal's `*` is a permission claim like any other, so with
+`WildcardPermissionEnabled = false` the registered `ICurrentUser` leaves it out and a bypassed request holds no
+permission.
 
 #### Scenario: Configured loopback URL but bound to all interfaces
 
@@ -895,11 +996,14 @@ different question from the one a gate asks, and it is unchanged because five tr
 
 ### Requirement: Token bindings are evaluated before plain tokens and short-circuit the decision
 
-The system SHALL evaluate `TokenBindings` first, in configuration order, comparing tokens with
-`StringComparer.Ordinal`. On the **first** binding whose token matches, the outcome SHALL be decided there:
+The system SHALL evaluate `TokenBindings` first, in configuration order, comparing each binding's token with the
+presented one by `CryptographicOperations.FixedTimeEquals` over their UTF-8 bytes (exact, ordinal equality, whose
+time does not depend on how much of the content matched; lengths may still differ observably). On the **first**
+binding whose token matches, the outcome SHALL be decided there:
 `false` when the client IP is null or whitespace, `true` when the binding's `AllowedIps` contains the IP
 exactly, and `false` otherwise — the plain `Tokens` list is not consulted afterwards. Only when no binding
-token matched SHALL the expanded `Tokens` set be checked by exact membership. A configuration that is
+token matched SHALL the expanded `Tokens` be checked for an exact match, comparing the presented token with
+**every** configured token in fixed time, without stopping at a match. A configuration that is
 enabled but yields neither collection after expansion SHALL return `false` and log
 "Authentication enabled but no tokens or bindings configured".
 
@@ -965,7 +1069,8 @@ environment or configuration change has no effect on an existing instance.
 ### Requirement: The service releases its lock and believes forwarding headers only from trusted proxies
 
 The system SHALL implement `IDisposable` on `AuthenticationService`, disposing the
-`ReaderWriterLockSlim` once and idempotently.
+`ReaderWriterLockSlim` once and idempotently — the disposed flag is claimed with `Interlocked.Exchange`, so two
+concurrent `Dispose` calls dispose it once.
 
 `GetClientIpAddress(getHeaderValue, fallbackIp, trustedProxies)` SHALL return the connection's own address
 (`fallbackIp`, unchanged) whenever `trustedProxies` is null or empty, or `fallbackIp` is not one of them —
@@ -1169,24 +1274,40 @@ key and the returned identity — so matching is both case- and surrounding-whit
 - **When** `new OidcIdTokenVerifier(keySource, providers)` is constructed
 - **Then** the re-keying `ToDictionary` throws for the duplicate key, at construction
 
-### Requirement: JWKS key sets are cached per provider and served stale on failure for a bounded time
+### Requirement: JWKS key sets are cached per provider and JWKS URI and served stale on failure for a bounded time
 
 The system SHALL make `HttpOidcSigningKeySource.GetSigningKeysAsync` return the cached key set while it is
 younger than the cache duration (`DefaultCacheDuration` = 1 hour, overridable) unless `forceRefresh` is
-requested. It SHALL fetch `OidcProviderOptions.JwksUri` and cache only a **non-empty** result — a JWKS that
+requested. Entries SHALL be keyed by the provider name **and** `OidcProviderOptions.JwksUri`, so a provider pointed at
+another endpoint is fetched afresh. At most one fetch per key SHALL run at a time: a caller that finds no fresh entry
+waits on that key's gate, then re-checks — an ordinary call takes any entry fresh by then, a forced refresh takes only
+an entry fetched at or after the moment it asked — and fetches only if neither applies. Waiting on the gate honours
+the caller's `CancellationToken`. It SHALL fetch `OidcProviderOptions.JwksUri` and cache only a **non-empty** result — a JWKS that
 parses but exposes no signing keys SHALL be returned without being cached, and SHALL set `LastFetchError`.
 On any exception other than `OperationCanceledException` it SHALL record `LastFetchError` and return the
 previously cached (stale) key set only while that set is younger than the maximum stale age
 (`DefaultMaxStaleAge` = 24 hours, overridable), otherwise an empty collection; `OperationCanceledException`
 SHALL propagate. `LastServedStale` SHALL be true exactly when the last answer was a stale set served because
 a fetch failed. Ages SHALL be measured with the injectable `IDateTimeProvider` (the system clock by
-default). Provider keys SHALL be cached under a case-insensitive key.
+default). Cache keys (provider and URI) SHALL be compared case-insensitively.
 
 #### Scenario: Second call inside the window does not hit the network
 
 - **Given** a successful fetch 5 minutes ago and a 1-hour cache duration
 - **When** `GetSigningKeysAsync(provider, options, forceRefresh: false)` is called
 - **Then** the cached keys are returned and no HTTP request is made
+
+#### Scenario: Provider moved to another JWKS endpoint
+
+- **Given** keys cached for provider `google` from URI A 5 minutes ago
+- **When** keys are requested for `google` with options naming URI B
+- **Then** URI B is fetched; the keys from A are not served
+
+#### Scenario: Concurrent first logins
+
+- **Given** an empty cache and 20 concurrent requests for the same provider and URI
+- **When** they all call `GetSigningKeysAsync`
+- **Then** one HTTP request is made and all 20 receive its keys
 
 #### Scenario: Transient network failure
 
@@ -1257,7 +1378,8 @@ SHALL answer the full names that start with the path, ordered.
 The system SHALL build every Vault request as an absolute URI against `VaultSettings.Address` (trailing
 slash normalised) and attach `X-Vault-Token` and `X-Vault-Namespace` as **per-request** headers, so a
 caller-supplied `HttpClient` is never mutated; only a client the provider created itself SHALL have its
-`Timeout` set from `TimeoutSeconds`. Read/write paths SHALL be `{MountPath}/data/{key}` for
+`Timeout` set from `TimeoutSeconds`. The constructor SHALL throw `ArgumentOutOfRangeException` when
+`VaultSettings.KvVersion` is neither 1 nor 2. Read/write paths SHALL be `{MountPath}/data/{key}` for
 `KvVersion == 2` and `{MountPath}/{key}` otherwise; delete SHALL use `{MountPath}/metadata/{key}` for v2 and
 `{MountPath}/{key}` otherwise; write payloads SHALL be `{ data: { value } }` for v2 and `{ value }` for v1.
 A `404` SHALL yield null from the read paths and SHALL be tolerated by delete; any other non-success status
@@ -1300,11 +1422,18 @@ lists the mount root.
 - **When** `GetSecretAsync(key)` is called
 - **Then** null is returned
 
-#### Scenario: Health probe never throws
+#### Scenario: Unsupported KV version
 
-- **Given** an unreachable Vault address
+- **Given** `VaultSettings` with `KvVersion = 3`
+- **When** a `VaultSecretProvider` is constructed
+- **Then** `ArgumentOutOfRangeException` is thrown
+
+#### Scenario: Health probe answers failures, not the caller's cancellation
+
+- **Given** an unreachable Vault address, or a request that times out
 - **When** `IsHealthyAsync()` is called
 - **Then** `false` is returned
+- **And** when the caller's own token is cancelled, `OperationCanceledException` propagates instead
 
 ### Requirement: Vault responses are parsed defensively for KV v2 and KV v1
 
@@ -1350,7 +1479,8 @@ expiry (defaulting to 3600 seconds when the response omits it), guarding the ref
 `SemaphoreSlim` double-check. It SHALL call the Key Vault REST API at api-version 7.4 with a
 `Bearer` header, treat `404` as null (read) / empty (list) / success (delete), and dispose only an
 `HttpClient` it created itself. `AzureKeyVaultSettings` SHALL alias `RemoteSettings` members —
-`VaultUri`↔`Location`, `TenantId`↔`Name`, `ClientId`↔`UserName`, `ClientSecret`↔`Password`.
+`VaultUri`↔`Location`, `TenantId`↔`Name`, `ClientId`↔`UserName`, `ClientSecret`↔`Password` — assigning null to
+`TenantId`, `ClientId` or `ClientSecret` stores the empty string.
 
 #### Scenario: Missing credentials surface at first use, not at construction
 
@@ -1544,7 +1674,11 @@ variable equals `"true"` case-insensitively, SHALL throw `ArgumentException` for
 name, and SHALL report "LocalVault: token is empty — skipping." and return unchanged when no token was
 resolved. Option values SHALL be resolved as "explicit value, else environment variable
 (`LOCAL_VAULT_TOKEN` / `_ADDR` / `_USER` / `_DOMAIN` / `_ENVIRONMENT`), else fallback", with `Url` falling
-back to `http://localhost:8200`, and `User`/`Domain`/`Environment` lower-cased. Sources SHALL be registered
+back to `http://localhost:8200`, and `User`/`Domain`/`Environment` lower-cased — resolved into a copy, so the
+caller's `LocalVaultOptions` instance is never written to. Each registered source SHALL build a provider that creates
+its own `VaultSecretProvider` from the resolved settings and disposes it when the configuration root disposes the
+provider; a `LocalVaultConfigurationSource` constructed over a caller's `VaultSecretProvider` leaves that client to the
+caller. Sources SHALL be registered
 in this order, so later ones override earlier: `projects/defaults`, `projects/defaults.{env}`,
 `projects/{project}`, `projects/{project}.{env}`, and — only when a user is set —
 `users/{user}/{project}`, `users/{user}/{project}.{env}`; each prefixed by `{domain}/` when a domain is set,
@@ -1580,12 +1714,19 @@ and `.{env}` variants emitted only when an environment is set. The project name 
 - **When** `AddLocalVaultConfiguration(builder, "  ")` is called
 - **Then** `ArgumentException("Project name is required.")` is thrown
 
+#### Scenario: Caller's options are not rewritten
+
+- **Given** a `LocalVaultOptions { Domain = "Acme" }` passed in, and `LOCAL_VAULT_TOKEN` set
+- **When** the extension is called
+- **Then** the passed instance still reads `Domain = "Acme"` and `Token` unset; only the resolved copy is lower-cased and filled from the environment
+
 ### Requirement: Configuration-source registration guards its arguments
 
 The system SHALL throw `ArgumentNullException` from `AddSecretConfiguration` (both overloads) and both
 `AddVaultPath` overloads when the builder, the provider/client, or the paths enumerable is null, and from
-`SecretConfigurationSource` / `LocalVaultConfigurationSource` / their providers when the provider or client
-is null. A null path SHALL be normalised to the empty string rather than rejected.
+`SecretConfigurationSource` / `LocalVaultConfigurationSource` / their providers when the provider, client or (for the
+settings-based `LocalVaultConfigurationSource`) settings is null. A null path SHALL be normalised to the empty string
+rather than rejected.
 
 #### Scenario: Null provider
 
@@ -1605,14 +1746,16 @@ The system SHALL define `IRoleProvider` (`GetRolesAsync`, `IsInRoleAsync`) and `
 (`HasPermissionAsync`, `GetPermissionsAsync`) keyed by a `Guid` user id, and
 `IUserPermissionResolver.GetAsync(userId, tenantId)` for request-time resolution, whose `GetRolesAsync`
 default returns an empty set so implementations may supply only permissions. `AuthorizationContext` SHALL
-answer `IsInRole` / `HasPermission` by plain membership over its `Roles` / `Permissions` lists, with no
-wildcard handling.
+answer `IsInRole` by plain membership over its `Roles` list, and `HasPermission` by membership of the permission
+or of the wildcard `"*"` in its `Permissions` list, as `ClaimsPermissionChecker` does. It has no access to
+`BirkoSecurityOptions`, so it honours `"*"` whatever `WildcardPermissionEnabled` says; whoever fills `Permissions`
+decides whether `"*"` is in it.
 
-#### Scenario: AuthorizationContext has no wildcard semantics
+#### Scenario: AuthorizationContext honours the wildcard
 
 - **Given** an `AuthorizationContext` whose `Permissions` is `["*"]`
 - **When** `HasPermission("users:read")` is called
-- **Then** `false` is returned — unlike `ClaimsPermissionChecker`, this type does not honour `"*"`
+- **Then** `true` is returned
 
 #### Scenario: Resolver that supplies permissions only
 
@@ -2075,7 +2218,8 @@ or when the host registered its own `IGrantAdminSource`. The decorator SHALL ret
 `"*"` for a holder of the reserved admin grant in scope and `"{type}:{action}"` for every action of each in-scope
 type-wide grant, and the host's roles plus `"{type}:{role}"` per such grant; per-resource grants are not surfaced,
 and a type-wide grant whose role or resource type is undeclared is skipped rather than thrown. The admin source
-SHALL count a user as admin when they hold the admin grant or the host resolver gives them `"*"`. Both constructors
+SHALL count a user as admin when they hold the admin grant or the host resolver gives them `"*"` — read from the
+resolver directly, so `BirkoSecurityOptions.WildcardPermissionEnabled = false` does not affect it. Both constructors
 SHALL refuse a `GrantAwareUserPermissionResolver` as the inner resolver with `ArgumentException`.
 
 #### Scenario: Type-wide grant reaches RequirePermission
@@ -2110,7 +2254,8 @@ The system SHALL decide owner access through `OwnerAccess.CanAccess(caller, owne
 404 for an absent or foreign entity and 200 with the DTO otherwise; `CreateClash` answers `null` when there is no
 clash, 409 when the clashing id is the caller's and 404 when it is someone else's; `RequireOwned` answers 404 for an
 absent or foreign entity and `null` (proceed) with the entity otherwise. For an `ICurrentUser`,
-`SeesEverything(viewAllPermission?)` SHALL be true when the permissions contain `"*"` or the given non-empty
+`SeesEverything(viewAllPermission?)` SHALL be true when the permissions contain `"*"` (absent from the registered
+`ICurrentUser` implementations' permissions when `WildcardPermissionEnabled` is false) or the given non-empty
 view-all permission (throwing `ArgumentNullException` for a null user), and `CanAccess(owner, viewAllPermission?)`
 SHALL compare `UserGuid` — for a string owner in its `"D"` form — through `OwnerAccess`.
 
