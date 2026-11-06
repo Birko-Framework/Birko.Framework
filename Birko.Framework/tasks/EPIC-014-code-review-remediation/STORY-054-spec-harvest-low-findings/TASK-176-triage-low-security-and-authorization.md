@@ -58,7 +58,7 @@ what the code *does*, defects included, which is exactly what let it find them. 
       evidence
 - [x] A confirmed finding too large for this task is spawned via `/tasks spawn` — never left as a ticked box
       with the work undone
-- [ ] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
+- [x] [[STORY-054]]'s **Progress** line and `finding-count` reflect this area's closed count
 
 ## Out of scope
 
