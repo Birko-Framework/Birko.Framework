@@ -234,3 +234,15 @@ decides. A third pins that a timeout after sending is not retried even with `ret
 
 - [x] N/A — mechanical; the proof is an attempt count and the resulting row set under an induced transient
       error, per provider and per half.
+
+## Follow-up 2026-11-06 — the live deadlock tests raced on a slow runner
+
+CI live-tests on `da4eeecc` failed `Birko.Data.SQL.PostgreSQL.Tests.DeadlockRetryLiveTests.With_retry_off_the_deadlock_reaches_the_caller_and_nothing_is_applied`
+(186/187; CI runs `-v q`, so no message was kept). Not reproduced locally (0/20 under 8 CPU burners). The tests arranged
+the deadlock with a FIXED sleep in the other session (PostgreSQL 600 ms, SQL Server 300 ms): if the framework had not yet
+taken row 1 by then, the other session took it first, no deadlock formed, and the write simply succeeded. Reproduced by
+delaying the framework's start 800 ms: the PostgreSQL retry-off test fails with "no exception was thrown" (the CI
+symptom) and the retry-on one with 1 attempt; all 3 SQL Server tests fail the same way. Fixed: the other session now
+waits until the database shows the framework holding row 1 (PostgreSQL: its statement waiting on a lock; SQL Server: in
+its `WAITFOR` or a lock wait) before closing the cycle. With the same 800 ms delay all 5 pass; live PostgreSQL 187/187,
+SQL Server 224/224.

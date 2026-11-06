@@ -86,7 +86,23 @@ public class DeadlockRetryLiveTests : IDisposable
         "UPDATE " + Table + " SET v = v + 1 WHERE id = 1; SELECT pg_sleep(0.3); "
         + "UPDATE " + Table + " SET v = v + 1 WHERE id = 2;";
 
-    /// <summary>Holds row 2, then (after the framework is waiting for it) wants row 1, then commits.</summary>
+    /// <summary>Polls, on its own connection, until another session's statement on the table waits for a lock.</summary>
+    private static void WaitUntilTheFrameworkIsBlocked()
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' "
+                        + $"AND query LIKE '%{Table}%' AND pid <> pg_backend_pid()";
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (Convert.ToInt64(cmd.ExecuteScalar()) == 0)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The framework never blocked on row 2: the deadlock could not be arranged.");
+            Thread.Sleep(20);
+        }
+    }
+
+    /// <summary>Holds row 2, then (once the framework is waiting for it) wants row 1, then commits.</summary>
     private static Task RunTheOtherSession(ManualResetEventSlim holdingRow2)
         => Task.Run(() =>
         {
@@ -95,7 +111,10 @@ public class DeadlockRetryLiveTests : IDisposable
             Exec(c, "SET LOCAL deadlock_timeout = '10s';", t); // never the one to give up
             Exec(c, $"UPDATE {Table} SET v = v + 100 WHERE id = 2;", t);
             holdingRow2.Set();
-            Thread.Sleep(600); // the framework holds row 1 and is waiting for row 2
+            // Wait until the framework is BLOCKED on row 2, which it reaches only holding row 1; then the next statement
+            // closes the cycle. This was a fixed 600 ms sleep, and on a slow runner the framework could still be opening
+            // its connection, so no deadlock formed and the retry-off test saw nothing thrown (CI on da4eeecc).
+            WaitUntilTheFrameworkIsBlocked();
             Exec(c, $"UPDATE {Table} SET v = v + 100 WHERE id = 1;", t);
             t.Commit();
         });

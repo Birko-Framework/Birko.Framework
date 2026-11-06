@@ -95,6 +95,24 @@ public class DeadlockRetryLiveTests : IDisposable
         "UPDATE dbo." + Table + " SET V = V + 1 WHERE Id = 1; WAITFOR DELAY '00:00:00.600'; "
         + "UPDATE dbo." + Table + " SET V = V + 1 WHERE Id = 2;";
 
+    /// <summary>Polls, on its own connection, until another session's statement on the table is in its WAITFOR or a lock wait.</summary>
+    private static void WaitUntilTheFrameworkHoldsRow1()
+    {
+        using var c = new SqlConnection(RawConnectionString());
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM sys.dm_exec_requests r CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) s "
+                        + "WHERE r.session_id <> @@SPID AND (r.wait_type = 'WAITFOR' OR r.wait_type LIKE 'LCK[_]M[_]%') "
+                        + $"AND s.text LIKE '%{Table}%'";
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (Convert.ToInt32(cmd.ExecuteScalar()) == 0)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The framework never took row 1: the deadlock could not be arranged.");
+            Thread.Sleep(20);
+        }
+    }
+
     /// <summary>
     /// The other session: holds row 2, wants row 1 while the framework holds it, wins the deadlock (HIGH priority), then
     /// commits. Started before the framework's statement; its lock on row 2 is taken at once.
@@ -108,7 +126,9 @@ public class DeadlockRetryLiveTests : IDisposable
             using var t = c.BeginTransaction();
             Exec(c, $"UPDATE dbo.{Table} SET V = V + 100 WHERE Id = 2;", t);
             holdingRow2.Set();
-            Thread.Sleep(300); // the framework now holds row 1 and is in its WAITFOR
+            // Wait until the framework holds row 1 (its WAITFOR, or already blocked on row 2), then close the cycle. This
+            // was a fixed 300 ms sleep; a slow start left no deadlock (the PostgreSQL twin failed so on CI, da4eeecc).
+            WaitUntilTheFrameworkHoldsRow1();
             Exec(c, $"UPDATE dbo.{Table} SET V = V + 100 WHERE Id = 1;", t);
             t.Commit();
         });
