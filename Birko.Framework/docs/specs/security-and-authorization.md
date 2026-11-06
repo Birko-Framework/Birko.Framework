@@ -1,6 +1,6 @@
 ---
 area: security-and-authorization
-generated-at: 10bfc5a75fcc20812d02cc1038560c5b76a83273
+generated-at: 83059adb00eea2a8d1d729065a8cce772ae67bad
 generated-on: 2026-11-06
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
@@ -23,6 +23,7 @@ sources:
   - ../Birko.Security.AspNetCore/Authentication/LoopbackBypass.cs
   - ../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs
   - ../Birko.Security.AspNetCore/Authorization/ClaimsPermissionChecker.cs
+  - ../Birko.Security.AspNetCore/Authorization/IAppliesWildcardOption.cs
   - ../Birko.Security.AspNetCore/Authorization/IUserPermissionResolver.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionEndpointFilter.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs
@@ -627,7 +628,10 @@ claim value SHALL also be split on spaces when `ClaimMappingOptions.SplitPermiss
 null (the default), when `PermissionClaim` is `"scope"` (RFC 6749 §3.3 forbids spaces inside a scope token) (TASK-520).
 When a `BirkoSecurityOptions` with `WildcardPermissionEnabled = false` was supplied to the constructor (as
 `AddBirkoSecurity` registers it), the wildcard `"*"` (`WildcardPermission.Value`) SHALL be removed from the returned
-`Permissions` set (`WildcardPermission.Apply`); with no options, or the option true, it is kept.
+`Permissions` set (`WildcardPermission.Apply(permissions, principal, options)`); with no options, or the option true,
+it is kept. It SHALL also be kept for the loopback bypass principal (identity `AuthenticationType` equal to
+`LoopbackBypass.AuthenticationType`), whose `"*"` Birko grants itself rather than reading it from the host's data
+(TASK-823).
 
 #### Scenario: A space-delimited scope reads as separate permissions
 
@@ -653,6 +657,12 @@ When a `BirkoSecurityOptions` with `WildcardPermissionEnabled = false` was suppl
 - **When** `Permissions` is read
 - **Then** the set is `{ "users:user:read", "users:user:write" }` — `"*"` is left out, so no reader of `ICurrentUser.Permissions` sees it
 
+#### Scenario: The loopback bypass principal keeps the wildcard
+
+- **Given** `BirkoSecurityOptions.WildcardPermissionEnabled = false` and a principal whose identity's `AuthenticationType` is `LoopbackBypass.AuthenticationType`, carrying the permission claim `"*"`
+- **When** `ClaimsCurrentUser.Permissions` is read
+- **Then** the set contains `"*"`
+
 #### Scenario: Repeated claims
 
 - **Given** two `permission` claims, `"a"` and `"b"`
@@ -664,8 +674,10 @@ When a `BirkoSecurityOptions` with `WildcardPermissionEnabled = false` was suppl
 The system SHALL provide `ResolvedPermissionsCurrentUser`, which reads `UserGuid`, `Email` and `TenantGuid`
 from claims exactly as `ClaimsCurrentUser` does, but takes `Permissions` **only** from
 `HttpContext.Items["birko:resolved-permissions"]`, falling back to an empty set when the item is absent or
-not an `IReadOnlySet<string>` — claim-borne permissions are ignored entirely on this path — and removing `"*"`
-from them when the supplied `BirkoSecurityOptions.WildcardPermissionEnabled` is false, as `ClaimsCurrentUser` does.
+not an `IReadOnlySet<string>` — claim-borne permissions are ignored entirely on this path. It SHALL NOT filter the
+set itself (it takes no `BirkoSecurityOptions`): `WildcardPermissionEnabled` is applied by
+`PermissionResolutionMiddleware` when it fills the slot, the one place that knows whether a `"*"` came from the host's
+resolver or was granted by Birko (TASK-823).
 `Roles` SHALL prefer `HttpContext.Items["birko:resolved-roles"]` and fall back to the role claims (split on `','`/`';'`).
 
 #### Scenario: Middleware did not run
@@ -688,7 +700,10 @@ and `GetRolesAsync` — storing their results under `ItemsKey` and `RolesItemsKe
 `Guid`. The tenant argument SHALL be the parsed `TenantGuidClaim`, coerced to `null` when it is absent,
 unparseable, or `Guid.Empty`. A resolver that returns null from either call SHALL fail the request with
 `InvalidOperationException` naming the resolver type and the method, rather than storing null (which the current user
-would read as "no permissions"). Otherwise the middleware SHALL always invoke the next delegate, whether or not it
+would read as "no permissions"). Before storing the permissions, the middleware SHALL remove `"*"` from them when the
+`BirkoSecurityOptions` resolved from `context.RequestServices` has `WildcardPermissionEnabled = false` — a `"*"` from
+the host's resolver is not superadmin — unless the resolver implements the marker `IAppliesWildcardOption`, whose
+answer is stored as it is because it applies the option to the host data itself (TASK-823). Otherwise the middleware SHALL always invoke the next delegate, whether or not it
 resolved anything; its constructor SHALL throw `ArgumentNullException` for a null next delegate.
 
 #### Scenario: Anonymous request
@@ -715,15 +730,28 @@ resolved anything; its constructor SHALL throw `ArgumentNullException` for a nul
 - **When** the middleware runs
 - **Then** `InvalidOperationException` is thrown naming `{ResolverType}.GetAsync`, and the next delegate is not invoked
 
+#### Scenario: Host resolver's wildcard switched off
+
+- **Given** `BirkoSecurityOptions.WildcardPermissionEnabled = false` registered and a resolver (not an `IAppliesWildcardOption`) answering `{ "*", "a" }`
+- **When** the middleware runs for an authenticated, identifiable caller
+- **Then** `{ "a" }` is stored under `ItemsKey`
+
+#### Scenario: A resolver that applies the option itself is stored as it is
+
+- **Given** `WildcardPermissionEnabled = false` and a resolver implementing `IAppliesWildcardOption` answering `{ "*" }`
+- **When** the middleware runs for an authenticated, identifiable caller
+- **Then** `{ "*" }` is stored under `ItemsKey`
+
 ### Requirement: Endpoint permission filtering distinguishes 401 from 403
 
 The system SHALL make `PermissionEndpointFilter` return a JSON `401` `{ error = "Unauthorized" }` when
 `ICurrentUser` is not resolvable from request services or `IsAuthenticated` is false, and a JSON `403`
 `{ error = "Forbidden", required = <permission> }` when the caller is authenticated but the permission set
 contains neither the required permission nor the wildcard `"*"`. Otherwise it SHALL invoke the next filter.
-The filter does not read `BirkoSecurityOptions.WildcardPermissionEnabled` itself: when it is false, the
-`ICurrentUser` implementations Birko registers already leave `"*"` out of `Permissions`, so the wildcard passes
-nothing. An `ICurrentUser` the application registers itself decides for itself.
+The filter does not read `BirkoSecurityOptions.WildcardPermissionEnabled` itself: when it is false, a `"*"` from the
+host's own permission data has already been left out where it entered (`ClaimsCurrentUser`, or
+`PermissionResolutionMiddleware` for `ResolvedPermissionsCurrentUser`), so such a wildcard passes nothing; a `"*"`
+Birko grants itself (the loopback bypass principal's, a grants admin's) is kept and passes. An `ICurrentUser` the application registers itself decides for itself.
 
 #### Scenario: Superadmin passes any check
 
@@ -855,9 +883,9 @@ register `Birko.Data.Tenant.Models.ITenantContext` as `Tenant.Current` plus `ITe
 `TenantContextAdapter`, and select the tenant resolver from `TenantResolverType`: `Header` →
 `HeaderTenantResolver`, `Subdomain` → `SubdomainTenantResolver` (throwing `ArgumentException` when
 `SubdomainLookup` is null), `Custom` → nothing registered. `RequireTenantHeaderMatchesClaim` SHALL default
-to `true` and `WildcardPermissionEnabled` to `true`; the registered options instance is what `ClaimsCurrentUser` and
-`ResolvedPermissionsCurrentUser` receive, so `WildcardPermissionEnabled = false` removes `"*"` from every caller's
-`Permissions`.
+to `true` and `WildcardPermissionEnabled` to `true`; the registered options instance is what `ClaimsCurrentUser`
+receives and what `PermissionResolutionMiddleware` reads from request services, so `WildcardPermissionEnabled = false`
+removes a host-supplied `"*"` from every caller's `Permissions` (a `"*"` Birko grants itself is kept, TASK-823).
 
 The system SHALL also register an `IStartupFilter` that, after the application's pipeline has been built,
 throws `InvalidOperationException` — so the host refuses to start — when `RequireTenantHeaderMatchesClaim` is
@@ -926,9 +954,9 @@ When `BirkoSecurityOptions.LoopbackBypass` is true and `UseBirkoLoopbackBypass()
 authorization, the system SHALL run an unauthenticated request as a principal holding the `*` permission only if every
 address in the server's `IServerAddressesFeature` is loopback. Unknown, wildcard or non-loopback addresses SHALL enforce
 authentication, and an authenticated request SHALL keep its own principal. An enabled bypass without the middleware
-SHALL refuse to start (TASK-522). The bypass principal's `*` is a permission claim like any other, so with
-`WildcardPermissionEnabled = false` the registered `ICurrentUser` leaves it out and a bypassed request holds no
-permission.
+SHALL refuse to start (TASK-522). The bypass principal (authentication type `LoopbackBypass.AuthenticationType`, user
+id `Guid.Empty`) is Birko's own, so with `WildcardPermissionEnabled = false` `ClaimsCurrentUser` keeps its `*`
+(TASK-823); under `ResolvedPermissionsCurrentUser` its permission claim is not consulted, as for any principal.
 
 #### Scenario: Configured loopback URL but bound to all interfaces
 
@@ -947,6 +975,12 @@ permission.
 - **Given** the bypass is active and a request carries a valid token
 - **When** it is authorized
 - **Then** it runs as the token's principal, not as the `*` principal
+
+#### Scenario: The bypass keeps its wildcard with the option off
+
+- **Given** the bypass is active, `WildcardPermissionEnabled = false` and `ICurrentUser` → `ClaimsCurrentUser`
+- **When** a request without a token reads `ICurrentUser.Permissions`
+- **Then** the set contains `"*"`
 
 ### Requirement: Static-token authentication allows everything only when deliberately switched off
 
@@ -2216,10 +2250,14 @@ factory, and replace the `IGrantAdminSource` with `UserPermissionResolverAdminSo
 resolver. It SHALL throw `InvalidOperationException` when no resolver is registered, when it was already applied,
 or when the host registered its own `IGrantAdminSource`. The decorator SHALL return the host's permissions plus
 `"*"` for a holder of the reserved admin grant in scope and `"{type}:{action}"` for every action of each in-scope
-type-wide grant, and the host's roles plus `"{type}:{role}"` per such grant; per-resource grants are not surfaced,
+type-wide grant, and the host's roles plus `"{type}:{role}"` per such grant. With `BirkoSecurityOptions.WildcardPermissionEnabled = false`
+(the registered options, which `WithGrantPermissions` passes to both) the decorator SHALL drop a `"*"` the host
+resolver answers and still add `"*"` for an admin-grant holder; it implements `IAppliesWildcardOption`, so
+`PermissionResolutionMiddleware` stores its answer as it is (TASK-823); per-resource grants are not surfaced,
 and a type-wide grant whose role or resource type is undeclared is skipped rather than thrown. The admin source
-SHALL count a user as admin when they hold the admin grant or the host resolver gives them `"*"` — read from the
-resolver directly, so `BirkoSecurityOptions.WildcardPermissionEnabled = false` does not affect it. Both constructors
+SHALL count a user as admin when they hold the admin grant or the host resolver gives them `"*"` — with
+`WildcardPermissionEnabled = false` the host's `"*"` makes nobody an admin, while the admin grant still does
+(TASK-823). Both constructors
 SHALL refuse a `GrantAwareUserPermissionResolver` as the inner resolver with `ArgumentException`.
 
 #### Scenario: Type-wide grant reaches RequirePermission
@@ -2240,6 +2278,18 @@ SHALL refuse a `GrantAwareUserPermissionResolver` as the inner resolver with `Ar
 - **When** `CanAsync(U, …)` is called through `IGrantService`
 - **Then** it returns `true`
 
+#### Scenario: Host superadmin is not a grant admin with the wildcard off
+
+- **Given** `WildcardPermissionEnabled = false`, a host resolver giving user U `"*"` and no admin grant for U
+- **When** U's permissions are resolved through `GrantAwareUserPermissionResolver` and `UserPermissionResolverAdminSource.IsAdminAsync(U, …)` is called
+- **Then** the permissions do not contain `"*"` and `IsAdminAsync` returns `false`
+
+#### Scenario: Admin-grant holder keeps the wildcard with the option off
+
+- **Given** `WildcardPermissionEnabled = false` and user U holding the reserved admin grant in scope
+- **When** U's permissions are resolved through `GrantAwareUserPermissionResolver` and stored by the middleware
+- **Then** they contain `"*"`, and `IsAdminAsync(U, …)` returns `true`
+
 #### Scenario: Applied twice
 
 - **Given** `AddBirkoGrants(...).WithGrantPermissions()`
@@ -2254,8 +2304,8 @@ The system SHALL decide owner access through `OwnerAccess.CanAccess(caller, owne
 404 for an absent or foreign entity and 200 with the DTO otherwise; `CreateClash` answers `null` when there is no
 clash, 409 when the clashing id is the caller's and 404 when it is someone else's; `RequireOwned` answers 404 for an
 absent or foreign entity and `null` (proceed) with the entity otherwise. For an `ICurrentUser`,
-`SeesEverything(viewAllPermission?)` SHALL be true when the permissions contain `"*"` (absent from the registered
-`ICurrentUser` implementations' permissions when `WildcardPermissionEnabled` is false) or the given non-empty
+`SeesEverything(viewAllPermission?)` SHALL be true when the permissions contain `"*"` (a host-supplied `"*"` is
+absent from the registered `ICurrentUser` implementations' permissions when `WildcardPermissionEnabled` is false) or the given non-empty
 view-all permission (throwing `ArgumentNullException` for a null user), and `CanAccess(owner, viewAllPermission?)`
 SHALL compare `UserGuid` — for a string owner in its `"D"` form — through `OwnerAccess`.
 
