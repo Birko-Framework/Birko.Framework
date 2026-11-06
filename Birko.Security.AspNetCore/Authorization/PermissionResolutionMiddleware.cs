@@ -27,7 +27,8 @@ public sealed class PermissionResolutionMiddleware
 
     private readonly RequestDelegate _next;
 
-    public PermissionResolutionMiddleware(RequestDelegate next) => _next = next;
+    public PermissionResolutionMiddleware(RequestDelegate next) =>
+        _next = next ?? throw new ArgumentNullException(nameof(next)); // SH-L229
 
     public async Task InvokeAsync(HttpContext context, IUserPermissionResolver resolver, ClaimMappingOptions claimOptions)
     {
@@ -39,16 +40,23 @@ public sealed class PermissionResolutionMiddleware
                 var tenantClaim = context.User.FindFirstValue(claimOptions.TenantGuidClaim);
                 Guid? tenantId = Guid.TryParse(tenantClaim, out var tid) && tid != Guid.Empty ? tid : null;
 
-                var perms = await resolver.GetAsync(userId, tenantId, context.RequestAborted);
+                // SH-L229: IUserPermissionResolver promises a set, never null. A null was stored, and the current user read
+                // it as "no permissions": a broken resolver looked like an unprivileged user. Refused, naming the resolver.
+                var perms = await resolver.GetAsync(userId, tenantId, context.RequestAborted)
+                    ?? throw NullResult(resolver, nameof(IUserPermissionResolver.GetAsync));
                 context.Items[ItemsKey] = perms;
 
                 // Roles are resolved server-side too (kept out of the JWT like permissions), so
                 // ICurrentUser.Roles works without a role claim. See ResolvedPermissionsCurrentUser.
-                var roles = await resolver.GetRolesAsync(userId, tenantId, context.RequestAborted);
+                var roles = await resolver.GetRolesAsync(userId, tenantId, context.RequestAborted)
+                    ?? throw NullResult(resolver, nameof(IUserPermissionResolver.GetRolesAsync));
                 context.Items[RolesItemsKey] = roles;
             }
         }
 
         await _next(context);
     }
+
+    private static InvalidOperationException NullResult(IUserPermissionResolver resolver, string method) =>
+        new($"{resolver.GetType().Name}.{method} returned null; IUserPermissionResolver must return a set, empty when the user has none.");
 }

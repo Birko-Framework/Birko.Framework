@@ -98,3 +98,6 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
 
 - **JWT registration** (SH-L221, SH-L222, SH-L227, SH-L228): `Task176JwtRegistrationTests`, 6 of 7 red before the fix;
   `A_32_character_secret_is_accepted` passes either way (a contract pin).
+- **Authorization** (SH-L217, SH-L219, SH-L229, SH-L235): `Task176AuthorizationTests`, 7 of 9 red with each fix
+  disabled in place (the old code cannot compile against the new constructor parameter); the wildcard-on default and
+  the authenticated-caller grant pass either way (contract pins).

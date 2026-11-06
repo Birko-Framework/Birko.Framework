@@ -21,20 +21,24 @@ public sealed class ClaimsPermissionChecker : IPermissionChecker
         _currentUser = currentUser;
     }
 
+    // SH-L219: only an AUTHENTICATED caller holds permissions, as PermissionEndpointFilter already required (401 before any
+    // permission is read). A principal a non-authenticating middleware filled with claims passed here, "*" included.
+    private bool IsCaller(Guid userId) => _currentUser.IsAuthenticated && _currentUser.UserGuid == userId;
+
     public Task<bool> HasPermissionAsync(Guid userId, string permission, CancellationToken ct = default)
     {
-        if (_currentUser.UserGuid != userId)
+        if (!IsCaller(userId))
             return Task.FromResult(false);
 
         var has = _currentUser.Permissions.Contains(permission)
-               || _currentUser.Permissions.Contains("*");
+               || _currentUser.Permissions.Contains(WildcardPermission.Value);
 
         return Task.FromResult(has);
     }
 
     public Task<IReadOnlyList<string>> GetPermissionsAsync(Guid userId, CancellationToken ct = default)
     {
-        if (_currentUser.UserGuid != userId)
+        if (!IsCaller(userId))
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
 
         return Task.FromResult<IReadOnlyList<string>>(_currentUser.Permissions.ToList());

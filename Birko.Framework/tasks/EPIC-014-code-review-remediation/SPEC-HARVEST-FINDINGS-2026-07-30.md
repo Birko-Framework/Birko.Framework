@@ -6051,6 +6051,8 @@ Sparse, ExpireAfter and IndexField.FieldType (Text/Geo2d/Geo2dSphere/Hashed, wit
 
 `../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs:47`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-176]] (2026-11-06).** Not dead: `TenantHeaderClaimGuardMiddleware` (Tenant/TenantHeaderClaimGuardMiddleware.cs:96) read it. But `PermissionEndpointFilter` (:28), `ClaimsPermissionChecker` (:30) and `CurrentUserOwnerAccessExtensions.SeesEverything` honoured `"*"` regardless, so turning it off closed the bypass in one place only. Now applied where permissions are produced: `ClaimsCurrentUser` and `ResolvedPermissionsCurrentUser` take the options and leave `"*"` out of `Permissions` when it is off (`WildcardPermission.Apply`), so every reader agrees; `AddBirkoSecurity` passes them (tested through DI).
+
 Documented as "Enable wildcard \"*\" permission that grants all access. Default: true", but nothing in the area references it. PermissionEndpointFilter (line 28) and ClaimsPermissionChecker (line 30) honour "*" unconditionally, so an operator setting it false to close the superadmin bypass gets no behaviour change and no warning.
 
 #### SH-L218 — TokenServiceAdapter emits ClaimTypes URIs, not the JwtClaimNames the module advertises
@@ -6062,6 +6064,8 @@ GenerateAccessToken writes ClaimTypes.NameIdentifier and ClaimTypes.Email, while
 #### SH-L219 — ClaimsPermissionChecker grants permissions without requiring IsAuthenticated, unlike the endpoint filter
 
 `../Birko.Security.AspNetCore/Authorization/ClaimsPermissionChecker.cs:26`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `HasPermissionAsync` / `GetPermissionsAsync` compared only the user id (ClaimsPermissionChecker.cs:26). Both now require `ICurrentUser.IsAuthenticated` first, as `PermissionEndpointFilter` does; an unauthenticated principal carrying `"*"` is granted nothing (tested).
 
 HasPermissionAsync only compares userId to ICurrentUser.UserId and then reads Permissions — it never consults IsAuthenticated, while PermissionEndpointFilter.InvokeAsync (line 25) treats an unauthenticated caller as 401 before looking at permissions. ClaimsCurrentUser likewise reads UserId/Permissions off the principal regardless of Identity.IsAuthenticated (lines 28-62). A principal populated with claims by a non-authenticating middleware therefore passes IPermissionChecker (including via "*") but is rejected by the filter.
 
@@ -6131,6 +6135,8 @@ BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHashe
 
 `../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs:30`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** The constructor took a null `next`, and a null from `IUserPermissionResolver.GetAsync` / `GetRolesAsync` was stored in `HttpContext.Items` and read as "no permissions". The constructor throws `ArgumentNullException`; a null result throws `InvalidOperationException` naming the resolver type and method, and nothing is stored.
+
 `public PermissionResolutionMiddleware(RequestDelegate next) => _next = next;` has no null check, and the resolver results stored at lines 43 and 48 are never validated against IUserPermissionResolver's documented "never null" contract. A resolver returning null stores null in HttpContext.Items, ResolvedPermissionsCurrentUser's `as IReadOnlySet<string>` falls through to an empty set, and the caller sees a user with no permissions rather than a broken resolver.
 
 #### SH-L230 — AES key generation is a static on the concrete class, unreachable through IEncryptionProvider
@@ -6166,6 +6172,8 @@ The bare `catch { return false; }` also catches cancellation of the supplied tok
 #### SH-L235 — AuthorizationContext ignores the "*" wildcard that the rest of the area treats as all-access
 
 `../Birko.Security/Authorization/IRoleProvider.cs:38`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `AuthorizationContext.HasPermission` was plain membership (Birko.Security/Authorization/IRoleProvider.cs:38). It now also grants on `"*"`, as the ASP.NET Core checks do. (No caller in the framework or the consumers uses the type; fixed for agreement, not for a measured failure.)
 
 `HasPermission(string permission) => Permissions.Contains(permission)` is plain membership, whereas ClaimsPermissionChecker (line 29) and PermissionEndpointFilter (line 28) both accept "*" as granting everything. The same permission list therefore authorises a superadmin through one type and denies them through the other, with nothing in either type's docs marking the difference.
 

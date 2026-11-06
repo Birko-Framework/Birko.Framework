@@ -14,11 +14,15 @@ public sealed class ClaimsCurrentUser : ICurrentUser
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ClaimMappingOptions _options;
+    private readonly BirkoSecurityOptions? _security;
 
-    public ClaimsCurrentUser(IHttpContextAccessor httpContextAccessor, ClaimMappingOptions options)
+    /// <param name="security">Its <see cref="BirkoSecurityOptions.WildcardPermissionEnabled"/> is applied to
+    /// <see cref="Permissions"/> (SH-L217); <c>AddBirkoSecurity</c> registers it.</param>
+    public ClaimsCurrentUser(IHttpContextAccessor httpContextAccessor, ClaimMappingOptions options, BirkoSecurityOptions? security = null)
     {
         _httpContextAccessor = httpContextAccessor;
         _options = options;
+        _security = security;
     }
 
     private ClaimsPrincipal? Principal => _httpContextAccessor.HttpContext?.User;
@@ -55,12 +59,12 @@ public sealed class ClaimsCurrentUser : ICurrentUser
     // compactness, a single claim with a joined value. The producer (TokenServiceAdapter) joins
     // with ';'; older paths used ','. Split on both so callers see discrete values regardless
     // (e.g. `Contains("*")` works for a superadmin + TenantAdmin combo joined as "*,users:user:read,...").
-    public IReadOnlySet<string> Permissions =>
+    public IReadOnlySet<string> Permissions => WildcardPermission.Apply(
         Principal?.FindAll(_options.PermissionClaim)
             .SelectMany(c => c.Value.Split(_options.SplitsPermissionsOnSpace ? ScopeSeparators : ClaimSeparators,
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToHashSet()
-        ?? new HashSet<string>();
+        ?? new HashSet<string>(), _security);
 
     private static readonly char[] ClaimSeparators = [',', ';'];
 

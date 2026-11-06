@@ -57,6 +57,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionEndpointFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/IUserPermissionResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionResolutionMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization/WildcardPermission.cs" />
     <!-- Tenant -->
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/ITenantResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/HeaderTenantResolver.cs" />

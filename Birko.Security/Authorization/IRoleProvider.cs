@@ -35,5 +35,10 @@ public class AuthorizationContext
     public IReadOnlyList<string> Permissions { get; set; } = [];
 
     public bool IsInRole(string role) => Roles.Contains(role);
-    public bool HasPermission(string permission) => Permissions.Contains(permission);
+    /// <summary>
+    /// Whether <see cref="Permissions"/> grants <paramref name="permission"/>: it holds it, or holds the wildcard <c>"*"</c>,
+    /// which grants everything, as in the ASP.NET Core permission checks (SH-L235: this one alone treated "*" as a plain
+    /// name, so one permission list authorised a superadmin there and denied them here).
+    /// </summary>
+    public bool HasPermission(string permission) => Permissions.Contains(permission) || Permissions.Contains("*");
 }
