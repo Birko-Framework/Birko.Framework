@@ -35,7 +35,7 @@ later Framework push was `[skip ci]` or tasks-only, so [[TASK-305]]'s code had n
       passes; Windows passes.
 - [x] `Birko.Data.SQL.SqLite.Tests` 616/616 and `Birko.Data.SQL.Tests` 734/734 on Linux (TASK-305's busy-retry tests
       included).
-- [ ] CI green on the next push.
+- [x] CI green on the next push: build-and-test 42218744396 and live-tests 42218744373 passed on `0e16c63b` (2026-11-06), the first CI build of TASK-305 too.
 
 ## Human test plan
 
