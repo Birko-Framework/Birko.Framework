@@ -101,3 +101,5 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
 - **Authorization** (SH-L217, SH-L219, SH-L229, SH-L235): `Task176AuthorizationTests`, 7 of 9 red with each fix
   disabled in place (the old code cannot compile against the new constructor parameter); the wildcard-on default and
   the authenticated-caller grant pass either way (contract pins).
+- **Token adapter** (SH-L218, SH-L236, SH-L237): `Task176TokenAdapterTests`, 6 of 8 red against the original adapter;
+  the round trip and the bearer handler's inbound mapping pass either way (contract pins).

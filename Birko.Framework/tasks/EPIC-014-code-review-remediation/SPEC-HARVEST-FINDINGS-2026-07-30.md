@@ -6059,6 +6059,8 @@ Documented as "Enable wildcard \"*\" permission that grants all access. Default:
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:51`  ·  _restates a first-pass finding_
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `GenerateAccessToken` wrote `ClaimTypes.NameIdentifier` / `ClaimTypes.Email` (TokenServiceAdapter.cs:51-52), so the URIs went into the token verbatim. Not quite unused, though: Symbio's own `TokenIssuer` writes `JwtClaimNames.UserId` / `.Email`. The adapter now writes `sub` / `email` too; the JWT handlers map them inbound to the `ClaimTypes` URIs `ClaimMappingOptions` reads by default, and `ValidateToken` reads either. Only GrantsSmoke uses the adapter.
+
 GenerateAccessToken writes ClaimTypes.NameIdentifier and ClaimTypes.Email, while JwtClaimNames declares UserId = "sub" and Email = "email" and is referenced by nothing except ClaimMappingOptions.TenantGuidClaim/Permission. A consumer reading "sub"/"email" directly, as JwtClaimNames advertises, sees no user id and no email; JwtClaimNames.UserId, .Email and .Role are read nowhere in the module.
 
 #### SH-L219 — ClaimsPermissionChecker grants permissions without requiring IsAuthenticated, unlike the endpoint filter
@@ -6181,11 +6183,15 @@ The bare `catch { return false; }` also catches cancellation of the supplied tok
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:63`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** Roles and permissions were joined with `;` with no check (TokenServiceAdapter.cs:63, 66), while `ValidateToken` splits on `;` and `ClaimsCurrentUser` / `ResolvedPermissionsCurrentUser` on `,` and `;`. `GenerateAccessToken` now refuses a role or permission holding either character (`ArgumentException` naming the value) rather than writing one the readers disagree about.
+
 GenerateAccessToken joins with ';' (lines 63, 66) with no escaping or rejection of members containing a separator. ClaimsCurrentUser splits on both ',' and ';' (line 64) and ResolvedPermissionsCurrentUser splits roles the same way, while TokenServiceAdapter.ValidateToken splits on ';' only (lines 108, 112). A role or permission code containing either character is silently fragmented into two grants by one reader and kept whole by another.
 
 #### SH-L237 — TokenServiceAdapter guards neither its constructor arguments nor a null TokenRequest.Email
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:38`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** The constructor assigned both arguments unchecked and a null `TokenRequest.Email` reached `new Claim(type, null)` in the provider. Both constructor arguments throw `ArgumentNullException`; a null request throws `ArgumentNullException`, a null or empty `Email` an `ArgumentException` naming it.
 
 The constructor assigns _tokenProvider and _options unchecked, unlike JwtTokenProvider (line 25) and OidcIdTokenVerifier (line 66). GenerateAccessToken then writes `claims[ClaimTypes.Email] = request.Email` (line 52) — TokenRequest's positional parameter is non-nullable but nothing enforces it, and a null value reaches `new Claim(type, value)` inside JwtTokenProvider, throwing ArgumentNullException from a frame that names neither Email nor the request.
 

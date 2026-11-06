@@ -37,19 +37,31 @@ public sealed class TokenServiceAdapter
 
     public TokenServiceAdapter(ITokenProvider tokenProvider, JwtAuthenticationOptions options)
     {
-        _tokenProvider = tokenProvider;
-        _options = options;
+        // SH-L237: unguarded, unlike JwtTokenProvider and OidcIdTokenVerifier; a null failed later, far from here.
+        _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     /// <summary>
     /// Generates a JWT access token with structured claims.
     /// </summary>
+    /// <exception cref="ArgumentException">An empty email, or a role or permission holding <c>','</c> or <c>';'</c>.</exception>
     public TokenResult GenerateAccessToken(TokenRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        // SH-L237: a null Email reached `new Claim(type, null)` inside the token provider, which named neither.
+        if (string.IsNullOrEmpty(request.Email))
+            throw new ArgumentException("TokenRequest.Email is required.", nameof(request));
+        RequireNoSeparator(request.Roles, "role");
+        RequireNoSeparator(request.Permissions, "permission");
+
+        // SH-L218: the registered JWT names JwtClaimNames advertises ("sub", "email"), as Symbio's own issuer writes; the
+        // ClaimTypes URIs were written into the token verbatim. Inbound, the JWT handlers map them back to
+        // ClaimTypes.NameIdentifier / ClaimTypes.Email, which ClaimMappingOptions' defaults and ValidateToken read.
         var claims = new Dictionary<string, string>
         {
-            [ClaimTypes.NameIdentifier] = request.UserGuid.ToString(),
-            [ClaimTypes.Email] = request.Email,
+            [JwtClaimNames.UserId] = request.UserGuid.ToString(),
+            [JwtClaimNames.Email] = request.Email,
         };
 
         if (request.TenantGuid.HasValue)
@@ -98,9 +110,10 @@ public sealed class TokenServiceAdapter
         if (!result.IsValid)
             return new TokenValidationInfo(false);
 
-        var userId = result.Claims.TryGetValue(ClaimTypes.NameIdentifier, out var uid) && Guid.TryParse(uid, out var parsedUid)
+        // The provider's handler maps "sub" / "email" to the ClaimTypes URIs; a provider that does not map is read too.
+        var userId = Claim(result, ClaimTypes.NameIdentifier, JwtClaimNames.UserId) is { } uid && Guid.TryParse(uid, out var parsedUid)
             ? parsedUid : (Guid?)null;
-        result.Claims.TryGetValue(ClaimTypes.Email, out var email);
+        var email = Claim(result, ClaimTypes.Email, JwtClaimNames.Email);
         var tenantGuid = result.Claims.TryGetValue(_options.Claims.TenantGuidClaim, out var tid) && Guid.TryParse(tid, out var parsedTid)
             ? parsedTid : (Guid?)null;
 
@@ -114,4 +127,25 @@ public sealed class TokenServiceAdapter
 
         return new TokenValidationInfo(true, userId, email, tenantGuid, roles, permissions);
     }
+
+    private static string? Claim(TokenValidationResult result, string mapped, string registered) =>
+        result.Claims.TryGetValue(mapped, out var value) || result.Claims.TryGetValue(registered, out value) ? value : null;
+
+    /// <summary>
+    /// SH-L236: roles and permissions travel joined with <c>';'</c>, and the readers split on <c>';'</c>
+    /// (<see cref="ValidateToken"/>) or on <c>','</c> and <c>';'</c> (<c>ClaimsCurrentUser</c>,
+    /// <c>ResolvedPermissionsCurrentUser</c>). A value holding either character became two grants for one reader and one
+    /// for another, so it is refused here rather than corrupted.
+    /// </summary>
+    private static void RequireNoSeparator(IReadOnlySet<string>? values, string kind)
+    {
+        if (values == null) return;
+        foreach (var value in values)
+        {
+            if (value.IndexOfAny(Separators) >= 0)
+                throw new ArgumentException($"The {kind} '{value}' contains ',' or ';', which separate {kind}s in the token.", nameof(values));
+        }
+    }
+
+    private static readonly char[] Separators = [',', ';'];
 }
