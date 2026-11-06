@@ -6075,6 +6075,8 @@ HasPermissionAsync only compares userId to ICurrentUser.UserId and then reads Pe
 
 `../Birko.Security/Authentication/AuthenticationService.cs:122`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `binding.Token == token` and `_expandedTokens.Contains(token)` (AuthenticationService.cs:180, :206) both stop at the first differing character. Both now compare with `CryptographicOperations.FixedTimeEquals` over UTF-8 bytes, and the plain-token path compares against every configured token rather than stopping at a match. Not red-testable (timing); `Task176StaticTokenTests` pins that the decisions are unchanged, including a prefix and a same-length near miss.
+
 `_expandedTokens.Contains(token)` (HashSet, StringComparer.Ordinal) and `binding.Token == token` at line 96 both short-circuit on the first differing character, while the password hashers in the same area deliberately use CryptographicOperations.FixedTimeEquals. These are long-lived shared secrets compared on a request path, so the one primitive that exists for exactly this comparison is not used here.
 
 #### SH-L221 — No ValidAlgorithms allow-list on either symmetric JWT validation path
@@ -6198,6 +6200,8 @@ The constructor assigns _tokenProvider and _options unchecked, unlike JwtTokenPr
 #### SH-L238 — AuthenticationService._disposed is a non-volatile flag checked outside any synchronisation
 
 `../Birko.Security/Authentication/AuthenticationService.cs:266`
+
+**Verdict: CONFIRMED-NARROWER — fixed by [[TASK-176]] (2026-11-06).** The flag was a plain `bool` (AuthenticationService.cs:21, read and set in `Dispose`), but the consequence named is harmless: a second `ReaderWriterLockSlim.Dispose` does nothing (the existing `Dispose_IsIdempotent` and 64 parallel calls pass on the old code too), and a call racing `Dispose` getting `ObjectDisposedException` is the ordinary contract of a disposed object. Made exact anyway (`Interlocked.Exchange` on an `int`); the parallel-dispose test is a contract pin.
 
 Dispose reads and writes the plain bool `_disposed` with no lock, Interlocked or volatile, while every other field access in the class is guarded by _lock. Two concurrent Dispose calls can both pass the check and double-dispose the ReaderWriterLockSlim, and a Dispose racing an in-flight ValidateToken leaves the latter throwing ObjectDisposedException from EnterReadLock rather than returning a decision.
 

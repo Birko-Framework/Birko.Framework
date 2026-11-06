@@ -18,7 +18,7 @@ namespace Birko.Security.Authentication
         private readonly List<CachedTokenBinding> _expandedBindings;
         private readonly IReadOnlyCollection<string> _trustedProxies;
         private readonly ReaderWriterLockSlim _lock;
-        private bool _disposed;
+        private int _disposed; // SH-L238: 0 or 1, claimed with Interlocked.Exchange in Dispose
 
         /// <summary>
         /// Cached token binding with pre-expanded values
@@ -177,7 +177,7 @@ namespace Birko.Security.Authentication
                 {
                     foreach (var binding in _expandedBindings)
                     {
-                        if (binding.Token == token)
+                        if (SecretEquals(binding.Token, token)) // SH-L220: fixed time
                         {
                             // Token matches, now check IP
                             if (string.IsNullOrWhiteSpace(clientIp))
@@ -203,7 +203,11 @@ namespace Birko.Security.Authentication
                 // Fall back to simple token validation (no IP binding)
                 if (_expandedTokens.Count > 0)
                 {
-                    var isValid = _expandedTokens.Contains(token);
+                    // SH-L220: every token compared in fixed time, none skipped, so the answer's timing tells nothing about
+                    // how much of a secret matched (HashSet.Contains short-circuits on the first differing character).
+                    var isValid = false;
+                    foreach (var expected in _expandedTokens)
+                        isValid |= SecretEquals(expected, token);
 
                     if (isValid)
                     {
@@ -477,14 +481,22 @@ namespace Birko.Security.Authentication
         /// </summary>
         public void Dispose()
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
             {
                 return;
             }
 
-            _disposed = true;
             _lock?.Dispose();
             GC.SuppressFinalize(this);
         }
+
+        /// <summary>
+        /// SH-L220: a configured token compared with the presented one in fixed time over their UTF-8 bytes, as the
+        /// password hashers compare hashes. Ordinal <c>==</c> returned at the first differing character. The lengths may
+        /// still differ observably; the content may not.
+        /// </summary>
+        private static bool SecretEquals(string expected, string? presented) =>
+            presented != null && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(presented));
     }
 }

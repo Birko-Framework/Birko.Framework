@@ -103,3 +103,6 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
   the authenticated-caller grant pass either way (contract pins).
 - **Token adapter** (SH-L218, SH-L236, SH-L237): `Task176TokenAdapterTests`, 6 of 8 red against the original adapter;
   the round trip and the bearer handler's inbound mapping pass either way (contract pins).
+- **Static tokens and dispose** (SH-L220, SH-L238): `Task176StaticTokenTests`, **all 10 are contract pins** (green
+  before and after): comparison timing is not observable in a unit test, and a double `ReaderWriterLockSlim.Dispose` was
+  already harmless. They pin that the fixed-time comparison decides exactly as `==` did.
