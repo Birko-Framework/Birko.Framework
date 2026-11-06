@@ -6099,6 +6099,8 @@ The guard is `string.IsNullOrEmpty(options.Secret)` while JwtAuthenticationOptio
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSettings.cs:23`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** The three `string?` aliases set `Name` / `UserName` / `Password` through `value!` (AzureKeyVaultSettings.cs:23, 30, 37). They store `value ?? string.Empty`, as `PasswordSettings` and `VaultSettings.Token` do.
+
 TenantId/ClientId/ClientSecret are `string?` whose setters do `Name = value!` / `UserName = value!` / `Password = value!` (lines 23, 30, 37) over Settings.Name and RemoteSettings.UserName (both `= null!` non-nullable) and PasswordSettings.Password (non-nullable). Assigning null stores a null the type system promises cannot be one. This is the exact CR-L094/CR-L353 pattern already fixed in PasswordSettings (`password ?? string.Empty`) and in VaultSettings.Token.
 
 #### SH-L224 — BCrypt verification rejects the widely used $2y$ prefix, locking out imported hashes
@@ -6161,11 +6163,15 @@ BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHashe
 
 `../Birko.Security.Vault.Configuration/LocalVaultConfigurationExtensions.cs:117`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** `ResolveOptions` assigned into `seed` (LocalVaultConfigurationExtensions.cs:117-127). It resolves a copy (`LocalVaultOptions.Copy`, a memberwise clone of strings and ints); the dead `FirstNonEmpty(o.Token, env, o.Token)` fallback is `string.Empty`.
+
 `var o = seed ?? new LocalVaultOptions();` then assigns Token/Url/User/Domain/Environment on it (lines 119-127). The caller's object is silently rewritten: environment-variable values are baked in and User/Domain/Environment are lower-cased, so a caller that reuses one options instance for a second call (or inspects it afterwards) sees values it never set. `FirstNonEmpty(o.Token, env, o.Token)` also passes the current value as its own fallback, which is dead.
 
 #### SH-L232 — AddLocalVaultConfiguration creates a disposable VaultSecretProvider that nothing ever disposes
 
 `../Birko.Security.Vault.Configuration/LocalVaultConfigurationExtensions.cs:57`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** One `VaultSecretProvider` per call was shared by every source and disposed by nothing. `AddLocalVaultConfiguration` now gives each source the `VaultSettings`; each provider creates its own client and, being `IDisposable` now, disposes it when the configuration root disposes the provider. A source over a client the caller passed (`AddVaultPath`) leaves it to the caller.
 
 `new VaultSecretProvider(new VaultSettings {…})` owns the HttpClient it allocates (VaultSecretProvider.cs:39-40) and implements IDisposable, but the instance is only captured by the configuration sources and never disposed — neither the extension nor LocalVaultConfigurationSource/Provider holds a disposal path. Each call to the extension leaks one HttpClient and its handler for the process lifetime.
 
@@ -6173,11 +6179,15 @@ BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHashe
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:251`
 
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** Every path tested `KvVersion == 2` with v1 as the else (VaultSecretProvider.cs:104 and on). The constructor now refuses anything but 1 or 2 with `ArgumentOutOfRangeException` naming `KvVersion`.
+
 Every branch is `_settings.KvVersion == 2 ? … : …` (lines 121, 135, 150, 251 and the parse selection at 104). KvVersion is a plain int with no validation, so a typo'd 3 or a 0 from a bound configuration section quietly issues v1 paths and runs ParseKv1Response — which then throws KeyNotFoundException on the v2 body shape it gets back. The documented "1 or 2" domain is enforced nowhere.
 
 #### SH-L234 — IsHealthyAsync swallows OperationCanceledException and reports the server unhealthy
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:233`
+
+**Verdict: CONFIRMED — fixed by [[TASK-176]] (2026-11-06).** The bare `catch { return false; }` (VaultSecretProvider.cs:237) caught the caller's cancellation. It now excludes an `OperationCanceledException` when the caller's token is cancelled, as `HttpOidcSigningKeySource` does; a timeout (the token untouched) is still `false`.
 
 The bare `catch { return false; }` also catches cancellation of the supplied token, so a caller that cancels (shutdown, request abort) receives "Vault is unhealthy" instead of an OperationCanceledException. HttpOidcSigningKeySource in the same area deliberately excludes OperationCanceledException from its catch (line 78) for exactly this reason.
 

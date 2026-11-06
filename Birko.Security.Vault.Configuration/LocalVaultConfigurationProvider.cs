@@ -11,19 +11,29 @@ namespace Birko.Security.Vault.Configuration;
 /// bind cleanly to POCOs — e.g. a Vault field <c>Security--DevCertificate--Fingerprint</c>
 /// ends up as <c>config["Security:DevCertificate:Fingerprint"]</c>.
 /// </summary>
-public sealed class LocalVaultConfigurationProvider : ConfigurationProvider
+public sealed class LocalVaultConfigurationProvider : ConfigurationProvider, IDisposable
 {
     private readonly VaultSecretProvider _client;
+    private readonly bool _ownsClient;
     private readonly string _path;
     private readonly Action<string> _diagnostics;
 
-    public LocalVaultConfigurationProvider(VaultSecretProvider client, string path, Action<string>? diagnostics = null)
+    /// <param name="ownsClient">True when this provider made <paramref name="client"/> and disposes it with itself
+    /// (SH-L232); a client the caller passed in stays the caller's.</param>
+    public LocalVaultConfigurationProvider(VaultSecretProvider client, string path, Action<string>? diagnostics = null, bool ownsClient = false)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
+        _ownsClient = ownsClient;
         _path = (path ?? string.Empty).Trim('/');
         // CR-L356: diagnostics are routed through an injectable sink (default Console.WriteLine) instead of
         // hard-coding Console, so hosts can capture them via ILogger/etc.
         _diagnostics = diagnostics ?? Console.WriteLine;
+    }
+
+    /// <summary>Disposes the client when this provider owns it; the configuration root calls this when it is disposed.</summary>
+    public void Dispose()
+    {
+        if (_ownsClient) _client.Dispose();
     }
 
     /// <summary>

@@ -54,19 +54,21 @@ public static class LocalVaultConfigurationExtensions
             return builder;
         }
 
-        var client = new VaultSecretProvider(new VaultSettings
+        var settings = new VaultSettings
         {
             Address        = options.Url,
             Token          = options.Token,
             MountPath      = options.MountPath,
             KvVersion      = options.KvVersion,
             TimeoutSeconds = options.TimeoutSeconds,
-        });
+        };
 
+        // SH-L232: each source builds providers that create and own their client, disposed with the configuration
+        // root. One client shared by every source was disposed by nothing: one HttpClient leaked per call.
         var project = projectName.ToLowerInvariant();
         foreach (var path in BuildPaths(project, options))
         {
-            builder.Add(new LocalVaultConfigurationSource(client, path, diagnostics));
+            builder.Add(new LocalVaultConfigurationSource(settings, path, diagnostics));
         }
         return builder;
     }
@@ -112,11 +114,16 @@ public static class LocalVaultConfigurationExtensions
     private static bool IsEnabled()
         => string.Equals(Environment.GetEnvironmentVariable(EnabledVar), "true", StringComparison.OrdinalIgnoreCase);
 
-    private static LocalVaultOptions ResolveOptions(LocalVaultOptions? seed)
+    /// <summary>
+    /// The options to use: a COPY of <paramref name="seed"/> with the environment filled in and the path parts lower-cased.
+    /// </summary>
+    /// <remarks>SH-L231: it assigned into the caller's object, baking environment values in and lower-casing what the
+    /// caller set, so a reused options instance read back values nobody set.</remarks>
+    internal static LocalVaultOptions ResolveOptions(LocalVaultOptions? seed)
     {
-        var o = seed ?? new LocalVaultOptions();
+        var o = seed?.Copy() ?? new LocalVaultOptions();
 
-        o.Token       = FirstNonEmpty(o.Token,       Environment.GetEnvironmentVariable(TokenVar),       o.Token);
+        o.Token       = FirstNonEmpty(o.Token,       Environment.GetEnvironmentVariable(TokenVar),       string.Empty);
         o.Url         = FirstNonEmpty(o.Url,         Environment.GetEnvironmentVariable(AddressVar),     "http://localhost:8200");
         o.User        = FirstNonEmpty(o.User,        Environment.GetEnvironmentVariable(UserVar),        string.Empty);
         o.Domain      = FirstNonEmpty(o.Domain,      Environment.GetEnvironmentVariable(DomainVar),      string.Empty);

@@ -51,4 +51,7 @@ public sealed class LocalVaultOptions
 
     /// <summary>HTTP request timeout in seconds (default: 30).</summary>
     public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>A field-for-field copy (all values are strings and ints), so resolving never writes into the caller's object.</summary>
+    internal LocalVaultOptions Copy() => (LocalVaultOptions)MemberwiseClone();
 }

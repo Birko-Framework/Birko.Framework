@@ -36,6 +36,11 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     public VaultSecretProvider(VaultSettings settings, HttpClient? httpClient, ISerializer? serializer = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        // SH-L233: every path is `KvVersion == 2 ? v2 : v1`, so a 3 or a 0 from a bound configuration section quietly
+        // issued v1 paths and then failed parsing the v2 body it got back. The documented domain is enforced here.
+        if (_settings.KvVersion is not (1 or 2))
+            throw new ArgumentOutOfRangeException(nameof(settings), _settings.KvVersion,
+                "VaultSettings.KvVersion must be 1 or 2 (the KV secrets engine version).");
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
         _serializer = serializer ?? new SystemJsonSerializer();
@@ -234,7 +239,9 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
             var response = await SendCoreAsync(HttpMethod.Get, "v1/sys/health", null, ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
-        catch
+        // SH-L234: the caller's own cancellation propagates, as HttpOidcSigningKeySource lets it; it was answered "Vault is
+        // unhealthy". A timeout (a TaskCanceledException with the caller's token untouched) is still an unhealthy answer.
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
         {
             return false;
         }

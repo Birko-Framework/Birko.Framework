@@ -20,21 +20,21 @@ public class AzureKeyVaultSettings : RemoteSettings
     public string? TenantId
     {
         get => Name;
-        set => Name = value!;
+        set => Name = value ?? string.Empty; // SH-L223: Settings.Name is non-nullable; was `value!`
     }
 
     /// <summary>Azure AD client/application ID. Alias for <see cref="RemoteSettings.UserName"/>.</summary>
     public string? ClientId
     {
         get => UserName;
-        set => UserName = value!;
+        set => UserName = value ?? string.Empty; // SH-L223
     }
 
     /// <summary>Azure AD client secret. Alias for <see cref="PasswordSettings.Password"/>.</summary>
     public string? ClientSecret
     {
         get => Password;
-        set => Password = value!;
+        set => Password = value ?? string.Empty; // SH-L223
     }
 
     /// <summary>HTTP request timeout in seconds (default: 30).</summary>

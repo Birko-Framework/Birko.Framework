@@ -110,3 +110,6 @@ Fixed in groups by root cause, each one commit with its tests, red-verified agai
   fix disabled in place; the two `NeedsRehash`-through-the-interface tests do not compile against the old interface;
   `A_hash_at_the_default_cost_still_verifies` is a contract pin.
 - **Encryption key** (SH-L230): `Task176EncryptionKeyTests` does not compile against the old interface (the member is new).
+- **Vault and Key Vault** (SH-L223, SH-L231, SH-L232, SH-L233, SH-L234): `Task176VaultTests` + `Task176AzureKeyVaultSettingsTests`,
+  6 red with each fix disabled in place; four contract pins (KvVersion 1 and 2, a timeout still unhealthy, a caller's
+  client left open).
