@@ -201,9 +201,11 @@ jobs:
           dotnet run spec-links.cs -- --check | tee out.txt
           areas=$(grep -oE "^areas: [0-9]+" out.txt | grep -oE "[0-9]+")
           files=$(grep -oE "CLAUDE.md files: [0-9]+" out.txt | grep -oE "[0-9]+")
-          expected=$(find "$GITHUB_WORKSPACE/birko/Framework" -mindepth 2 -maxdepth 3 -name CLAUDE.md \
-                     \( -path '*/Birko.*/CLAUDE.md' -o -path '*/tests/*/CLAUDE.md' \) \
-                     -not -path '*/Birko.Framework/*' -not -path '*/bin/*' -not -path '*/obj/*' | wc -l)
+          # Counted from INSIDE the checkout, on relative paths: the runner's own path is
+          # /home/runner/work/Birko.Framework/..., so a `-not -path '*/Birko.Framework/*'` on absolute paths excluded
+          # every file and the first run reported "tree has 0".
+          expected=$(cd "$GITHUB_WORKSPACE/birko/Framework" && ls -1 Birko.*/CLAUDE.md tests/*/CLAUDE.md \
+                     | grep -v '^Birko\.Framework/' | wc -l)
           echo "areas: ${areas:-<none>}, CLAUDE.md files: ${files:-<none>}, tree has: $expected"
           if [ "${areas:-0}" -lt 20 ]; then echo "::error::read only ${areas:-0} areas from the map"; exit 1; fi
           if [ "${files:-0}" != "$expected" ]; then echo "::error::swept ${files:-0} CLAUDE.md files, tree has $expected"; exit 1; fi
