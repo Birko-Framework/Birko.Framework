@@ -75,6 +75,7 @@ Words outside backticks are not. By status:
 | `b-button` | themed | `Button` | |
 | `b-checkbox` | themed | `CheckBox` | |
 | `b-color-picker` | needs-theme | | Avalonia's `ColorPicker`, in the `Avalonia.Controls.ColorPicker` package, not referenced yet |
+| `b-country-select` | missing | | ISO 3166-1 alpha-2 country picker (Birko.Web v0.4.8, TASK-817); a desktop `Form` has no country field yet |
 | `b-date-picker` | themed | `CalendarDatePicker` | |
 | `b-date-range-picker` | form-only | `FieldType.DateRange` | two pickers |
 | `b-datetime-picker` | form-only | `FieldType.DateTime` | a date picker and a time picker |
@@ -143,6 +144,7 @@ Words outside backticks are not. By status:
 | `pages/base-list-page` | built | `ListPageViewModel` and `ListPageView` | |
 | `pages/base-page` | built | `BasePageViewModel` | |
 | `pages/base-split-page` | built | `SplitPageViewModel` and `SplitPageView` | |
+| `pages/contextual-ribbon` | missing | | a page raising its record's contextual tab through the shell (TASK-804); the desktop `Ribbon` has contextual tabs (`RibbonContextual`), set by the host, with no page-to-shell request |
 | `pages/endpoint-utils` | n/a | | builds REST URLs; desktop pages read through `ICrudDataSource` |
 | `pages/live-refresh` | missing | | |
 | `shell/b-app-shell` | built | `RibbonShellView` | |
