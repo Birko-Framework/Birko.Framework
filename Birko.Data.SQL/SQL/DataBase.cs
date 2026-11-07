@@ -118,23 +118,72 @@ namespace Birko.Data.SQL
             }
         }
 
+        /// <summary>
+        /// The command text with each parameter's value written in place of its name. Diagnostic only (the
+        /// <c>InitException</c> command text); never executed.
+        /// </summary>
+        /// <remarks>
+        /// One pass over the text (TASK-832). At a position where a parameter name can start, the <b>longest</b>
+        /// name matching there is substituted: names are suffixed with <c>_{count}</c>
+        /// (<c>SqlBuilderContext.GenerateParameterName</c>), so <c>@WHEREName0_5</c> is a prefix of
+        /// <c>@WHEREName0_50</c>, and <c>@LIMIT</c> of <c>@LIMITxxx</c>. The text is written once, so a value
+        /// that happens to contain a parameter name is not rewritten either.
+        /// <para>Measured before: one <c>StringBuilder.Replace</c> per parameter, each scanning the whole text of
+        /// a builder it kept fragmenting. Every SQL read builds this string eagerly, and for
+        /// <c>ids.Contains(x.Guid)</c> with 2,000 ids it took 6.5 s of a 6.8 s read on SQLite (Symbio's
+        /// FIELD-051).</para>
+        /// </remarks>
         public static string GetGeneratedQuery(DbCommand dbCommand)
         {
-            var query = new StringBuilder(dbCommand.CommandText);
-            // Replace longest parameter names first: names are suffixed with _{count}
-            // (GenerateParameterName), so @WHEREName0_5 is a prefix of @WHEREName0_50 and @LIMIT is a
-            // prefix of @LIMITxxx. A naive left-to-right Replace would corrupt the rendered SQL by
-            // substituting the shorter name inside the longer one. This string is diagnostic only
-            // (OnExecute log / InitException commandText), not executed.
-            foreach (DbParameter parameter in dbCommand.Parameters
-                .Cast<DbParameter>()
-                .OrderByDescending(p => p.ParameterName.Length))
+            var text = dbCommand.CommandText ?? string.Empty;
+            if (dbCommand.Parameters.Count == 0 || text.Length == 0)
             {
-                bool isString = _stringTypes.Contains(parameter.DbType);
-                string? value = isString
-                        ? "'" + parameter.Value?.ToString() + "'"
-                        : parameter.Value?.ToString();
-                query.Replace(parameter.ParameterName, value);
+                return text;
+            }
+
+            var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+            var starts = new HashSet<char>();
+            int longest = 0;
+            foreach (DbParameter parameter in dbCommand.Parameters)
+            {
+                var name = parameter.ParameterName;
+                if (string.IsNullOrEmpty(name) || values.ContainsKey(name))
+                {
+                    continue;
+                }
+                values[name] = _stringTypes.Contains(parameter.DbType)
+                    ? "'" + parameter.Value?.ToString() + "'"
+                    : parameter.Value?.ToString();
+                starts.Add(name[0]);
+                longest = Math.Max(longest, name.Length);
+            }
+
+            var lookup = values.GetAlternateLookup<ReadOnlySpan<char>>();
+            var query = new StringBuilder(text.Length);
+            int i = 0;
+            while (i < text.Length)
+            {
+                if (starts.Contains(text[i]))
+                {
+                    var matched = 0;
+                    string? value = null;
+                    for (int length = Math.Min(longest, text.Length - i); length > 0; length--)
+                    {
+                        if (lookup.TryGetValue(text.AsSpan(i, length), out value))
+                        {
+                            matched = length;
+                            break;
+                        }
+                    }
+                    if (matched > 0)
+                    {
+                        query.Append(value);
+                        i += matched;
+                        continue;
+                    }
+                }
+                query.Append(text[i]);
+                i++;
             }
 
             return query.ToString();

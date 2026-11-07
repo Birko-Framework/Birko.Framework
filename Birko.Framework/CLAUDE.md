@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL read with a long IN list is linear again (2026-11-07)
+[[TASK-832]], reported by Symbio (FIELD-051). Every SQL read builds `DataBase.GetGeneratedQuery`, the diagnostic SQL
+with values filled in, and it ran one `StringBuilder.Replace` per parameter. For `ids.Contains(x.Guid)` on SQLite that
+was 6.5 s of a 6.8 s read at 2,000 ids, and 87 s at 4,000 (measured, Release). It is one pass now: 130 ms and 289 ms. A
+value containing a parameter name is no longer rewritten. Chunking a list past a provider's parameter limit is
+[[TASK-833]].
 ### A token binding matches an IPv4-mapped client (2026-11-07)
 [[TASK-831]]. A binding's `AllowedIps` were compared with the client address as text. Kestrel bound to `[::]` reports
 an IPv4 client as `::ffff:127.0.0.1` (measured), so a binding listing `127.0.0.1` refused it. Both sides are now parsed

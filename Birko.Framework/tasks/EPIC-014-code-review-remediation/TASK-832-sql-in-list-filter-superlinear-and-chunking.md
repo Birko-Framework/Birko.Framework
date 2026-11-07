@@ -3,7 +3,7 @@ id: TASK-832
 parent: EPIC-014
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P1
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -83,30 +83,61 @@ The super-linear cost needs its own fix. Chunking alone would only hide it insid
 **Size.** Filed as one task because Symbio asked for one. These are two separable units: the build/bind cost, and
 chunking with its semantics on every SQL provider. Planning should judge it against `slicing.md` and spawn chunking as
 its own task if they do not fit one context.
+→ **Split 2026-11-07 (the user's decision): chunking is TASK-833.** This task closed on the super-linear cost.
 
 ## Acceptance criteria
 
-- [ ] **Measured first, in the framework:** a Release benchmark or test separates SQL build, parameter binding and
+- [x] **Measured first, in the framework:** a Release benchmark or test separates SQL build, parameter binding and
       execution at N = 500, 1000, 2000 and 4000 on SQLite, and the super-linear step is named. If PostgreSQL, SQL
       Server or MySQL shows the same curve (live suites per `live-tests.yml`), that is measured too.
-- [ ] The step named above is fixed. The same benchmark shows roughly linear growth (each doubling ≤ ~2.5×) up to at
+      → `Task832InListCostTests.Measure_the_stages_of_an_in_list_read` (Release, SQLite, 4000 rows). Every stage is
+        linear or small except one: **`DataBase.GetGeneratedQuery`**, the diagnostic copy of the SQL with values
+        substituted, built eagerly by every SQL read (`ReadOnAsync` and 8 other call sites).
+
+        | ids | parse | render | raw SQLite | GetGeneratedQuery | ReadAsync |
+        |---|---|---|---|---|---|
+        | 500 | 16 ms | 11 ms | 4 ms | 72 ms | 133 ms |
+        | 1000 | 0.5 ms | 18 ms | 17 ms | 655 ms | 687 ms |
+        | 2000 | 0.6 ms | 50 ms | 47 ms | 6,520 ms | 6,825 ms |
+        | 4000 | 1.2 ms | 166 ms | 96 ms | (not run) | 87,382 ms |
+
+        The cause: one `StringBuilder.Replace` per parameter, each scanning the whole text of a builder that every
+        replacement fragmented further.
+      → **Not measured live on PostgreSQL / SQL Server / MySQL.** `GetGeneratedQuery` is provider-agnostic and every
+        SQL provider's read path calls it, so the cost and the fix apply to all of them. The live curves are not
+        recorded.
+- [x] The step named above is fixed. The same benchmark shows roughly linear growth (each doubling ≤ ~2.5×) up to at
       least 4000 ids on SQLite. A regression test guards it without being timing-flaky, for example by counting
       operations, or with a generous bound at a large N.
+      → `GetGeneratedQuery` makes one pass: at each position where a parameter name can start, it substitutes the
+        longest name that matches there, through a span lookup. After the fix: 1.4 / 0.4 / 0.9 / 21 ms, and
+        `ReadAsync` 56 / 39 / 130 / 289 ms. From 2000 to 4000 that is 2.2×.
+      → Guards:
+        - `The_diagnostic_query_stays_linear_in_the_parameter_count`: 20,000 parameters under 5 s. On the old code it
+          did not finish in 300 s.
+        - `The_longest_name_wins_where_one_name_prefixes_another`: the old behaviour, kept.
+        - `A_value_that_contains_a_parameter_name_is_not_rewritten`: red on the old code.
+      → Left over and small, both handed to TASK-833: `AddParameter`'s linear `Contains` (render 186 ms at 4,000) and
+        SQLite's own named binding (99 ms at 4,000).
 - [ ] A filtered read whose IN list would exceed the provider's limit (all parameters counted) is split
       transparently and returns exactly the rows the single query would. `IN` is a union and `NOT IN` an intersection,
-      each pinned by a test. Per provider, the chunk size and limit are named.
+      each pinned by a test. Per provider, the chunk size and limit are named. — ⚠ NOT MET — split to TASK-833
 - [ ] An IN under OR or a nested expression, and a chunked read with limit, offset or sort, are either correct or
-      refused with an exception that names the reason. They are never silently wrong.
+      refused with an exception that names the reason. They are never silently wrong. — ⚠ NOT MET — split to TASK-833
 - [ ] Count, delete and update with a chunked IN filter are handled, or refused with a stated limitation. A chunked
-      delete or update can never widen its scope (rules 1–3).
+      delete or update can never widen its scope (rules 1–3). — ⚠ NOT MET — split to TASK-833
 - [ ] MongoDB, RavenDB, Cosmos DB, Elasticsearch, InfluxDB and the in-memory and file stores are each stated as
-      needing no chunking, or handled, with the reason.
-- [ ] Symbio's repro shape runs through `FindAllAsync` on SQLite at 2000 ids in a time recorded here, against
+      needing no chunking, or handled, with the reason. — ⚠ NOT MET — split to TASK-833
+- [x] Symbio's repro shape runs through `FindAllAsync` on SQLite at 2000 ids in a time recorded here, against
       Symbio's 6.6–7.1 s.
+      → Through the framework's `AsyncSQLiteStore.ReadAsync` (Release): 130 ms at 2000 ids. That is not through
+        Symbio's `RepositoryBase` and tenant decorator, and Symbio measured in Debug. Symbio's own re-measurement is
+        its confirmation (§ Human test plan).
 
 ## Out of scope
 
 - Symbio's own batching (Symbio TASK-1077 / TASK-1074).
+- Chunking a list past the provider's parameter limit → TASK-833.
 
 ## Human test plan
 
