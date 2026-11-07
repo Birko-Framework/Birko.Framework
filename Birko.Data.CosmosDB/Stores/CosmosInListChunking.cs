@@ -17,8 +17,15 @@ namespace Birko.Data.CosmosDB.Stores;
 /// server refuses a query text over 524,288 characters (SC3020, 400 Bad Request). Measured on the emulator
 /// (vnext-preview, 2026-11-07): a filtered read accepts 13,105 Guids and refuses 13,106, 40 characters per Guid.</para>
 /// <para>The rules are TASK-833's (the user's decision): a list is split only when its IN is a plain AND conjunct of the
-/// filter, its values are not strings, and the read has no sort, limit or offset. Then <c>IN(L) AND R</c> is the union
-/// over the chunks of <c>IN(Lk) AND R</c>, and with the values deduplicated the chunks are disjoint, so counts add up.
+/// filter, its values are scalar value types or strings, and the read has no sort, limit or offset. Then <c>IN(L) AND R</c>
+/// is the union over the chunks of <c>IN(Lk) AND R</c>, and with the values deduplicated the chunks are disjoint, so
+/// counts add up.</para>
+/// <para>Strings are split here and refused by the SQL planner (<c>InListChunkPlanner</c>), and the difference is the
+/// provider's comparison. Under a case- or accent-insensitive SQL collation two distinct C# strings can be one stored
+/// value, so a row could match two chunks (TASK-833). Cosmos DB has no collation: <c>IN</c> and <c>ARRAY_CONTAINS</c>
+/// match only the ordinally equal string. Measured on the emulator (vnext-preview, 2026-11-07, TASK-841): "a" / "A",
+/// "a" / "a ", U+00E9 / "e"+U+0301 and "Straße" / "STRASSE" each match only themselves, through both. So strings
+/// are deduplicated ordinally, like the default <see cref="string.Equals(string)"/>, and their chunks are disjoint.
 /// A shape that cannot be split still runs as one query while its text fits, so nothing that worked before refuses;
 /// past the ceiling it is refused with <see cref="NotSupportedException"/> before any request, naming the operation,
 /// the count, the limit and the reason, never the values. The caller's expression is never modified, and an empty
@@ -229,10 +236,8 @@ internal static class CosmosInListChunking
 
         private string? ReasonFor(MethodCallExpression node, Type elementType)
         {
-            if (elementType == typeof(string))
-                return "its values are strings";
-            if (!elementType.IsValueType)
-                return $"its values are of type {elementType.Name}, not a scalar value type";
+            if (elementType != typeof(string) && !elementType.IsValueType)
+                return $"its values are of type {elementType.Name}, not a scalar value type or a string";
             if (_conjuncts.Contains(node))
                 return null;
 
@@ -256,6 +261,7 @@ internal static class CosmosInListChunking
             var value = Evaluate(source);
             var result = new List<object?>();
             if (value is not IEnumerable sequence) return result;
+            // Default equality: ordinal for strings, which is how Cosmos DB compares them (TASK-841).
             var seen = new HashSet<object?>();
             var sawNull = false;
             foreach (var v in sequence)

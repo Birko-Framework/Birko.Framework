@@ -130,16 +130,14 @@ public class Task834InListPlannerTests
         yield return new object[] { "OR", "under an OR" };
         yield return new object[] { "NOT IN", "NOT IN" };
         yield return new object[] { "negated group", "under a NOT" };
-        yield return new object[] { "string", "strings" };
         yield return new object[] { "nested", "nested expression" };
     }
 
-    private static Expression<Func<InListDoc, bool>> Shape(string shape, List<Guid?> ids, List<string> names) => shape switch
+    private static Expression<Func<InListDoc, bool>> Shape(string shape, List<Guid?> ids) => shape switch
     {
         "OR" => x => ids.Contains(x.Guid) || x.N == 1,
         "NOT IN" => x => !ids.Contains(x.Guid),
         "negated group" => x => !(ids.Contains(x.Guid) && x.N == 1),
-        "string" => x => names.Contains(x.Name!),
         "nested" => x => (x.N > 0 ? ids.Contains(x.Guid) : false),
         _ => throw new ArgumentOutOfRangeException(nameof(shape)),
     };
@@ -149,8 +147,7 @@ public class Task834InListPlannerTests
     public void An_unsplittable_list_past_the_ceiling_is_refused_naming_the_reason_and_not_the_values(string shape, string reason)
     {
         var ids = Ids(200);
-        var names = ids.Select(g => g.ToString()!).ToList();
-        var act = () => Plan(Shape(shape, ids, names));
+        var act = () => Plan(Shape(shape, ids));
         var ex = act.Should().Throw<NotSupportedException>().Which;
         ex.Message.Should().Contain(reason).And.Contain("200 distinct values").And.Contain("4000").And.Contain("read");
         ex.Message.Should().NotContain(ids[0].ToString()!);
@@ -161,8 +158,7 @@ public class Task834InListPlannerTests
     public void An_unsplittable_list_within_the_ceiling_still_runs_as_one_query(string shape, string _)
     {
         var ids = Ids(50);
-        var names = ids.Select(g => g.ToString()!).ToList();
-        Plan(Shape(shape, ids, names)).Should().BeNull();
+        Plan(Shape(shape, ids)).Should().BeNull();
     }
 
     [Fact]
@@ -403,7 +399,6 @@ public sealed class Task834InListChunkingLiveTests : IDisposable
     {
         yield return new object[] { "OR" };
         yield return new object[] { "NOT IN" };
-        yield return new object[] { "string" };
         yield return new object[] { "sort" };
         yield return new object[] { "limit" };
         yield return new object[] { "offset" };
@@ -416,14 +411,12 @@ public sealed class Task834InListChunkingLiveTests : IDisposable
         var f = await SetUpAsync(5);
         if (f == null) return;
         var ids = PastCeiling(f);
-        var names = ids.Select(g => g.ToString()!).ToList();
         var store = f.Async(1000);
         var sync = f.Sync(1000);
         Expression<Func<InListDoc, bool>> filter = shape switch
         {
             "OR" => x => ids.Contains(x.Guid) || x.N == 1,
             "NOT IN" => x => !ids.Contains(x.Guid),
-            "string" => x => names.Contains(x.Name!),
             _ => x => ids.Contains(x.Guid),
         };
         var orderBy = shape == "sort" ? OrderBy<InListDoc>.By(x => x.N) : null;

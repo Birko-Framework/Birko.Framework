@@ -33,9 +33,9 @@ namespace Birko.Data.CosmosDB.Views;
 /// <para>The server counts the serialized parameter values toward its 524,288-character query limit (measured on the
 /// emulator, 2026-11-07: 13,795 Guids pass, 25,000 fail with SC3020), so a list longer than
 /// <see cref="InListChunkSize"/> is split by TASK-834's planner (<c>CosmosInListChunking</c>): a read or count whose
-/// list is a plain AND conjunct of non-string values runs once per chunk of distinct values, rows concatenated and
-/// counts summed. Past <see cref="MaxQueryTextLength"/> a list that cannot be split (under NOT or OR, string values,
-/// a sort, limit or offset, <see cref="QueryFirstAsync"/>, or a grouped view) is refused with
+/// list is a plain AND conjunct runs once per chunk of distinct values (strings included: Cosmos DB compares them
+/// exactly, TASK-841), rows concatenated and counts summed. Past <see cref="MaxQueryTextLength"/> a list that cannot
+/// be split (under NOT or OR, a sort, limit or offset, <see cref="QueryFirstAsync"/>, or a grouped view) is refused with
 /// <see cref="NotSupportedException"/> before any request; below it, it runs as one query.</para>
 /// </remarks>
 public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new()

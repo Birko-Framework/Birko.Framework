@@ -243,7 +243,7 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
     {
         new object[] { "negated", "NOT IN" }, new object[] { "or", "under an OR" }, new object[] { "sorted", "sort" },
         new object[] { "paged", "sort, limit or offset" }, new object[] { "first", "sort, limit or offset" },
-        new object[] { "strings", "strings" }, new object[] { "grouped read", "grouped view" },
+        new object[] { "grouped read", "grouped view" },
         new object[] { "grouped count", "grouped view" },
     };
 
@@ -268,7 +268,6 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
             "sorted" => () => store.QueryAsync(v => ids.Contains(v.Key), OrderBy<ItemView>.By(v => v.Number)),
             "paged" => () => store.QueryAsync(v => ids.Contains(v.Key), null, 5),
             "first" => () => store.QueryFirstAsync(v => ids.Contains(v.Key)),
-            "strings" => () => store.QueryAsync(v => strings.Contains(v.Label!)),
             "grouped read" => () => totals.QueryAsync(v => strings.Contains(v.Region!)),
             "grouped count" => () => totals.CountAsync(v => strings.Contains(v.Region!)),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),
