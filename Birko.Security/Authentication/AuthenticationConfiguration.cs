@@ -30,5 +30,14 @@ namespace Birko.Security.Authentication
         /// binding's allow-list (SH-M249).
         /// </summary>
         public List<string> TrustedProxies { get; set; } = new();
+
+        /// <summary>
+        /// What <see cref="AuthenticationService"/> does with a <see cref="TrustedProxies"/> entry it cannot read (TASK-830).
+        /// <see cref="TrustedProxyParsing.Strict"/> (the default) refuses at construction, naming the entry: a proxy that
+        /// silently stays untrusted makes every request read as coming from the proxy, and a token binding's
+        /// <c>AllowedIps</c> then match nothing. <see cref="TrustedProxyParsing.Lenient"/> skips it and logs an error,
+        /// the behaviour before TASK-830.
+        /// </summary>
+        public TrustedProxyParsing TrustedProxyParsing { get; set; } = TrustedProxyParsing.Strict;
     }
 }

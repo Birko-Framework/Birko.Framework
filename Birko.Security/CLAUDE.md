@@ -23,6 +23,7 @@ Birko.Security/
 │   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[], TrustedProxies[] (addresses or CIDR; empty = trust none)
 │   ├── TrustedProxyList.cs            - TASK-829: the one trusted-proxy parser; Parse is strict (throws), ParseLenient skips and reports
 │   ├── TrustedProxySettings.cs        - TASK-829: an ASP.NET host's one proxy list (AddBirkoForwardedHeaders) + ResolvedItemKey
+│   ├── TrustedProxyParsing.cs         - TASK-830: Strict | Lenient, on AuthenticationConfiguration and the static walk
 │   └── TokenBinding.cs               - Token + AllowedIps
 ├── Authorization/
 │   └── IRoleProvider.cs               - IRoleProvider, IPermissionChecker, AuthorizationContext
@@ -83,9 +84,11 @@ service.ValidateToken("my-token", "192.168.1.1");
 - IRoleProvider/IPermissionChecker are async (implementations will hit database)
 - AuthorizationContext is a simple POCO — populated per-request from token claims
 - AuthenticationService namespace changed from `Birko.Communication.Authentication` → `Birko.Security.Authentication`
-- Every trusted-proxy list is parsed by `TrustedProxyList` (TASK-829). `AuthenticationService` parses leniently, as it
-  always did, so the HttpListener transports start as before; a skipped entry is now logged at error level. The
-  forwarded-headers registration parses strictly and refuses at startup
+- Every trusted-proxy list is parsed by `TrustedProxyList` (TASK-829), in a `TrustedProxyParsing` mode (TASK-830).
+  `AuthenticationService` takes the configuration's `TrustedProxyParsing`, `Strict` by default: a bad entry refuses at
+  construction (`ParseTrustedProxies`, `InvalidOperationException` naming the configuration type), and `Lenient`
+  skips it and logs an error. The static `GetClientIpAddress(…, mode)` defaults to `Lenient`, because it parses per
+  call and a throw there is a failed request. The forwarded-headers registration is always strict
 
 ## Maintenance
 

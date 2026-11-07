@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\TokenBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\TrustedProxyList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\TrustedProxySettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication\TrustedProxyParsing.cs" />
     <!-- Authorization -->
     <Compile Include="$(MSBuildThisFileDirectory)Authorization\IRoleProvider.cs" />
     <!-- Hashing -->

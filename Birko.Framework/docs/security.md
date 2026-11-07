@@ -188,7 +188,12 @@ proxies, so the client cannot choose the answer by writing the header itself. Be
 from anyone, so a caller holding a bound token could name an allowed address and pass. **Behind a reverse proxy, list
 it in `TrustedProxies`**, or every request is seen as coming from the proxy. A binding whose every address expands to
 nothing refuses its token from everywhere and is logged at error level at construction (SH-M250). A `TrustedProxies`
-entry that is not an address or a CIDR range is skipped and logged at error level (TASK-829). In an ASP.NET Core host,
+entry that is not an address or a CIDR range, names an unset `${VAR}`, or trusts everything (`0.0.0.0/0`) refuses at
+construction: `InvalidOperationException` naming the configuration type and the entry (TASK-830). A proxy that stayed
+silently untrusted made every request read as coming from the proxy. `TrustedProxyParsing = Lenient` on the
+configuration opts back in to skipping and logging such an entry. The static
+`AuthenticationService.GetClientIpAddress(…, trustedProxies, mode)` parses on every call, so it stays lenient unless
+it is passed `TrustedProxyParsing.Strict`. In an ASP.NET Core host,
 use [one list for the whole host](#behind-a-reverse-proxy-task-829) instead.
 
 ## RBAC Interfaces

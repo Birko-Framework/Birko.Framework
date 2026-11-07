@@ -55,6 +55,14 @@ namespace Birko.Security.Authentication
         public static TrustedProxyList ParseLenient(IEnumerable<string>? entries, Action<string, string>? onSkipped = null)
             => Build(entries, lenient: true, (entry, reason) => onSkipped?.Invoke(entry, reason));
 
+        /// <summary>
+        /// Parses in <paramref name="mode"/>: <see cref="Parse(IEnumerable{string}?)"/> for
+        /// <see cref="TrustedProxyParsing.Strict"/>, <see cref="ParseLenient"/> (reporting to
+        /// <paramref name="onSkipped"/>) for <see cref="TrustedProxyParsing.Lenient"/>.
+        /// </summary>
+        public static TrustedProxyList Parse(IEnumerable<string>? entries, TrustedProxyParsing mode, Action<string, string>? onSkipped = null)
+            => mode == TrustedProxyParsing.Lenient ? ParseLenient(entries, onSkipped) : Parse(entries);
+
         private static TrustedProxyList Build(IEnumerable<string>? entries, bool lenient, Action<string, string> refuse)
         {
             if (entries == null)

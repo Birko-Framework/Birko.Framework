@@ -272,6 +272,18 @@ public class Task829ForwardedHeadersTests
         (await WhoAsync(deferring, ("X-Forwarded-For", "203.0.113.7")))[3].Should().Be("203.0.113.7");
     }
 
+    [Fact]
+    public async Task A_websocket_list_with_a_bad_entry_refuses_when_mapped_even_without_the_registration()
+    {
+        // TASK-830: before, the map-time check parsed leniently and only behind the registration, so a list of only
+        // malformed entries read as empty and the host started.
+        var start = () => StartAsync(new Host(
+            Pipeline: a => a.MapWebSocketEndpoint("/ws", (_, _) => Task.CompletedTask),
+            WebSocketProxies: new[] { "10.0.0.300" }));
+
+        await start.Should().ThrowAsync<InvalidOperationException>().WithMessage("WebSocketAuthenticationConfiguration.TrustedProxies: *'10.0.0.300'*");
+    }
+
     // ── the loopback bypass ──
 
     private static Action<IServiceCollection> Security(bool bypass) => s =>

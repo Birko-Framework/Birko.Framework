@@ -48,24 +48,22 @@ namespace Birko.Communication.WebSocket.Services
             TrustedProxySettings? forwardedHeadersProxies)
         {
             var authConfig = config.Value ?? new WebSocketAuthenticationConfiguration();
-            EnsureProxyListsAgree(authConfig, forwardedHeadersProxies);
+            EnsureProxiesValid(authConfig, forwardedHeadersProxies);
             _authService = new AuthenticationService(authConfig, authLogger);
             _logger = logger;
         }
 
         /// <summary>
-        /// TASK-829: behind <c>AddBirkoForwardedHeaders</c> the client address is decided by that registration's list
-        /// alone (<see cref="GetClientIpAddress"/> takes the address it produced), so a different list here would be
-        /// accepted and never used. An empty list here is fine: it defers to the host's.
+        /// The configuration's own list is read in its <see cref="AuthenticationConfiguration.TrustedProxyParsing"/> mode,
+        /// so a strict list with a bad entry refuses here (TASK-830). Then TASK-829: behind
+        /// <c>AddBirkoForwardedHeaders</c> the client address is decided by that registration's list alone
+        /// (<see cref="GetClientIpAddress"/> takes the address it produced), so a different list here would be accepted
+        /// and never used. An empty list here is fine: it defers to the host's.
         /// </summary>
-        internal static void EnsureProxyListsAgree(AuthenticationConfiguration own, TrustedProxySettings? forwardedHeadersProxies)
+        internal static void EnsureProxiesValid(AuthenticationConfiguration own, TrustedProxySettings? forwardedHeadersProxies)
         {
-            if (forwardedHeadersProxies == null)
-            {
-                return;
-            }
-            var ownList = TrustedProxyList.ParseLenient(own.TrustedProxies);
-            if (ownList.IsEmpty)
+            var ownList = AuthenticationService.ParseTrustedProxies(own);
+            if (forwardedHeadersProxies == null || ownList.IsEmpty)
             {
                 return;
             }

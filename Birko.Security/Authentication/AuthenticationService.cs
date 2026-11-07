@@ -40,12 +40,11 @@ namespace Birko.Security.Authentication
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _logger = logger;
+            // Parsed before the lock is created, so a refusal leaves nothing to dispose.
+            _trustedProxies = ParseTrustedProxies(_config, _logger);
             _expandedTokens = new HashSet<string>(StringComparer.Ordinal);
             _expandedBindings = new List<CachedTokenBinding>();
             _lock = new ReaderWriterLockSlim();
-            // TASK-829: one parser for every trusted-proxy list, lenient here: a bad entry is skipped and logged.
-            _trustedProxies = TrustedProxyList.ParseLenient(_config.TrustedProxies, (entry, reason) =>
-                _logger?.LogError("TrustedProxies entry '{Entry}' {Reason}; it is ignored.", entry, reason));
 
             // Initialize cache immediately to avoid first-request latency
             InitializeCache();
@@ -295,11 +294,39 @@ namespace Birko.Security.Authentication
         /// <param name="fallbackIp">The address of the connection's peer</param>
         /// <param name="trustedProxies">Addresses or CIDR ranges of proxies whose headers are believed</param>
         /// <returns>The client IP address or null</returns>
+        /// <param name="mode">
+        /// What a bad <paramref name="trustedProxies"/> entry does (TASK-830): skipped by default, as before, since this
+        /// parses on every call and a throw here is a failed request, not a refused startup;
+        /// <see cref="TrustedProxyParsing.Strict"/> throws <see cref="FormatException"/> naming it.
+        /// </param>
         public static string? GetClientIpAddress(
             Func<string, string?> getHeaderValue,
             string? fallbackIp,
-            IReadOnlyCollection<string>? trustedProxies = null)
-            => GetClientIpAddress(getHeaderValue, fallbackIp, TrustedProxyList.ParseLenient(trustedProxies));
+            IReadOnlyCollection<string>? trustedProxies = null,
+            TrustedProxyParsing mode = TrustedProxyParsing.Lenient)
+            => GetClientIpAddress(getHeaderValue, fallbackIp, TrustedProxyList.Parse(trustedProxies, mode));
+
+        /// <summary>
+        /// The configuration's <see cref="AuthenticationConfiguration.TrustedProxies"/> in its
+        /// <see cref="AuthenticationConfiguration.TrustedProxyParsing"/> mode (TASK-830). Strict refuses with
+        /// <see cref="InvalidOperationException"/> naming the configuration type and wrapping the
+        /// <see cref="FormatException"/>; lenient logs each skipped entry at error level.
+        /// </summary>
+        public static TrustedProxyList ParseTrustedProxies(AuthenticationConfiguration config, ILogger? logger = null)
+        {
+            ArgumentNullException.ThrowIfNull(config);
+            try
+            {
+                return TrustedProxyList.Parse(config.TrustedProxies, config.TrustedProxyParsing, (entry, reason) =>
+                    logger?.LogError("TrustedProxies entry '{Entry}' {Reason}; it is ignored.", entry, reason));
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException(
+                    $"{config.GetType().Name}.TrustedProxies: {ex.Message} Correct it, or set TrustedProxyParsing = "
+                    + "Lenient to skip such entries.", ex);
+            }
+        }
 
         private static string? GetClientIpAddress(
             Func<string, string?> getHeaderValue,

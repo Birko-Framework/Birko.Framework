@@ -57,6 +57,8 @@ var result = await provider.ValidateTokenAsync(token);
 - **StaticTokenAuthenticator** - Static token authentication
 - **TrustedProxyList** - the one parser for trusted-proxy lists (address or CIDR, `${ENV_VAR}`): `Parse` refuses a bad
   entry, `ParseLenient` skips and reports it (TASK-829)
+- **TrustedProxyParsing** - `Strict` (default) or `Lenient`: what `AuthenticationService` does with a bad
+  `TrustedProxies` entry (TASK-830)
 - **TrustedProxySettings** - an ASP.NET host's one list of trusted proxies, registered by `AddBirkoForwardedHeaders`
   (Birko.Security.AspNetCore)
 
