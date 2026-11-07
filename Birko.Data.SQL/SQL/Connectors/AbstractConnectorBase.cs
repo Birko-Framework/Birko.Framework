@@ -1112,21 +1112,28 @@ namespace Birko.Data.SQL.Connectors
 
         /// <summary>
         /// Binds <paramref name="value"/> to <paramref name="name"/> on <paramref name="command"/>. A name the
-        /// command already holds is overwritten, never added twice: the multi-row insert re-binds the same names
+        /// command already holds is replaced, never added twice: the multi-row insert re-binds the same names
         /// for every row.
         /// </summary>
         /// <remarks>
         /// TASK-836: not virtual (rule 12). The per-provider conversion is <see cref="ConvertParameterValue"/> and
         /// the per-provider parameter shape is <see cref="CreateParameter(DbCommand, string, object)"/>; this method
         /// owns only the overwrite bookkeeping, so the fast path below shares the providers' conversions.
+        /// <para>
+        /// TASK-852 (rule 28): a re-bound name gets a newly created parameter in the same position, so the typing
+        /// <see cref="CreateParameter(DbCommand, string, object)"/> applies has one producer. Assigning only
+        /// <c>Value</c> kept the first value's type: on SQL Server a nullable <c>DateTime</c> column whose first row
+        /// was null sent every later row as an inferred <c>datetime</c>, stored rounded to ~3.33 ms (measured).
+        /// </para>
         /// </remarks>
         public DbCommand AddParameter(DbCommand command, string name, object? value)
         {
             value = ConvertParameterValue(value);
-            // Contains is a linear scan on SqliteParameterCollection and SqlParameterCollection.
-            if (command.Parameters.Contains(name))
+            // IndexOf is a linear scan on SqliteParameterCollection and SqlParameterCollection.
+            var index = command.Parameters.IndexOf(name);
+            if (index >= 0)
             {
-                command.Parameters[name].Value = value ?? DBNull.Value;
+                command.Parameters[index] = CreateParameter(command, name, value);
                 return command;
             }
             command.Parameters.Add(CreateParameter(command, name, value));

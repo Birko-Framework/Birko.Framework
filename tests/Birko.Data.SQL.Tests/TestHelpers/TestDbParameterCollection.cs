@@ -32,14 +32,17 @@ namespace Birko.Data.SQL.Tests.TestHelpers
 
         public override bool Contains(string value)
         {
-            ContainsByNameCalls++;
-            return _parameters.Any(p => p.ParameterName == value);
+            NameLookups++;
+            return FindByName(value) >= 0;
         }
 
         /// <summary>
-        /// How many times a parameter was looked up by name (TASK-836: the lookup that made an IN list quadratic).
+        /// How many times a caller looked a parameter up by name, through <c>Contains</c> or <c>IndexOf</c> (TASK-836:
+        /// the lookup that made an IN list quadratic; TASK-852 moved <c>AddParameter</c> from one to the other).
         /// </summary>
-        public int ContainsByNameCalls { get; private set; }
+        public int NameLookups { get; private set; }
+
+        private int FindByName(string parameterName) => _parameters.FindIndex(p => p.ParameterName == parameterName);
 
         public override void CopyTo(Array array, int index) =>
             ((ICollection)_parameters).CopyTo(array, index);
@@ -48,8 +51,11 @@ namespace Birko.Data.SQL.Tests.TestHelpers
 
         public override int IndexOf(object value) => _parameters.IndexOf((DbParameter)value);
 
-        public override int IndexOf(string parameterName) =>
-            _parameters.FindIndex(p => p.ParameterName == parameterName);
+        public override int IndexOf(string parameterName)
+        {
+            NameLookups++;
+            return FindByName(parameterName);
+        }
 
         public override void Insert(int index, object value) =>
             _parameters.Insert(index, (DbParameter)value);
@@ -60,7 +66,7 @@ namespace Birko.Data.SQL.Tests.TestHelpers
 
         public override void RemoveAt(string parameterName)
         {
-            var idx = IndexOf(parameterName);
+            var idx = FindByName(parameterName);
             if (idx >= 0) _parameters.RemoveAt(idx);
         }
 
@@ -74,7 +80,7 @@ namespace Birko.Data.SQL.Tests.TestHelpers
 
         protected override void SetParameter(string parameterName, DbParameter value)
         {
-            var idx = IndexOf(parameterName);
+            var idx = FindByName(parameterName);
             if (idx >= 0) _parameters[idx] = value;
         }
 

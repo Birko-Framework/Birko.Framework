@@ -31,7 +31,7 @@ namespace Birko.Data.SQL.Tests.Connectors
 
             var sql = _connector.ConditionDefinition(Condition.Create("Id", values, ConditionType.In), _command);
 
-            _command.TestParameters.ContainsByNameCalls.Should().Be(0, "every name in the list was generated, so none can exist yet");
+            _command.TestParameters.NameLookups.Should().Be(0, "every name in the list was generated, so none can exist yet");
             _command.TestParameters.All.Select(p => p.Value).Should().Equal(values);
             _command.TestParameters.All.Select(p => p.ParameterName).Should().OnlyHaveUniqueItems();
             sql.Should().StartWith("Id IN (@WHEREId0_0, @WHEREId1_1, ").And.EndWith("@WHEREId99_99)");
@@ -93,7 +93,7 @@ namespace Birko.Data.SQL.Tests.Connectors
 
             context.AddParameter(_command, stale, 2);
 
-            _command.TestParameters.ContainsByNameCalls.Should().Be(2, "the count moved since the name was generated");
+            _command.TestParameters.NameLookups.Should().Be(2, "the count moved since the name was generated");
             _command.TestParameters.All.Select(p => p.ParameterName).Should().Equal(name, "@Other", stale);
         }
 
@@ -106,7 +106,7 @@ namespace Birko.Data.SQL.Tests.Connectors
 
             context.AddParameter(_command, name, 1);
 
-            _command.TestParameters.ContainsByNameCalls.Should().Be(1);
+            _command.TestParameters.NameLookups.Should().Be(1);
             _command.TestParameters.All.Should().ContainSingle();
         }
     }
