@@ -13,7 +13,7 @@ Fluent SQL mapping framework for Birko domain models. Replaces attribute-based m
 `Birko.Models.SQL/`
 
 ## Components (`Birko.Models.SQL.Mapping`)
-- **ModelMap\<T\>** — Fluent configuration: `ToTable()` (and `ToTable(name, schema)`, TASK-272), `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
+- **ModelMap\<T\>** — Fluent configuration: `ToTable()` (and `ToTable(name, schema)`, TASK-272), `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`. Each takes a property read directly off the parameter (`x => x.Code`); anything else (`x => x.Sub.Code`, `x => x.Code.Length`, `x => x.Maybe.Value`, a captured object's member) is refused with `NotSupportedException` naming the path, at `Configure` (so at `Register`; `RegisterFromAssembly` surfaces it wrapped in a `TargetInvocationException`). TASK-845: before, only the last name was kept, so `x => x.Sub.Code` configured a top-level `Code` (measured: renamed, bounded, unique and indexed). The rule is local, not `ViewDefinitionBuilder.GetMemberPath` (TASK-843): that one resolves nested paths for views, and `Birko.Data.Views` is not a dependency of this project
 - **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `HasUniqueIndex()`, `And()`
 - **IModelMapping\<T\>** — Implement to define SQL mappings for a model type
 - **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`), `GetMap<T>()`, `GetPropertyMaps()`, `ApplyToDatabase()`

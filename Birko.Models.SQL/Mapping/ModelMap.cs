@@ -101,17 +101,33 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
+        /// <summary>
+        /// The property an entry point maps: <c>x =&gt; x.Name</c> (or <c>x =&gt; (object)x.Name</c>) is <c>"Name"</c>.
+        /// TASK-845: a member that is not read directly off the parameter is refused by name. <c>x =&gt; x.Sub.X</c> used
+        /// to be recorded as <c>"X"</c>, so the column name, flags, length and indexes landed on a top-level <c>X</c>
+        /// (measured), and so did a string's <c>Length</c>, a Nullable's <c>Value</c> and a captured object's member.
+        /// A SQL table has no nested member, so this is a one-segment rule, kept here rather than reusing
+        /// <c>ViewDefinitionBuilder.GetMemberPath</c> (TASK-843): that producer resolves nested paths, which this caller
+        /// must refuse, and it lives in <c>Birko.Data.Views</c>, which nothing on the SQL mapping side references.
+        /// </summary>
         private static string GetMemberName<TProp>(Expression<Func<T, TProp>> expression)
         {
-            if (expression.Body is MemberExpression member)
+            var member = expression.Body as MemberExpression
+                ?? (expression.Body as UnaryExpression)?.Operand as MemberExpression
+                ?? throw new ArgumentException("Expression must be a member access expression.", nameof(expression));
+            if (member.Expression is ParameterExpression)
             {
                 return member.Member.Name;
             }
-            if (expression.Body is UnaryExpression unary && unary.Operand is MemberExpression unaryMember)
+
+            var names = new List<string> { member.Member.Name };
+            for (var owner = member.Expression as MemberExpression; owner != null; owner = owner.Expression as MemberExpression)
             {
-                return unaryMember.Member.Name;
+                names.Insert(0, owner.Member.Name);
             }
-            throw new ArgumentException("Expression must be a member access expression.", nameof(expression));
+            throw new NotSupportedException(
+                $"'{expression}' maps '{string.Join(".", names)}', which is not a property of {typeof(T).Name}: a SQL table has "
+                + $"no nested member. Map a property of {typeof(T).Name} itself. (TASK-845)");
         }
     }
 }

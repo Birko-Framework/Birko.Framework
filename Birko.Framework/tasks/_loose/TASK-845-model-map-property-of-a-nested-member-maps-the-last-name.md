@@ -3,7 +3,7 @@ id: TASK-845
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P2
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -32,12 +32,29 @@ TASK-840 (Cosmos DB view filters) and TASK-843 (view projections) fixed.
 
 ## Acceptance criteria
 
-- [ ] Reproduced first: a fluent mapping of `x => x.Sub.X` on an entity that also has a top-level `X`. Record which
+- [x] Reproduced first: a fluent mapping of `x => x.Sub.X` on an entity that also has a top-level `X`. Record which
       column the configuration lands on.
-- [ ] A nested member in a fluent mapping is refused by name when the mapping is registered (SQL tables have no nested
+      → On HEAD, 2026-11-07: `map.Property(x => x.Sub.Code).HasColumnName("sub_code").HasMaxLength(5).HasIndex(...)`
+        plus `HasUnique(x => x.Sub.Code)`. After `ApplyToDatabase`, the **top-level `Code`** became column
+        `sub_code`, a `CharField(5)`, unique, carrying both indexes. Nothing was raised.
+- [x] A nested member in a fluent mapping is refused by name when the mapping is registered (SQL tables have no nested
       members). A single-segment member keeps its behaviour byte for byte. Rule 16: reuse the member-path producer
       from TASK-843 if it fits, or say why not.
-- [ ] Regression tests red before the fix; the SQL importer suites stay green.
+      → `ModelMap.GetMemberName` is behind all four entry points that take an expression: `Property`, `HasUnique`,
+        `HasPrimary`, `Ignore`.
+      → A member not read directly off the parameter throws `NotSupportedException` naming the path, inside
+        `Configure`, so `Register` records nothing. That covers `x.Sub.Code`, `x.Code.Length`, `x.Maybe.Value`, and a
+        captured object's member.
+      → `x => x.P` and `x => (object)x.P` are unchanged; a non-member expression is still `ArgumentException`.
+      → **Rule 16, not reused:** `ViewDefinitionBuilder.GetMemberPath` is private to Birko.Data.Views, which
+        Birko.Models.SQL may not reference (CLAUDE-projects.md § Dependency Flow). It also resolves nested paths, and
+        this caller must refuse them. One small local rule; the doc comment says why.
+- [x] Regression tests red before the fix; the SQL importer suites stay green.
+      → `Task845NestedMemberTests` (7 tests): with HEAD's `ModelMap.cs`, 5 fail. The 2 that pass pin unchanged
+        behaviour.
+      → All 29 Birko.Models.SQL importer suites are green, Birko.Data.SQL.SqLite.Tests (663) included.
+      → **Found, filed:** `RegisterFromAssembly` wraps any `Configure` exception in `TargetInvocationException`, which
+        predates this task → TASK-846.
 
 ## Out of scope
 
