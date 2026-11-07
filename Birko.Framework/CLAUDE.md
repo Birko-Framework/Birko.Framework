@@ -296,6 +296,14 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB view names are quoted; a failing mapping names itself (2026-11-07)
+- [[TASK-844]]: a Cosmos DB view property named like a keyword (`Value`, `Inner`) failed every query with SC1001. Aliases
+  are now quoted (`AS "Value"`), and so are paths (`c["Sub"]["Value"]`), measured.
+- [[TASK-848]]: sorting a grouped Cosmos DB view by an aggregate is refused by name before the request; Cosmos rejects
+  every form. Sorting by a group key works.
+- [[TASK-846]], [[TASK-847]]: a mapping that throws while the registries scan an assembly arrives as
+  `InvalidOperationException` naming the mapping and stage, with the original inside. It used to arrive as
+  `TargetInvocationException` (the user's decision over rule 9's keep-the-type default).
 ### A view that projects a nested member reads it, on every provider (2026-11-07)
 [[TASK-843]]. `ViewDefinitionBuilder` kept only the last member name, so `Select(r => r.Sub.X, …)` read the top-level
 `X` on SQLite, Cosmos DB, MongoDB, RavenDB and Elasticsearch, silently (reproduced on each).
