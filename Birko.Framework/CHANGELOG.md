@@ -4,6 +4,27 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — RavenDB writes wait for the indexes, so a query after a write sees it
+[[TASK-828]], found by the TASK-826 contract. Under load, an update applied to all 6 documents while a query on the value it
+wrote returned 5 (stale index, measured). Every store session and the unit of work now save with
+`WaitForIndexesAfterSaveChanges` (15 s, no throw: an applied write is never reported failed), the user's decision. The cost
+is write latency.
+
+## 2026-11-07 — A decimal column can be computed from the same row in one write
+[[TASK-826]], requested by Symbio (TASK-1063: recompute net prices when a tax rate changes, without read-modify-write).
+`PropertyUpdate.Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`: `+ - * /` over
+`decimal` columns and constants, `Math.Round` only with an explicit mode (C# and MongoDB default to half-even, SQL to
+half-away). Every provider stores C#'s cents, checked at midpoints in both modes on all 13 (the user's decision): one
+statement on SQL and MongoDB, Painless on Elasticsearch, C# read-modify-save elsewhere. **Breaking:** `PropertyAssignment.Match`
+takes a third (`computed`) branch. A RavenDB server-side patch is [[TASK-827]].
+
+## 2026-11-07 — A fluent mapping's indexes are on the table before anyone can read it
+[[TASK-825]], reported by Symbio, whose gate twice created `EntityTranslations` without its unique index. Each
+`ApplyToDatabase` evicted the cached table, `LoadTable` published the rebuild bare, and the fluent indexes were written
+onto it afterwards (84% of loads racing a re-apply saw none, measured); a later eviction lost them for good. The fluent
+part now runs inside the build (`DataBase.RegisterTableConfigurator`), and re-applying unchanged mappings or table names
+evicts nothing.
+
 ## 2026-11-06 — Security low findings: 23 verified and fixed
 [[TASK-176]]. Behaviour a consumer can notice: `AddBirkoJwtBearer` refuses a secret under 32 characters and both JWT
 paths accept HS256 only; `WildcardPermissionEnabled = false` now disables a `"*"` from the host's claims or resolver

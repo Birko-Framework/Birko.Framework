@@ -373,24 +373,6 @@ for every list (the user's decisions). Presenter, Symbio and Affiliate replace t
 kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments
 (range-checked; a `long` past 2^53 is refused). Patch JavaScript holds numbers as doubles (measured), so decimal and
 floating values, `Compute`, and updates inside a unit of work stay on the exact C# path (the user's decision).
-### RavenDB writes wait for the indexes, so a query after a write sees it (2026-11-07)
-[[TASK-828]], found by the TASK-826 contract. Under load, an update applied to all 6 documents while a query on the value it
-wrote returned 5 (stale index, measured). Every store session and the unit of work now save with
-`WaitForIndexesAfterSaveChanges` (15 s, no throw: an applied write is never reported failed), the user's decision. The cost
-is write latency.
-### A decimal column can be computed from the same row in one write (2026-11-07)
-[[TASK-826]], requested by Symbio (TASK-1063: recompute net prices when a tax rate changes, without read-modify-write).
-`PropertyUpdate.Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`: `+ - * /` over
-`decimal` columns and constants, `Math.Round` only with an explicit mode (C# and MongoDB default to half-even, SQL to
-half-away). Every provider stores C#'s cents, checked at midpoints in both modes on all 13 (the user's decision): one
-statement on SQL and MongoDB, Painless on Elasticsearch, C# read-modify-save elsewhere. **Breaking:** `PropertyAssignment.Match`
-takes a third (`computed`) branch. A RavenDB server-side patch is [[TASK-827]].
-### A fluent mapping's indexes are on the table before anyone can read it (2026-11-07)
-[[TASK-825]], reported by Symbio, whose gate twice created `EntityTranslations` without its unique index. Each
-`ApplyToDatabase` evicted the cached table, `LoadTable` published the rebuild bare, and the fluent indexes were written
-onto it afterwards (84% of loads racing a re-apply saw none, measured); a later eviction lost them for good. The fluent
-part now runs inside the build (`DataBase.RegisterTableConfigurator`), and re-applying unchanged mappings or table names
-evicts nothing.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
