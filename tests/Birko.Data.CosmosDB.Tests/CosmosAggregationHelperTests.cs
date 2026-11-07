@@ -19,8 +19,8 @@ public class CosmosAggregationHelperTests
             new[] { ("Category", "Category") },
             new[] { (AggregateFunction.Sum, (string?)"Amount", "Total") });
 
-        select.Should().Contain("c[\"Category\"] AS Category");
-        select.Should().Contain("SUM(c[\"Amount\"]) AS Total");
+        select.Should().Contain("c[\"Category\"] AS \"Category\"");
+        select.Should().Contain("SUM(c[\"Amount\"]) AS \"Total\"");
         select.Should().NotContain("c.Category");
         select.Should().NotContain("c.Amount");
 
@@ -34,7 +34,7 @@ public class CosmosAggregationHelperTests
             groupByFields: System.Array.Empty<(string, string)>(),
             aggregates: new[] { (AggregateFunction.Count, (string?)null, "Cnt") });
 
-        select.Should().Be("SELECT COUNT(1) AS Cnt FROM c");
+        select.Should().Be("SELECT COUNT(1) AS \"Cnt\" FROM c");
         groupBy.Should().BeNull();
     }
 

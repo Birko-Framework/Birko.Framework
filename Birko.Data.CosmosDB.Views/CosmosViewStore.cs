@@ -27,7 +27,7 @@ namespace Birko.Data.CosmosDB.Views;
 /// Other shapes (a comparer, a computed operand, a nested collection) are refused by name before any request.
 /// Before TASK-837 a collection Contains rendered <c>CONTAINS()</c> and matched nothing.</para>
 /// <para>A member path under a view property (<c>v.Inner.X</c>, also in a <c>Contains</c>) renders in full,
-/// <c>c.Src.X</c>, only its first segment mapped to the source field (TASK-840; it used to render <c>c.X</c> and read the
+/// <c>c["Src"]["X"]</c>, only its first segment mapped to the source field (TASK-840; it used to render <c>c.X</c> and read the
 /// wrong field). A member that is not a document field (<c>Length</c>, <c>HasValue</c>, <c>Count</c>, a struct's member)
 /// or a captured variable is refused by name before any request.</para>
 /// <para>The server counts the serialized parameter values toward its 524,288-character query limit (measured on the
@@ -217,6 +217,8 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     /// default, and a filter or order on a view name tested a document field that does not exist.
     /// TASK-843: a nested source is selected by its whole path, <c>c["Sub"]["X"]</c>; it used to be <c>c["X"]</c>, the
     /// document's top-level field (measured on the emulator).
+    /// TASK-844: the alias is a quoted string, <c>AS "Inner"</c>; bare, a view property named like a keyword failed
+    /// every query with a 400.
     /// </remarks>
     private QueryDefinition BuildProjectionSql(Expression<Func<TView, bool>>? filter, OrderBy<TView>? orderBy, int? limit, int? offset)
     {
@@ -224,7 +226,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         var sb = new StringBuilder("SELECT ");
         sb.Append(_definition.Fields.Count == 0
             ? "VALUE c"
-            : string.Join(", ", _definition.Fields.Select(f => $"{CosmosAggregationHelper.PathRef(f.SourcePath)} AS {f.ViewProperty}")));
+            : string.Join(", ", _definition.Fields.Select(f => $"{CosmosAggregationHelper.PathRef(f.SourcePath)} AS {CosmosAggregationHelper.Alias(f.ViewProperty)}")));
         sb.Append(" FROM c").Append(Where(filter, parameters));
         AppendOrderAndPage(sb, orderBy, limit, offset);
         return Bind(sb.ToString(), parameters);
@@ -373,14 +375,14 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         }
 
         // A nested source (TASK-843) maps to its dotted path, Sub.X, which DocumentPath and ResolveOrderKey render as
-        // c.Sub.X: the same field the projection selects as c["Sub"]["X"].
+        // c["Sub"]["X"], the same path the projection selects.
         var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
         return field?.SourceProperty ?? viewProperty;
     }
 
     /// <summary>
     /// Resolves an ORDER BY key expressed as a TView property name (CR-H044): a group key maps back
-    /// to its source field (<c>c.{source}</c>); an aggregate result orders by its SELECT alias.
+    /// to its source field (<c>c["Source"]</c>, bracket-quoted, TASK-844); an aggregate result orders by its SELECT alias.
     /// </summary>
     private string ResolveOrderKey(string viewProperty)
     {
@@ -390,8 +392,9 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             return viewProperty;
         }
 
-        // Group key / passthrough field — order by the source field the GROUP BY uses.
-        return $"c.{MapViewPropertyToSource(viewProperty)}";
+        // Group key / passthrough field — order by the source field the GROUP BY uses, bracket-quoted (TASK-844: a
+        // dotted c.Value is a 400 syntax error).
+        return CosmosAggregationHelper.PathRef(MapViewPropertyToSource(viewProperty).Split('.'));
     }
 
     #endregion
@@ -669,7 +672,7 @@ internal static class CosmosFilterTranslator
 
     /// <summary>
     /// TASK-840: the document path of a member chain read off the filter's parameter, <c>v.Inner.X</c> →
-    /// <c>c.Inner.X</c>. Only the first segment, the view property, goes through the view-to-source map: the projection
+    /// <c>c["Inner"]["X"]</c> (bracket-quoted, TASK-844). Only the first segment, the view property, goes through the view-to-source map: the projection
     /// selects that source field whole (<c>c["Src"] AS Inner</c>, and <c>Select</c> requires the same type on both
     /// sides), so every deeper name is the same in the view and in the document. Before TASK-840 only the last name was
     /// kept (<c>c.X</c>), which compared a same-named top-level field, or a missing one, with no error.
@@ -705,8 +708,10 @@ internal static class CosmosFilterTranslator
         }
 
         names.Reverse();
-        names[0] = Map(names[0], mapMember);
-        return "c." + string.Join(".", names);
+        // The mapped first segment is the source's dotted path (TASK-843). Every segment is bracket-quoted (TASK-844):
+        // dotted, a name like Value is a 400 syntax error (c.Value, measured on the emulator).
+        var segments = Map(names[0], mapMember).Split('.').Concat(names.Skip(1)).ToList();
+        return CosmosAggregationHelper.PathRef(segments);
     }
 
     /// <summary>A type whose members are fields of a JSON object: a class that is not a string or a collection.</summary>

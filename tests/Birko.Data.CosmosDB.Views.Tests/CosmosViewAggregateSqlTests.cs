@@ -61,8 +61,8 @@ public class CosmosViewAggregateSqlTests
     {
         var sql = BuildSql(v => v.CategoryName == "books", orderBy: null);
 
-        sql.Should().Contain("c.Category ", "CR-H045: the WHERE must target the source field");
-        sql.Should().NotContain("c.CategoryName", "the renamed view name does not exist on the source document");
+        sql.Should().Contain("c[\"Category\"] ", "CR-H045: the WHERE must target the source field");
+        sql.Should().NotContain("c[\"CategoryName\"]", "the renamed view name does not exist on the source document");
     }
 
     [Fact]
@@ -73,9 +73,9 @@ public class CosmosViewAggregateSqlTests
         var sql = BuildSql(filter: null, orderBy: orderBy);
 
         var orderByClause = sql.Substring(sql.IndexOf("ORDER BY", StringComparison.Ordinal));
-        orderByClause.Should().Contain("c.Category", "CR-H044: the group key orders by its source field");
-        orderByClause.Should().NotContain("c.CategoryName");
+        orderByClause.Should().Contain("c[\"Category\"]", "CR-H044: the group key orders by its source field");
+        orderByClause.Should().NotContain("c[\"CategoryName\"]");
         orderByClause.Should().Contain("Total", "the aggregate result orders by its SELECT alias");
-        orderByClause.Should().NotContain("c.Total", "an aggregate result is not a raw document field");
+        orderByClause.Should().NotContain("c[\"Total\"]", "an aggregate result is not a raw document field");
     }
 }

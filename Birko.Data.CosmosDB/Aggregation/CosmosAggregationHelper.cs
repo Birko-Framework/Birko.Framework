@@ -47,13 +47,13 @@ namespace Birko.Data.CosmosDB.Aggregation
 
             foreach (var (fieldName, alias) in groupByFieldList)
             {
-                selectParts.Add($"{FieldRef(fieldName)} AS {alias}");
+                selectParts.Add($"{FieldRef(fieldName)} AS {Alias(alias)}");
             }
 
             foreach (var (function, sourceProperty, alias) in aggregates)
             {
                 var fieldExpr = function == AggregateFunction.Count ? null : FieldRef(sourceProperty);
-                selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {alias}");
+                selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {Alias(alias)}");
             }
 
             var selectFromSql = $"SELECT {string.Join(", ", selectParts)} FROM c";
@@ -81,6 +81,16 @@ namespace Birko.Data.CosmosDB.Aggregation
             var escaped = fieldName.Replace("\\", "\\\\").Replace("\"", "\\\"");
             return $"c[\"{escaped}\"]";
         }
+
+        /// <summary>
+        /// TASK-844: a SELECT alias written as a quoted string, <c>AS "Value"</c>, escaped as <see cref="FieldRef(string?)"/>
+        /// escapes a field name. A bare alias is parsed as an identifier, so a property named like a keyword
+        /// (<c>Inner</c>, <c>Value</c>) was a 400 syntax error on every query (measured on the emulator, vnext-preview,
+        /// 2026-11-07: <c>c["Sub"] AS Inner</c> → SC1001). The quoted form names the result property exactly as written,
+        /// any characters included. The one producer of every alias this helper and the view store write.
+        /// </summary>
+        internal static string Alias(string alias)
+            => "\"" + alias.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
         /// <summary>
         /// TASK-843: the bracket-quoted accessor of a member path, <c>["Sub", "X"]</c> → <c>c["Sub"]["X"]</c>, each

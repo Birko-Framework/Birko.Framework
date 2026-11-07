@@ -215,7 +215,7 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
         var textFew = CosmosFilterTranslator.Translate<ItemView>(v => few.Contains(v.Key) && v.Region == "EU", pFew);
         var textMany = CosmosFilterTranslator.Translate<ItemView>(v => many.Contains(v.Key) && v.Region == "EU", pMany);
 
-        textMany.Should().Be(textFew).And.Be("(ARRAY_CONTAINS(@p0, c.Key) AND c.Region = @p1)");
+        textMany.Should().Be(textFew).And.Be("(ARRAY_CONTAINS(@p0, c[\"Key\"]) AND c[\"Region\"] = @p1)");
         pMany.Should().HaveCount(2);
         pMany[0].Value.Should().BeOfType<object[]>().Which.Should().HaveCount(20_000);
     }
@@ -227,7 +227,7 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
         var ids = new List<Guid> { Guid.NewGuid() };
         var p = new List<KeyValuePair<string, object?>>();
         CosmosFilterTranslator.Translate<ItemView>(v => ids.Contains(v.Key) || !v.Labels!.Contains("x"), p, n => map[n])
-            .Should().Be("(ARRAY_CONTAINS(@p0, c.SrcKey) OR NOT (ARRAY_CONTAINS(c.SrcTags, @p1)))");
+            .Should().Be("(ARRAY_CONTAINS(@p0, c[\"SrcKey\"]) OR NOT (ARRAY_CONTAINS(c[\"SrcTags\"], @p1)))");
         CosmosFilterTranslator.Translate<ItemView>(v => new List<int>().Contains(v.Number), p).Should().Be("false");
     }
 

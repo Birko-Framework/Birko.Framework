@@ -13,7 +13,7 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 ## Purpose
 - Read-only view queries over Cosmos DB containers via `IViewStore<TView>`
 - View lifecycle management via `IViewManager`
-- Cosmos SQL projection (`SELECT c["Source"] AS ViewProp`) for non-aggregate views (TASK-151: LINQ ignored renames)
+- Cosmos SQL projection (`SELECT c["Source"] AS "ViewProp"`) for non-aggregate views (TASK-151: LINQ ignored renames)
 - Cosmos SQL with GROUP BY for aggregate views
 
 ## Components
@@ -24,7 +24,9 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 - Grouping views (aggregates or GroupBy): `QueryFirstAsync` and `CountAsync` take the GROUP BY path too; the count is the number of groups the view's own query returns
 - A filter on an aggregate view property is refused (it would need HAVING); `Persistent` mode is refused (no stored views)
 - Aggregate views: Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`
-- Field names use property names as-is (matching SDK default serialization); a nested source (`r.Sub.X`, TASK-843) is selected as `c["Sub"]["X"]` (`CosmosAggregationHelper.PathRef`), and a filter or sort on its view property reads `c.Sub.X`
+- Field names use property names as-is (matching SDK default serialization); a nested source (`r.Sub.X`, TASK-843) is selected as `c["Sub"]["X"]` (`CosmosAggregationHelper.PathRef`), and a filter or sort on its view property reads the same path
+- **Every identifier is quoted (TASK-844).** Aliases are quoted strings, `c["Sub"] AS "Inner"` (`CosmosAggregationHelper.Alias`, the one producer, also for group-by and aggregate aliases); WHERE and ORDER BY paths are bracket-quoted, `c["Sub"]["Value"]` (`PathRef`). Measured on the emulator (vnext-preview, 2026-11-07): a bare `AS Inner` / `AS Value` and a dotted `c.Value` / `c.Sub.Value` are 400 SC1001 syntax errors; `AS "Value"` works (`[Value]` and backticks do not). So any property name works
+- ORDER BY an aggregate view property (`Total`) is not supported by Cosmos DB in any form (bare alias SC2001, quoted alias or the aggregate expression 2206, measured); it fails with a 400. Ordering by a group key works
 - Aggregate SQL built via shared `CosmosAggregationHelper` from `Birko.Data.CosmosDB`
 - Joins are refused in the constructor (`NotSupportedException`); Cosmos DB has no cross-document join
 

@@ -181,9 +181,9 @@ public sealed class Task840CosmosViewNestedPathTests : IAsyncLifetime
         var p = new List<KeyValuePair<string, object?>>();
         var xs = new List<int> { 1 };
         CosmosFilterTranslator.Translate<NestedView>(v => v.Child!.Deep!.Level == 1 && v.Child!.Tags.Contains("a"), p, n => map[n])
-            .Should().Be("(c.Sub.Deep.Level = @p0 AND ARRAY_CONTAINS(c.Sub.Tags, @p1))");
+            .Should().Be("(c[\"Sub\"][\"Deep\"][\"Level\"] = @p0 AND ARRAY_CONTAINS(c[\"Sub\"][\"Tags\"], @p1))");
         CosmosFilterTranslator.Translate<NestedView>(v => xs.Contains(v.Child!.X) || v.Maybe!.Value == 3, p, n => map[n])
-            .Should().Be("(ARRAY_CONTAINS(@p2, c.Sub.X) OR c.SrcMaybe = @p3)");
+            .Should().Be("(ARRAY_CONTAINS(@p2, c[\"Sub\"][\"X\"]) OR c[\"SrcMaybe\"] = @p3)");
     }
 
     private static Container Unreachable(out CosmosClient client)

@@ -105,7 +105,7 @@ public class CosmosViewFilterInjectionTests
         var q = Aggregate(v => v.CategoryName == payload);
 
         // The containment: the statement carries a placeholder, so there is nothing to escape.
-        q.QueryText.Should().Contain("c.Category = @p0");
+        q.QueryText.Should().Contain("c[\"Category\"] = @p0");
         q.QueryText.Should().NotContain(payload,
             "no caller-supplied text may appear in the statement at all — that is the whole point of "
             + "binding rather than escaping");
@@ -122,7 +122,7 @@ public class CosmosViewFilterInjectionTests
         // Guard the whole verb family or none of it: BuildCountAggregateSql builds its own statement.
         var q = Count(v => v.CategoryName == payload);
 
-        q.QueryText.Should().Contain("c.Category = @p0");
+        q.QueryText.Should().Contain("c[\"Category\"] = @p0");
         q.QueryText.Should().NotContain(payload);
         q.GetQueryParameters().Single().Value.Should().Be(payload);
     }
@@ -136,7 +136,7 @@ public class CosmosViewFilterInjectionTests
 
         q.QueryText.Should().NotContain("OR");
         q.QueryText.Should().NotContain("--");
-        q.QueryText.Should().Contain("WHERE c.Category = @p0");
+        q.QueryText.Should().Contain("WHERE c[\"Category\"] = @p0");
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class CosmosViewFilterInjectionTests
         // CONTAINS(field, value) is the other place a caller value reached the statement.
         var q = Aggregate(v => v.CategoryName!.Contains(@"x\' OR 1=1 --"));
 
-        q.QueryText.Should().Contain("CONTAINS(c.Category, @p0)");
+        q.QueryText.Should().Contain("CONTAINS(c[\"Category\"], @p0)");
         q.QueryText.Should().NotContain("OR 1=1");
         q.GetQueryParameters().Single().Value.Should().Be(@"x\' OR 1=1 --");
     }
