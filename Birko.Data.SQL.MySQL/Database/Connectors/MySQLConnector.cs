@@ -63,6 +63,14 @@ namespace Birko.Data.SQL.Connectors
         public override bool SupportsTransactionalDdl => false;
 
         /// <summary>
+        /// TASK-833: 65535, the protocol's ceiling on a prepared statement's placeholders. The framework's filtered
+        /// statements are not prepared (<c>Prepare()</c> is called only by the bulk update and delete by key, whose
+        /// parameter sets are fixed), so MySqlConnector substitutes their parameters on the client and the server never
+        /// counts them; the ceiling is kept so a statement that is ever prepared stays within it.
+        /// </summary>
+        public override int MaxCommandParameters => 65535;
+
+        /// <summary>
         /// Column length used for an <b>indexed</b> string that declares no explicit length (TASK-248).
         /// </summary>
         /// <remarks>

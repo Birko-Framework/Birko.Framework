@@ -40,10 +40,36 @@ namespace Birko.Data.SQL.Connectors
                 throw new Data.Exceptions.WholeTableWriteException("delete", tableName);
             }
 
+            // TASK-833 — see the sync twin in AbstractConnector_Delete.
+            var terms = conditions?.ToList();
+            var plan = PlanInListChunks("delete", terms, (command, chunk) => BuildDelete(command, tableName, chunk, allowAllRows));
+            plan.ThrowIfRefused();
+            if (!plan.IsChunked)
+            {
+                await DeleteStatementAsync(tableName, terms, allowAllRows, ct).ConfigureAwait(false);
+                return;
+            }
+            await RunAtomicallyAsync(async () =>
+            {
+                foreach (var chunk in plan.Chunks!)
+                {
+                    await DeleteStatementAsync(tableName, chunk, allowAllRows: false, ct).ConfigureAwait(false);
+                }
+                return 0;
+            }, ct).ConfigureAwait(false);
+        }
+
+        private async Task DeleteStatementAsync(string tableName, IEnumerable<Conditions.Condition>? conditions, bool allowAllRows, CancellationToken ct)
+        {
+            // SH-H002 — per statement, so a chunk is guarded exactly as a whole filter is.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
+            {
+                throw new Data.Exceptions.WholeTableWriteException("delete", tableName);
+            }
+
             await DoCommandWithTransactionAsync(async (command) =>
             {
-                command.CommandText = "DELETE FROM " + TableIdentifier(tableName);
-                AddRequiredWhere(conditions, command, "delete", tableName, allowAllRows);
+                BuildDelete(command, tableName, conditions, allowAllRows);
                 await Task.CompletedTask;
             }, async (command) =>
             {

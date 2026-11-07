@@ -112,6 +112,12 @@ namespace Birko.Data.SQL.Connectors
 
         }
 
+        /// <summary>
+        /// The read funnel. TASK-833: an <c>IN</c> list past the provider's limit (or the chunk size) is read chunk after
+        /// chunk and the rows are the union; a list that cannot be split is refused past the limit, before anything runs.
+        /// A chunked read outside a transaction is not a single snapshot: a write committed between two chunks can be seen
+        /// by one and not the other.
+        /// </summary>
         public IEnumerable<IEnumerable<object>> Select(
             IEnumerable<string> tableNames,
             IDictionary<int, string> fields,
@@ -126,11 +132,24 @@ namespace Birko.Data.SQL.Connectors
             {
                 yield break;
             }
-            foreach(var item in RunReaderCommand((command) => {
-                command = CreateSelectCommand(command, tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct(), fields, conditions, orderFields, limit, offset);
-            }, transformFunction!))
-            { 
-                yield return item; 
+            var names = tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
+            var terms = conditions?.ToList();
+
+            // TASK-833: a list past the provider's limit (or the chunk size) is read chunk after chunk; the rows are the
+            // union. Refused before the reader runs, whose exception path would re-wrap it.
+            var plan = PlanInListChunks("read", terms,
+                (command, chunk) => CreateSelectCommand(command, names, fields, chunk, orderFields, limit, offset),
+                SortOrPageReason(orderFields, limit, offset));
+            plan.ThrowIfRefused();
+
+            foreach (var chunk in plan.Statements(terms))
+            {
+                foreach (var item in RunReaderCommand((command) => {
+                    command = CreateSelectCommand(command, names, fields, chunk, orderFields, limit, offset);
+                }, transformFunction!))
+                {
+                    yield return item;
+                }
             }
         }
     }

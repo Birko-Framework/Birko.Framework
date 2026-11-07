@@ -46,6 +46,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectCount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_Update.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\IConditionStrategy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\InListChunkPlanner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\SqlBuilderContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\Strategies\ComparisonConditionStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\Strategies\EqualConditionStrategy.cs" />

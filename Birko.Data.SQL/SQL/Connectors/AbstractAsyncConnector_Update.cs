@@ -120,54 +120,64 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
-        public virtual async Task<int> UpdateAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, CancellationToken ct = default, bool allowAllRows = false)
+        /// <remarks>
+        /// TASK-833 — the async twin of the sync <c>Update(string, …)</c>'s chunking. Not virtual since TASK-833 (rule 12): an
+        /// override goes on <see cref="UpdateCoreAsync"/>, once per statement. None was found in the framework or the
+        /// consumer repos.
+        /// </remarks>
+        public async Task<int> UpdateAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, CancellationToken ct = default, bool allowAllRows = false)
+        {
+            if (!HasUpdatePayload(fields, values, isExpressionValues))
+            {
+                return await UpdateCoreAsync(tableName, fields, values, conditions, isExpressionValues, allowAllRows, ct).ConfigureAwait(false);
+            }
+            // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
+            {
+                throw new Data.Exceptions.WholeTableWriteException("update", tableName);
+            }
+
+            var terms = conditions?.ToList();
+            var plan = PlanInListChunks("update", terms,
+                (command, chunk) => BuildUpdate(command, tableName, fields, values, chunk, isExpressionValues, allowAllRows),
+                writtenColumns: WrittenColumns(fields, isExpressionValues));
+            plan.ThrowIfRefused();
+            if (!plan.IsChunked)
+            {
+                return await UpdateCoreAsync(tableName, fields, values, terms, isExpressionValues, allowAllRows, ct).ConfigureAwait(false);
+            }
+            return await RunAtomicallyAsync(async () =>
+            {
+                var matched = 0;
+                foreach (var chunk in plan.Chunks!)
+                {
+                    matched += Math.Max(0, await UpdateCoreAsync(tableName, fields, values, chunk, isExpressionValues, false, ct).ConfigureAwait(false));
+                }
+                return matched;
+            }, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Runs ONE update statement (rule 12's seam).</summary>
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        protected virtual async Task<int> UpdateCoreAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions, bool isExpressionValues, bool allowAllRows, CancellationToken ct)
         {
             var matched = -1;
-            // What "nothing to set" means depends on the path (TASK-331). The value path's payload is
-            // `values` — an empty one has no parameters for its `col = @SETcol` list. The expression path's
-            // payload is the SET clauses in `fields`; `values` holds only the constants they bound, and
-            // `UPPER(Name)` or `A + B` binds none — gating it on `values` skipped the UPDATE silently.
-            var hasPayload = isExpressionValues
-                ? fields.Any()
-                : values != null && values.Any();
-            if (hasPayload)
+            if (!HasUpdatePayload(fields, values, isExpressionValues)) return matched;
+
+            // SH-H002 — per statement, so a chunk is guarded exactly as a whole filter is.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
             {
-                // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
-                if (!allowAllRows && WouldTargetEveryRow(conditions))
-                {
-                    throw new Data.Exceptions.WholeTableWriteException("update", tableName);
-                }
-
-                await DoCommandWithTransactionAsync(async (command) =>
-                {
-                    command.CommandText = "UPDATE " + TableIdentifier(tableName) + " SET ";
-                    if (!isExpressionValues)
-                    {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));
-                    }
-                    else
-                    {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x));
-                    }
-
-                    AddRequiredWhere(conditions, command, "update", tableName, allowAllRows);
-                    foreach (var kvp in values ?? new Dictionary<string, object>())
-                    {
-                        if (!isExpressionValues)
-                        {
-                            AddParameter(command, SetParameterName(kvp.Key), kvp.Value);
-                        }
-                        else
-                        {
-                            AddParameter(command, kvp.Key, kvp.Value);
-                        }
-                    }
-                    await Task.CompletedTask;
-                }, async (command) =>
-                {
-                    matched = await command.ExecuteNonQueryAsync(ct);
-                }, true);
+                throw new Data.Exceptions.WholeTableWriteException("update", tableName);
             }
+
+            await DoCommandWithTransactionAsync(async (command) =>
+            {
+                BuildUpdate(command, tableName, fields, values, conditions, isExpressionValues, allowAllRows);
+                await Task.CompletedTask;
+            }, async (command) =>
+            {
+                matched = await command.ExecuteNonQueryAsync(ct);
+            }, true);
             return matched;
         }
     }

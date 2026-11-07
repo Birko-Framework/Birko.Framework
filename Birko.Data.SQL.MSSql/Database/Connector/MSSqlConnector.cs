@@ -528,6 +528,13 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public override bool RequiresOrderByForPaging => true;
 
+        /// <summary>
+        /// TASK-833: SQL Server takes at most 2100 parameters in one request, and <c>sp_executesql</c>, which a
+        /// parameterised <c>SqlCommand</c> becomes, takes 2 of them for the statement text and the parameter list, so a
+        /// command may bind 2098. Measured by <c>InListChunkingLiveTests</c>: 2098 binds, 2099 fails.
+        /// </summary>
+        public override int MaxCommandParameters => 2098;
+
         /// <inheritdoc />
         public override bool SupportsSchemas => true;
 

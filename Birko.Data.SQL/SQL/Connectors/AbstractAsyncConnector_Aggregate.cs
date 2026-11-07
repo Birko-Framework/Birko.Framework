@@ -23,6 +23,14 @@ namespace Birko.Data.SQL.Connectors
 
             var (fields, groupFields, conditions, orderFields) = BuildAggregateQueryParts(type, query);
 
+            // TASK-833: an aggregate's groups span chunks, so it is never split; past the provider's limit it is refused
+            // here, before the reader runs, rather than failing in the driver.
+            var terms = conditions?.ToList();
+            PlanInListChunks("aggregate", terms,
+                (command, chunk) => CreateSelectCommand(command, new[] { table.Name }, fields, null, chunk,
+                    groupFields.Count > 0 ? groupFields : null, orderFields, query.Limit, query.Offset),
+                "it is an aggregate, whose groups would span chunks").ThrowIfRefused();
+
             await foreach (var row in RunReaderCommandAsync(
                 async command =>
                 {
@@ -31,7 +39,7 @@ namespace Birko.Data.SQL.Connectors
                         new[] { table.Name },
                         fields,
                         null,
-                        conditions,
+                        terms,
                         groupFields.Count > 0 ? groupFields : null,
                         orderFields,
                         query.Limit,

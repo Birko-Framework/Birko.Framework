@@ -44,6 +44,12 @@ namespace Birko.Data.SQL.Connectors
         public override bool FoldsUnquotedIdentifiers => true;
 
         /// <summary>
+        /// TASK-833: 65535, the protocol's ceiling (a Bind message counts its parameters in 16 bits), which Npgsql enforces
+        /// before sending. Inherited by <c>TimescaleDBConnector</c>.
+        /// </summary>
+        public override int MaxCommandParameters => 65535;
+
+        /// <summary>
         /// TASK-826 — a numeric division keeps about 16 significant digits; a dividend with scale 28 makes the quotient
         /// keep 28 decimals, as many as C#'s decimal.
         /// </summary>

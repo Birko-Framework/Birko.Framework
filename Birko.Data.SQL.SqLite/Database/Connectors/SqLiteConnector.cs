@@ -23,6 +23,12 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// TASK-833: SQLITE_MAX_VARIABLE_NUMBER, 32766 since SQLite 3.32; Microsoft.Data.Sqlite 10.x bundles a later
+        /// SQLite. <c>Task833InListChunkingTests</c> pins it against <c>sqlite3_limit(handle, SQLITE_LIMIT_VARIABLE_NUMBER, -1)</c>.
+        /// </summary>
+        public override int MaxCommandParameters => 32766;
+
+        /// <summary>
         /// TASK-305: SQLITE_BUSY (5) and SQLITE_LOCKED (6) — the statement could not take its lock and did not run, and
         /// a bulk write in the connector's own transaction is rolled back before the retry (CR-M144).
         /// </summary>

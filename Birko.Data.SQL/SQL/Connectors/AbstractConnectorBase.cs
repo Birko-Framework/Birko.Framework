@@ -129,6 +129,62 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool SupportsTransactionalDdl => true;
 
         /// <summary>
+        /// The most parameters one command may bind on this provider (TASK-833). A statement whose <c>IN</c> list would take
+        /// it past this is split into chunks by <see cref="InListChunkPlanner"/>, or refused where it cannot be split. The
+        /// base answers "no limit"; each provider names its own.
+        /// </summary>
+        public virtual int MaxCommandParameters => int.MaxValue;
+
+        /// <summary>
+        /// The <c>IN</c> list length past which a list that can be split is run in chunks of this size, to keep each
+        /// statement's binding and rendering cost bounded (TASK-833). 1000 on every provider (the user's decision).
+        /// </summary>
+        public virtual int PreferredInListChunkSize => 1000;
+
+        /// <summary>
+        /// TASK-833. Plans one statement's <c>IN</c> chunking. <paramref name="build"/> builds the statement on a command for
+        /// a given condition list; when the lists are longer than <see cref="PreferredInListChunkSize"/> it is run once, on
+        /// a command of a connection that is never opened, with the split list cut to one value, and the parameter count
+        /// it leaves is the statement's overhead (tenant, soft delete, SET values, limit). Callers throw the refusal before
+        /// <c>DoCommand</c>, whose exception path re-wraps it.
+        /// </summary>
+        protected InListChunkPlan PlanInListChunks(
+            string operation,
+            IReadOnlyList<Conditions.Condition>? conditions,
+            Action<DbCommand, IReadOnlyList<Conditions.Condition>> build,
+            string? statementReason = null,
+            IEnumerable<string>? writtenColumns = null)
+        {
+            return InListChunkPlanner.Plan(operation, conditions, MaxCommandParameters, PreferredInListChunkSize, probe =>
+            {
+                using var connection = CreateConnection(_settings);
+                using var command = connection.CreateCommand();
+                build(command, probe);
+                return command.Parameters.Count;
+            }, statementReason, writtenColumns);
+        }
+
+        /// <summary>
+        /// The columns an UPDATE's SET writes (TASK-833): the column names on the value path, the left side of each
+        /// <c>col = expr</c> clause on the expression path.
+        /// </summary>
+        protected static IEnumerable<string> WrittenColumns(IDictionary<int, string> fields, bool isExpressionValues)
+            => fields.Values.Select(clause =>
+            {
+                if (!isExpressionValues) return clause;
+                var equals = clause.IndexOf('=');
+                return equals < 0 ? clause : clause.Substring(0, equals).Trim();
+            });
+
+        /// <summary>The statement-level reason a read cannot be chunked, or null (TASK-833).</summary>
+        protected static string? SortOrPageReason(IDictionary<string, bool>? orderFields, int? limit, int? offset)
+        {
+            if (orderFields != null && orderFields.Count > 0) return "the read is sorted, and a sort across chunks is not the database's sort";
+            if (limit != null || offset != null) return "the read is paged (limit / offset), and a page across chunks is not the database's page";
+            return null;
+        }
+
+        /// <summary>
         /// Whether <paramref name="field"/>'s <c>PRIMARY KEY</c> is emitted. True for every key on every provider except
         /// where a provider must leave an <b>implicit</b> key out (<c>AbstractField.IsImplicitPrimary</c>, TASK-567):
         /// TimescaleDB, whose hypertables refuse a key without the time column. The drift check asks the same question,

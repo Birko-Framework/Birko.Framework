@@ -102,6 +102,20 @@ No DataAnnotations equivalent exists for `[UniqueField]`, `[PrecisionField]`, or
 #### Extensions
 - SQL helper extensions for common operations
 
+## Long IN lists (TASK-833)
+
+`ids.Contains(x.Col)` past `PreferredInListChunkSize` (1000) is split by `InListChunkPlanner` into several
+statements: read (rows streamed), count (summed), delete and update (each chunk guarded on its own, all in one
+`RunAtomically(Async)` boundary).
+- **Provider limits (`MaxCommandParameters`):** SQLite 32766, SQL Server 2098 (2099 fails, measured live), PostgreSQL
+  and MySQL 65535. The other parameters are counted by a probe build.
+- **When it splits:** only an IN that is a plain AND conjunct over non-string values of one type: whole-microsecond,
+  single-`Kind` dates, with no sort, limit or offset, in an update that does not write that column.
+- **Any other shape** stays one statement within the limit; past it, `NotSupportedException` before anything runs,
+  naming the reason.
+- **Not a snapshot:** a chunked read outside a transaction is not one snapshot.
+- **Not wired yet:** aggregates refuse past the limit, and views are not wired (TASK-837).
+
 ## Connector Pattern
 
 SQL stores use a typed connector:

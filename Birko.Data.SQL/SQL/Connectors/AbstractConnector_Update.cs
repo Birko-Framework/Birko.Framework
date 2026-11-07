@@ -122,51 +122,98 @@ namespace Birko.Data.SQL.Connectors
         internal static string SetParameterName(string column) => "@SET" + column.Replace(".", string.Empty);
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        /// <remarks>
+        /// TASK-833: an <c>IN</c> list past the provider's limit (or the chunk size) is updated chunk by chunk, each chunk
+        /// through <see cref="UpdateCore"/> and so guarded on its own (rules 1-3), all of them in ONE boundary (rule 6), and
+        /// the matched rows are the sum. Where the list cannot be split it is refused past the limit, before anything runs.
+        /// Not virtual (rule 12): an override goes on <see cref="UpdateCore"/>, once per statement.
+        /// </remarks>
         public int Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
         {
-            var matched = -1;
-            // What "nothing to set" means depends on the path (TASK-331). The value path's payload is
-            // `values` — an empty one has no parameters for its `col = @SETcol` list. The expression path's
-            // payload is the SET clauses in `fields`; `values` holds only the constants they bound, and
-            // `UPPER(Name)` or `A + B` binds none — gating it on `values` skipped the UPDATE silently.
-            var hasPayload = isExpressionValues
-                ? fields.Any()
-                : values != null && values.Any();
-            if (hasPayload)
+            if (!HasUpdatePayload(fields, values, isExpressionValues))
             {
-                // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
-                if (!allowAllRows && WouldTargetEveryRow(conditions))
-                {
-                    throw new Data.Exceptions.WholeTableWriteException("update", tableName);
-                }
-
-                DoCommandWithTransaction((command) => {
-                    command.CommandText = "UPDATE " + TableIdentifier(tableName) + " SET ";
-                    if (!isExpressionValues)
-                    {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));
-                    }
-                    else
-                    {
-                        command.CommandText += string.Join(", ", fields.Values.Select(x => x));
-                    }
-
-                    AddRequiredWhere(conditions, command, "update", tableName, allowAllRows);
-                    foreach (var kvp in values ?? new Dictionary<string, object>())
-                    {
-                        if (!isExpressionValues)
-                        {
-                            AddParameter(command, SetParameterName(kvp.Key), kvp.Value);
-                        }
-                        else
-                        {
-                            AddParameter(command, kvp.Key, kvp.Value);
-                        }
-                    }
-                }, (command) => {
-                    matched = command.ExecuteNonQuery();
-                }, true);
+                return UpdateCore(tableName, fields, values, conditions, isExpressionValues, allowAllRows);
             }
+            // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
+            {
+                throw new Data.Exceptions.WholeTableWriteException("update", tableName);
+            }
+
+            var terms = conditions?.ToList();
+            var plan = PlanInListChunks("update", terms,
+                (command, chunk) => BuildUpdate(command, tableName, fields, values, chunk, isExpressionValues, allowAllRows),
+                writtenColumns: WrittenColumns(fields, isExpressionValues));
+            plan.ThrowIfRefused();
+            if (!plan.IsChunked)
+            {
+                return UpdateCore(tableName, fields, values, terms, isExpressionValues, allowAllRows);
+            }
+            return RunAtomically(() =>
+            {
+                var matched = 0;
+                foreach (var chunk in plan.Chunks!)
+                {
+                    matched += Math.Max(0, UpdateCore(tableName, fields, values, chunk, isExpressionValues, allowAllRows: false));
+                }
+                return matched;
+            });
+        }
+
+        /// <summary>
+        /// What "nothing to set" means depends on the path (TASK-331). The value path's payload is <paramref name="values"/>
+        /// — an empty one has no parameters for its <c>col = @SETcol</c> list. The expression path's payload is the SET
+        /// clauses in <paramref name="fields"/>; <paramref name="values"/> holds only the constants they bound, and
+        /// <c>UPPER(Name)</c> or <c>A + B</c> binds none — gating it on <paramref name="values"/> skipped the UPDATE silently.
+        /// </summary>
+        protected static bool HasUpdatePayload(IDictionary<int, string> fields, IDictionary<string, object>? values, bool isExpressionValues)
+            => isExpressionValues ? fields.Any() : values != null && values.Any();
+
+        /// <summary>The one producer of a filtered UPDATE: the run and the chunk planner's probe both build it here.</summary>
+        protected void BuildUpdate(System.Data.Common.DbCommand command, string tableName, IDictionary<int, string> fields, IDictionary<string, object>? values, IEnumerable<Conditions.Condition>? conditions, bool isExpressionValues, bool allowAllRows)
+        {
+            command.CommandText = "UPDATE " + TableIdentifier(tableName) + " SET ";
+            if (!isExpressionValues)
+            {
+                command.CommandText += string.Join(", ", fields.Values.Select(x => x + "= " + SetParameterName(x)));
+            }
+            else
+            {
+                command.CommandText += string.Join(", ", fields.Values.Select(x => x));
+            }
+
+            AddRequiredWhere(conditions, command, "update", tableName, allowAllRows);
+            foreach (var kvp in values ?? new Dictionary<string, object>())
+            {
+                if (!isExpressionValues)
+                {
+                    AddParameter(command, SetParameterName(kvp.Key), kvp.Value);
+                }
+                else
+                {
+                    AddParameter(command, kvp.Key, kvp.Value);
+                }
+            }
+        }
+
+        /// <summary>Runs ONE update statement (rule 12's seam).</summary>
+        /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
+        protected virtual int UpdateCore(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions, bool isExpressionValues, bool allowAllRows)
+        {
+            var matched = -1;
+            if (!HasUpdatePayload(fields, values, isExpressionValues)) return matched;
+
+            // SH-H002 — per statement, so a chunk is guarded exactly as a whole filter is.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
+            {
+                throw new Data.Exceptions.WholeTableWriteException("update", tableName);
+            }
+
+            DoCommandWithTransaction((command) => {
+                BuildUpdate(command, tableName, fields, values, conditions, isExpressionValues, allowAllRows);
+            }, (command) => {
+                matched = command.ExecuteNonQuery();
+            }, true);
             return matched;
         }
     }

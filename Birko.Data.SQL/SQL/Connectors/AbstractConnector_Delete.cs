@@ -47,12 +47,47 @@ namespace Birko.Data.SQL.Connectors
                 throw new Data.Exceptions.WholeTableWriteException("delete", tableName);
             }
 
+            // TASK-833: a list past the provider's limit (or the chunk size) is deleted chunk by chunk, every chunk through the
+            // single-statement path below, so each one is guarded on its own (rules 1-3), and all of them in ONE boundary
+            // (rule 6). Refused before anything runs where the list cannot be split.
+            var terms = conditions?.ToList();
+            var plan = PlanInListChunks("delete", terms, (command, chunk) => BuildDelete(command, tableName, chunk, allowAllRows));
+            plan.ThrowIfRefused();
+            if (!plan.IsChunked)
+            {
+                DeleteStatement(tableName, terms, allowAllRows);
+                return;
+            }
+            RunAtomically(() =>
+            {
+                foreach (var chunk in plan.Chunks!)
+                {
+                    DeleteStatement(tableName, chunk, allowAllRows: false);
+                }
+                return 0;
+            });
+        }
+
+        private void DeleteStatement(string tableName, IEnumerable<Conditions.Condition>? conditions, bool allowAllRows)
+        {
+            // SH-H002 — per statement, so a chunk is guarded exactly as a whole filter is.
+            if (!allowAllRows && WouldTargetEveryRow(conditions))
+            {
+                throw new Data.Exceptions.WholeTableWriteException("delete", tableName);
+            }
+
             DoCommandWithTransaction((command) => {
-                command.CommandText = "DELETE FROM " + TableIdentifier(tableName);
-                AddRequiredWhere(conditions, command, "delete", tableName, allowAllRows);
+                BuildDelete(command, tableName, conditions, allowAllRows);
             }, (command) => {
                 command.ExecuteNonQuery();
             }, true);
+        }
+
+        /// <summary>The one producer of a filtered DELETE: the run and the chunk planner's probe both build it here.</summary>
+        protected void BuildDelete(System.Data.Common.DbCommand command, string tableName, IEnumerable<Conditions.Condition>? conditions, bool allowAllRows)
+        {
+            command.CommandText = "DELETE FROM " + TableIdentifier(tableName);
+            AddRequiredWhere(conditions, command, "delete", tableName, allowAllRows);
         }
     }
 }

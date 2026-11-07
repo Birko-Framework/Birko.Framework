@@ -1057,6 +1057,91 @@ namespace Birko.Data.SQL.Connectors
             return opened!.Value;
         }
 
+        /// <summary>
+        /// Runs several statements of one write as ONE boundary (TASK-833, rule 6): the chunks of a split <c>IN</c>. Inside an
+        /// ambient boundary for this database each statement joins it and the owner commits. Otherwise a transaction is
+        /// opened (<see cref="OpenOwnedTransaction"/>, so a busy BEGIN is retried), published as the ambient boundary so
+        /// every statement joins it, committed at the end and rolled back on any failure; work registered to follow the
+        /// commit runs after it and is discarded on a rollback or a failed commit (TASK-669).
+        /// </summary>
+        /// <remarks>
+        /// The one producer of this boundary on the connector. The bulk stores' <c>Atomically(Async)</c> is the same shape
+        /// with a store's own transaction context and TASK-555's commit-on-<c>EntityNotFoundException</c> on top.
+        /// </remarks>
+        protected TResult RunAtomically<TResult>(Func<TResult> body)
+        {
+            if (body == null) throw new ArgumentNullException(nameof(body));
+            if (AmbientTransaction != null) return body();
+
+            var (opened, begun) = OpenOwnedTransaction();
+            using var connection = opened;
+            using var transaction = begun;
+            var scope = AmbientSqlTransaction.Enter(_settings.GetId(), connection, transaction);
+            TResult result;
+            try
+            {
+                result = body();
+            }
+            catch
+            {
+                scope.Dispose();
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                transaction.Rollback();
+                throw;
+            }
+            scope.Dispose();
+            try
+            {
+                transaction.Commit();
+            }
+            catch
+            {
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                throw;
+            }
+            AmbientSqlTransaction.RunCommitted(transaction, ex => RecordSubscriberFailure("AfterCommit", ex));
+            return result;
+        }
+
+        /// <summary>The async twin of <see cref="RunAtomically{TResult}"/>.</summary>
+        protected async System.Threading.Tasks.Task<TResult> RunAtomicallyAsync<TResult>(
+            Func<System.Threading.Tasks.Task<TResult>> body,
+            System.Threading.CancellationToken ct = default)
+        {
+            if (body == null) throw new ArgumentNullException(nameof(body));
+            if (AmbientTransaction != null) return await body().ConfigureAwait(false);
+
+            var (opened, begun) = await OpenOwnedTransactionAsync(ct).ConfigureAwait(false);
+            await using var connection = opened;
+            await using var transaction = begun;
+            var scope = AmbientSqlTransaction.Enter(_settings.GetId(), connection, transaction);
+            TResult result;
+            try
+            {
+                result = await body().ConfigureAwait(false);
+            }
+            catch
+            {
+                scope.Dispose();
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                // Not the caller's token: a cancelled write must still be rolled back.
+                await transaction.RollbackAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+            scope.Dispose();
+            try
+            {
+                await transaction.CommitAsync(ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                throw;
+            }
+            await AmbientSqlTransaction.RunCommittedAsync(transaction, ex => RecordSubscriberFailure("AfterCommit", ex)).ConfigureAwait(false);
+            return result;
+        }
+
         private void RunBulkCore(
             string label,
             Action<DbConnection, DbTransaction?, bool> body,
