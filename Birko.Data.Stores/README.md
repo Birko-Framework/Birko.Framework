@@ -46,6 +46,14 @@ store.Update(
     new PropertyUpdate<Redirect>().Increment(x => x.HitCount, 1).Set(x => x.LastHitAt, now)
 );
 
+// 1c. Compute — a decimal column from other columns of the same row, in the same statement (TASK-826)
+store.Update(
+    x => x.TaxRateGuid == rateGuid,
+    new PropertyUpdate<BasePrice>()
+        .Set(x => x.TaxRatePercent, newRate)
+        .Compute(x => x.PriceWithoutTax, x => Math.Round(x.PriceWithTax / (1 + newRate / 100m), 2, MidpointRounding.ToEven))
+);
+
 // 2. Action<T> — read-modify-save (for complex mutations)
 store.Update(x => x.Price > 100, item => { item.Price *= 0.9m; });
 
@@ -53,12 +61,12 @@ store.Update(x => x.Price > 100, item => { item.Price *= 0.9m; });
 store.Delete(x => x.IsExpired);
 ```
 
-| Platform | PropertyUpdate | Increment | Delete(filter) |
-|----------|---------------|-----------|----------------|
-| SQL | Native `UPDATE SET WHERE` | `col = col + @p`, same statement | Native `DELETE WHERE` |
-| MongoDB | `UpdateMany` with `$set` | `$inc` | `DeleteMany` |
-| ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts the write part-way and throws `StoreConcurrencyException` (TASK-502) | `DeleteByQuery` (same check) |
-| Others | Fallback read-modify-save | Fallback — **not atomic** | Fallback read-then-delete |
+| Platform | PropertyUpdate | Increment | Compute | Delete(filter) |
+|----------|---------------|-----------|---------|----------------|
+| SQL | Native `UPDATE SET WHERE` | `col = col + @p`, same statement | the formula in SQL, same statement | Native `DELETE WHERE` |
+| MongoDB | `UpdateMany` with `$set` | `$inc` | one pipeline update (`$set` with `$divide` / `$round` …) | `DeleteMany` |
+| ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts the write part-way and throws `StoreConcurrencyException` (TASK-502) | Painless `BigDecimal` (same check) | `DeleteByQuery` (same check) |
+| Others | Fallback read-modify-save | Fallback — **not atomic** | Fallback in C# — **not atomic** | Fallback read-then-delete |
 
 **Increment / Decrement** (`short`, `int`, `long`, `float`, `double`, `decimal` properties — the types every provider
 stores as a number; `Decrement` is `Increment` with a negated delta). Nullable properties do not compile; a cast in
@@ -67,6 +75,17 @@ something different on every backend, and providers resolve only the leaf of a n
 a `PropertyUpdate` with another assignment to the same property. Behind the localization wrappers an increment on a
 localizable field is refused, and so is any increment in an update that also sets a localizable field on a
 non-default culture (that update is replayed as read-modify-save). Caveats, measured or read from the providers:
+
+**Compute** (TASK-826) sets a `decimal` (or `decimal?`) property from a formula over the same row: non-nullable
+`decimal` properties, `decimal` constants and captured values (evaluated once, when added), `+ - * /`, unary minus, and
+`Math.Round` / `decimal.Round` **with an explicit** `MidpointRounding.ToEven` or `AwayFromZero`. Anything else is
+refused when added; so is a `Math.Round` without a mode, because C# and MongoDB round half to even by default and SQL
+half away from zero. Every provider stores what C# computes on the same row (a cross-provider contract at rounding
+midpoints, both modes, all 13 providers): SQL Server, PostgreSQL and MySQL emulate half-to-even around `ROUND`, MongoDB
+emulates away-from-zero around `$round`, SQLite computes in its exact decimal functions. The formula reads the row as it
+was before the update and may not read a column the same update assigns (refused: MySQL evaluates a SET list left to
+right, the others against the old row). A division by zero fails the write on every provider. On InfluxDB a `decimal`
+is stored as a double, as for every write there.
 
 - **SQLite:** a `decimal` is `TEXT COLLATE BIRKO_DECIMAL` and increments through `birko_decimal_add`, so
   `10.10m + 0.20m` is exactly `10.30m` and an increment past `decimal.MaxValue` is refused (TASK-513; before it,

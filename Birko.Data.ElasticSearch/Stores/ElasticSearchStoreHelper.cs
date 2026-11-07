@@ -141,9 +141,18 @@ namespace Birko.Data.ElasticSearch.Stores
                 // (TASK-613), so a member renamed by its mapping attribute is written where it is read.
                 var fieldName = Data.ElasticSearch.ElasticSearch.StoredFieldName(property, null)!;
                 var paramName = "p_" + property.Name;
+                if (assignment is Data.Stores.ComputedAssignment computedAssignment)
+                {
+                    // TASK-826: the formula in BigDecimal, so nothing passes through a double until the stored number.
+                    var formula = RenderComputed(computedAssignment.Value, paramName, scriptParams);
+                    scriptParts.Add($"ctx._source.{fieldName} = ({formula}).doubleValue()");
+                    continue;
+                }
+
                 var (op, value) = assignment.Match(
                     set => ("=", set.Value),
-                    increment => ("+=", (object?)increment.Delta));
+                    increment => ("+=", (object?)increment.Delta),
+                    computed => throw new InvalidOperationException("A computed set is rendered above."));
 
                 if (value == null)
                 {
@@ -160,5 +169,36 @@ namespace Birko.Data.ElasticSearch.Stores
 
             return (string.Join("; ", scriptParts), scriptParams);
         }
+
+        /// <summary>
+        /// TASK-826 — a computed set's formula as a Painless <c>BigDecimal</c> expression. A column is parsed from its
+        /// stored text, a constant is a string parameter, a division keeps 34 significant digits (DECIMAL128), and
+        /// <c>setScale</c> rounds with the mode named.
+        /// </summary>
+        private static string RenderComputed(Data.Stores.ComputedValue value, string paramName, Dictionary<string, object> scriptParams)
+            => value.Match(
+                column => $"new BigDecimal(String.valueOf(ctx._source.{Data.ElasticSearch.ElasticSearch.StoredFieldName(column.Property, null)}))",
+                constant =>
+                {
+                    var name = paramName + "_" + scriptParams.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    while (scriptParams.ContainsKey(name)) name += "x";
+                    scriptParams[name] = constant.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    return $"new BigDecimal(params.{name})";
+                },
+                binary =>
+                {
+                    var left = RenderComputed(binary.Left, paramName, scriptParams);
+                    var right = RenderComputed(binary.Right, paramName, scriptParams);
+                    return binary.Operator switch
+                    {
+                        Data.Stores.ComputedOperator.Add => $"{left}.add({right})",
+                        Data.Stores.ComputedOperator.Subtract => $"{left}.subtract({right})",
+                        Data.Stores.ComputedOperator.Multiply => $"{left}.multiply({right})",
+                        Data.Stores.ComputedOperator.Divide => $"{left}.divide({right}, MathContext.DECIMAL128)",
+                        _ => throw new NotSupportedException($"Operator {binary.Operator} is not supported."),
+                    };
+                },
+                round => $"{RenderComputed(round.Operand, paramName, scriptParams)}.setScale({round.Digits}, "
+                    + (round.Mode == MidpointRounding.AwayFromZero ? "RoundingMode.HALF_UP" : "RoundingMode.HALF_EVEN") + ")");
     }
 }

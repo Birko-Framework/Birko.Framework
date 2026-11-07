@@ -2,7 +2,7 @@
 id: TASK-826
 parent: null
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-07
@@ -65,22 +65,22 @@ none may refuse them** (the user's decision, 2026-11-07: the request is that all
 
 ## Acceptance criteria
 
-- [ ] A new `PropertyUpdate<T>` case: set a property from an expression over the same row's properties, constants
+- [x] A new `PropertyUpdate<T>` case: set a property from an expression over the same row's properties, constants
       and captured values. Supported nodes are decided at implementation and kept to what every native provider can
       express exactly: `+ - * /`, a decimal constant, `Math.Round(v, d, MidpointRounding)`. Anything else is refused
       at `Set` time, never dropped or evaluated client-side quietly (rules 41/42).
-- [ ] **Every provider supports it** (the user's decision, 2026-11-07): SQLite, PostgreSQL, SQL Server, MySQL,
+- [x] **Every provider supports it** (the user's decision, 2026-11-07): SQLite, PostgreSQL, SQL Server, MySQL,
       TimescaleDB, MongoDB, Elasticsearch, Cosmos DB, RavenDB, InfluxDB, InMemory, JSON, XML. No provider refuses the
       case. Native providers write in one statement; providers on the `ApplyTo` fallback evaluate the same expression
       in C# and say in their docs whether that path is atomic (a concurrency gap found there is filed, not hidden).
-- [ ] Decorators see the new case: tenant and soft-delete scoping, `UpdatedAt` / `UpdatedBy` stamping, the
+- [x] Decorators see the new case: tenant and soft-delete scoping, `UpdatedAt` / `UpdatedBy` stamping, the
       localization and event-sourcing wrappers (an event-sourced update records the computed value or refuses).
-- [ ] SQLite computes exactly: decimal multiply, divide and round functions beside the existing add / sum / avg.
-- [ ] A cross-provider contract at a `.xx5` midpoint for **both** rounding modes: the stored value equals C#'s
+- [x] SQLite computes exactly: decimal multiply, divide and round functions beside the existing add / sum / avg.
+- [x] A cross-provider contract at a `.xx5` midpoint for **both** rounding modes: the stored value equals C#'s
       `Math.Round` on the same inputs, on every provider (SQLite, InMemory, JSON, XML, and live PostgreSQL, SQL
       Server, MySQL, TimescaleDB, MongoDB, Cosmos DB, RavenDB, Elasticsearch, InfluxDB; every one of them, none skipped). A division whose exact
       result is not representable (e.g. `/ 1.2`) is in the contract too.
-- [ ] Atomicity: one statement per native provider (asserted the way TASK-498 asserted it for `Increment`).
+- [x] Atomicity: one statement per native provider (asserted the way TASK-498 asserted it for `Increment`).
 
 ## Human test plan
 
@@ -96,3 +96,62 @@ live cross-provider contract. Comparable to TASK-498 plus the expression transla
 
 TASK-498 (the `Match` hierarchy this extends), TASK-515 (SQLite ignores declared decimal precision/scale, which
 bears on what "to the cent" means there), TASK-217 (the partial-update SET list).
+
+## Outcome (2026-11-07)
+
+`PropertyUpdate<T>.Compute(target, formula)` for a `decimal` / `decimal?` target. The formula becomes a closed
+hierarchy, `ComputedValue` (column, constant, `+ - * /`, round), reached through `Match`. `PropertyAssignment.Match`
+takes a third `computed` branch. **Breaking** for any caller of the two-branch form; none exists outside the
+framework (Consumers grepped).
+
+- **Accepted:** non-nullable `decimal` properties of the row, `decimal` constants and captured values (evaluated once,
+  when added), unary minus, and `Math.Round` / `decimal.Round` with an explicit `ToEven` or `AwayFromZero`.
+- **Refused when added:** a round without a mode, directed modes, row-dependent digits, nullable or non-decimal
+  operands, nested members, `%` and any other call. Also refused: a formula reading a column the same update assigns,
+  in either order of the calls, because MySQL evaluates a SET list left to right and the others against the old row.
+
+Per provider:
+
+- **SQL:** connector hooks `ComputedArithmetic`, `ComputedDivide`, `ComputedRound` and `ComputedTruncate`.
+  - Half-to-even is emulated around `ROUND`.
+  - Each dialect widens the quotient's scale: PostgreSQL `NUMERIC(60,28)`, MySQL `DECIMAL(65,26)`, SQL Server
+    `DECIMAL(38,20) / DECIMAL(28,8)`, with the value narrowed to `DECIMAL(32,12)` before the midpoint test.
+  - SQLite gets exact `birko_decimal_sub/mul/div/round` functions in C#.
+- **MongoDB:** one pipeline update. Away-from-zero is emulated around `$round`, which rounds half to even.
+- **Elasticsearch:** Painless `BigDecimal` with `DECIMAL128` division and `setScale(HALF_EVEN | HALF_UP)`.
+- **Others:** `ApplyTo` evaluates the formula in C#, read-modify-save. On InfluxDB a decimal is stored as a double, as
+  for every write there.
+- **Localization:** the wrapper refuses a computed set on its read-modify-save replay, as it refuses an increment.
+- **Event sourcing:** records the computed value in the Updated event.
+
+### Measured
+
+- **Cross-provider contract** (`tests/Shared/StoreContract/ComputedSetContract.cs`), sync and async, 9 tests each:
+  - Covers a divide and a multiply landing on half-cent midpoints (one negative), an inexact `100 / 1.2`, both modes,
+    a constant set beside the formula, and filter scoping.
+  - Green on all 13 providers, the live ones against local containers: SQLite, PostgreSQL, TimescaleDB, SQL Server,
+    MySQL, MongoDB, Elasticsearch, Cosmos DB, RavenDB, InMemory, JSON and XML (×3 stores). InfluxDB runs against
+    stand-in query and write APIs.
+- **Red verification**, each mutation restored:
+  - SQL half-to-even emulation off: 5 of 9 red on PostgreSQL, SQL Server, MySQL and TimescaleDB.
+  - SQLite on its native operators: 3 red, including the 20-digit exactness test.
+  - MongoDB away-from-zero via `$round`: 4 red.
+  - Elasticsearch `HALF_UP` swapped to `HALF_EVEN`: 4 red.
+  - Fallback ignoring the mode: red on InMemory (4), core (1) and InfluxDB (2).
+- **Symbio's shape** (`Task826ComputedSetChainTests`): tenant → soft-delete → timestamp over SQLite. One `UPDATE`;
+  only the current tenant's live rows change; `UpdatedAt` is stamped.
+- **Regression:** 124 importer suites, live. 122 green. The other two:
+  - RavenDB failed 1 contract test under load: index staleness. The contract now waits for indexes, and the full
+    suite passed 3 of 3. The store gap is filed as [[TASK-828]].
+  - PostgreSQL `DeadlockRetryLiveTests.With_retry_off…` fails on a clean HEAD as well, against the local container.
+    It is pre-existing, and CI passed it on `64433632`.
+
+### Not covered
+
+- Atomicity was asserted by statement count on SQLite only. The other SQL dialects share the translator, and
+  MongoDB and Elasticsearch send one request by construction.
+- `UpdatedBy` (audit) was not tested. Its `Set` is added the same way as the timestamp's.
+- The dialects' division scale casts are a precaution: no test fails without them (by arithmetic, not measured: two-decimal money
+  over a divisor of up to four digits stays clear of a midpoint at MySQL's default scale).
+
+RavenDB server-side patch: [[TASK-827]].

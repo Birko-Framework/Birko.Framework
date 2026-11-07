@@ -478,6 +478,17 @@ areas:
       - ../Birko.Data.SQL/Stores/PropertyUpdateSqlTranslator.cs
       - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
       - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreHelper.cs
+      # TASK-826's computed set: the formula hierarchy and its C# reference, and the per-dialect rendering it
+      # reaches through the connector (ComputedArithmetic / ComputedDivide / ComputedRound / ComputedTruncate)
+      # plus SQLite's exact decimal functions. Added at the fix, not found at a regen: the sixth instance of
+      # the under-coverage above would otherwise have been this one.
+      - ../Birko.Data.Stores/ComputedValue.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
+      - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteDecimal.cs
+      - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector.cs
+      - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
+      - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
+      - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries

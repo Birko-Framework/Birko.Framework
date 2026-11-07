@@ -97,9 +97,13 @@ store.Update(x => x.Price > 100, updates);
 
 // Atomic counter: UPDATE ... SET HitCount = HitCount + 1 WHERE ... ($inc on MongoDB, += in painless)
 store.Update(x => x.Guid == id, new PropertyUpdate<Redirect>().Increment(x => x.HitCount, 1));
+
+// A decimal from other columns of the same row (TASK-826); the rounding mode must be explicit
+store.Update(x => x.TaxRateGuid == rate, new PropertyUpdate<BasePrice>()
+    .Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven)));
 ```
 
-`Increment` / `Decrement` are atomic only where the store translates natively; the reflection fallback
+`Increment` / `Decrement` and `Compute` are atomic only where the store translates natively; the reflection fallback
 (`ApplyTo`, used by stores without a native translation) is read-modify-save and can lose concurrent increments.
 
 ## Lazy-Init (Template Method Pattern)
@@ -316,7 +320,10 @@ public override void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> 
 {
     var defs = updates.Assignments.Select(a => a.Match(
         set => Builders<T>.Update.Set(a.PropertyInfo!.Name, BsonValue.Create(set.Value)),
-        increment => Builders<T>.Update.Inc(a.PropertyInfo!.Name, BsonValue.Create(increment.Delta))));
+        increment => Builders<T>.Update.Inc(a.PropertyInfo!.Name, BsonValue.Create(increment.Delta)),
+        // TASK-826: translate the ComputedValue formula (or fall back to ApplyTo, which evaluates it in C#), and
+        // run tests/Shared/StoreContract/ComputedSetContract.cs against the store.
+        computed => throw new NotSupportedException("see MongoPropertyUpdateTranslator.BuildPipeline")));
     Collection.UpdateMany(filter, Builders<T>.Update.Combine(defs));
 }
 

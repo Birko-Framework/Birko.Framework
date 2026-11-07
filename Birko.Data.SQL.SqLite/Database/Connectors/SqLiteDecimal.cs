@@ -35,6 +35,10 @@ namespace Birko.Data.SQL.Connectors
         public const string AddFunction = "birko_decimal_add";
         public const string SumAggregate = "birko_decimal_sum";
         public const string AvgAggregate = "birko_decimal_avg";
+        public const string SubtractFunction = "birko_decimal_sub";
+        public const string MultiplyFunction = "birko_decimal_mul";
+        public const string DivideFunction = "birko_decimal_div";
+        public const string RoundFunction = "birko_decimal_round";
 
         /// <summary>
         /// The text form Microsoft.Data.Sqlite binds a <c>decimal</c> parameter as (measured: <c>10.10m</c>
@@ -50,6 +54,21 @@ namespace Birko.Data.SQL.Connectors
             connection.CreateCollation(Collation, Compare);
             connection.CreateFunction<object?, object?, string?>(AddFunction,
                 (a, b) => a == null || b == null ? null : Format(ToDecimal(a) + ToDecimal(b)),
+                isDeterministic: true);
+            // TASK-826: the rest of a computed set's arithmetic, in C#'s own decimal, so SQLite stores exactly what C#
+            // computes. A division by zero throws, which fails the statement.
+            connection.CreateFunction<object?, object?, string?>(SubtractFunction,
+                (a, b) => a == null || b == null ? null : Format(ToDecimal(a) - ToDecimal(b)),
+                isDeterministic: true);
+            connection.CreateFunction<object?, object?, string?>(MultiplyFunction,
+                (a, b) => a == null || b == null ? null : Format(ToDecimal(a) * ToDecimal(b)),
+                isDeterministic: true);
+            connection.CreateFunction<object?, object?, string?>(DivideFunction,
+                (a, b) => a == null || b == null ? null : Format(ToDecimal(a) / ToDecimal(b)),
+                isDeterministic: true);
+            connection.CreateFunction<object?, long, long, string?>(RoundFunction,
+                (a, digits, awayFromZero) => a == null ? null : Format(Math.Round(ToDecimal(a), (int)digits,
+                    awayFromZero != 0 ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven)),
                 isDeterministic: true);
             connection.CreateAggregate<object?, (decimal Sum, long Count), string?>(SumAggregate,
                 (0m, 0L),

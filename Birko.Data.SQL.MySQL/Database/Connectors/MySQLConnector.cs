@@ -185,6 +185,16 @@ namespace Birko.Data.SQL.Connectors
             => EnsureSchemaAndReport(ex, commandText);
 
         /// <inheritdoc />
+        /// <summary>
+        /// TASK-826 — a division keeps the dividend's scale plus <c>div_precision_increment</c> (4), capped at 30; a
+        /// dividend with scale 26 makes the quotient keep 30 decimals.
+        /// </summary>
+        public override string ComputedDivide(string left, string right)
+            => "(CAST(" + left + " AS DECIMAL(65,26)) / " + right + ")";
+
+        /// <summary>TASK-826 — MySQL has no <c>TRUNC</c>.</summary>
+        public override string ComputedTruncate(string value) => "TRUNCATE(" + value + ", 0)";
+
         public override string QuoteIdentifier(string identifier)
         {
             return "`" + identifier.Replace("`", "``") + "`";

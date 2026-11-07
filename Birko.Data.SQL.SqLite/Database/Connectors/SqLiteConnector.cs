@@ -355,6 +355,22 @@ namespace Birko.Data.SQL.Connectors
                 ? string.Format("{0}({1}, {2})", SqLiteDecimal.AddFunction, column, parameter)
                 : base.IncrementExpression(field, column, parameter);
 
+        /// <summary>TASK-826 — every step of a computed set through <see cref="SqLiteDecimal"/>'s exact functions.</summary>
+        public override string ComputedArithmetic(Birko.Data.Stores.ComputedOperator op, string left, string right)
+            => string.Format("{0}({1}, {2})", op switch
+            {
+                Birko.Data.Stores.ComputedOperator.Add => SqLiteDecimal.AddFunction,
+                Birko.Data.Stores.ComputedOperator.Subtract => SqLiteDecimal.SubtractFunction,
+                Birko.Data.Stores.ComputedOperator.Multiply => SqLiteDecimal.MultiplyFunction,
+                Birko.Data.Stores.ComputedOperator.Divide => SqLiteDecimal.DivideFunction,
+                _ => throw new NotSupportedException($"Operator {op} is not supported."),
+            }, left, right);
+
+        /// <inheritdoc />
+        public override string ComputedRound(string value, int digits, MidpointRounding mode)
+            => string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}({1}, {2}, {3})",
+                SqLiteDecimal.RoundFunction, value, digits, mode == MidpointRounding.AwayFromZero ? 1 : 0);
+
         /// <summary>
         /// TASK-513 — a decimal default is the text a decimal parameter binds as (<c>'0.0'</c>), so a
         /// back-filled row is indistinguishable from one written by the store.

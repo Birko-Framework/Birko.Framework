@@ -43,6 +43,13 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public override bool FoldsUnquotedIdentifiers => true;
 
+        /// <summary>
+        /// TASK-826 — a numeric division keeps about 16 significant digits; a dividend with scale 28 makes the quotient
+        /// keep 28 decimals, as many as C#'s decimal.
+        /// </summary>
+        public override string ComputedDivide(string left, string right)
+            => "(CAST(" + left + " AS NUMERIC(60,28)) / " + right + ")";
+
         /// <inheritdoc />
         public override bool SupportsSchemas => true;
 

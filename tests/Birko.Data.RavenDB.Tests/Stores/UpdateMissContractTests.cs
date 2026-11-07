@@ -45,6 +45,25 @@ internal sealed class RavenLive : IDisposable
         return store;
     }
 
+    /// <summary>
+    /// Waits until every tracked database's indexes have caught up (TASK-826). The store's filtered reads do not wait
+    /// for non-stale results, so a filtered update or read straight after writes can miss documents under load
+    /// (measured: an update matched 5 of 6 rows during the full suite) — a provider gap of its own, TASK-828.
+    /// </summary>
+    public void WaitForIndexes()
+    {
+        using var admin = new DocumentStore { Urls = new[] { Url! } }.Initialize();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        foreach (var db in _databases)
+        {
+            while (admin.Maintenance.ForDatabase(db).Send(new Raven.Client.Documents.Operations.GetStatisticsOperation()).StaleIndexes.Length > 0)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException($"RavenDB indexes of {db} stayed stale.");
+                System.Threading.Thread.Sleep(50);
+            }
+        }
+    }
+
     public void Dispose()
     {
         foreach (var s in _stores) { try { s.Dispose(); } catch { } }

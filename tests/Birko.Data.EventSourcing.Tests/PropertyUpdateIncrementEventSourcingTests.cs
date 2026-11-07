@@ -27,6 +27,8 @@ public class PropertyUpdateIncrementEventSourcingTests
     {
         public string Name { get; set; } = string.Empty;
         public int Hits { get; set; }
+        public decimal Gross { get; set; }
+        public decimal Net { get; set; }
         public long Version { get; set; }
 
         private readonly List<IEvent> _uncommitted = new();
@@ -92,6 +94,27 @@ public class PropertyUpdateIncrementEventSourcingTests
         HitsIn(history[1]).Should().Be(15, "the event records the value after the increment");
 
         (await wrapper.GetHistoryAsync(bystander.Guid!.Value)).Should().ContainSingle("a non-matching row gets no Updated event");
+    }
+
+    /// <summary>TASK-826: a computed set is applied on the replay and the event records the computed value.</summary>
+    [Fact]
+    public async Task Async_Computed_Set_Applies_And_Records_An_Updated_Event()
+    {
+        var eventStore = new InMemoryEventStore();
+        var inner = new AsyncInMemoryStore<Counter>();
+        var wrapper = new AsyncEventSourcingBulkStoreWrapper<AsyncInMemoryStore<Counter>, Counter>(inner, eventStore);
+        var target = new Counter { Name = "target", Gross = 0.15m };
+        await wrapper.CreateAsync(new[] { target });
+
+        await wrapper.UpdateAsync(x => x.Name == "target", new PropertyUpdate<Counter>()
+            .Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven)));
+
+        (await inner.ReadAsync(target.Guid!.Value))!.Net.Should().Be(0.12m);
+        var history = (await wrapper.GetHistoryAsync(target.Guid!.Value)).ToList();
+        history.Select(e => e.EventType).Should().Equal("Created", "Updated");
+        using var doc = JsonDocument.Parse(history[1].EventData);
+        doc.RootElement.EnumerateObject().Single(p => string.Equals(p.Name, nameof(Counter.Net), StringComparison.OrdinalIgnoreCase))
+            .Value.GetDecimal().Should().Be(0.12m, "the event records the computed value");
     }
 
     [Fact]

@@ -60,7 +60,7 @@ namespace Birko.Data.Stores
                     $"Set needs a direct access to a top-level property of {typeof(T).Name}; '{property}' is not one.", nameof(property));
 
             var assignment = new SetAssignment(property, value);
-            RefuseConflict(assignment, set => false, increment => true);
+            RefuseConflict(assignment, set => false, increment => true, computed => true);
             _assignments.Add(assignment);
             return this;
         }
@@ -109,7 +109,57 @@ namespace Birko.Data.Stores
             }
 
             var assignment = new IncrementAssignment(property, delta, current => checked((TProperty)current + delta));
-            RefuseConflict(assignment, set => true, increment => true);
+            RefuseConflict(assignment, set => true, increment => true, computed => true);
+            _assignments.Add(assignment);
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a <c>decimal</c> property from a formula over the same row, in one native statement where the provider
+        /// has one (TASK-826): <c>Compute(x =&gt; x.Net, x =&gt; Math.Round(x.Gross / (1 + rate), 2, MidpointRounding.ToEven))</c>.
+        /// <para>
+        /// The formula may use non-nullable <c>decimal</c> properties of the row, <c>decimal</c> constants and captured
+        /// values, <c>+ - * /</c>, unary minus, and <c>Math.Round</c> / <c>decimal.Round</c> <b>with an explicit</b>
+        /// <see cref="MidpointRounding"/> (<see cref="MidpointRounding.ToEven"/> or <see cref="MidpointRounding.AwayFromZero"/>).
+        /// Anything else is refused here. Every provider stores what C# computes on the same row: SQL (every dialect) and
+        /// MongoDB in one statement, Elasticsearch per document through UpdateByQuery, the rest through read-modify-save
+        /// (<see cref="ApplyTo"/>), which is <b>not</b> atomic.
+        /// </para>
+        /// <para>
+        /// The formula reads the row as it was before the update. It may not read a column this update also assigns,
+        /// in either order of the calls: providers evaluate the SET list in different orders (MySQL left to right, the
+        /// rest against the old row), so that combination is refused rather than given two meanings.
+        /// </para>
+        /// </summary>
+        /// <param name="property">The property to set: a direct top-level <c>decimal</c> property.</param>
+        /// <param name="value">The formula.</param>
+        /// <returns>This instance for fluent chaining.</returns>
+        /// <exception cref="ArgumentException">The selector or the formula is not supported.</exception>
+        /// <exception cref="InvalidOperationException">The property already has an assignment, or a formula would read an assigned column.</exception>
+        public PropertyUpdate<T> Compute(Expression<Func<T, decimal>> property, Expression<Func<T, decimal>> value)
+            => AddComputed(property, value);
+
+        /// <inheritdoc cref="Compute(Expression{Func{T, decimal}}, Expression{Func{T, decimal}})"/>
+        public PropertyUpdate<T> Compute(Expression<Func<T, decimal?>> property, Expression<Func<T, decimal>> value)
+            => AddComputed(property, value);
+
+        private PropertyUpdate<T> AddComputed(LambdaExpression property, Expression<Func<T, decimal>> value)
+        {
+            if (property.Body is not MemberExpression { Member: PropertyInfo, Expression: ParameterExpression })
+                throw new ArgumentException(
+                    $"Compute needs a direct access to a top-level property of {typeof(T).Name}; '{property}' is not one.", nameof(property));
+            if (value == null) throw new ArgumentNullException(nameof(value));
+
+            var assignment = new ComputedAssignment(property, ComputedValue.From(value));
+            RefuseConflict(assignment, set => true, increment => true, computed => true);
+
+            var reads = assignment.Value.Columns().Select(c => c.Name).ToHashSet();
+            var assigned = _assignments.FirstOrDefault(a => reads.Contains(a.MemberPath));
+            if (assigned != null || reads.Contains(assignment.MemberPath))
+                throw new InvalidOperationException(
+                    $"The formula for '{assignment.MemberPath}' reads '{assigned?.MemberPath ?? assignment.MemberPath}', which this update also assigns; "
+                    + "providers disagree on which value such a formula sees, so send them as separate updates.");
+
             _assignments.Add(assignment);
             return this;
         }
@@ -143,21 +193,29 @@ namespace Birko.Data.Stores
 
                 var value = assignment.Match(
                     set => set.Value,
-                    increment => increment.AddTo(prop.GetValue(entity)!));
+                    increment => increment.AddTo(prop.GetValue(entity)!),
+                    computed => computed.Value.Evaluate(entity));
                 prop.SetValue(entity, value);
             }
         }
 
-        private void RefuseConflict(PropertyAssignment added, Func<SetAssignment, bool> conflictsWithSet, Func<IncrementAssignment, bool> conflictsWithIncrement)
+        private void RefuseConflict(PropertyAssignment added, Func<SetAssignment, bool> conflictsWithSet,
+            Func<IncrementAssignment, bool> conflictsWithIncrement, Func<ComputedAssignment, bool> conflictsWithComputed)
         {
             var path = added.MemberPath;
-            if (!_assignments.Any(a => a.MemberPath == path && a.Match(conflictsWithSet, conflictsWithIncrement)))
+            if (_assignments.Any(a => a.MemberPath == path && a.Match(conflictsWithSet, conflictsWithIncrement, conflictsWithComputed)))
             {
-                return;
+                throw new InvalidOperationException(
+                    $"'{path}' already has an assignment in this update; an increment or a computed set cannot be combined with another assignment to the same property.");
             }
 
-            throw new InvalidOperationException(
-                $"'{path}' already has an assignment in this update; an increment cannot be combined with another assignment to the same property.");
+            // TASK-826: a formula added earlier may read the property assigned now.
+            var reader = _assignments.FirstOrDefault(a => a.Match(
+                set => false, increment => false, computed => computed.Value.Columns().Any(c => c.Name == path)));
+            if (reader != null)
+                throw new InvalidOperationException(
+                    $"The formula for '{reader.MemberPath}' reads '{path}', which this update would also assign; "
+                    + "providers disagree on which value such a formula sees, so send them as separate updates.");
         }
     }
 }

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — Store write edges agree across providers
+[[TASK-719]]. A new store contract (`WriteEdgeContract`, all 12 providers, live) found: Cosmos DB and Elasticsearch
+threw on a delete of a key that is not stored (now a no-op); Cosmos DB's and RavenDB's `SaveAsync` gave the delegate a
+Guid-less entity; Elasticsearch, the async JSON and XML stores and a Cosmos DB batch skipped a bulk-update item with no
+Guid (now `EntityNotFoundException`, as elsewhere); a MongoDB `SaveAsync` unique collision was the driver's exception
+(now `StoreUniqueViolationException`). Unconfigured stores answering success, SQL included, are [[TASK-812]].
+
 ## 2026-11-04 — SQL unit of work reads its own rollback mark; a failed savepoint release is not a failed write
 [[TASK-718]]. `SqlUnitOfWork.CommitAsync` looked for a participant's rollback mark in the calling flow, so an owner
 committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it

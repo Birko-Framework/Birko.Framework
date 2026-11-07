@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Birko.Data.Stores;
@@ -38,25 +38,27 @@ internal static class LocalizedPropertyUpdateHelper
     }
 
     /// <summary>
-    /// Throws if <paramref name="updates"/> carries any increment. Called on the non-default-culture path that
-    /// replays the update as read-modify-save: an increment on a non-localizable field there would lose its
-    /// atomicity silently, while the identical call on the default culture stays atomic.
+    /// Throws if <paramref name="updates"/> carries any increment or computed set (TASK-826). Called on the
+    /// non-default-culture path that replays the update as read-modify-save: either one on a non-localizable field
+    /// there would lose its atomicity silently, while the identical call on the default culture stays atomic.
     /// </summary>
-    /// <exception cref="NotSupportedException">The update carries an increment.</exception>
+    /// <exception cref="NotSupportedException">The update carries an increment or a computed set.</exception>
     public static void RefuseIncrementOnReadModifyWriteFallback<T>(PropertyUpdate<T> updates)
         where T : Data.Models.AbstractModel
     {
         foreach (var assignment in updates.Assignments)
         {
-            if (!assignment.Match(set => false, increment => true))
+            var kind = assignment.Match<(string Verb, string Noun)?>(
+                set => null, increment => ("increment", "increment"), computed => ("compute", "computed set"));
+            if (kind == null)
             {
                 continue;
             }
 
             throw new NotSupportedException(
-                $"Cannot increment '{typeof(T).Name}.{assignment.MemberPath}' in the same update as a localizable field on a "
-                + "non-default culture: that update is replayed as read-modify-save, where the increment is not atomic. "
-                + "Send the increment as its own update.");
+                $"Cannot {kind.Value.Verb} '{typeof(T).Name}.{assignment.MemberPath}' in the same update as a localizable field on a "
+                + $"non-default culture: that update is replayed as read-modify-save, where the {kind.Value.Noun} is not atomic. "
+                + $"Send the {kind.Value.Noun} as its own update.");
         }
     }
 

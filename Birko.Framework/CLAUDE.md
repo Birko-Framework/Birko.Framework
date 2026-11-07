@@ -295,6 +295,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A decimal column can be computed from the same row in one write (2026-11-07)
+[[TASK-826]], requested by Symbio (TASK-1063: recompute net prices when a tax rate changes, without read-modify-write).
+`PropertyUpdate.Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`: `+ - * /` over
+`decimal` columns and constants, `Math.Round` only with an explicit mode (C# and MongoDB default to half-even, SQL to
+half-away). Every provider stores C#'s cents, checked at midpoints in both modes on all 13 (the user's decision): one
+statement on SQL and MongoDB, Painless on Elasticsearch, C# read-modify-save elsewhere. **Breaking:** `PropertyAssignment.Match`
+takes a third (`computed`) branch. A RavenDB server-side patch is [[TASK-827]].
 ### A fluent mapping's indexes are on the table before anyone can read it (2026-11-07)
 [[TASK-825]], reported by Symbio, whose gate twice created `EntityTranslations` without its unique index. Each
 `ApplyToDatabase` evicted the cached table, `LoadTable` published the rebuild bare, and the fluent indexes were written
@@ -371,12 +378,6 @@ time. `MongoMigrationRunner(null)` is `ArgumentNullException`. TimescaleDB intro
 held the wrong rows; a sort took the first field's direction for all; a UTC `DateTime` came back local; `Read(Guid)`
 skipped lazy-init and wrapped a cancellation (measured against a stand-in query API). New `InfluxReadPlan` decides
 what runs where for both stores. A duplicate create is still accepted (a decision left open).
-### Store write edges agree across providers (2026-11-04)
-[[TASK-719]]. A new store contract (`WriteEdgeContract`, all 12 providers, live) found: Cosmos DB and Elasticsearch
-threw on a delete of a key that is not stored (now a no-op); Cosmos DB's and RavenDB's `SaveAsync` gave the delegate a
-Guid-less entity; Elasticsearch, the async JSON and XML stores and a Cosmos DB batch skipped a bulk-update item with no
-Guid (now `EntityNotFoundException`, as elsewhere); a MongoDB `SaveAsync` unique collision was the driver's exception
-(now `StoreUniqueViolationException`). Unconfigured stores answering success, SQL included, are [[TASK-812]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

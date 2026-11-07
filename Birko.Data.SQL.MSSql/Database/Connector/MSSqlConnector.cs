@@ -135,6 +135,24 @@ namespace Birko.Data.SQL.Connectors
             return ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// TASK-826 — SQL Server sizes a decimal quotient from both operands' types and, past 38 digits, cuts its scale to
+        /// as few as six. These casts keep 12 decimals for a dividend of up to 18 integer digits and a divisor of up to
+        /// 8 decimals.
+        /// </summary>
+        public override string ComputedDivide(string left, string right)
+            => "(CAST(" + left + " AS DECIMAL(38,20)) / CAST(" + right + " AS DECIMAL(28,8)))";
+
+        /// <summary>
+        /// TASK-826 — the half-to-even test multiplies the value by a power of ten; on a 38-digit value SQL Server would
+        /// cut the product's scale (rounding it, which can fake a midpoint), so the value is first narrowed to 32 digits.
+        /// </summary>
+        public override string ComputedRound(string value, int digits, MidpointRounding mode)
+            => base.ComputedRound("CAST(" + value + " AS DECIMAL(32,12))", digits, mode);
+
+        /// <summary>TASK-826 — SQL Server has no <c>TRUNC</c>; <c>ROUND(v, 0, 1)</c> truncates.</summary>
+        public override string ComputedTruncate(string value) => "ROUND(" + value + ", 0, 1)";
+
         public override string QuoteIdentifier(string identifier)
         {
             return "[" + identifier.Replace("]", "]]") + "]";

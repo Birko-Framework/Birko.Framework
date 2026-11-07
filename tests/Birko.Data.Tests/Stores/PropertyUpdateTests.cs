@@ -38,7 +38,7 @@ public class PropertyUpdateTests
         public int Hits { get; set; }
     }
 
-    private static object? DeltaOf(PropertyAssignment a) => a.Match<object?>(set => null, increment => increment.Delta);
+    private static object? DeltaOf(PropertyAssignment a) => a.Match<object?>(set => null, increment => increment.Delta, computed => null);
 
     [Fact]
     public void Increment_And_Set_Chain_InOneUpdate_KeepingTheirKinds()

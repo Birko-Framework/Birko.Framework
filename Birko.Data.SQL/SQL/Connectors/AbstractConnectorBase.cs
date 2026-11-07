@@ -631,6 +631,59 @@ namespace Birko.Data.SQL.Connectors
             => column + " + " + parameter;
 
         /// <summary>
+        /// One arithmetic step of a <c>PropertyUpdate.Compute</c> formula over <c>decimal</c> operands (TASK-826).
+        /// The default is the native operator, exact for <c>+ - *</c> on an exact numeric type.
+        /// </summary>
+        /// <remarks>
+        /// Division goes through <see cref="ComputedDivide"/>, because each dialect picks the quotient's scale
+        /// differently and too few digits can move a value across a rounding midpoint. SQLite overrides this:
+        /// its operators go through a double.
+        /// </remarks>
+        public virtual string ComputedArithmetic(Birko.Data.Stores.ComputedOperator op, string left, string right) => op switch
+        {
+            Birko.Data.Stores.ComputedOperator.Add => "(" + left + " + " + right + ")",
+            Birko.Data.Stores.ComputedOperator.Subtract => "(" + left + " - " + right + ")",
+            Birko.Data.Stores.ComputedOperator.Multiply => "(" + left + " * " + right + ")",
+            Birko.Data.Stores.ComputedOperator.Divide => ComputedDivide(left, right),
+            _ => throw new NotSupportedException($"Operator {op} is not supported."),
+        };
+
+        /// <summary>
+        /// <c>left / right</c> for a computed set. The dialects override it to widen the quotient's scale: PostgreSQL
+        /// keeps about 16 significant digits, MySQL four decimals beyond the dividend, SQL Server as few as six.
+        /// </summary>
+        public virtual string ComputedDivide(string left, string right) => "(" + left + " / " + right + ")";
+
+        /// <summary>
+        /// <c>Math.Round(value, digits, mode)</c> for a computed set, matching C# on an exact numeric value. SQL's
+        /// <c>ROUND</c> rounds half away from zero on every server dialect, so <see cref="MidpointRounding.ToEven"/> is
+        /// emulated: a value exactly on a midpoint goes to the even neighbour, any other value rounds as <c>ROUND</c> does.
+        /// </summary>
+        public virtual string ComputedRound(string value, int digits, MidpointRounding mode)
+        {
+            var native = "ROUND(" + value + ", " + digits.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
+            if (mode == MidpointRounding.AwayFromZero) return native;
+
+            var scaled = "(" + value + " * " + Pow10(digits) + ")";
+            var truncated = ComputedTruncate(scaled);
+            return "(CASE WHEN ABS(" + scaled + " - " + truncated + ") = 0.5"
+                + " THEN (" + truncated + " + (" + truncated + " % 2)) * " + Pow10(-digits)
+                + " ELSE " + native + " END)";
+        }
+
+        /// <summary>The integer part of an exact numeric value (toward zero), for <see cref="ComputedRound"/>.</summary>
+        public virtual string ComputedTruncate(string value) => "TRUNC(" + value + ")";
+
+        /// <summary>10 to the power of <paramref name="exponent"/> as an exact numeric literal (<c>100</c>, <c>0.01</c>).</summary>
+        protected static string Pow10(int exponent)
+        {
+            var result = 1m;
+            for (var i = 0; i < Math.Abs(exponent); i++) result *= 10m;
+            if (exponent < 0) result = 1m / result;
+            return result.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
         /// The column definition <c>ALTER TABLE … ADD</c> emits: <see cref="FieldDefinition"/>, plus a
         /// <c>DEFAULT</c> of <see cref="Fields.AbstractField.DefaultStoredValue"/> when the column is NOT NULL.
         /// </summary>

@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Birko.Data.Stores;
 
 namespace Birko.Data.SQL.Stores
@@ -34,20 +35,54 @@ namespace Birko.Data.SQL.Stores
                         throw new InvalidOperationException(
                             $"'{columnMembers[column]}' and '{assignment.MemberPath}' both map to column {column}; an update cannot set it twice.");
                     fields.Remove(earlier);
-                    values.Remove(Connectors.AbstractConnector.SetParameterName(column));
+                    foreach (var key in values.Keys.Where(k => k == Connectors.AbstractConnector.SetParameterName(column)
+                                 || k.StartsWith(Connectors.AbstractConnector.SetParameterName(column) + "_", StringComparison.Ordinal)).ToList())
+                        values.Remove(key);
                 }
                 columnPositions[column] = i;
                 columnMembers[column] = assignment.MemberPath;
                 var parameter = Connectors.AbstractConnector.SetParameterName(column);
-                var (fragment, value) = assignment.Match(
+                var fragment = assignment.Match(
                     // Through the field's own conversion, exactly as an entity write (TASK-596).
-                    set => ($"{column} = {parameter}", field.ToStoredValue(set.Value)),
-                    increment => ($"{column} = {connector.IncrementExpression(field, column, parameter)}", (object?)increment.Delta));
+                    set => Bind($"{column} = {parameter}", parameter, field.ToStoredValue(set.Value)),
+                    increment => Bind($"{column} = {connector.IncrementExpression(field, column, parameter)}", parameter, increment.Delta),
+                    computed => $"{column} = {Render(computed.Value, typeof(T), connector, parameter, values)}");
                 fields.Add(i, fragment);
-                values.Add(parameter, value ?? DBNull.Value);
                 i++;
             }
             return (fields, values);
+
+            string Bind(string fragment, string parameter, object? value)
+            {
+                values.Add(parameter, value ?? DBNull.Value);
+                return fragment;
+            }
         }
+
+        /// <summary>
+        /// TASK-826 — a computed set's formula as SQL: columns bare from table metadata (rule 17), every constant a
+        /// parameter named after the target column, each step through the connector's dialect.
+        /// </summary>
+        private static string Render(ComputedValue value, Type modelType, Connectors.AbstractConnectorBase connector, string parameter,
+            Dictionary<string, object> values)
+            => value.Match(
+                column =>
+                {
+                    // The same resolution as the assignment's own target (GetFieldFromLambda), so a renamed or inherited
+                    // column is read where it is written.
+                    var x = System.Linq.Expressions.Expression.Parameter(modelType, "x");
+                    var lambda = System.Linq.Expressions.Expression.Lambda(System.Linq.Expressions.Expression.Property(x, column.Property), x);
+                    return SQL.DataBase.GetFieldFromLambda(lambda).Name;
+                },
+                constant =>
+                {
+                    var name = parameter + "_" + values.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    while (values.ContainsKey(name)) name += "x";
+                    values.Add(name, constant.Value);
+                    return name;
+                },
+                binary => connector.ComputedArithmetic(binary.Operator,
+                    Render(binary.Left, modelType, connector, parameter, values), Render(binary.Right, modelType, connector, parameter, values)),
+                round => connector.ComputedRound(Render(round.Operand, modelType, connector, parameter, values), round.Digits, round.Mode));
     }
 }

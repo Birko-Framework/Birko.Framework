@@ -7,7 +7,8 @@ namespace Birko.Data.Stores
 {
     /// <summary>
     /// One assignment inside a <see cref="PropertyUpdate{T}"/>: a closed set of kinds (<see cref="SetAssignment"/>,
-    /// <see cref="IncrementAssignment"/>) whose operand is reached only through <see cref="Match{TResult}"/>.
+    /// <see cref="IncrementAssignment"/>, <see cref="ComputedAssignment"/>) whose operand is reached only through
+    /// <see cref="Match{TResult}"/>.
     /// Why there is no shared <c>Value</c>: Birko.Data.Stores/CLAUDE.md.
     /// </summary>
     public abstract class PropertyAssignment
@@ -21,7 +22,10 @@ namespace Birko.Data.Stores
         public LambdaExpression Property { get; }
 
         /// <summary>Dispatches on the assignment kind.</summary>
-        public abstract TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment);
+        public abstract TResult Match<TResult>(
+            Func<SetAssignment, TResult> set,
+            Func<IncrementAssignment, TResult> increment,
+            Func<ComputedAssignment, TResult> computed);
 
         /// <summary>The member chain the assignment targets (e.g. <c>Address.Street</c>), casts unwrapped.</summary>
         internal string MemberPath
@@ -58,7 +62,8 @@ namespace Birko.Data.Stores
         public object? Value { get; }
 
         /// <inheritdoc />
-        public override TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment)
+        public override TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment,
+            Func<ComputedAssignment, TResult> computed)
             => set(this);
     }
 
@@ -78,7 +83,29 @@ namespace Birko.Data.Stores
         internal Func<object, object> AddTo { get; }
 
         /// <inheritdoc />
-        public override TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment)
+        public override TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment,
+            Func<ComputedAssignment, TResult> computed)
             => increment(this);
+    }
+
+    /// <summary>
+    /// Assigns a <c>decimal</c> formula over the same row: <c>col = round(other / 1.2, 2)</c> (TASK-826). The formula
+    /// reads the row as it was before the update; a formula that reads a column the same update assigns is refused when
+    /// it is added, so no provider's evaluation order can change the result.
+    /// </summary>
+    public sealed class ComputedAssignment : PropertyAssignment
+    {
+        internal ComputedAssignment(LambdaExpression property, ComputedValue value) : base(property)
+        {
+            Value = value;
+        }
+
+        /// <summary>The formula.</summary>
+        public ComputedValue Value { get; }
+
+        /// <inheritdoc />
+        public override TResult Match<TResult>(Func<SetAssignment, TResult> set, Func<IncrementAssignment, TResult> increment,
+            Func<ComputedAssignment, TResult> computed)
+            => computed(this);
     }
 }

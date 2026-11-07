@@ -24,6 +24,8 @@ public class LocalizedPropertyUpdateIncrementTests
     {
         public int Stock { get; set; }       // not localizable
         public string Label { get; set; } = string.Empty;   // localizable
+        public decimal Gross { get; set; }   // not localizable (TASK-826)
+        public decimal Net { get; set; }     // not localizable (TASK-826)
 
         public IReadOnlyList<string> GetLocalizableFields() => new[] { nameof(Label) };
     }
@@ -85,6 +87,31 @@ public class LocalizedPropertyUpdateIncrementTests
 
         sync.Invoking(w => w.Update(x => x.Stock > 0, update())).Should().Throw<NotSupportedException>().WithMessage("*Stock*read-modify-save*");
         await async.Invoking(w => w.UpdateAsync(x => x.Stock > 0, update(), default)).Should().ThrowAsync<NotSupportedException>().WithMessage("*Stock*");
+    }
+
+    /// <summary>TASK-826: a computed set loses its atomicity on the same replay, so it is refused the same way.</summary>
+    [Fact]
+    public async Task Computed_Set_Beside_A_Localizable_Set_Is_Refused_On_A_Non_Default_Culture()
+    {
+        var update = () => new PropertyUpdate<PricedModel>().Set(x => x.Label, "x")
+            .Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven));
+        var sync = SyncWrapper(new InMemoryBulkStore<PricedModel>(), "sk");
+        var async = AsyncWrapper(new InMemoryAsyncBulkStore<PricedModel>(), "sk");
+
+        sync.Invoking(w => w.Update(x => x.Stock > 0, update())).Should().Throw<NotSupportedException>().WithMessage("*compute*Net*computed set is not atomic*");
+        await async.Invoking(w => w.UpdateAsync(x => x.Stock > 0, update(), default)).Should().ThrowAsync<NotSupportedException>().WithMessage("*Net*");
+    }
+
+    [Fact]
+    public void Computed_Set_Beside_A_Localizable_Set_Applies_On_The_Default_Culture()
+    {
+        var store = new InMemoryBulkStore<PricedModel>();
+        var guid = store.Create(new PricedModel { Stock = 5, Gross = 0.15m });
+
+        SyncWrapper(store, "en").Update(x => x.Stock > 0, new PropertyUpdate<PricedModel>().Set(x => x.Label, "x")
+            .Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.AwayFromZero)));
+
+        store.Read(guid)!.Net.Should().Be(0.13m);
     }
 
     [Fact]
