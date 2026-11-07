@@ -1,6 +1,6 @@
 ---
 area: security-and-authorization
-generated-at: a972f9a45657741346a5a3052ad52e0da4789175
+generated-at: f2e572cedb05dd54d2a39f34ae3d4da23c22d456
 generated-on: 2026-11-07
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
@@ -98,6 +98,7 @@ sources:
   - ../Birko.Security/Authentication/AuthenticationService.cs
   - ../Birko.Security/Authentication/TokenBinding.cs
   - ../Birko.Security/Authentication/TrustedProxyList.cs
+  - ../Birko.Security/Authentication/TrustedProxyParsing.cs
   - ../Birko.Security/Authentication/TrustedProxySettings.cs
   - ../Birko.Security/Authorization/IRoleProvider.cs
   - ../Birko.Security/Core/IEncryptionProvider.cs
@@ -1227,7 +1228,7 @@ The system SHALL implement `IDisposable` on `AuthenticationService`, disposing t
 `ReaderWriterLockSlim` once and idempotently — the disposed flag is claimed with `Interlocked.Exchange`, so two
 concurrent `Dispose` calls dispose it once.
 
-`GetClientIpAddress(getHeaderValue, fallbackIp, trustedProxies)` SHALL return the connection's own address
+`GetClientIpAddress(getHeaderValue, fallbackIp, trustedProxies, mode)` SHALL return the connection's own address
 (`fallbackIp`, unchanged) whenever `trustedProxies` is null or empty, or `fallbackIp` is not one of them —
 the forwarding headers are then not read at all. Only when the peer is trusted SHALL it consult, in order:
 `X-Forwarded-For`, walked from the **right**, returning the first hop that is not itself a trusted proxy (or
@@ -1235,13 +1236,19 @@ the leftmost hop when every hop is trusted); then `X-Real-IP`; then `CF-Connecti
 Only an address is an answer (TASK-651): a returned value is the parsed address, without a port and with an
 IPv4-mapped address unwrapped; a hop that is not an address ends the walk with `fallbackIp`, and a single-address
 header that is not one is skipped (an `X-Forwarded-For: 1.2.3.4, unknown` returned `"unknown"`). The trusted-proxy
-entries are read by `TrustedProxyList.ParseLenient` (TASK-829) and matched with `TrustedProxyList.Contains`: an address,
+entries are read by `TrustedProxyList.Parse(entries, mode)` (TASK-829) in the optional `mode`, `TrustedProxyParsing.Lenient`
+by default because the list is parsed on every call (TASK-830; `Strict` throws `FormatException` naming a bad entry), and
+matched with `TrustedProxyList.Contains`: an address,
 compared after mapping IPv4-mapped IPv6 to IPv4, or a CIDR range (it contains `/`), matched against the address and its
 IPv4-mapped form; an address given with a port (`10.0.0.5:51234`, `[::1]:51234`) is parsed to its address; an
 unparseable address is never trusted, and an entry the lenient parse skips trusts nothing. The instance method
 `ResolveClientIp(getHeaderValue, connectionIp)` SHALL apply the configuration's
-`AuthenticationConfiguration.TrustedProxies` (empty by default), parsed once at construction by
-`TrustedProxyList.ParseLenient`, each skipped entry logged as an error naming it and the reason. The REST, SOAP and SSE
+`AuthenticationConfiguration.TrustedProxies` (empty by default), parsed once at construction, before the lock is
+allocated, by `AuthenticationService.ParseTrustedProxies(config, logger)` in the configuration's
+`AuthenticationConfiguration.TrustedProxyParsing` mode (TASK-830). `Strict`, the default, SHALL refuse a bad entry with
+`InvalidOperationException` whose message begins `<configuration type name>.TrustedProxies: `, quotes the entry and
+suggests `TrustedProxyParsing = Lenient`, wrapping the parser's `FormatException`; `Lenient` SHALL skip it and log an
+error naming it and the reason (the behaviour before TASK-830). The REST, SOAP and SSE
 authentication wrappers resolve the client IP through `ResolveClientIp`; the WebSocket one does too, except behind
 `AddBirkoForwardedHeaders` (see the WebSocket forwarded-headers requirement).
 
@@ -1281,7 +1288,25 @@ authentication wrappers resolve the client IP through `ResolveClientIp`; the Web
 - **When** `GetClientIpAddress` is called
 - **Then** `"10.0.0.5"` is returned
 
-### Requirement: A trusted-proxy list has one parser, strict at startup and lenient for the transports
+#### Scenario: A bad entry refuses at construction (TASK-830)
+
+- **Given** a transport configuration `TransportConfig` with the default parsing and `TrustedProxies = ["10.0.0.5", entry]`, entry `10.0.0.300`, `10.0.0.0/40`, `0.0.0.0/0`, `10.5` or an unset `${VAR}`
+- **When** an `AuthenticationService` is constructed over it
+- **Then** `InvalidOperationException` is thrown, `TransportConfig.TrustedProxies: ` naming the entry (or saying the variable is not set) and suggesting `TrustedProxyParsing = Lenient`, with the `FormatException` inside
+
+#### Scenario: Lenient opts back in to skipping (TASK-830)
+
+- **Given** `TrustedProxyParsing = Lenient` and `TrustedProxies = ["10.0.0.300", "10.0.0.5"]`
+- **When** the service is constructed and `ResolveClientIp` reads `X-Forwarded-For: 203.0.113.7` from peer `10.0.0.5`
+- **Then** construction succeeds and `"203.0.113.7"` is returned; the bad entry is skipped and logged
+
+#### Scenario: The static walk is lenient unless asked (TASK-830)
+
+- **Given** `X-Forwarded-For: 203.0.113.7` from a fallback of `10.0.0.5`
+- **When** `GetClientIpAddress` is called with `["garbage", "10.0.0.5"]` and no mode, and with `["garbage"]` and `TrustedProxyParsing.Strict`
+- **Then** the first returns `"203.0.113.7"`; the second throws `FormatException` quoting `'garbage'`
+
+### Requirement: A trusted-proxy list has one parser, strict unless a transport opts into lenient
 
 `TrustedProxyList` SHALL be the one parser of every trusted-proxy list (`AuthenticationConfiguration.TrustedProxies`
 and `TrustedProxySettings.TrustedProxies`, TASK-829). Each entry is `${VAR}`-expanded and trimmed; an entry with a `/`
@@ -1295,7 +1320,10 @@ is not a CIDR network, has prefix length 0 (`0.0.0.0/0`, `::/0`: "trusts every s
 in full: IPv4 as four dotted decimal parts (`10.5` refused), IPv6 without brackets (`[::1]`, `[::1]:80` refused), and no
 port (`10.0.0.5:8080` refused). `ParseLenient` SHALL instead skip such an entry and pass it with the reason to an
 optional callback, and SHALL accept what the strict parse refuses only for its form: a `/0` network, a short IPv4 form,
-a bracketed IPv6 address, and an address with a port (the port ignored).
+a bracketed IPv6 address, and an address with a port (the port ignored). `Parse(entries, mode, onSkipped)` SHALL
+dispatch on `TrustedProxyParsing` (TASK-830): `Strict` to `Parse`, `Lenient` to `ParseLenient`. The forwarded-headers
+registration always parses strictly; a transport's `AuthenticationConfiguration` parses in its `TrustedProxyParsing`,
+`Strict` by default (TASK-830).
 
 #### Scenario: IPv4-mapped peers match
 
@@ -2606,10 +2634,13 @@ when the service cannot be resolved, and 401 when `ValidateToken` rejects the qu
 the client address is decided once and `X-Forwarded-For` or `X-Real-IP` are not walked a second time; without the
 marker it SHALL walk the headers through `ResolveClientIp` as before. When `TrustedProxySettings` is registered (the
 container then picks the constructor that takes it), the service SHALL throw `InvalidOperationException` at
-construction if its own `TrustedProxies` is non-empty and not `SameAs` the host's list (both parsed leniently), naming
-both lists; an empty own list defers to the host's. A mapping that requires authentication SHALL run the same check at
-map time, reading `TrustedProxySettings` and `IOptions<WebSocketAuthenticationConfiguration>` from the root provider,
-so the refusal is a startup failure rather than a first-request one (TASK-829).
+construction if its own `TrustedProxies` is non-empty and not `SameAs` the host's list, naming both lists; an empty own
+list defers to the host's. Its own list is parsed first by `AuthenticationService.ParseTrustedProxies` in its
+`TrustedProxyParsing` mode, so a strict list with a bad entry refuses whether or not `TrustedProxySettings` is
+registered (TASK-830); the host's list is parsed leniently. A mapping that requires authentication SHALL run the same
+checks at map time, reading `IOptions<WebSocketAuthenticationConfiguration>` and, when registered,
+`TrustedProxySettings` from the root provider, so either refusal is a startup failure rather than a first-request one
+(TASK-829, TASK-830).
 
 #### Scenario: One client address through a trusted proxy
 
@@ -2628,3 +2659,9 @@ so the refusal is a startup failure rather than a first-request one (TASK-829).
 - **Given** a host list `["10.0.0.5"]` and a WebSocket list `["10.0.0.6"]`, or a host list that is empty and a non-empty WebSocket list
 - **When** the service is constructed or the endpoint is mapped
 - **Then** `InvalidOperationException` is thrown; an empty WebSocket list or the same list is accepted
+
+#### Scenario: A bad entry without the registration (TASK-830)
+
+- **Given** no `AddBirkoForwardedHeaders` and a WebSocket list `["10.0.0.300"]` under the default strict parsing
+- **When** an endpoint requiring authentication is mapped and the host starts
+- **Then** `InvalidOperationException` is thrown beginning `WebSocketAuthenticationConfiguration.TrustedProxies: ` and quoting `'10.0.0.300'`; before, the list read as empty and the host started
