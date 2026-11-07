@@ -11,8 +11,9 @@ namespace Birko.Models.SQL.Tests;
 /// <summary>
 /// TASK-846. Measured before the fix: <c>RegisterFromAssembly</c> called each mapping's <c>Configure</c> through
 /// <c>MethodInfo.Invoke</c>, so whatever it threw (TASK-845's <c>NotSupportedException</c>, an <c>ArgumentException</c>)
-/// reached the caller as a <c>TargetInvocationException</c>: a filter on the type missed it and the outer message named
-/// reflection. It is rethrown as itself now, with its stack, and the mapping is named on <c>Exception.Data</c> (rule 9).
+/// reached the caller as a <c>TargetInvocationException</c>: the outer message named reflection, not the mapping. It
+/// arrives as an <c>InvalidOperationException</c> naming the mapping now, with the original as its inner exception (the
+/// user's decision, weighed against rule 9).
 /// </summary>
 public class Task846RegisterFromAssemblyExceptionTests
 {
@@ -47,30 +48,30 @@ public class Task846RegisterFromAssemblyExceptionTests
     };
 
     [Fact]
-    public void A_nested_member_refusal_reaches_the_caller_as_itself()
+    public void A_nested_member_refusal_names_the_mapping_and_keeps_the_original_inside()
     {
         var registry = new ModelMapRegistry();
 
         var thrown = Scan(registry, map => map.Property(x => x.Code.Length))
-            .Should().Throw<NotSupportedException>().Which;
+            .Should().Throw<InvalidOperationException>().Which;
 
-        thrown.Message.Should().Contain("TASK-845");
-        thrown.Data[ModelMapRegistry.MappingTypeDataKey].Should().Be(typeof(ThrowingMapping).FullName);
+        thrown.Message.Should().Contain(typeof(ThrowingMapping).FullName!).And.Contain("TASK-845");
+        thrown.InnerException.Should().BeOfType<NotSupportedException>();
         registry.HasMap<Thrower>().Should().BeFalse("a mapping that threw registers nothing");
     }
 
     [Fact]
-    public void Any_exception_keeps_its_type_message_and_stack()
+    public void Any_exception_is_named_by_mapping_with_its_type_message_and_stack_inside()
     {
         var registry = new ModelMapRegistry();
 
         var thrown = Scan(registry, _ => ThrowsHere())
-            .Should().Throw<ArgumentException>().Which;
+            .Should().Throw<InvalidOperationException>().Which;
 
         thrown.Should().NotBeAssignableTo<TargetInvocationException>();
-        thrown.Message.Should().StartWith("bad mapping");
-        thrown.StackTrace.Should().Contain(nameof(ThrowsHere), "the original throw site is kept");
-        thrown.Data[ModelMapRegistry.MappingTypeDataKey].Should().Be(typeof(ThrowingMapping).FullName);
+        thrown.Message.Should().Contain(typeof(ThrowingMapping).FullName!).And.Contain("bad mapping");
+        var inner = thrown.InnerException.Should().BeOfType<ArgumentException>().Which;
+        inner.StackTrace.Should().Contain(nameof(ThrowsHere), "the original throw site is kept");
     }
 
     [Fact]

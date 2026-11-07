@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.ExceptionServices;
 using Birko.Data.Patterns.Schema;
 
 namespace Birko.Models.SQL.Mapping
@@ -12,12 +11,6 @@ namespace Birko.Models.SQL.Mapping
         // CR-L322: store the non-generic IModelMap view so TableName/Properties are read by a direct cast
         // rather than string-keyed reflection.
         private readonly Dictionary<Type, IModelMap> _maps = new Dictionary<Type, IModelMap>();
-
-        /// <summary>
-        /// The <see cref="Exception.Data"/> key under which <see cref="RegisterFromAssembly"/> names the mapping whose
-        /// <c>Configure</c> threw: the mapping type's full name (TASK-846).
-        /// </summary>
-        public const string MappingTypeDataKey = "Birko.Models.SQL.MappingType";
 
         public void Register<T>(IModelMapping<T> mapping) where T : class
         {
@@ -35,9 +28,13 @@ namespace Birko.Models.SQL.Mapping
         /// <see cref="Register{T}(IModelMapping{T})"/> or the owning project's helper (for the translation table,
         /// <c>LocalizationSqlMappings.Register&lt;TTranslation&gt;(registry, table)</c>).
         /// <para>
-        /// <b>An exception from a mapping's <c>Configure</c> is rethrown as itself</b> (TASK-846), with its own stack, and the
-        /// mapping's full type name on <c>Data[</c><see cref="MappingTypeDataKey"/><c>]</c>; before, it arrived wrapped in a
-        /// <see cref="TargetInvocationException"/>. Mappings scanned before it stay registered; it registers nothing.
+        /// <b>An exception from a mapping's <c>Configure</c> arrives as an <see cref="InvalidOperationException"/> whose
+        /// message names the mapping type</b> and repeats the original message, with the original as
+        /// <see cref="Exception.InnerException"/> (TASK-846, the user's decision). Before, it arrived as a
+        /// <see cref="TargetInvocationException"/> naming nothing; a scan over an assembly does not say which mapping
+        /// failed unless the exception does. <see cref="Register{T}(IModelMapping{T})"/>, whose caller passed the mapping
+        /// itself, still lets the exception through as itself. Mappings scanned before it stay registered; it registers
+        /// nothing.
         /// </para>
         /// </remarks>
         public void RegisterFromAssembly(Assembly assembly)
@@ -64,12 +61,11 @@ namespace Birko.Models.SQL.Mapping
                 }
                 catch (TargetInvocationException wrapped) when (wrapped.InnerException is Exception thrown)
                 {
-                    // TASK-846: what Configure threw reaches the caller as itself, as through Register<T>. Rule 9: its type
-                    // is a contract, so the mapping is named on Data rather than by a wrapper.
-                    if (!thrown.Data.IsReadOnly && !thrown.Data.Contains(MappingTypeDataKey))
-                        thrown.Data[MappingTypeDataKey] = entry.MappingType.FullName;
-                    ExceptionDispatchInfo.Capture(thrown).Throw();
-                    throw;
+                    // TASK-846: the reflection layer is dropped and the mapping is named in the message. Rule 9 weighed:
+                    // the type a caller sees changes to InvalidOperationException, which the user chose so that a scan's
+                    // failure says which mapping failed; the original stays as InnerException.
+                    throw new InvalidOperationException(
+                        $"Model mapping '{entry.MappingType.FullName}' failed in Configure: {thrown.Message}", thrown);
                 }
 
                 _maps[entry.ModelType] = modelMap;
