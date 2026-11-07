@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -33,7 +35,15 @@ public sealed class PermissionResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, IUserPermissionResolver resolver, ClaimMappingOptions claimOptions)
     {
-        if (context.User?.Identity?.IsAuthenticated == true)
+        // TASK-824: the loopback bypass principal is no user the host knows (its id is Guid.Empty), so the resolver is not
+        // asked about it: its answer for an empty id replaced the bypass's "*", and a bypassed request got nothing. Its
+        // own permission claims are stored instead, untouched by the wildcard option (TASK-823: the bypass keeps its "*").
+        if (context.User?.Identity?.AuthenticationType == LoopbackBypass.AuthenticationType)
+        {
+            context.Items[ItemsKey] = context.User.FindAll(claimOptions.PermissionClaim).Select(c => c.Value).ToHashSet();
+            context.Items[RolesItemsKey] = new HashSet<string>();
+        }
+        else if (context.User?.Identity?.IsAuthenticated == true)
         {
             var userIdClaim = context.User.FindFirstValue(claimOptions.UserIdClaim);
             if (Guid.TryParse(userIdClaim, out var userId))

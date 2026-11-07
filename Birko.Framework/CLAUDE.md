@@ -311,7 +311,7 @@ evicts nothing.
 ### Security low findings: 23 verified and fixed (2026-11-06)
 [[TASK-176]]. Behaviour a consumer can notice: `AddBirkoJwtBearer` refuses a secret under 32 characters and both JWT
 paths accept HS256 only; `WildcardPermissionEnabled = false` now disables a `"*"` from the host's claims or resolver
-everywhere, grants admin included, while the admin grant and the loopback bypass keep theirs ([[TASK-823]], the user's
+everywhere, grants admin included, while the admin grant and the loopback bypass keep theirs, the bypass now under `UseResolvedPermissions` too ([[TASK-824]]; it got 403) ([[TASK-823]], the user's
 decision; new marker `IAppliesWildcardOption`); `TokenServiceAdapter` writes
 `sub` / `email`. **New interface members:** `IPasswordHasher.NeedsRehash`, `IEncryptionProvider.CreateKey`. Also: fixed-time
 static tokens, BCrypt `$2y$` and a stored-cost ceiling, Vault client disposal, a per-endpoint single-flight JWKS cache.

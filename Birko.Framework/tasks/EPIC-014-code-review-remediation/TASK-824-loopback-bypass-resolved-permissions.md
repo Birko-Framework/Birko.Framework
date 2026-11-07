@@ -2,7 +2,7 @@
 id: TASK-824
 parent: EPIC-014
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-06
@@ -28,10 +28,23 @@ usually nothing, whatever `WildcardPermissionEnabled` says. Predates TASK-176 an
 
 ## Acceptance criteria
 
-- [ ] Reproduced as observed state (loopback bypass + `UseResolvedPermissions`, a `RequirePermission` endpoint).
-- [ ] Fixed with a regression test (e.g. the middleware stores `{"*"}` for the bypass principal without asking the
+- [x] Reproduced as observed state (loopback bypass + `UseResolvedPermissions`, a `RequirePermission` endpoint).
+- [x] Fixed with a regression test (e.g. the middleware stores `{"*"}` for the bypass principal without asking the
       resolver), or the decision recorded with why the bypass should not apply on that path.
 
 ## Human test plan
 
 N/A — fully covered by automated tests.
+
+## Outcome (2026-11-07)
+
+Reproduced first (`Task824LoopbackResolvedPermissionsTests`). A real loopback Kestrel host with the bypass,
+`UseResolvedPermissions`, a resolver answering nothing and a `RequirePermission("runs:read")` endpoint answered a
+token-less request **403**, with the wildcard option on and off. The resolver had been asked about `Guid.Empty`.
+
+The fix is in `PermissionResolutionMiddleware`. The bypass principal (authentication type `LoopbackBypass`, the same test
+`WildcardPermission.Apply` uses since TASK-823) is not resolved. Its own permission claims (`"*"`) are stored, with no
+roles, and the wildcard option is not applied, because TASK-823 decided the bypass keeps its `"*"`. Afterwards: 200 with
+`"*"` in both modes, and the resolver is never asked about `Guid.Empty`. Red against the original, 2 of 2.
+
+Regression: Security.AspNetCore 168 and Security.Grants 187, all green.
