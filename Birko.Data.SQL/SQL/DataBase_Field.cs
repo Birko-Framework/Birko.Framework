@@ -321,6 +321,16 @@ namespace Birko.Data.SQL
             return property;
         }
 
+        /// <summary>
+        /// TASK-855: the field <paramref name="property"/> is on <paramref name="modelType"/>'s table, the one producer of a
+        /// column's identity (rules 16, 48). A field built from the property alone never saw what the table build writes
+        /// (a fluent <c>HasColumnName</c>), so every <c>PropertyUpdate</c> on a renamed column wrote the C# name, while the
+        /// filter on the same property, resolved through the table, read the renamed one. Null when the type maps to no
+        /// table or the table has no such column; the caller then builds the field from the property, as before.
+        /// </summary>
+        private static AbstractField? LambdaField(PropertyInfo property, Type modelType)
+            => TryLoadTable(modelType)?.GetFieldByPropertyName(property.Name);
+
         public static AbstractField GetField<T, P>(Expression<Func<T, P>> expr)
         {
             PropertyInfo? propInfo = null;
@@ -345,8 +355,7 @@ namespace Birko.Data.SQL
             {
                 propInfo = typeof(Models.AbstractDatabaseModel).GetProperty(propInfo.Name);
             }
-            var fields = LoadField(propInfo!, expr.Parameters[0].Type);
-            return fields.First();
+            return LambdaField(propInfo!, expr.Parameters[0].Type) ?? LoadField(propInfo!, expr.Parameters[0].Type).First();
         }
 
         /// <summary>
@@ -377,8 +386,8 @@ namespace Birko.Data.SQL
             {
                 propInfo = typeof(Models.AbstractDatabaseModel).GetProperty(propInfo.Name);
             }
-            var fields = LoadField(propInfo!, expr.Parameters[0].Type);
-            return fields.FirstOrDefault()
+            return LambdaField(propInfo!, expr.Parameters[0].Type)
+                ?? LoadField(propInfo!, expr.Parameters[0].Type).FirstOrDefault()
                 // SH-M027 (TASK-170): an [IgnoreField] / [NotMapped] / unsupported member maps to no field, and First()
                 // threw "Sequence contains no elements" from inside the store, naming nothing.
                 ?? throw new ArgumentException($"'{expr}' names {propInfo!.DeclaringType?.Name}.{propInfo.Name}, which is not a mapped column.", nameof(expr));
