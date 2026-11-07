@@ -1,6 +1,6 @@
 ---
 area: backend-store-implementations
-generated-at: fc4c807731169e50b7c842f593690ca7f53e0a1a
+generated-at: 773367ed5925aad9234c1a6c72b92d5193e5d9ac
 generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
@@ -65,6 +65,7 @@ sources:
   - ../Birko.Data.RavenDB/Stores/RavenDBStore.cs
   - ../Birko.Data.RavenDB/Stores/RavenDocumentId.cs
   - ../Birko.Data.RavenDB/Stores/RavenIndexWait.cs
+  - ../Birko.Data.RavenDB/Stores/RavenPropertyUpdatePatch.cs
   - ../Birko.Data.RavenDB/Stores/RavenTrackedCopy.cs
   - ../Birko.Data.RavenDB/Stores/Settings.cs
   - ../Birko.Data.SQL.MSSql/Repositories/AsyncMSSqlModelRepository.cs
@@ -444,7 +445,7 @@ is `null` or empty.
 - **When** `DeleteAsync(entity with G)` is called outside a batch, alone or among stored entities
 - **Then** nothing is thrown and the stored entities are deleted
 
-### Requirement: Filtered Update and Delete run natively on SQL, MongoDB and Elasticsearch only
+### Requirement: Filtered Update and Delete run natively on SQL, MongoDB and Elasticsearch; RavenDB patches exact updates
 
 The system SHALL run `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` as:
 - MongoDB: public overrides that rewrite `MemoryExtensions.Contains`, run `RequireFilter` and `RequireBoundedFilter`, then
@@ -455,8 +456,16 @@ The system SHALL run `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` as
   failure or invalid response `StoreException`, a timeout `StoreException`. The query matches the index as of its last
   refresh.
 - SQL: native statements inherited from `DataBaseBulkStore` / `AsyncDataBaseBulkStore`.
-- RavenDB, Cosmos DB, InfluxDB, JSON and XML: the base implementation (read the matches, then write each through
-  `*Core`).
+- RavenDB `Update(filter, PropertyUpdate<T>)` and `UpdateAll(PropertyUpdate<T>)`, sync and async: public overrides that
+  run `RequireFilter` and `RequireBoundedFilter` (the filtered form only) and return on an empty `PropertyUpdate`. When
+  the store runs in no session (neither its own `TransactionContext` nor an ambient unit-of-work session) and
+  `RavenPropertyUpdatePatch.TryBuild` yields a patch, they read the matching documents, defer one `PatchCommandData` per
+  document id into one fresh session (through `RavenIndexWait.Apply`) and save it once: one transaction, the arithmetic
+  run on the server, `*Core` not reached, no miss reported. A script failing its range check SHALL surface as
+  `OverflowException` with nothing written to any document. Otherwise (a session, or no patch) the base implementation
+  (TASK-827, the user's decision).
+- RavenDB `Delete(filter)`, and Cosmos DB, InfluxDB, JSON and XML: the base implementation (read the matches, then write
+  each through `*Core`).
 
 `Update(filter, Action<T>)` SHALL be the base read-modify-save on every backend.
 
@@ -471,6 +480,26 @@ The system SHALL run `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` as
 - **Given** a document changed between the query snapshot and the write
 - **When** `UpdateAsync(filter, updates)` runs
 - **Then** `StoreConcurrencyException` reports how many documents were applied before it stopped
+
+#### Scenario: Parallel RavenDB increments outside a unit of work (TASK-827)
+
+- **Given** an `AsyncRavenDBStore<T>` (or `RavenDBStore<T>`) with no session, holding one document with `Hits = 0`
+- **When** 8 callers each run `UpdateAsync(x => x.Guid == g, new PropertyUpdate<T>().Increment(x => x.Hits, 1))` 10 times
+  in parallel
+- **Then** the document reads `Hits = 80` (the C# read-modify-save path lost increments, measured)
+  (`tests/Birko.Data.RavenDB.Tests/Stores/Task827PatchTests.cs`)
+
+#### Scenario: A RavenDB increment that overflows on one document (TASK-827)
+
+- **Given** two matching documents, one with an `int` `Hits = 1` and one with `Hits = int.MaxValue`
+- **When** `UpdateAsync(filter, new PropertyUpdate<T>().Increment(x => x.Hits, 1))` runs
+- **Then** `OverflowException` is thrown and both documents keep their values
+
+#### Scenario: A RavenDB update inside a unit of work (TASK-827)
+
+- **Given** an `AsyncRavenDBStore<T>` whose `TransactionContext` is an active `RavenDbUnitOfWork`'s session
+- **When** a `PropertyUpdate` increment runs and the unit of work rolls back
+- **Then** the update took the base path in the unit of work's session, and the stored value is unchanged
 
 ### Requirement: PropertyUpdate is translated natively on MongoDB and Elasticsearch
 
@@ -487,7 +516,18 @@ The system SHALL translate each assignment through `Match(set, increment, comput
   (a column parsed from its stored text, a constant a string parameter, division at `MathContext.DECIMAL128`, a round
   `setScale` with `HALF_EVEN` or `HALF_UP`) stored as `.doubleValue()` (TASK-826).
 
-An assignment whose property cannot be resolved SHALL throw `ArgumentException` on both.
+On RavenDB, `RavenPropertyUpdatePatch.TryBuild` SHALL build one patch script only when every assignment is exact in a
+double, since patch JavaScript holds every number as a double (measured on RavenDB 6.0): a set is
+`this['{Property}'] = args.pN` for a (nullable) string, bool, Guid, `DateTime`, `DateTimeOffset`, `TimeSpan`, char, enum,
+`byte` / `sbyte` / `short` / `ushort` / `int` / `uint`, or `long` whose value lies within ±(2^53 − 1); an increment of a
+`short`, `int` or `long` property by a `short` / `int` delta, or a `long` delta within ±(2^53 − 1), adds to the stored
+value (null read as 0) and throws `BIRKO_INCREMENT_OVERFLOW` unless the result is a safe integer within the type's range
+(±(2^53 − 1) for `long`). Any other assignment (a `decimal`, `double` or `float` set or increment, an increment of a
+nullable or other type, a nested member path, an unresolved property, any computed set) SHALL make `TryBuild` return
+`null`, so the whole update stays on the exact C# path (TASK-827). A `long` counter past 2^53 therefore cannot be
+incremented outside a unit of work on RavenDB.
+
+An assignment whose property cannot be resolved SHALL throw `ArgumentException` on MongoDB and Elasticsearch.
 
 #### Scenario: Incrementing a string-stored decimal on MongoDB
 
@@ -500,6 +540,19 @@ An assignment whose property cannot be resolved SHALL throw `ArgumentException` 
 - **Given** a MongoDB store whose `Net` and `Gross` are stored as Decimal128
 - **When** `UpdateAsync(filter, new PropertyUpdate<T>().Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven)))` runs
 - **Then** one pipeline update sets `Net` to `$round` of `$divide` of `$Gross` by 1.2, to 2 digits
+
+#### Scenario: A decimal increment on RavenDB (TASK-827)
+
+- **Given** a RavenDB document with `decimal Amount = 0.1m`
+- **When** `UpdateAsync(filter, new PropertyUpdate<T>().Increment(x => x.Amount, 0.2m))` runs, then a set adds
+  `98765432109876543.21m`
+- **Then** `TryBuild` returns `null` both times, the C# path applies them, and `Amount` reads `98765432109876543.51m`
+
+#### Scenario: A long past 2^53 on RavenDB (TASK-827)
+
+- **Given** a RavenDB document with `long Total = 9007199254740993`
+- **When** a `PropertyUpdate` increments `Total` by 1
+- **Then** `OverflowException` is thrown and `Total` still reads `9007199254740993`
 
 ### Requirement: Async MongoDB, Cosmos DB and RavenDB save natively; their sync twins use the shared routing
 
