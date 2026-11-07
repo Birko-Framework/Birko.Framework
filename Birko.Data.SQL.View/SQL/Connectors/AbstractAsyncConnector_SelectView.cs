@@ -35,26 +35,33 @@ namespace Birko.Data.SQL.Connectors
             // AbstractConnector_SelectView.cs for why this is the single resolution point.
             orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
             // TASK-639: the WHERE follows the path too; a persistent view has no source columns.
-            conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
+            var terms = DataBase.ResolveViewConditions(view, conditions, usePersistent)?.ToList();
 
-            if (usePersistent)
+            // TASK-837 — see the sync twin.
+            var plan = PlanViewReadChunks(view, usePersistent, terms, orderFields, limit, offset);
+            plan.ThrowIfRefused();
+
+            foreach (var chunk in plan.Statements(terms))
             {
-                await foreach (var items in RunReaderCommandAsync(
-                    (command) => { CreatePersistentViewSelectCommand(command, view, conditions, orderFields, limit, offset); return Task.CompletedTask; },
-                    (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }),
-                    ct).ConfigureAwait(false))
+                if (usePersistent)
                 {
-                    yield return items?.FirstOrDefault()!;
+                    await foreach (var items in RunReaderCommandAsync(
+                        (command) => { CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset); return Task.CompletedTask; },
+                        (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }),
+                        ct).ConfigureAwait(false))
+                    {
+                        yield return items?.FirstOrDefault()!;
+                    }
                 }
-            }
-            else
-            {
-                await foreach (var items in RunReaderCommandAsync(
-                    (command) => { CreateSelectCommand(command, view, conditions, orderFields, limit, offset); return Task.CompletedTask; },
-                    (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }),
-                    ct).ConfigureAwait(false))
+                else
                 {
-                    yield return items?.FirstOrDefault()!;
+                    await foreach (var items in RunReaderCommandAsync(
+                        (command) => { CreateSelectCommand(command, view, chunk, orderFields, limit, offset); return Task.CompletedTask; },
+                        (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }),
+                        ct).ConfigureAwait(false))
+                    {
+                        yield return items?.FirstOrDefault()!;
+                    }
                 }
             }
         }

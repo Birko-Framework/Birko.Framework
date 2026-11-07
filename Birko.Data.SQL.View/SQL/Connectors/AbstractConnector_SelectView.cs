@@ -98,24 +98,32 @@ namespace Birko.Data.SQL.Connectors
             // method. Resolving makes the ORDER BY clause unreachable from caller-supplied text.
             orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
             // TASK-639: the WHERE follows the path too; a persistent view has no source columns.
-            conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
+            var terms = DataBase.ResolveViewConditions(view, conditions, usePersistent)?.ToList();
 
-            if (usePersistent)
+            // TASK-837: an IN list past the provider's limit is read chunk after chunk, as a table read is (TASK-833); a
+            // list that cannot be split is refused here, before anything runs.
+            var plan = PlanViewReadChunks(view, usePersistent, terms, orderFields, limit, offset);
+            plan.ThrowIfRefused();
+
+            foreach (var chunk in plan.Statements(terms))
             {
-                foreach (var items in RunReaderCommand((command) => {
-                    command = CreatePersistentViewSelectCommand(command, view, conditions, orderFields, limit, offset);
-                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }))
+                if (usePersistent)
                 {
-                    yield return items?.FirstOrDefault()!;
+                    foreach (var items in RunReaderCommand((command) => {
+                        command = CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset);
+                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }))
+                    {
+                        yield return items?.FirstOrDefault()!;
+                    }
                 }
-            }
-            else
-            {
-                foreach (var items in RunReaderCommand((command) => {
-                    command = CreateSelectCommand(command, view, conditions, orderFields, limit, offset);
-                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }))
+                else
                 {
-                    yield return items?.FirstOrDefault()!;
+                    foreach (var items in RunReaderCommand((command) => {
+                        command = CreateSelectCommand(command, view, chunk, orderFields, limit, offset);
+                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }))
+                    {
+                        yield return items?.FirstOrDefault()!;
+                    }
                 }
             }
         }

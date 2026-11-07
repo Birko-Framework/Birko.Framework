@@ -22,23 +22,31 @@ namespace Birko.Data.SQL.Connectors
 
             var usePersistent = await ShouldUsePersistentViewAsync(view, name => ViewExistsAsync(name, ct)).ConfigureAwait(false);
             // TASK-639: a persistent view's WHERE names its own columns, not the source ones.
-            conditions = DataBase.ResolveViewConditions(view, conditions, usePersistent);
+            var terms = DataBase.ResolveViewConditions(view, conditions, usePersistent)?.ToList();
 
-            // TASK-724: no name test — see the sync twin (rule 53: an unreachable fallback, removed).
-            if (usePersistent)
-            {
-                return await SelectCountPersistentViewAsync(view.Name!, conditions, ct).ConfigureAwait(false);
-            }
+            // TASK-837 — see the sync twin.
+            var plan = PlanViewCountChunks(view, usePersistent, terms);
+            plan.ThrowIfRefused();
 
-            // TASK-151 (SH-M404): COUNT(*) over the view's own SELECT (see CreateViewCountCommand).
             long count = 0;
-            await DoCommandAsync(
-                command => { CreateViewCountCommand(command, view, conditions); return Task.CompletedTask; },
-                async command =>
+            foreach (var chunk in plan.Statements(terms))
+            {
+                // TASK-724: no name test — see the sync twin (rule 53: an unreachable fallback, removed).
+                if (usePersistent)
                 {
-                    var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-                    if (result != null && result != DBNull.Value) count = Convert.ToInt64(result);
-                }).ConfigureAwait(false);
+                    count += await SelectCountPersistentViewAsync(view.Name!, chunk, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                // TASK-151 (SH-M404): COUNT(*) over the view's own SELECT (see CreateViewCountCommand).
+                await DoCommandAsync(
+                    command => { CreateViewCountCommand(command, view, chunk); return Task.CompletedTask; },
+                    async command =>
+                    {
+                        var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+                        if (result != null && result != DBNull.Value) count += Convert.ToInt64(result);
+                    }).ConfigureAwait(false);
+            }
             return count;
         }
 

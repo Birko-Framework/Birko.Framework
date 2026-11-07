@@ -15,8 +15,10 @@ namespace Birko.Data.CosmosDB.Views;
 
 /// <summary>
 /// Azure Cosmos DB (NoSQL API) implementation of <see cref="IViewStore{TView}"/>.
-/// For non-aggregate views, uses LINQ via <c>container.GetItemLinqQueryable</c>.
-/// For aggregate views, builds Cosmos SQL with GROUP BY and executes via <c>GetItemQueryIterator</c>.
+/// Builds Cosmos SQL itself, with filter values bound as parameters by <c>CosmosFilterTranslator</c>: a projection
+/// for non-aggregate views, GROUP BY for aggregate ones, both run through <c>GetItemQueryIterator</c>. A collection
+/// <c>Contains</c> in a filter is refused before any request (TASK-837); it rendered <c>CONTAINS()</c> and matched
+/// nothing.
 /// Joins are not supported (Cosmos DB does not support cross-container joins).
 /// </summary>
 public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new()
@@ -409,6 +411,18 @@ internal static class CosmosFilterTranslator
         IList<KeyValuePair<string, object?>> parameters,
         Func<string, string>? mapMember)
     {
+        // TASK-837: only a string's Contains is a substring test. A collection's (`ids.Contains(v.Col)`, an IN list, in
+        // its instance, static and span forms) used to reach the string path and fail on an unrelated message, or, on a
+        // collection-valued field, render CONTAINS(c.Field, @p) over an array, which matches nothing. It is refused by
+        // name, before any request; Cosmos DB view filters have no IN. A list is never chunked here, so TASK-834's query
+        // text ceiling cannot be reached through a view.
+        if (method.Method.Name == "Contains" && (method.Object == null || method.Object.Type != typeof(string)))
+        {
+            throw new NotSupportedException(
+                "A Contains on a collection (an IN list, such as ids.Contains(v.Col)) is not supported in a Cosmos DB view "
+                + "filter; only a string's Contains is. Filter the source container through its store, or narrow the view. (TASK-837)");
+        }
+
         if (method.Method.Name == "Contains" && method.Object != null)
         {
             var field = TranslateFieldAccess(method.Object, mapMember);

@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateSelectCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_ViewInListChunking.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_ViewConditions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_ViewOrderBy.cs" />
