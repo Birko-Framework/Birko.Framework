@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: 4b5bf7e6a33b66aa46da5e6adc40ff88e547da43
-generated-on: 2026-10-16
+generated-at: 3ec3a29a5a8994e4b2d37a4abfd16131a5e7d081
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
@@ -11,9 +11,15 @@ sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
+  - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs
+  - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
+  - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteDecimal.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
@@ -23,6 +29,7 @@ sources:
   - ../Birko.Data.SQL/Stores/PropertyUpdateSqlTranslator.cs
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
+  - ../Birko.Data.Stores/ComputedValue.cs
   - ../Birko.Data.Stores/IAsyncBulkStore.cs
   - ../Birko.Data.Stores/IBulkStore.cs
   - ../Birko.Data.Stores/OrderBy.cs
@@ -46,8 +53,9 @@ ordered, paged collection; create/update/delete a whole collection; and — the 
 exists for — **update or delete every entity matching a LINQ predicate without the caller ever
 materialising those entities**. Two update flavours are offered: `Update(filter, Action<T>)`, a
 portable read-modify-save loop, and `Update(filter, PropertyUpdate<T>)`, a declarative set of
-property assignments — constant sets and numeric increments — that a backend is free to translate into
-one native statement (`UPDATE … SET … WHERE …`, MongoDB `$set` / `$inc`, ElasticSearch `UpdateByQuery`).
+property assignments — constant sets, numeric increments and computed sets (a `decimal` column set from a
+formula over the same row) — that a backend is free to translate into one native statement
+(`UPDATE … SET … WHERE …`, MongoDB `$set` / `$inc` or a pipeline update, ElasticSearch `UpdateByQuery`).
 
 The abstract bases (`AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>`) supply portable fallbacks
 that work on any backend; the SQL bulk stores (`DataBaseBulkStore<DB,T>` /
@@ -154,6 +162,17 @@ script writes a null as `null` under the stored field name and the by-query resp
 table through `TableIdentifier`). TASK-159, TASK-171, TASK-567, TASK-625 and TASK-632 touched these sources
 too; their changes here are `PropertyUpdate.Clone`, `OrderBy.ThenByName` and the duplicate / unique
 translation around the bulk collection writes.
+
+Scoped regen at `3ec3a29a5a8994e4b2d37a4abfd16131a5e7d081` for **TASK-826** — `PropertyUpdate<T>.Compute(target,
+formula)`, a third assignment kind (`ComputedAssignment`) whose value is the new closed `ComputedValue` formula
+hierarchy; `PropertyAssignment.Match` takes a third `computed` branch. The SQL connectors gain the
+`ComputedArithmetic` / `ComputedDivide` / `ComputedRound` / `ComputedTruncate` hooks, MongoDB renders an update holding
+a computed set as one pipeline update, ElasticSearch as Painless `BigDecimal`, and the portable fallback evaluates the
+formula in C#. **`.map.yml` was edited at the fix** (not found at a regen): `ComputedValue.cs`, the four dialect
+connectors, `SqLiteDecimal.cs` and `AbstractConnectorBase.cs` are now sources — which also closes the
+`AbstractConnectorBase.cs` gap reported at the TASK-137 regen above, so `WouldTargetEveryRow` / `AddRequiredWhere` are
+now reachable by this area's globs. The localization replay refusal and the event-sourcing record of a computed set
+live in files outside this area and are not specified here.
 
 ## Requirements
 
@@ -477,17 +496,29 @@ the update has no assignments.
   concurrent writer between the read and the save can lose one of the two increments; only the native
   translations below apply an increment atomically
 
+#### Scenario: A computed set in the fallback is evaluated in C# and not atomic
+
+- **Given** an `AbstractBulkStore<T>` / `AbstractAsyncBulkStore<T>` with no native translation (InMemory, JSON,
+  XML, RavenDB, Cosmos DB, InfluxDB) and
+  `new PropertyUpdate<T>().Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`
+- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates, ct)` is called
+- **Then** each matching entity is read, `ApplyTo` sets `Net` to `ComputedValue.Evaluate(entity)` — C#'s own
+  `decimal` arithmetic and `Math.Round` with the named mode — and the whole entity is saved; a concurrent writer
+  between the read and the save is not seen (TASK-826)
+
 ### Requirement: PropertyUpdate assignment collection and reflection application
 
 The system SHALL let callers accumulate assignments fluently via `PropertyUpdate<T>.Set(property, value)`,
-`Increment(property, delta)` and `Decrement(property, delta)`, SHALL preserve insertion order in the
-internal `Assignments` list, and SHALL store each entry as one of a **closed** set of kinds —
-`SetAssignment` (carrying `Value`) or `IncrementAssignment` (carrying `Delta`) — with no shared value
-member, so that a translator can reach an operand only through `PropertyAssignment.Match(set, increment)`
-and must name the increment branch to read a delta. `ApplyTo` SHALL apply the entries in order, resolving
+`Increment(property, delta)`, `Decrement(property, delta)` and `Compute(property, formula)`, SHALL preserve
+insertion order in the internal `Assignments` list, and SHALL store each entry as one of a **closed** set of
+kinds — `SetAssignment` (carrying `Value`), `IncrementAssignment` (carrying `Delta`) or `ComputedAssignment`
+(carrying a `ComputedValue` formula, TASK-826) — with no shared value member, so that a translator can reach an
+operand only through `PropertyAssignment.Match(set, increment, computed)` and must name the increment and computed
+branches to read a delta or a formula. `ApplyTo` SHALL apply the entries in order, resolving
 each target by unwrapping a `Convert` / `ConvertChecked` body to its operand and taking the
 `MemberExpression`'s `PropertyInfo`: a set assigns its value, an increment reads the current value and
-assigns `checked(current + delta)` in the property's own type. A selector that does not resolve to a
+assigns `checked(current + delta)` in the property's own type, and a computed set assigns
+`ComputedValue.Evaluate(entity)`. A selector that does not resolve to a
 property SHALL throw rather than be skipped. `Set` SHALL refuse, when it is **declared**, any selector that is
 not a direct access to a top-level property of `T` — a single `Convert` over one is allowed — with
 `ArgumentException` for the `property` parameter (TASK-170, SH-M026), so the reflection refusals of `ApplyTo`
@@ -547,6 +578,7 @@ a copy without mutating the instance it was given (TASK-159).
 - **Given** a `PropertyUpdate<T>` holding `Set(x => x.Name, "a")`
 - **When** `Clone()` is called and `Set(x => x.Count, 5)` is added to the copy
 - **Then** the copy holds both assignments in order and the original still holds only the first
+- **And** a cloned computed set evaluates the same formula (TASK-826)
 
 #### Scenario: An increment adds to the current value
 
@@ -608,13 +640,108 @@ allowed.
   of it
 - **Then** it throws `InvalidOperationException` naming `Count` and the assignment is not recorded
 
+### Requirement: A computed set accepts only an exact decimal formula with an explicit rounding mode
+
+The system SHALL accept `PropertyUpdate<T>.Compute(property, formula)` only for a target that is a direct
+access to a top-level `decimal` or `decimal?` property of `T` (else `ArgumentException` for `property`; a null
+formula is `ArgumentNullException`), and SHALL translate the formula, **when it is added**, into a closed
+`ComputedValue` tree — `ComputedColumn`, `ComputedConstant`, `ComputedBinary` (`Add`, `Subtract`, `Multiply`,
+`Divide`) and `ComputedRound` — reached only through `ComputedValue.Match(column, constant, binary, round)`
+(TASK-826). The formula MAY read non-nullable `decimal` top-level properties of the row, `decimal` constants and
+captured values, use `+ - * /` and unary minus (rendered as `0 - operand`), and call `Math.Round` / `decimal.Round`
+with an **explicit** `MidpointRounding.ToEven` or `MidpointRounding.AwayFromZero` and 0 to 28 digits (0 when the
+overload names none). A subtree that does not read the row SHALL be evaluated once, when added, to a `decimal`
+constant. Anything else SHALL be refused with `ArgumentException` ("Cannot compute '…': …") before any backend sees
+the update. `ComputedValue.Evaluate(entity)` — C#'s `decimal` arithmetic and `Math.Round` on the same row — SHALL
+be the reference every provider's translation stores.
+
+#### Scenario: A midpoint is rounded with the mode named
+
+- **Given** a row whose `Gross` is `0.15` and `Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, mode))`
+- **When** the update is applied, natively or by `ApplyTo`
+- **Then** `Net` is `0.12` for `ToEven` and `0.13` for `AwayFromZero` — the value C# computes for `0.125` — on
+  every provider (the shared `ComputedSetContract`, sync and async, also covers a negative midpoint, an inexact
+  `100 / 1.2` and a multiplication landing on a midpoint)
+
+#### Scenario: Captured values and constant subexpressions are evaluated when added
+
+- **Given** a captured `rate` and the formula `x => x.Gross / (1 + rate)`
+- **When** `Compute` is called
+- **Then** `1 + rate` becomes one `ComputedConstant`, so a later change to `rate` does not change the update
+- **And** a constant subexpression that evaluates to null, or to a type other than `decimal`, is refused, and one
+  that throws is refused with the exception's message
+
+#### Scenario: A rounding without an explicit mode is refused
+
+- **Given** `Math.Round(x.Gross / 1.2m, 2)`
+- **When** `Compute` is called
+- **Then** it throws `ArgumentException` saying the mode must be explicit, because C# and MongoDB round half to
+  even by default and SQL half away from zero
+- **And** a directed mode (`ToZero`, `ToNegativeInfinity`, `ToPositiveInfinity`), digits or a mode that depend on
+  the row, and digits outside 0 to 28 are refused the same way
+
+#### Scenario: Operands the formula cannot read are refused
+
+- **Given** a formula reading a `decimal?` property, a non-`decimal` property, a nested member
+  (`x.Owner.Amount`), `%`, or any method other than `Math.Round` / `decimal.Round`
+- **When** `Compute` is called
+- **Then** it throws `ArgumentException` and nothing is recorded — a nullable operand is refused because NULL
+  arithmetic differs between providers
+
+#### Scenario: A nullable decimal property may be the target
+
+- **Given** a `decimal? Net` property
+- **When** `Compute(x => x.Net, x => x.Gross * 2m)` is applied
+- **Then** `Net` holds the computed value
+
+#### Scenario: A division by zero fails rather than storing anything
+
+- **Given** `Compute(x => x.Net, x => x.Gross / 0m)` or `x => 10m / x.Gross` over a row whose `Gross` is 0
+- **When** `ApplyTo` runs, or the SQLite statement executes
+- **Then** `ApplyTo` throws `DivideByZeroException`; on SQLite `birko_decimal_div` throws, which fails the whole
+  statement, so no row — including the rows whose divisor was not zero — is changed
+
+### Requirement: A computed set never shares a column with another assignment of the same update
+
+The system SHALL refuse with `InvalidOperationException`, when the assignment is added: a computed set of a
+member that already has any assignment; any `Set` or `Increment` of a member that already has a computed set; a
+formula that reads its own target; a formula that reads a member the update already assigns; and any assignment to
+a member that an earlier formula reads — in either order of the calls — because providers evaluate a SET list in
+different orders (MySQL left to right, the others against the old row) (TASK-826). Assignments to independent
+members SHALL combine in one update, and a formula SHALL read the row as it was before the update.
+
+#### Scenario: A formula reading a column the update assigns is refused in either order
+
+- **Given** `new PropertyUpdate<T>().Set(x => x.Gross, 5m)`
+- **When** `.Compute(x => x.Net, x => x.Gross * 2m)` is added — or the `Compute` is added first and the `Set` after
+- **Then** it throws `InvalidOperationException` naming both members and asking for separate updates
+
+#### Scenario: A formula reading its own target is refused
+
+- **Given** a fresh `PropertyUpdate<T>`
+- **When** `Compute(x => x.Net, x => x.Net * 2m)` is called
+- **Then** it throws `InvalidOperationException`
+
+#### Scenario: A computed target cannot have another assignment
+
+- **Given** a `PropertyUpdate<T>` that already computes `Net`
+- **When** `Set(x => x.Net, 1m)`, `Increment(x => x.Net, 1m)` or a second `Compute(x => x.Net, …)` is added
+- **Then** it throws `InvalidOperationException` naming `Net`, and the assignment is not recorded
+
+#### Scenario: Independent assignments combine
+
+- **Given** `new PropertyUpdate<T>().Set(x => x.Name, "rate changed").Compute(x => x.Net, x => x.Gross / 1.2m)`
+- **When** the update is applied
+- **Then** both members are written in the one update
+
 ### Requirement: SQL PropertyUpdate translates to a single UPDATE … SET … WHERE
 
 The system SHALL override `Update(filter, PropertyUpdate<T>)` in `DataBaseBulkStore<DB,T>` and
 `AsyncDataBaseBulkStore<DB,T>` to render the assignments through the shared
 `PropertyUpdateSqlTranslator` — each column resolved through `DataBase.GetFieldFromLambda` and emitted
 bare, a set as `col = @SETcol` and an increment as `col = ` followed by the store `Connector`'s
-`IncrementExpression(field, col, @SETcol)` — `col + @SETcol` by default — translate the filter through
+`IncrementExpression(field, col, @SETcol)` — `col + @SETcol` by default — and a computed set as `col = ` followed
+by its formula rendered through the connector's computed-set hooks (see the next requirement), translate the filter through
 `DataBase.ParseConditionExpression`, and issue one connector
 `Update(tableName, fields, values, conditions, isExpressionValues: true, allowAllRows)` — reading no
 entities and invoking no per-entity update path. Two assignments to one member SHALL be last-wins, as
@@ -692,8 +819,8 @@ fragments and by the connector's own non-expression SET rendering.
 - **Then** the translator removes the earlier fragment and its `@SETName` value and keeps the second, so one
   statement sets `Name = @SETName` bound to `"b"` — the same result `ApplyTo` reaches on the portable path
   (TASK-170, SH-M030; it used to throw `ArgumentException` on the duplicate dictionary key). Only two sets can
-  reach this, because an increment beside another assignment to its member is refused when the update is
-  declared
+  reach this, because an increment or a computed set beside another assignment to its member is refused when the
+  update is declared
 
 #### Scenario: Two different properties mapped onto one column are refused
 
@@ -728,15 +855,66 @@ fragments and by the connector's own non-expression SET rendering.
 - **And** with a null filter it instead throws `ArgumentNullException`, because `RequireFilter` precedes
   initialisation — a missing store does not excuse a missing filter
 
+### Requirement: SQL computed sets render through per-dialect connector hooks
+
+The system SHALL render a `ComputedAssignment` in `PropertyUpdateSqlTranslator` as `col = <formula>`, with every
+column the formula reads resolved through `DataBase.GetFieldFromLambda` (the same resolution as the target, so a
+renamed or inherited column is read where it is written) and emitted bare, every constant bound as its own
+parameter named after the target column (`@SETcol_<n>`), each arithmetic step through the connector's
+`ComputedArithmetic(op, left, right)` and each round through `ComputedRound(value, digits, mode)` (TASK-826). On
+the async bulk store the fragment SHALL be rendered by the sync `Connector`, as an increment's is. The
+`AbstractConnectorBase` defaults SHALL be: `+ - *` as the native operators, parenthesised; `/` through
+`ComputedDivide(left, right)`, the plain quotient by default; `AwayFromZero` as `ROUND(value, digits)`; and
+`ToEven` emulated, because every server dialect's `ROUND` rounds half away from zero — a value whose scaled form
+`value * 10^digits` lies exactly `0.5` from its `ComputedTruncate` (`TRUNC(…)` by default) goes to the even
+neighbour, and any other value is `ROUND(value, digits)`. The dialects SHALL override: PostgreSQL divides
+`CAST(left AS NUMERIC(60,28)) / right`; MySQL divides `CAST(left AS DECIMAL(65,26)) / right` and truncates with
+`TRUNCATE(v, 0)`; SQL Server divides `CAST(left AS DECIMAL(38,20)) / CAST(right AS DECIMAL(28,8))`, narrows the value
+to `DECIMAL(32,12)` before the half-even test, and truncates with `ROUND(v, 0, 1)`; SQLite renders every step
+through C# `decimal` functions — `birko_decimal_add` / `_sub` / `_mul` / `_div` and
+`birko_decimal_round(value, digits, awayFromZero ? 1 : 0)` — registered on each connection, because SQLite's own
+operators go through a double.
+
+#### Scenario: A computed set is one UPDATE that rounds as C# does
+
+- **Given** a SQL bulk store and `Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`
+- **When** `Update(filter, updates)` is called over three matching rows
+- **Then** exactly one `UPDATE` statement is issued, and each row's `Net` equals
+  `Math.Round(row.Gross / 1.2m, 2, MidpointRounding.ToEven)` — on SQLite also for 20-digit values such as
+  `98765432109876543.21`
+
+#### Scenario: Half-to-even is emulated around ROUND on the server dialects
+
+- **Given** PostgreSQL, TimescaleDB, SQL Server or MySQL and a `ToEven` round over a value landing on a midpoint
+- **When** the statement runs
+- **Then** the `CASE WHEN ABS(scaled - truncated) = 0.5 THEN (truncated + (truncated % 2)) * 10^-digits ELSE
+  ROUND(value, digits) END` form stores the even neighbour, where `ROUND` alone would round away from zero
+
+#### Scenario: SQLite computes every step in C# decimal
+
+- **Given** a SQLite store and a computed set
+- **When** the formula is rendered
+- **Then** `ComputedArithmetic` emits `birko_decimal_add|sub|mul|div(left, right)` and `ComputedRound` emits
+  `birko_decimal_round(value, digits, mode)`; a NULL operand yields NULL
+
 ### Requirement: Document-store PropertyUpdate translations render sets and increments natively
 
 The system SHALL, in `MongoDBStore<T>` / `AsyncMongoDBStore<T>`, render a non-empty `PropertyUpdate<T>`
 through the shared `MongoPropertyUpdateTranslator.Build` as one combined update definition — a set as
 `$set` and an increment as `$inc`, each under the target property's C# name — and issue one
-`UpdateMany`, inside `TransactionContext` when one is set. It SHALL refuse an increment whose member is
-serialized with a string representation before anything is sent. The system SHALL, in
+`UpdateMany`, inside `TransactionContext` when one is set. When the update holds a computed set it SHALL instead
+build one pipeline update (`BuildPipeline`, MongoDB 4.2+): a single `$set` stage, keyed by each member's class-map
+element name, in which a set is a `$literal`, an increment an `$add` of the element and the delta, and a formula the
+aggregation operators `$add` / `$subtract` / `$multiply` / `$divide` over `Decimal128` constants, `ToEven` as
+`$round` and `AwayFromZero` emulated as `sign(v) * floor(|v| * 10^d + 0.5) / 10^d` — so every expression reads the
+document as it was before the update (TASK-826). It SHALL refuse an increment, and a computed set whose target or
+any column it reads, when that member is serialized with a string representation, before anything is sent. The
+system SHALL, in
 `ElasticSearchStore<T>` / `AsyncElasticSearchStore<T>`, render the assignments through the shared
-`ElasticSearchStoreHelper.BuildUpdateScript` as one inline painless script run by `UpdateByQuery`, and SHALL
+`ElasticSearchStoreHelper.BuildUpdateScript` as one inline painless script run by `UpdateByQuery` — a computed set
+as a `BigDecimal` expression (each column parsed from its stored text, each constant a string parameter, division at
+`MathContext.DECIMAL128`, a round as `setScale(digits, HALF_EVEN | HALF_UP)`) whose result is stored through
+`.doubleValue()` (TASK-826) — and SHALL
 throw unless that by-query write ran to completion (`ElasticSearchStoreHelper.RequireComplete`, shared with
 `Delete(filter)`'s `DeleteByQuery`). Both backends run their filter guards first and return without writing
 when the update has no assignments. MongoDB also returns without writing when its collection is missing;
@@ -758,12 +936,26 @@ an ElasticSearch store with no client does not return silently (TASK-153) — se
 - **Then** it throws `NotSupportedException` naming `T.Amount` and suggesting
   `[BsonRepresentation(BsonType.Decimal128)]`, and nothing is sent to the server
 - **And** the same member stored as `Decimal128` is incremented normally
+- **And** a computed set whose target or any column it reads is string-stored is refused with the same exception,
+  whose message now names both "an increment or a computed set" (TASK-826)
+
+#### Scenario: MongoDB renders an update holding a computed set as one pipeline update
+
+- **Given** a `MongoDBStore<T>` and
+  `new PropertyUpdate<T>().Set(x => x.Name, "n").Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, mode))`
+- **When** `Update(filter, updates)` is called with a bounded filter
+- **Then** one `UpdateMany` is issued with a pipeline of one `$set` stage holding `Name: { $literal: "n" }` and
+  `Net` as `$divide` of `$Gross` by a `Decimal128` constant under `$round` (`ToEven`) or the `$let` / `$floor`
+  away-from-zero form (`AwayFromZero`), and the stored value matches C#'s
+- **And** an update with no computed set keeps the `$set` / `$inc` form above
 
 #### Scenario: MongoDB writes under the C# property name
 
 - **Given** a property mapped to a different element name (for example with `[BsonElement("n")]`)
 - **When** it is set or incremented through a `PropertyUpdate<T>`
 - **Then** the update names the C# property, not the mapped element name (TASK-503)
+- **And** the pipeline form used when the update holds a computed set names the class map's element name directly
+  (`ElementName`, falling back to the C# name), because a raw pipeline stage is not mapped by the driver (TASK-826)
 
 #### Scenario: MongoDB refuses a selector that is not a property
 
@@ -779,6 +971,14 @@ an ElasticSearch store with no client does not return silently (TASK-153) — se
   field name is the field the document is stored under (`ElasticSearch.StoredFieldName`, the producer the
   filter and sort translators share: the `Name` a NEST mapping attribute declares, else the property name
   camel-cased), each parameter `p_<PropertyName>`
+
+#### Scenario: ElasticSearch renders a computed set in BigDecimal
+
+- **Given** an `ElasticSearchStore<T>` and `Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`
+- **When** the script is built
+- **Then** the fragment is `ctx._source.net = (new BigDecimal(String.valueOf(ctx._source.gross))
+  .divide(new BigDecimal(params.p_Net_<n>), MathContext.DECIMAL128).setScale(2, RoundingMode.HALF_EVEN)).doubleValue()`,
+  with the constant bound as the string `"1.2"`; `AwayFromZero` renders `RoundingMode.HALF_UP` (TASK-826)
 
 #### Scenario: ElasticSearch writes a mapping-renamed property where it is read
 
