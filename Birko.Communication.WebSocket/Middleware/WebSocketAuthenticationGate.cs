@@ -1,6 +1,8 @@
+using Birko.Security.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Threading.Tasks;
 
@@ -31,10 +33,27 @@ namespace Birko.Communication.WebSocket.Middleware
             var isService = services.GetService<IServiceProviderIsService>();
             if (isService == null || isService.IsService(typeof(Services.WebSocketAuthenticationService)))
             {
+                EnsureProxyListsAgree(services);
                 return;
             }
 
             throw new InvalidOperationException($"{MissingServiceMessage} Endpoint: '{pattern}'.");
+        }
+
+        /// <summary>
+        /// TASK-829: the service refuses a trusted-proxy list that differs from the host's forwarded headers, but it is
+        /// built on first use. Checking at map time makes that refusal a startup failure rather than a first-request one.
+        /// Both are singletons, so reading them from the root provider is safe.
+        /// </summary>
+        private static void EnsureProxyListsAgree(IServiceProvider services)
+        {
+            var hostProxies = services.GetService<TrustedProxySettings>();
+            var config = services.GetService<IOptions<Services.WebSocketAuthenticationConfiguration>>()?.Value;
+            if (hostProxies == null || config == null)
+            {
+                return;
+            }
+            Services.WebSocketAuthenticationService.EnsureProxyListsAgree(config, hostProxies);
         }
 
         /// <summary>

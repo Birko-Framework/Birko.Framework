@@ -112,6 +112,10 @@ It fails closed. With `requireAuthentication: true` and no `WebSocketAuthenticat
 `InvalidOperationException`, and a request that reaches the gate anyway is refused with 401. Before TASK-536 the check
 was skipped and anonymous upgrades were accepted.
 
+Behind a reverse proxy, register the proxy once with `AddBirkoForwardedHeaders` (Birko.Security.AspNetCore). The token
+binding then checks the client address that registration produced, and a `TrustedProxies` list in
+`WebSocketAuthenticationConfiguration` must be empty or the same list, or mapping refuses (TASK-829).
+
 ```csharp
 // Static tokens
 builder.Services.Configure<WebSocketAuthenticationConfiguration>(builder.Configuration.GetSection("WebSocketAuth"));

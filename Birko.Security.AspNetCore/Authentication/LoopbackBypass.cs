@@ -58,8 +58,9 @@ public static class LoopbackBypass
 /// bound to <c>[::]</c>, i.e. unauthenticated access from any interface. Unknown addresses (a server that reports none,
 /// e.g. a test host) enforce.
 /// <para>
-/// ⚠ A reverse proxy on the same machine forwards remote callers over loopback. The bypass cannot tell them apart; never
-/// enable it behind one.
+/// ⚠ A reverse proxy on the same machine forwards remote callers over loopback. The bypass cannot tell them apart, so the
+/// host refuses to start when <c>AddBirkoForwardedHeaders</c> trusts any proxy (TASK-829); never enable it behind one that
+/// is not registered there.
 /// </para>
 /// </remarks>
 public sealed class LoopbackBypassMiddleware

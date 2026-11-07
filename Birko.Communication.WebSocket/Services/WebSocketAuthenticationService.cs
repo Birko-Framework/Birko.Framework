@@ -25,10 +25,59 @@ namespace Birko.Communication.WebSocket.Services
             IOptions<WebSocketAuthenticationConfiguration> config,
             ILogger<WebSocketAuthenticationService> logger,
             ILogger<AuthenticationService> authLogger)
+            : this(config, logger, authLogger, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance in a host that registered the forwarded headers (TASK-829). The container picks
+        /// this constructor when <see cref="TrustedProxySettings"/> is registered.
+        /// </summary>
+        /// <param name="config">The authentication configuration</param>
+        /// <param name="logger">ASP.NET Core logger for this service</param>
+        /// <param name="authLogger">ASP.NET Core logger for the authentication service</param>
+        /// <param name="forwardedHeadersProxies">The host's one list of trusted proxies, or null when it has none</param>
+        /// <exception cref="InvalidOperationException">
+        /// This configuration's own non-empty <see cref="AuthenticationConfiguration.TrustedProxies"/> differs from
+        /// <paramref name="forwardedHeadersProxies"/>.
+        /// </exception>
+        public WebSocketAuthenticationService(
+            IOptions<WebSocketAuthenticationConfiguration> config,
+            ILogger<WebSocketAuthenticationService> logger,
+            ILogger<AuthenticationService> authLogger,
+            TrustedProxySettings? forwardedHeadersProxies)
         {
             var authConfig = config.Value ?? new WebSocketAuthenticationConfiguration();
+            EnsureProxyListsAgree(authConfig, forwardedHeadersProxies);
             _authService = new AuthenticationService(authConfig, authLogger);
             _logger = logger;
+        }
+
+        /// <summary>
+        /// TASK-829: behind <c>AddBirkoForwardedHeaders</c> the client address is decided by that registration's list
+        /// alone (<see cref="GetClientIpAddress"/> takes the address it produced), so a different list here would be
+        /// accepted and never used. An empty list here is fine: it defers to the host's.
+        /// </summary>
+        internal static void EnsureProxyListsAgree(AuthenticationConfiguration own, TrustedProxySettings? forwardedHeadersProxies)
+        {
+            if (forwardedHeadersProxies == null)
+            {
+                return;
+            }
+            var ownList = TrustedProxyList.ParseLenient(own.TrustedProxies);
+            if (ownList.IsEmpty)
+            {
+                return;
+            }
+            var hostList = TrustedProxyList.ParseLenient(forwardedHeadersProxies.TrustedProxies);
+            if (ownList.SameAs(hostList))
+            {
+                return;
+            }
+            throw new InvalidOperationException(
+                $"WebSocketAuthenticationConfiguration.TrustedProxies lists {ownList}, but this host's forwarded headers "
+                + $"(Birko:ForwardedHeaders:TrustedProxies) list {hostList}. The client address is decided by the "
+                + "forwarded headers alone, so this list would never be used. Leave it empty, or make it the same list.");
         }
 
         /// <summary>
@@ -59,8 +108,18 @@ namespace Birko.Communication.WebSocket.Services
         /// </summary>
         /// <param name="context">The HTTP context</param>
         /// <returns>The client IP address or null</returns>
+        /// <remarks>
+        /// TASK-829: once <c>AddBirkoForwardedHeaders</c> has applied the forwarded headers
+        /// (<see cref="TrustedProxySettings.ResolvedItemKey"/>), the connection's address already is the client, and it
+        /// is returned as is. Reading <c>X-Forwarded-For</c> again could answer differently: past ASP.NET's forward
+        /// limit, or from <c>X-Real-IP</c>, which ASP.NET never reads and a client can send.
+        /// </remarks>
         public string? GetClientIpAddress(HttpContext context)
         {
+            if (context.Items.ContainsKey(TrustedProxySettings.ResolvedItemKey))
+            {
+                return context.Connection.RemoteIpAddress?.ToString();
+            }
             return _authService.ResolveClientIp(
                 headerName => context.Request.Headers[headerName].FirstOrDefault(),
                 context.Connection.RemoteIpAddress?.ToString()

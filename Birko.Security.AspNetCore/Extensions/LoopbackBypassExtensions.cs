@@ -42,5 +42,16 @@ internal sealed class LoopbackBypassStartupCheck : IStartupFilter
                 "BirkoSecurityOptions.LoopbackBypass is true, but app.UseBirkoLoopbackBypass() is not in the pipeline, "
                 + "so the bypass never applies. Call it after UseAuthentication() and before UseAuthorization(), or "
                 + "turn the option off.");
+
+        // TASK-829: a trusted proxy means one stands in front of this host, and a proxy on the same machine forwards
+        // remote callers over loopback, which the bypass cannot tell from a local tool. Read at Configure time, so the
+        // order of AddBirkoSecurity and AddBirkoForwardedHeaders does not matter.
+        if (_options.LoopbackBypass
+            && app.ApplicationServices.GetService(typeof(ForwardedHeadersRegistration)) is ForwardedHeadersRegistration proxies
+            && !proxies.Proxies.IsEmpty)
+            throw new InvalidOperationException(
+                "BirkoSecurityOptions.LoopbackBypass is true, but Birko:ForwardedHeaders:TrustedProxies lists "
+                + $"{proxies.Proxies}, so this host runs behind a reverse proxy, which forwards remote callers over "
+                + "loopback. The bypass would let them in without a token. Turn one of the two off.");
     };
 }

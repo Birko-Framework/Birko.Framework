@@ -9,6 +9,11 @@ namespace Birko.Security.AspNetCore;
 /// Resolves tenant from the request hostname subdomain.
 /// Example: "tenant1.example.com" → TenantName = "tenant1".
 /// Requires a lookup function to map tenant name → TenantGuid.
+/// <para>
+/// Reads <c>Request.Host</c>. Behind a reverse proxy that is the proxy's <c>Host</c> unless the proxy passes the client's
+/// through, or <c>AddBirkoForwardedHeaders</c> lists the public host names in <c>AllowedHosts</c> (TASK-829); that
+/// registration always runs before this resolver.
+/// </para>
 /// </summary>
 public sealed class SubdomainTenantResolver : ITenantResolver
 {

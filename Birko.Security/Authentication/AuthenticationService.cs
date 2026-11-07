@@ -16,7 +16,7 @@ namespace Birko.Security.Authentication
         private readonly ILogger<AuthenticationService>? _logger;
         private readonly HashSet<string> _expandedTokens;
         private readonly List<CachedTokenBinding> _expandedBindings;
-        private readonly IReadOnlyCollection<string> _trustedProxies;
+        private readonly TrustedProxyList _trustedProxies;
         private readonly ReaderWriterLockSlim _lock;
         private int _disposed; // SH-L238: 0 or 1, claimed with Interlocked.Exchange in Dispose
 
@@ -43,10 +43,9 @@ namespace Birko.Security.Authentication
             _expandedTokens = new HashSet<string>(StringComparer.Ordinal);
             _expandedBindings = new List<CachedTokenBinding>();
             _lock = new ReaderWriterLockSlim();
-            _trustedProxies = (_config.TrustedProxies ?? new List<string>())
-                .Select(ExpandEnvironmentVariable)
-                .Where(p => !string.IsNullOrWhiteSpace(p))
-                .ToList();
+            // TASK-829: one parser for every trusted-proxy list, lenient here: a bad entry is skipped and logged.
+            _trustedProxies = TrustedProxyList.ParseLenient(_config.TrustedProxies, (entry, reason) =>
+                _logger?.LogError("TrustedProxies entry '{Entry}' {Reason}; it is ignored.", entry, reason));
 
             // Initialize cache immediately to avoid first-request latency
             InitializeCache();
@@ -300,8 +299,14 @@ namespace Birko.Security.Authentication
             Func<string, string?> getHeaderValue,
             string? fallbackIp,
             IReadOnlyCollection<string>? trustedProxies = null)
+            => GetClientIpAddress(getHeaderValue, fallbackIp, TrustedProxyList.ParseLenient(trustedProxies));
+
+        private static string? GetClientIpAddress(
+            Func<string, string?> getHeaderValue,
+            string? fallbackIp,
+            TrustedProxyList trustedProxies)
         {
-            if (trustedProxies == null || trustedProxies.Count == 0 || !IsTrusted(fallbackIp, trustedProxies))
+            if (trustedProxies.IsEmpty || !trustedProxies.Contains(ParseAddress(fallbackIp)))
             {
                 return fallbackIp;
             }
@@ -320,7 +325,7 @@ namespace Birko.Security.Authentication
                     {
                         return fallbackIp;
                     }
-                    if (i == 0 || !IsTrusted(hops[i], trustedProxies))
+                    if (i == 0 || !trustedProxies.Contains(hop))
                     {
                         return Normalize(hop).ToString();
                     }
@@ -338,36 +343,6 @@ namespace Birko.Security.Authentication
             }
 
             return fallbackIp;
-        }
-
-        private static bool IsTrusted(string? ip, IReadOnlyCollection<string> trustedProxies)
-        {
-            var address = ParseAddress(ip);
-            if (address == null)
-            {
-                return false;
-            }
-
-            foreach (var entry in trustedProxies)
-            {
-                if (entry.Contains('/'))
-                {
-                    if (System.Net.IPNetwork.TryParse(entry.Trim(), out var network)
-                        && (network.Contains(address) || (address.IsIPv4MappedToIPv6 && network.Contains(address.MapToIPv4()))))
-                    {
-                        return true;
-                    }
-                }
-                else
-                {
-                    var proxy = ParseAddress(entry);
-                    if (proxy != null && Normalize(proxy).Equals(Normalize(address)))
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
         }
 
         private static System.Net.IPAddress? ParseAddress(string? value)

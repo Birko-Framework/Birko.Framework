@@ -23,7 +23,8 @@ Birko.Security.AspNetCore/
 │   ├── JwtAuthenticationOptions.cs  - JWT Bearer configuration (Secret, Issuer, Audience, Expiration, ClockSkew, Claims mapping)
 │   ├── JwtBearerExtensions.cs       - AddBirkoJwtBearer() DI extension method
 │   ├── TokenServiceAdapter.cs       - Wraps ITokenProvider with TokenRequest/TokenValidationInfo records
-│   └── LoopbackBypass.cs            - TASK-522: ShouldBypass decision + LoopbackBypassMiddleware (opt-in, loopback-only binds)
+│   ├── LoopbackBypass.cs            - TASK-522: ShouldBypass decision + LoopbackBypassMiddleware (opt-in, loopback-only binds)
+│   └── BirkoForwardedHeadersOptions.cs - TASK-829: TrustedProxySettings + ForwardLimit / AllowedHosts / ForwardProto (Birko:ForwardedHeaders)
 ├── Authorization/
 │   ├── ClaimsPermissionChecker.cs   - IPermissionChecker from JWT claims (wildcard "*" superadmin support)
 │   └── PermissionEndpointFilter.cs  - Minimal API RequirePermission() endpoint filter
@@ -38,7 +39,8 @@ Birko.Security.AspNetCore/
     ├── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI (JWT + User + Permissions + Tenant)
     ├── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() middleware wiring (sets the startup marker)
     ├── TenantHeaderGuardStartupCheck.cs - TASK-161: the host refuses to start when the guard is required but not wired
-    └── LoopbackBypassExtensions.cs  - UseBirkoLoopbackBypass() + the startup check refusing an enabled bypass that is not wired
+    ├── LoopbackBypassExtensions.cs  - UseBirkoLoopbackBypass() + the startup check refusing an enabled bypass that is not wired, or behind a trusted proxy
+    └── ForwardedHeadersExtensions.cs - TASK-829: AddBirkoForwardedHeaders() + the startup filter putting ForwardedHeadersMiddleware first
 ```
 
 ## Dependencies
@@ -66,7 +68,15 @@ Birko.Security.AspNetCore/
   server **actually bound** (`IServerAddressesFeature`, per request) is loopback. Unknown addresses, a wildcard bind
   (`0.0.0.0`, `[::]`) or any other address enforce. DraCode decided from the configured URLs, which a code-level
   Kestrel `Listen` overrides: measured, it bypassed while bound to `[::]`. An enabled bypass without its middleware
-  refuses to start. Never enable it behind a same-machine reverse proxy (remote callers arrive over loopback)
+  refuses to start, and so does one with `AddBirkoForwardedHeaders` trusting any proxy (TASK-829: a same-machine proxy
+  forwards remote callers over loopback)
+- `AddBirkoForwardedHeaders` (TASK-829) is the host's one list of trusted proxies, registered as `TrustedProxySettings`.
+  No `Use…` call: a startup filter inserted at index 0 puts `ForwardedHeadersMiddleware` first, ahead of the
+  authentication WebApplication adds on its own, which no app-placed call can guarantee. Its options are applied with
+  `PostConfigure` (ASP.NET reads both empty lists as *trust everyone*, so an empty list switches the headers off). A
+  request it processed carries `Items[TrustedProxySettings.ResolvedItemKey]`, and the WebSocket token binding then
+  takes `RemoteIpAddress` instead of walking the headers again. The `X-Forwarded-*` values it left unread are removed,
+  so a second `ForwardedHeadersMiddleware` cannot believe a client-written hop (rule 67, measured)
 
 ### Tenant header/claim correlation (`TenantHeaderClaimGuardMiddleware`)
 

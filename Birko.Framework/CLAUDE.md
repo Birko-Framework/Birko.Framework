@@ -3,7 +3,7 @@
 Modular .NET framework with data access, communication, AI, and model infrastructure. General-purpose across enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, and real-time domains.
 
 See also:
-- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (66 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
+- [CLAUDE-conventions.md](CLAUDE-conventions.md) — **the rulebook (67 rules with their measurements); § Conventions below indexes it and is not a substitute for it**
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog
 - [CLAUDE-maintenance.md](CLAUDE-maintenance.md) — Maintenance guidelines, new project checklist, solution registration
 - [CHANGELOG.md](CHANGELOG.md) — Historical architectural changes
@@ -121,7 +121,7 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 ## Conventions
 
-Day-to-day API conventions are below. **The rulebook proper — 66 rules, each with the measurement that
+Day-to-day API conventions are below. **The rulebook proper — 67 rules, each with the measurement that
 earned it — lives in [CLAUDE-conventions.md](CLAUDE-conventions.md).** The index after these bullets carries
 each rule's opening statement so you can tell whether one applies; open that file for the reasoning,
 the counter-examples and the measurements. They are not optional: every one exists because the defect
@@ -207,6 +207,7 @@ Search that file for the phrase to reach the full rule.
 64. DDL that names something only a registration provides makes every connection a participant — the connector is its one producer, and any other connection must register or it fails
 65. A denied action answers 403 when the caller may read the resource and 404 when they may not — and "unauthenticated" is 401, decided before anything is looked up
 66. A retry re-runs a write only when the server says it applied nothing, or when nothing was sent
+67. In an ASP.NET host the client address is decided once, by `AddBirkoForwardedHeaders`, and nothing reads the forwarded headers a second time
 
 ## Task tracking — this directory is the monorepo's aggregator
 
@@ -295,6 +296,14 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### One trusted-proxy list behind a reverse proxy (2026-11-07)
+[[TASK-829]]. New `AddBirkoForwardedHeaders(section)` (Birko.Security.AspNetCore, `Birko:ForwardedHeaders`): the host's one
+list of trusted proxies, registered as `TrustedProxySettings`. There is no `Use…` call; a startup filter puts ASP.NET's
+forwarded headers first. An empty list trusts nobody, even through a manual `UseForwardedHeaders()`, and a bad entry stops
+the host. The WebSocket token binding takes the address those headers produced, and refuses a list of its own that
+differs. The loopback bypass refuses to start behind a trusted proxy. The forwarded values it leaves unread are removed, so a
+second `UseForwardedHeaders()` cannot believe a client-written hop (rule 67, measured). One parser, `TrustedProxyList`,
+for every list (the user's decisions). Presenter, Symbio and Affiliate replace their own copies (notes in the task).
 ### RavenDB increments and sets run on the server (2026-11-07)
 [[TASK-827]]. `PropertyUpdate` on RavenDB was read-modify-save, so parallel increments lost some (measured). Exact
 kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments
@@ -318,66 +327,6 @@ takes a third (`computed`) branch. A RavenDB server-side patch is [[TASK-827]].
 onto it afterwards (84% of loads racing a re-apply saw none, measured); a later eviction lost them for good. The fluent
 part now runs inside the build (`DataBase.RegisterTableConfigurator`), and re-applying unchanged mappings or table names
 evicts nothing.
-### Security low findings: 23 verified and fixed (2026-11-06)
-[[TASK-176]]. Behaviour a consumer can notice: `AddBirkoJwtBearer` refuses a secret under 32 characters and both JWT
-paths accept HS256 only; `WildcardPermissionEnabled = false` now disables a `"*"` from the host's claims or resolver
-everywhere, grants admin included, while the admin grant and the loopback bypass keep theirs, the bypass now under `UseResolvedPermissions` too ([[TASK-824]]; it got 403) ([[TASK-823]], the user's
-decision; new marker `IAppliesWildcardOption`); `TokenServiceAdapter` writes
-`sub` / `email`. **New interface members:** `IPasswordHasher.NeedsRehash`, `IEncryptionProvider.CreateKey`. Also: fixed-time
-static tokens, BCrypt `$2y$` and a stored-cost ceiling, Vault client disposal, a per-endpoint single-flight JWKS cache.
-### Birko.Xaml themes the five `needs-theme` parity rows (2026-11-06)
-[[TASK-822]]. `NumericUpDown` and `Carousel` take Birko tokens; `BPre` / `BCodeBlock` are keyed `SelectableTextBlock`
-themes. `ColorPicker` (new package reference) needs `Controls/ColorPickerStyles.axaml` as a `StyleInclude`, like DataGrid.
-### Every project's CLAUDE.md names the specs that cover it (2026-11-06)
-[[TASK-226]]. Specs stay in `docs/specs/` (the user's decision); each project and test `CLAUDE.md` now carries a Specs
-block under its title, generated by `dotnet run spec-links.cs` from the `sources:` globs in `.map.yml` (matched by git,
-as `/specs` does): 191 of 303 name areas, 112 say "none yet". Never edit a block: change the map and re-run. CI's
-`helper-scripts` runs `--check`.
-### A soft delete keeps every column of the stored row (2026-11-06)
-[[TASK-821]]. `SoftDeleteStoreWrapper.Delete` (sync, async, bulk) stamped and wrote the instance it was given, so
-deleting through a view-model repository, which passes a model carrying only what `MapToModel` assigns, blanked every
-unmapped column (measured) and a `Restore` brought the row back without them. It now stamps a copy of the stored row
-(`SoftDeleteFilter.ToWrite`); with no stored row the store still reports the missing key.
-### ViewModel repositories skip an unchanged save; `ReadMode` and the hash are gone (2026-11-06)
-[[TASK-453]]. An update that changes nothing against the row it just read no longer reaches the store, single or
-bulk (`IsUnchanged`; the user's decision). It writes no audit stamp, `UpdatedAt` or event, accepted in writing. The
-SHA-256 tracker, which hashed every model on every read and gated nothing, is deleted. **Breaking:** `ReadMode` is
-removed with it, write guard included; Affiliate and FisData.Stock.Core stop compiling until their calls go.
-[[TASK-454]]: a view-model update of a soft-deleted row is refused (`EntityNotFoundException`), pinned.
-### Concurrent first table builds publish one consistent table (2026-11-06)
-[[TASK-276]]. A table build writes into the cached field objects every build of the type shares (`field.Table`,
-`IsPrimary`, `IsIndexed`), so two concurrent first `LoadTable` calls published a table whose fields pointed at the losing
-build's copy (measured: 3,997 of 4,000 rounds with 8 threads). Builds now run under one re-entrant lock, taken only on a
-cache miss. No answer was wrong before (flags and indexes matched; the one reader reads the shared fields). The flaky
-test the task was opened for never recurred in 200 loaded runs and stays unexplained.
-### SQL writes retry what the server did not apply (2026-11-05)
-[[TASK-305]]. The SQL connectors' retry policy defaulted to `None`, so a SQL Server deadlock victim failed the write
-(measured live, as on PostgreSQL). It is now two retries, 50 then 100 ms with jitter (the user's decision), and only of
-a failure that applied nothing: before the statement was sent, or a deadlock / serialization failure / lock wait /
-SQLite busy (new `IsNotAppliedException`, per provider). A timeout or a connection lost mid-write is not retried: the
-write may have applied. A bulk store write's own BEGIN retries too (`OpenOwnedTransaction`), which is where SQLite
-reports busy; before, it failed whatever the connector did. Rule 66.
-### The harvest's smaller findings, confirmed or closed (2026-11-04)
-[[TASK-724]], the last of EPIC-023. The async `CreateTableAsync` was a second copy without the composite key or the
-created-table record, and its own `IF NOT EXISTS` failed on SQL Server; it is the sync path now. The schema-drift check
-answers `Degraded`, never `Unhealthy`. A cancelled async insert stops waiting for the write gate. RavenDB refuses
-credentials it never used; InfluxDB retries by status, not message text; a string `MIN` of NULLs reads null; the
-instrumented wrappers forward aggregation. Four stale comments corrected; two findings recorded, one already fixed.
-### A store with no settings refuses reads and writes (2026-11-04)
-[[TASK-812]]. An unconfigured MongoDB, RavenDB, Cosmos DB or InfluxDB store returned `Guid.Empty` from `Create`, nothing
-from `Update` / `Delete`, and empty reads; JSON and XML refused writes but answered reads empty (measured by a new
-contract on every provider). Each now refuses every operation with `InvalidOperationException` naming `SetSettings`, at
-`InitCore`, as SQL and Elasticsearch already did. **Reads refuse too** (the user's decision; it reverses TASK-464).
-### JSON and XML file stores: one folder, and only their own files (2026-11-04)
-[[TASK-811]]. The sync `JsonSeparateStore` and `JsonBatchStore` kept their files in `Location/Name/`, every other separate
-or batch store in `Location/`, so sync and async stores on one settings missed each other's records (measured). All use
-`Location/` now (the user's decision). In a shared folder a store named `items` also read and destroyed the files of one
-named `items-archive`; a file is a store's only when the key in its name is exactly one Guid (or batch number), through
-the new `Birko.Helpers.RecordFiles`.
-### Cosmos serializer hands a stream over open; MongoDBLogModel is a log entity (2026-11-04)
-[[TASK-723]]. `CosmosGuidIdSerializer.FromStream<Stream>` returned the stream disposed (measured). `MongoDBLogModel`
-implements `ILogEntity` now, so the timestamp decorator stamps it, and a copy or load between two Mongo log models keeps
-the timestamps (both lost them, measured).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

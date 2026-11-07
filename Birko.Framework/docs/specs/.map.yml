@@ -823,6 +823,8 @@ areas:
       # owner-or-admin rule (rule 65) and the stale-grant health check
       - ../Birko.Security.Grants.AspNetCore/**/*.cs
       - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
+      # TASK-829: the host's one trusted-proxy list (forwarded headers)
+      - ../Birko.Security.AspNetCore/Extensions/ForwardedHeadersExtensions.cs
       - ../Birko.Communication.REST.Server/Middleware/RestAuthentication*.cs
       - ../Birko.Communication.SSE/Middleware/SseAuthentication*.cs
       - ../Birko.Communication.WebSocket/Services/WebSocketAuthentication*.cs

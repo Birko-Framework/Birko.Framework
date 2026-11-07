@@ -54,6 +54,10 @@ WebSocket communication implementation for real-time bidirectional communication
 ### Services
 - Connection management
 - Message routing
+- `WebSocketAuthenticationService.GetClientIpAddress` returns `Connection.RemoteIpAddress` once `AddBirkoForwardedHeaders`
+  processed the request (`Items[TrustedProxySettings.ResolvedItemKey]`), and walks `X-Forwarded-For` itself otherwise.
+  With `TrustedProxySettings` registered, its own non-empty `TrustedProxies` must equal that list, or it refuses: in the
+  constructor, and at map time through `WebSocketAuthenticationGate` (TASK-829)
 
 ## WebSocket Client
 

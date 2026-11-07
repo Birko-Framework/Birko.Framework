@@ -187,7 +187,9 @@ own: `X-Forwarded-For`, `X-Real-IP` and `CF-Connecting-IP` are believed **only**
 proxies, so the client cannot choose the answer by writing the header itself. Before SH-M249 the headers were believed
 from anyone, so a caller holding a bound token could name an allowed address and pass. **Behind a reverse proxy, list
 it in `TrustedProxies`**, or every request is seen as coming from the proxy. A binding whose every address expands to
-nothing refuses its token from everywhere and is logged at error level at construction (SH-M250).
+nothing refuses its token from everywhere and is logged at error level at construction (SH-M250). A `TrustedProxies`
+entry that is not an address or a CIDR range is skipped and logged at error level (TASK-829). In an ASP.NET Core host,
+use [one list for the whole host](#behind-a-reverse-proxy-task-829) instead.
 
 ## RBAC Interfaces
 
@@ -230,8 +232,57 @@ This registers: JWT Bearer authentication, `ICurrentUser`, `IPermissionChecker`,
 configured `PermissionClaim`, but only while every address the server actually bound is loopback (read per request from
 `IServerAddressesFeature`, not from configured URLs). Unknown, wildcard (`0.0.0.0`, `[::]`, `*`, `+`) or other
 addresses enforce authentication, and a request with a valid token keeps its own principal. It needs
-`app.UseBirkoLoopbackBypass()` after `UseAuthentication()`; without it the host refuses to start. Never enable it behind
-a reverse proxy on the same machine: the proxy forwards remote callers over loopback.
+`app.UseBirkoLoopbackBypass()` after `UseAuthentication()`; without it the host refuses to start. A reverse proxy on the
+same machine forwards remote callers over loopback, so the host also refuses to start when the bypass is on and
+`AddBirkoForwardedHeaders` lists any trusted proxy (TASK-829). A proxy you have not registered there cannot be seen:
+never enable the bypass behind one.
+
+### Behind a reverse proxy (TASK-829)
+
+Every request reaches the app from the proxy, so "who is the client, over which scheme, on which host" comes from the
+proxy's `X-Forwarded-*` headers, which must be believed from the proxy and from nobody else. One registration decides
+it for the whole host:
+
+```csharp
+builder.Services.AddBirkoForwardedHeaders(builder.Configuration.GetSection(BirkoForwardedHeadersOptions.SectionName));
+```
+
+```json
+"Birko": {
+  "ForwardedHeaders": {
+    "TrustedProxies": [ "172.18.0.0/16" ],   // address or CIDR, ${ENV_VAR} supported; empty trusts nobody
+    "ForwardLimit": 1,                       // proxies deep; Cloudflare in front of a local proxy is 2
+    "AllowedHosts": [ "app.example.com" ],   // X-Forwarded-Host only for these; empty ignores the header
+    "ForwardProto": true                     // X-Forwarded-Proto, so TLS terminated at the proxy reads https
+  }
+}
+```
+
+- **There is no `Use…` call.** A startup filter puts ASP.NET's `ForwardedHeadersMiddleware` at the front of the
+  pipeline, so it runs before authentication (including the one WebApplication adds on its own), the rate limiter, the
+  loopback bypass and the tenant resolvers, wherever the app places them. `SubdomainTenantResolver` and anything that
+  builds links from `Request.Scheme` / `Request.Host` therefore see the forwarded values.
+- **Nothing configured trusts nobody.** ASP.NET's own defaults trust loopback, and trust *every* sender once both of its
+  lists are empty (what `ASPNETCORE_FORWARDEDHEADERS_ENABLED` does). The registration replaces both after every other
+  setup, and with an empty list it switches the headers off, so a manual `UseForwardedHeaders()` trusts nobody too.
+- **What it does not read is removed.** Once it has run, the `X-Forwarded-*` values it left unread (past the forward
+  limit, so written by nobody it trusts) are removed. A second `ForwardedHeadersMiddleware` (the app's own
+  `UseForwardedHeaders()`, or `ASPNETCORE_FORWARDEDHEADERS_ENABLED`) then reads nothing; it used to believe a
+  client-written hop whenever the first pass stopped on a trusted address. ASP.NET keeps what it consumed in
+  `X-Original-For` / `-Proto` / `-Host`.
+- **A mistake stops the host.** A malformed entry, an unset `${VAR}`, a blank entry, a whole address space (`0.0.0.0/0`,
+  `::/0`), a short or bracketed address (`10.5`, `[::1]:80`), `ForwardLimit` below 1, allowed hosts with no proxy, or a
+  second call each throw `InvalidOperationException` at startup.
+- **One client address.** The list is registered as `TrustedProxySettings`, and the WebSocket token binding takes the
+  address the middleware produced (`HttpContext.Items[TrustedProxySettings.ResolvedItemKey]`) instead of reading
+  `X-Forwarded-For` again. A `WebSocketAuthenticationConfiguration.TrustedProxies` that differs from this list refuses
+  when the endpoint is mapped; leave it empty.
+- **`X-Real-IP` and `CF-Connecting-IP` are not read** behind the registration, by ASP.NET or by the token binding, since
+  a client can send them too. Behind Cloudflare → a local proxy, trust both (Cloudflare's published ranges with
+  `ForwardLimit = 2`), or have the local proxy write the real client address into `X-Forwarded-For`.
+- `HostFilteringMiddleware` runs before the registration and still sees the proxy's `Host`.
+- The `HttpListener` transports (REST, SOAP, SSE) run no ASP.NET middleware; they keep their own
+  `AuthenticationConfiguration.TrustedProxies`, parsed by the same `TrustedProxyList`.
 
 ### ICurrentUser
 

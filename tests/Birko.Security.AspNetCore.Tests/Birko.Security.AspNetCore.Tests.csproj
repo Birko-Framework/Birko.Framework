@@ -32,5 +32,8 @@
   <Import Project="..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
   <Import Project="..\..\Birko.EventBus.Tenant\Birko.EventBus.Tenant.projitems" Label="Shared" />
+  <!-- TASK-829: the WebSocket token binding must agree with the forwarded headers on one real host. -->
+  <Import Project="..\..\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Communication.WebSocket\Birko.Communication.WebSocket.projitems" Label="Shared" />
 
 </Project>

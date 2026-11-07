@@ -12,6 +12,8 @@ ASP.NET Core integration for Birko.Security — JWT Bearer authentication, curre
 - Multi-tenant middleware with header, subdomain, and custom resolution strategies
 - Tenant header/claim guard — rejects an `X-Tenant-Id` that disagrees with the JWT tenant claim (on by default)
 - `TokenServiceAdapter` for structured token generation and validation
+- `AddBirkoForwardedHeaders()`: one list of trusted reverse proxies for the whole host (TASK-829). See
+  [docs/security.md](../Birko.Framework/docs/security.md#behind-a-reverse-proxy-task-829)
 
 ## Dependencies
 
@@ -41,6 +43,12 @@ A bearer token is read from `?token=` only where a header cannot be set: a WebSo
 `text/event-stream` (EventSource), and the paths in `options.Jwt.QueryTokenPathPrefixes` (e.g. `"/api/media"` for
 `<img src>`). Anywhere else the query string is ignored, since it is written to access logs, browser history and
 `Referer` headers (SH-M256). An `Authorization` header always wins.
+
+Behind a reverse proxy, register its address once; the middleware runs first without a `Use…` call:
+
+```csharp
+builder.Services.AddBirkoForwardedHeaders(builder.Configuration.GetSection(BirkoForwardedHeadersOptions.SectionName));
+```
 
 `UseResolvedPermissions()` may be called before or after `AddBirkoSecurity`: it replaces every `ICurrentUser`
 registration, and `AddBirkoSecurity` adds `ClaimsCurrentUser` only when none exists (SH-M255).

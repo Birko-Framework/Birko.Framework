@@ -77,8 +77,10 @@ public class BirkoSecurityOptions
     /// is bound to is loopback (TASK-522, DraCode's daemon mode: local tools call a server only this machine can reach).
     /// Off by default. Fails safe: unknown addresses, a wildcard bind (<c>0.0.0.0</c>, <c>[::]</c>) or any non-loopback
     /// address enforce authentication. Needs <c>app.UseBirkoLoopbackBypass()</c> between <c>UseAuthentication()</c> and
-    /// <c>UseAuthorization()</c>; the host refuses to start when this is on without it. Never enable it behind a reverse
-    /// proxy on the same machine: the proxy forwards remote callers over loopback.
+    /// <c>UseAuthorization()</c>; the host refuses to start when this is on without it. A reverse proxy on the same
+    /// machine forwards remote callers over loopback, so the host also refuses to start when this is on and
+    /// <c>AddBirkoForwardedHeaders</c> trusts any proxy (TASK-829). A proxy not registered there cannot be seen: never
+    /// enable it behind one.
     /// </summary>
     public bool LoopbackBypass { get; set; }
 }

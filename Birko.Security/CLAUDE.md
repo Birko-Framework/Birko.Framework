@@ -21,6 +21,8 @@ Birko.Security/
 ├── Authentication/                    ← Moved from Birko.Communication.Authentication
 │   ├── AuthenticationService.cs       - Static token validation + IP binding, thread-safe; ResolveClientIp believes forwarding headers only from TrustedProxies (SH-M249)
 │   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[], TrustedProxies[] (addresses or CIDR; empty = trust none)
+│   ├── TrustedProxyList.cs            - TASK-829: the one trusted-proxy parser; Parse is strict (throws), ParseLenient skips and reports
+│   ├── TrustedProxySettings.cs        - TASK-829: an ASP.NET host's one proxy list (AddBirkoForwardedHeaders) + ResolvedItemKey
 │   └── TokenBinding.cs               - Token + AllowedIps
 ├── Authorization/
 │   └── IRoleProvider.cs               - IRoleProvider, IPermissionChecker, AuthorizationContext
@@ -81,6 +83,9 @@ service.ValidateToken("my-token", "192.168.1.1");
 - IRoleProvider/IPermissionChecker are async (implementations will hit database)
 - AuthorizationContext is a simple POCO — populated per-request from token claims
 - AuthenticationService namespace changed from `Birko.Communication.Authentication` → `Birko.Security.Authentication`
+- Every trusted-proxy list is parsed by `TrustedProxyList` (TASK-829). `AuthenticationService` parses leniently, as it
+  always did, so the HttpListener transports start as before; a skipped entry is now logged at error level. The
+  forwarded-headers registration parses strictly and refuses at startup
 
 ## Maintenance
 

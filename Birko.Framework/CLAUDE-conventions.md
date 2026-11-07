@@ -1,6 +1,6 @@
 # Birko Framework — Conventions
 
-The full rulebook: 66 rules, each carrying the measurement that earned it.
+The full rulebook: 67 rules, each carrying the measurement that earned it.
 
 Extracted from `CLAUDE.md` on 2026-09-19. That file is auto-loaded into every session and had reached
 4,359 lines, of which this section was 2,488 — so the reasoning moved here and the *statements* stayed
@@ -2622,3 +2622,18 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
   - **A suspicion was falsified, not adopted (rule 54).** That `Rollback()` on the victim's already-ended
     transaction would throw and hide the 1205: it does not, on Microsoft.Data.SqlClient against 2022, so no guard
     was added for it.
+
+- **In an ASP.NET host the client address is decided once, by `AddBirkoForwardedHeaders`, and nothing reads the
+  forwarded headers a second time.** TASK-829. A component that needs the client reads
+  `HttpContext.Connection.RemoteIpAddress`. A shared parser walks `X-Forwarded-For` only when
+  `Items[TrustedProxySettings.ResolvedItemKey]` is absent, as `WebSocketAuthenticationService.GetClientIpAddress` does.
+  Two walks of the same headers give two answers:
+  - **Measured, before the fix:** with `127.0.0.0/8` trusted and a client inside it, ASP.NET consumed the
+    `X-Forwarded-For` hop and stopped at its forward limit. Birko's own walk then fell back to `X-Real-IP` and answered
+    `1.2.3.4`, which the client wrote, for the token binding, while `RemoteIpAddress` read `127.0.0.5`.
+  - **A second `ForwardedHeadersMiddleware` is a second walk too.** The app's own `UseForwardedHeaders()`, or the one
+    `ASPNETCORE_FORWARDEDHEADERS_ENABLED` adds, read the hop left past the limit. When the address the first pass
+    reached was trusted, it believed a client-written `1.2.3.4` (measured). So the registration removes every
+    `X-Forwarded-*` value it left unread.
+  - **One list, too.** A transport configuration's own `TrustedProxies` must be empty, or the same list, in such a
+    host; otherwise it refuses. The list lives in exactly one place per host, as rule 16 asks of a name.

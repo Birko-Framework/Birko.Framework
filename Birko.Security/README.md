@@ -55,6 +55,10 @@ var result = await provider.ValidateTokenAsync(token);
 - **InMemorySecretProvider** - an `ISecretProvider` for local runs, tests and configuration-seeded secrets
 - **ITokenProvider** - Token generation and validation interface
 - **StaticTokenAuthenticator** - Static token authentication
+- **TrustedProxyList** - the one parser for trusted-proxy lists (address or CIDR, `${ENV_VAR}`): `Parse` refuses a bad
+  entry, `ParseLenient` skips and reports it (TASK-829)
+- **TrustedProxySettings** - an ASP.NET host's one list of trusted proxies, registered by `AddBirkoForwardedHeaders`
+  (Birko.Security.AspNetCore)
 
 ## Related Projects
 
