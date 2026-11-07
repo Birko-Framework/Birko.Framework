@@ -295,6 +295,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB increments and sets run on the server (2026-11-07)
+[[TASK-827]]. `PropertyUpdate` on RavenDB was read-modify-save, so parallel increments lost some (measured). Exact
+kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments
+(range-checked; a `long` past 2^53 is refused). Patch JavaScript holds numbers as doubles (measured), so decimal and
+floating values, `Compute`, and updates inside a unit of work stay on the exact C# path (the user's decision).
 ### RavenDB writes wait for the indexes, so a query after a write sees it (2026-11-07)
 [[TASK-828]], found by the TASK-826 contract. Under load, an update applied to all 6 documents while a query on the value it
 wrote returned 5 (stale index, measured). Every store session and the unit of work now save with
@@ -373,11 +378,6 @@ the new `Birko.Helpers.RecordFiles`.
 [[TASK-723]]. `CosmosGuidIdSerializer.FromStream<Stream>` returned the stream disposed (measured). `MongoDBLogModel`
 implements `ILogEntity` now, so the timestamp decorator stamps it, and a copy or load between two Mongo log models keeps
 the timestamps (both lost them, measured).
-### Migration edges: Cosmos patch names, the InfluxDB delete range (2026-11-04)
-[[TASK-722]]. A Cosmos `RenameField` of a field named `a/b` copied it instead of moving it (the unescaped path was
-nested), and escaping it did not help: the emulator kept `a~1b` literally. Patch-based steps now refuse a name holding
-`/` or `~`. The InfluxDB "delete everything" stopped at now, so future-dated points survived; it covers every storable
-time. `MongoMigrationRunner(null)` is `ArgumentNullException`. TimescaleDB introspection without a transaction: harmless.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

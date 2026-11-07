@@ -597,6 +597,54 @@ public class RavenDBStore<T>
 
     #endregion
 
+    #region Server-side PropertyUpdate (TASK-827)
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// TASK-827: when every assignment is one RavenDB's patch JavaScript computes exactly
+    /// (<see cref="RavenPropertyUpdatePatch"/>) and no unit of work is active, each matching document is patched on the
+    /// server, all in one <c>SaveChanges</c>: one transaction, and an increment cannot lose a concurrent one. Otherwise
+    /// (a decimal or floating-point value, a computed set, a session given to the store) the exact read-modify-save path.
+    /// </remarks>
+    public override void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        RequireFilter(filter, "update");
+        RequireBoundedFilter(filter, "update");
+        if (updates.Assignments.Count == 0) return;
+        if (!TryPatch(() => Read(filter, null, null, null), updates)) base.Update(filter, updates);
+    }
+
+    /// <inheritdoc />
+    public override void UpdateAll(PropertyUpdate<T> updates)
+    {
+        if (updates.Assignments.Count == 0) return;
+        if (!TryPatch(() => Read(), updates)) base.UpdateAll(updates);
+    }
+
+    private bool TryPatch(Func<IEnumerable<T>> matching, PropertyUpdate<T> updates)
+    {
+        if (Session != null) return false;
+        var patch = RavenPropertyUpdatePatch.TryBuild(updates);
+        if (patch == null) return false;
+
+        var ids = matching().Where(x => x?.Guid != null).Select(x => IdOf(x.Guid!.Value)).ToList();
+        if (ids.Count == 0) return true;
+        using var session = RavenIndexWait.Apply(_documentStore!.OpenSession());
+        foreach (var id in ids)
+            session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
+        try
+        {
+            session.SaveChanges();
+        }
+        catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
+        {
+            throw new OverflowException($"An increment on {typeof(T).Name} overflowed its type (or 2^53 for a long); nothing was written.", e);
+        }
+        return true;
+    }
+
+    #endregion
+
     #region Aggregation
 
     /// <summary>

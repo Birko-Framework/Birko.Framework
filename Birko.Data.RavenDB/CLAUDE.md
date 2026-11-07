@@ -136,6 +136,15 @@ Every session the stores and `RavenDbUnitOfWork` open goes through `Stores/Raven
 after it reads it. **Open a new store session through `RavenIndexWait.Apply`**, never `_documentStore.OpenSession()`
 directly, or that path is eventually consistent again. `Task828IndexWaitTests` asserts every write batch carries the wait.
 
+## Server-side PropertyUpdate (TASK-827)
+
+`Stores/RavenPropertyUpdatePatch.TryBuild` turns a `PropertyUpdate` into one patch script, or returns `null` when any
+assignment is not exact in a double (a decimal / double / float value, a `long` past 2^53, a computed set, a non-primitive
+`Set`). The stores' `Update(filter, PropertyUpdate)` / `UpdateAll` then read the matching ids, defer one
+`PatchCommandData` per document and save once. With a `TransactionContext` / ambient session they stay on the C# path.
+**Widen `TryBuild`'s accepted set only with a live round-trip test.** Patch JavaScript has no decimal and no access to
+the stored number's text (measured).
+
 ## Querying
 
 ### Load by ID

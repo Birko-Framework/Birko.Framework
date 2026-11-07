@@ -66,6 +66,7 @@ store.Delete(x => x.IsExpired);
 | SQL | Native `UPDATE SET WHERE` | `col = col + @p`, same statement | the formula in SQL, same statement | Native `DELETE WHERE` |
 | MongoDB | `UpdateMany` with `$set` | `$inc` | one pipeline update (`$set` with `$divide` / `$round` …) | `DeleteMany` |
 | ElasticSearch | `UpdateByQuery` (Painless) | `ctx._source.f += params.p` — a version conflict aborts the write part-way and throws `StoreConcurrencyException` (TASK-502) | Painless `BigDecimal` (same check) | `DeleteByQuery` (same check) |
+| RavenDB | One server-side patch per document, all in one transaction, for sets of non-floating values (TASK-827); a decimal / double / float value, or inside a unit of work: fallback | Server-side for `short` / `int` / `long` (a `long` past 2^53 is refused: patch JS numbers are doubles); `decimal` / `double` / `float`: fallback | Fallback in C# — **not atomic** | Fallback read-then-delete |
 | Others | Fallback read-modify-save | Fallback — **not atomic** | Fallback in C# — **not atomic** | Fallback read-then-delete |
 
 **Increment / Decrement** (`short`, `int`, `long`, `float`, `double`, `decimal` properties — the types every provider

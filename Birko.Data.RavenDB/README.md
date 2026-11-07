@@ -110,6 +110,18 @@ query from an index that may lag the documents; without the wait, a query on a v
 under load (measured). The cost is on the write. The wait gives up after 15 seconds **without throwing**: the write is
 already applied, and reporting it as failed would invite a retry that repeats it.
 
+## Server-side PropertyUpdate
+
+`Update(filter, PropertyUpdate)` and `UpdateAll(PropertyUpdate)` patch each matching document on the server, all in one
+`SaveChanges` (one transaction), when every assignment is exact in RavenDB's patch JavaScript (TASK-827). Every number
+there is a double (measured: a stored `98765432109876543.21m` reads `98765432109876544`). So:
+
+- **Patched on the server:** a `Set` of a string, bool, Guid, date, enum or integer (`long` within 2^53), and an
+  `Increment` of `short`, `int` or `long`. The increment is range-checked on the server: one that overflows, or a `long`
+  past 2^53, throws `OverflowException`, and no document is written.
+- **Read-modify-save in C#, exact but not atomic:** a `decimal`, `double` or `float` value, a computed set (`Compute`),
+  and any update made while a unit of work or a given session is active (a server patch could not join it).
+
 ## Filter-Based Bulk Operations
 
 Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Native RavenDB `PatchByQueryOperation` support may be added in a future release.

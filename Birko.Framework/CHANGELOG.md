@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — Migration edges: Cosmos patch names, the InfluxDB delete range
+[[TASK-722]]. A Cosmos `RenameField` of a field named `a/b` copied it instead of moving it (the unescaped path was
+nested), and escaping it did not help: the emulator kept `a~1b` literally. Patch-based steps now refuse a name holding
+`/` or `~`. The InfluxDB "delete everything" stopped at now, so future-dated points survived; it covers every storable
+time. `MongoMigrationRunner(null)` is `ArgumentNullException`. TimescaleDB introspection without a transaction: harmless.
+
 ## 2026-11-04 — InfluxDB reads page after filtering and keep UTC dates
 [[TASK-720]]. The InfluxDB stores sent `limit` / `offset` to the server and filtered what came back, so a filtered page
 held the wrong rows; a sort took the first field's direction for all; a UTC `DateTime` came back local; `Read(Guid)`

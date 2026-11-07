@@ -774,6 +774,57 @@ public class AsyncRavenDBStore<T>
 
     #endregion
 
+    #region Server-side PropertyUpdate (TASK-827)
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// TASK-827: when every assignment is one RavenDB's patch JavaScript computes exactly
+    /// (<see cref="RavenPropertyUpdatePatch"/>) and no unit of work is active, each matching document is patched on the
+    /// server, all in one <c>SaveChangesAsync</c>: one transaction, and an increment cannot lose a concurrent one.
+    /// Otherwise (a decimal or floating-point value, a computed set, a session given to the store) the exact
+    /// read-modify-save path.
+    /// </remarks>
+    public override async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        RequireFilter(filter, "update");
+        RequireBoundedFilter(filter, "update");
+        if (updates.Assignments.Count == 0) return;
+        if (!await TryPatchAsync(() => ReadAsync(filter, null, null, null, ct), updates, ct).ConfigureAwait(false))
+            await base.UpdateAsync(filter, updates, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public override async Task UpdateAllAsync(PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        if (updates.Assignments.Count == 0) return;
+        if (!await TryPatchAsync(() => ReadAsync(ct), updates, ct).ConfigureAwait(false))
+            await base.UpdateAllAsync(updates, ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TryPatchAsync(Func<Task<IEnumerable<T>>> matching, PropertyUpdate<T> updates, CancellationToken ct)
+    {
+        if (Session != null) return false;
+        var patch = RavenPropertyUpdatePatch.TryBuild(updates);
+        if (patch == null) return false;
+
+        var ids = (await matching().ConfigureAwait(false)).Where(x => x?.Guid != null).Select(x => IdOf(x.Guid!.Value)).ToList();
+        if (ids.Count == 0) return true;
+        using var session = RavenIndexWait.Apply(_documentStore!.OpenAsyncSession());
+        foreach (var id in ids)
+            session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
+        try
+        {
+            await session.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
+        {
+            throw new OverflowException($"An increment on {typeof(T).Name} overflowed its type (or 2^53 for a long); nothing was written.", e);
+        }
+        return true;
+    }
+
+    #endregion
+
     #region Aggregation
 
     /// <summary>
