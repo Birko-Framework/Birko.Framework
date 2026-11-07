@@ -1187,9 +1187,9 @@ namespace Birko.Data.SQL.Connectors
 
         /// <summary>
         /// The always-false constant. Emitted for a predicate that legitimately matches no row: an empty
-        /// <c>IN</c> (<see cref="Strategies.InConditionStrategy"/>), <c>_ =&gt; false</c>
-        /// (<c>DataBase.MakeFalseCondition</c>), and a negated group that reduces to always-true
-        /// (<c>NOT (A OR TRUE)</c>).
+        /// <c>IN</c> (<see cref="Strategies.InConditionStrategy"/>), which is also how <c>_ =&gt; false</c>
+        /// (<c>DataBase.MakeFalseCondition</c>) and an ordering against <c>null</c> are represented, and any group
+        /// that reduces to always-false (<c>A AND FALSE</c>, <c>NOT (A OR TRUE)</c>).
         /// </summary>
         /// <remarks>
         /// There is deliberately <b>no always-TRUE counterpart</b> (TASK-137). An always-false term cannot be
@@ -1209,79 +1209,94 @@ namespace Birko.Data.SQL.Connectors
         /// disagreeing with the emitted SQL.
         /// </summary>
         /// <remarks>
-        /// <para>Today exactly one leaf reduces: an <c>IN</c> with <see cref="Conditions.Condition.IsNot"/>
-        /// and no values. "Not in the empty set" is true of every row, and it used to render <c>1 = 1</c> —
-        /// which satisfied <see cref="AddRequiredWhere"/>'s "something was rendered" test with a tautology,
-        /// so <c>Delete(x =&gt; !empty.Contains(x.Col))</c> emptied the table and reported success. Measured:
+        /// <para>The verdict is <see cref="ConstantTruth"/>'s, which reduces the whole tree with three-valued
+        /// logic. The leaf it starts from is an <c>IN</c> with no values: "in the empty set" is false of every row
+        /// and "not in the empty set" true of every row. The latter used to render <c>1 = 1</c> — which satisfied
+        /// <see cref="AddRequiredWhere"/>'s "something was rendered" test with a tautology, so
+        /// <c>Delete(x =&gt; !empty.Contains(x.Col))</c> emptied the table and reported success. Measured:
         /// 0 of 3 rows left, no exception.</para>
-        /// <para><b>Group algebra.</b> A group's children all share the group's separator (the parser expresses
-        /// precedence by nesting, never by a mixed unparenthesized chain), so: an AND group means everything
-        /// only if <i>every</i> child does; an OR group if <i>any</i> child does. A negated group inverts —
-        /// <c>NOT (A OR TRUE)</c> is always <b>false</b>, so it is not always-true and renders
-        /// <see cref="AlwaysFalseSql"/>.</para>
         /// <para>This is not <c>DataBase.IsExplicitAllRows</c> and must not be confused with it. That one asks
         /// "did the caller explicitly say every row", and answers yes only for a single normalized constant
         /// node — the deliberate <c>DeleteAll()</c> synonym. This one asks "does this tree happen to reduce to
         /// every row", which is the case TASK-109 refuses.</para>
         /// </remarks>
         public static bool IsAlwaysTrueCondition(Conditions.Condition? condition)
-        {
-            if (condition == null) return false;
+            => condition != null && ConstantTruth(condition) == true;
 
+        /// <summary>
+        /// TASK-861 — what <paramref name="condition"/> answers for every row: <c>true</c> (it matches every row),
+        /// <c>false</c> (it matches none), or <c>null</c> when the answer depends on the row. <b>The one producer</b> of
+        /// the constant reduction: the whole-table guard (<see cref="WouldTargetEveryRow"/>), the renderer and the SQL
+        /// bulk stores' read-then-write path all ask it.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>The leaf.</b> An <c>IN</c> with no values is false: the empty <c>Contains</c>, <c>_ =&gt; false</c>
+        /// (<c>DataBase.MakeFalseCondition</c>) and an ordering against a <c>null</c> value (<c>DataBase.ComparedWithNull</c>)
+        /// are all represented that way. Every other leaf depends on the row.</para>
+        /// <para><b>The group.</b> A group's children all share the group's separator (the parser expresses precedence by
+        /// nesting, never by a mixed unparenthesized chain) and reduce with Kleene logic: <c>X AND FALSE</c> is FALSE,
+        /// <c>X OR TRUE</c> is TRUE, <c>X AND TRUE</c> and <c>X OR FALSE</c> are X. <see cref="Conditions.Condition.IsNot"/>
+        /// then inverts a constant: <c>NOT FALSE</c> is TRUE.</para>
+        /// <para><b>Why three values (TASK-861).</b> The reduction used to track only "always true", so a negation could
+        /// only ever turn a group into always-false. <c>!(empty.Contains(x.A) &amp;&amp; x.A &gt; 0)</c> rendered
+        /// <c>NOT (1 = 0 AND …)</c>, a non-empty WHERE that is true of every row, and Delete and Update wrote every row
+        /// with no exception on all four SQL providers (measured; 6 of 6). The guard has to reduce on what the tree
+        /// means, not on whether text was rendered (rule 3).</para>
+        /// </remarks>
+        public static bool? ConstantTruth(Conditions.Condition condition)
+        {
+            bool? value;
             var subConditions = condition.SubConditions;
             if (subConditions?.Any() == true)
             {
-                // A negated group that reduces to always-true is always-FALSE, never always-true.
-                if (condition.IsNot) return false;
-                return IsAlwaysTrueChain(subConditions.Select(sub => (condition.IsOr, IsAlwaysTrueCondition(sub))));
+                value = ConstantChain(subConditions.Select(sub => (condition.IsOr, ConstantTruth(sub))));
+            }
+            else if (condition.Type == Conditions.ConditionType.In && !HasAnyValue(condition.Values))
+            {
+                value = false;
+            }
+            else
+            {
+                return null;
             }
 
-            return condition.Type == Conditions.ConditionType.In
-                && condition.IsNot
-                && !HasAnyValue(condition.Values);
+            return condition.IsNot ? !value : value;
         }
 
         /// <summary>
-        /// True when a negated group reduces to always-<b>false</b> — the <c>NOT (A OR TRUE)</c> case, which
-        /// must render <see cref="AlwaysFalseSql"/> rather than have its inner terms dropped (dropping them
-        /// would turn "matches nothing" into "matches everything").
-        /// </summary>
-        private static bool IsNegatedAlwaysTrueGroup(Conditions.Condition condition)
-        {
-            var subConditions = condition.SubConditions;
-            if (subConditions?.Any() != true || !condition.IsNot) return false;
-            return IsAlwaysTrueChain(subConditions.Select(sub => (condition.IsOr, IsAlwaysTrueCondition(sub))));
-        }
-
-        /// <summary>
-        /// Reduces a chain of <c>(joinsWithOr, isAlwaysTrue)</c> terms to a single "means everything" verdict.
+        /// Reduces a chain of <c>(joinsWithOr, constant)</c> terms with three-valued logic (see <see cref="ConstantTruth"/>).
         /// <para>Shared by groups (where every term carries the group's separator) and by the flat
         /// <see cref="ConditionDefinition(IEnumerable{Conditions.Condition}, DbCommand)"/> list, where each
-        /// term brings its own. AND binds tighter than OR, so the chain is a series of AND-runs OR'd together:
-        /// a run means everything when all of its terms do, and the chain when any run does. Written this way
-        /// so the flat mixed case — <c>A OR TRUE AND B</c>, which is <c>A OR (TRUE AND B)</c> and NOT
-        /// always-true — cannot be over-reduced.</para>
+        /// term brings its own. AND binds tighter than OR, so the chain is a series of AND-runs OR'd together.
+        /// Written this way so the flat mixed case — <c>A OR TRUE AND B</c>, which is <c>A OR (TRUE AND B)</c> and NOT
+        /// always-true — cannot be over-reduced. An empty chain constrains nothing that can be told: <c>null</c>.</para>
         /// </summary>
-        private static bool IsAlwaysTrueChain(IEnumerable<(bool JoinsWithOr, bool IsAlwaysTrue)> terms)
+        private static bool? ConstantChain(IEnumerable<(bool JoinsWithOr, bool? Value)> terms)
         {
-            bool runIsAlwaysTrue = true;
-            bool anyRun = false;
+            bool? chain = false;    // OR's identity
+            bool? run = true;       // AND's identity
             bool first = true;
 
-            foreach (var (joinsWithOr, isAlwaysTrue) in terms)
+            foreach (var (joinsWithOr, value) in terms)
             {
                 if (!first && joinsWithOr)
                 {
-                    if (runIsAlwaysTrue) return true;   // a completed run means everything → so does the chain
-                    runIsAlwaysTrue = true;             // start the next AND-run
+                    chain = Or(chain, run);
+                    run = true;
                 }
-                runIsAlwaysTrue &= isAlwaysTrue;
-                anyRun = true;
+                run = And(run, value);
                 first = false;
             }
 
-            return anyRun && runIsAlwaysTrue;
+            return first ? null : Or(chain, run);
+
+            static bool? And(bool? a, bool? b) => a == false || b == false ? false : a == true && b == true ? true : null;
+            static bool? Or(bool? a, bool? b) => a == true || b == true ? true : a == false && b == false ? false : null;
         }
+
+        /// <summary>True when a chain of terms, each with its own separator, matches every row.</summary>
+        private static bool IsAlwaysTrueChain(IList<Conditions.Condition> terms)
+            => ConstantChain(terms.Select((term, i) => (i > 0 && term.IsOr, ConstantTruth(term)))) == true;
 
         /// <summary>True when <paramref name="values"/> holds at least one element. Enumerates; stops at the first.</summary>
         private static bool HasAnyValue(System.Collections.IEnumerable? values)
@@ -1297,21 +1312,25 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         /// <remarks>
         /// Callers must skip a condition for which <see cref="IsAlwaysTrueCondition"/> holds — it has no
-        /// rendering, which is the point (TASK-137). This method renders the <c>NOT (A OR TRUE)</c> case,
-        /// where the reduction is to always-<i>false</i> and so does have one.
+        /// rendering, which is the point (TASK-137). A group that reduces to always-<i>false</i>
+        /// (<c>NOT (A OR TRUE)</c>, <c>A AND FALSE</c>) renders <see cref="AlwaysFalseSql"/> rather than its terms
+        /// (TASK-861).
         /// </remarks>
         private void AppendConditionTo(StringBuilder sb, Conditions.Condition condition, DbCommand command)
         {
-            if (IsNegatedAlwaysTrueGroup(condition))
+            if (condition.SubConditions?.Any() != true)
+            {
+                sb.Append(BuildSingleCondition(condition, command));
+                return;
+            }
+
+            if (ConstantTruth(condition) == false)
             {
                 sb.Append(AlwaysFalseSql);
                 return;
             }
 
-            if (condition.SubConditions?.Any() == true)
-                AppendSubConditionsTo(sb, condition, command);
-            else
-                sb.Append(BuildSingleCondition(condition, command));
+            AppendSubConditionsTo(sb, condition, command);
         }
 
         /// <summary>
@@ -1331,10 +1350,11 @@ namespace Birko.Data.SQL.Connectors
             foreach (var sub in condition.SubConditions!)
             {
                 // TASK-137: an always-true child is reduced away rather than rendered — `A AND TRUE` is `A`,
-                // and there is no constant for TRUE that is not an injection lookalike. The caller has already
-                // established the group as a whole is not always-true (IsAlwaysTrueCondition), so in an OR
-                // group no child can be always-true here and this only ever drops AND terms.
-                if (IsAlwaysTrueCondition(sub)) continue;
+                // and there is no constant for TRUE that is not an injection lookalike. TASK-861: likewise an
+                // always-false child of an OR — `A OR FALSE` is `A`. The caller has already established that the
+                // group as a whole is neither constant (ConstantTruth), so an AND group holds no FALSE child and an
+                // OR group no TRUE one here, and at least one child depends on the row.
+                if (ConstantTruth(sub) == !condition.IsOr) continue;
 
                 if (count > 0) sb.Append(separator);
                 AppendConditionTo(sb, sub, command);
@@ -1400,7 +1420,7 @@ namespace Birko.Data.SQL.Connectors
             // TASK-137: same reduction as the single-condition overload. Each term brings its own separator
             // here, so the AND-run algebra in IsAlwaysTrueChain is what decides whether the whole flat chain
             // means everything — `A OR TRUE AND B` is `A OR (TRUE AND B)`, which does not.
-            if (IsAlwaysTrueChain(terms.Select((term, i) => (i > 0 && term.IsOr, IsAlwaysTrueCondition(term)))))
+            if (IsAlwaysTrueChain(terms))
                 return string.Empty;
 
             var sb = new StringBuilder();
@@ -1809,15 +1829,15 @@ namespace Birko.Data.SQL.Connectors
         /// <para><see cref="AddRequiredWhere"/> stays as the backstop for a non-empty collection that renders
         /// to nothing for some other reason (e.g. a malformed condition).</para>
         /// </remarks>
-        protected static bool WouldTargetEveryRow(IEnumerable<Conditions.Condition>? conditions)
+        public static bool WouldTargetEveryRow(IEnumerable<Conditions.Condition>? conditions)
         {
             if (conditions == null) return true;
             var terms = conditions as IList<Conditions.Condition> ?? conditions.ToList();
             // Enumerates rather than reading a Count — an empty collection constrains nothing.
             if (terms.Count == 0) return true;
-            // Shares IsAlwaysTrueChain with the renderer, so the guard and the emitted SQL cannot disagree
-            // about what "everything" means.
-            return IsAlwaysTrueChain(terms.Select((term, i) => (i > 0 && term.IsOr, IsAlwaysTrueCondition(term))));
+            // Shares ConstantTruth with the renderer, so the guard and the emitted SQL cannot disagree
+            // about what "everything" means — including a NOT over an always-false group (TASK-861).
+            return IsAlwaysTrueChain(terms);
         }
 
         /// <summary>

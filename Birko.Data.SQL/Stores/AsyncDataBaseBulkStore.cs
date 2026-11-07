@@ -258,9 +258,10 @@ namespace Birko.Data.SQL.Stores
         /// <remarks>
         /// This store does not derive from <c>AbstractAsyncBulkStore</c> (it implements
         /// <c>IAsyncBulkStore&lt;T&gt;</c> directly), so it did not inherit that class's guard and had
-        /// none of its own. Rather than a third copy of the rule, both hierarchies and this store now
-        /// call one producer — <c>BoundedFilterGuard</c> — and supply only the door name, which is the
-        /// part that genuinely differs: an async store has no <c>DeleteAll()</c>.
+        /// none of its own. The door name is the part that genuinely differs: an async store has no
+        /// <c>DeleteAll()</c>. TASK-861: the verdict is the connector guard's own condition-tree reduction
+        /// (<c>DataBase.RequireBoundedFilter</c>), not the expression-level <c>BoundedFilterGuard</c>, which did not
+        /// know an ordering against <c>null</c>.
         /// <para>
         /// Only the <c>Action&lt;T&gt;</c> overload needs this. The <c>PropertyUpdate&lt;T&gt;</c> and
         /// <c>Delete(filter)</c> overloads reach the connector, where SH-H002's <c>AddRequiredWhere</c>
@@ -269,7 +270,8 @@ namespace Birko.Data.SQL.Stores
         /// </remarks>
         private static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
         {
-            Data.Expressions.BoundedFilterGuard.Require(
+            // TASK-861: the condition tree the read executes decides, through the connector guard's own reduction.
+            SQL.DataBase.RequireBoundedFilter(
                 filter, operation, typeof(T).Name,
                 operation == "delete" ? "DeleteAllAsync()" : "UpdateAllAsync(updates)");
         }

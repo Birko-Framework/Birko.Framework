@@ -209,11 +209,12 @@ namespace Birko.Data.SQL.Stores
 
         /// <summary>
         /// TASK-329 — refuses a filter that <b>reduces</b> to every row on a destructive write. See the
-        /// async twin; the rule lives once in <c>BoundedFilterGuard</c> and only the door name differs.
+        /// async twin; the rule lives once in <c>DataBase.RequireBoundedFilter</c> and only the door name differs.
         /// </summary>
         private static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
         {
-            Data.Expressions.BoundedFilterGuard.Require(
+            // TASK-861: the condition tree the read executes decides, through the connector guard's own reduction.
+            SQL.DataBase.RequireBoundedFilter(
                 filter, operation, typeof(T).Name,
                 operation == "delete" ? "DeleteAll()" : "UpdateAll(updates)");
         }

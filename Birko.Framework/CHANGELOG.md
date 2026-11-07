@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — One trusted-proxy list behind a reverse proxy
+[[TASK-829]]. New `AddBirkoForwardedHeaders(section)` (Birko.Security.AspNetCore, `Birko:ForwardedHeaders`): the host's one
+list of trusted proxies, registered as `TrustedProxySettings`. There is no `Use…` call; a startup filter puts ASP.NET's
+forwarded headers first. An empty list trusts nobody, even through a manual `UseForwardedHeaders()`, and a bad entry stops
+the host. The WebSocket token binding takes the address those headers produced, and refuses a list of its own that
+differs. The loopback bypass refuses to start behind a trusted proxy. The forwarded values it leaves unread are removed, so a
+second `UseForwardedHeaders()` cannot believe a client-written hop (rule 67, measured). One parser, `TrustedProxyList`,
+for every list (the user's decisions). Presenter, Symbio and Affiliate replace their own copies (notes in the task).
+
 ## 2026-11-07 — RavenDB increments and sets run on the server
 [[TASK-827]]. `PropertyUpdate` on RavenDB was read-modify-save, so parallel increments lost some (measured). Exact
 kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments

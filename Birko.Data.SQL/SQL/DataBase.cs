@@ -544,6 +544,27 @@ namespace Birko.Data.SQL
         public static bool IsExplicitAllRows(LambdaExpression? expr)
             => Birko.Data.Expressions.PredicateScope.IsExplicitAllRows(expr);
 
+        /// <summary>
+        /// TASK-861 — refuses a destructive write whose <paramref name="filter"/> reduces to every row, for the SQL bulk
+        /// stores' read-then-write path (<c>Update(filter, Action)</c>), which emits no conditionless statement for the
+        /// connector to refuse. Null and the explicit <c>x =&gt; true</c> are the caller's own checks and pass here.
+        /// </summary>
+        /// <remarks>
+        /// It asks the condition tree that read will execute
+        /// (<see cref="Connectors.AbstractConnectorBase.WouldTargetEveryRow"/>), not the expression
+        /// (<c>BoundedFilterGuard</c> / <c>PredicateScope</c>), so the read path and the connector's destructive funnels
+        /// share one reduction. The expression-level guard does not know an ordering against <c>null</c>, which the
+        /// parser folds to always-false: measured on all four SQL providers, <c>Update(x =&gt; !(x.Score &gt; nul), action)</c>
+        /// rewrote 6 of 6 rows while <c>Delete</c> with the same filter refused.
+        /// </remarks>
+        public static void RequireBoundedFilter(LambdaExpression? filter, string operation, string entityName, string allRowsDoor)
+        {
+            if (filter == null || IsExplicitAllRows(filter)) return;
+            if (!Connectors.AbstractConnectorBase.WouldTargetEveryRow(ParseConditionExpression(filter))) return;
+            throw new Data.Exceptions.WholeTableWriteException(
+                operation, entityName, "every stored entity of that type", allRowsDoor);
+        }
+
         public static IEnumerable<Conditions.Condition> ParseConditionExpression(Expression? expr = null, Conditions.Condition? parent = null, Type? exprType = null)
         {
             if (expr != null)
@@ -565,12 +586,8 @@ namespace Birko.Data.SQL
                         }
                         else
                         {
-                            // false → WHERE 1=0 — represented as a condition with literal name
-                            var falseCondition = parent ?? new Conditions.Condition(null, null);
-                            falseCondition.Name = "1";
-                            falseCondition.Values = new object[] { 0 };
-                            falseCondition.Type = ConditionType.Equal;
-                            return new[] { falseCondition };
+                            // false → WHERE 1 = 0
+                            return new[] { MakeFalseCondition(parent) };
                         }
                     }
                     var res = ParseConditionExpression(body, parent, type);
@@ -1373,14 +1390,21 @@ namespace Birko.Data.SQL
         }
 
         /// <summary>
-        /// Creates a WHERE 1=0 condition (always-false) for short-circuiting AND with false.
+        /// Creates the always-false condition (<c>1 = 0</c>) for short-circuiting AND with false.
         /// </summary>
+        /// <remarks>
+        /// TASK-861: it is the empty <c>IN</c>, the one always-false leaf
+        /// <see cref="Connectors.AbstractConnectorBase.ConstantTruth"/> knows, so a negation the parser has already put
+        /// on <paramref name="parent"/> (<c>!(x.A &gt; 0 &amp;&amp; off)</c>) reduces to always-true and a destructive
+        /// statement refuses it. It used to be <c>1 = @p</c> bound to 0, which nothing reduced: under that negation it
+        /// rendered a WHERE that is true of every row. The name is never rendered.
+        /// </remarks>
         private static Conditions.Condition MakeFalseCondition(Conditions.Condition? parent)
         {
             var c = parent ?? new Conditions.Condition(null, null);
             c.Name = "1";
-            c.Values = new object[] { 0 };
-            c.Type = ConditionType.Equal;
+            c.Values = Array.Empty<object>();
+            c.Type = ConditionType.In;
             return c;
         }
 
@@ -2009,8 +2033,11 @@ namespace Birko.Data.SQL
         /// TASK-859 — a comparison whose value is <c>null</c>. An equality is the operand's <c>IS [NOT] NULL</c>; a lifted
         /// ordering (<c>&lt;</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&gt;=</c>) is <c>false</c> in C# whatever the row, so it becomes
         /// the empty <c>IN</c>: <c>1 = 0</c>, or under <see cref="Condition.IsNot"/> the always-true term TASK-137 reduces
-        /// away (and a destructive statement refuses). An ordering used to bind the null (UNKNOWN, so no row, but every row
-        /// under a <c>NOT</c>) or, from a closure, to become <c>IS NULL</c>.
+        /// away. However deep it sits, <see cref="Connectors.AbstractConnectorBase.ConstantTruth"/> reduces the enclosing
+        /// groups with it (TASK-861), so a filter that therefore means every row — <c>!(x.Score &gt; nul)</c> or
+        /// <c>!(x.Score &gt; nul &amp;&amp; x.Amount &gt; 3)</c> — is refused by a destructive statement and reads every row.
+        /// An ordering used to bind the null (UNKNOWN, so no row, but every row under a <c>NOT</c>) or, from a closure,
+        /// to become <c>IS NULL</c>.
         /// </summary>
         private static void ComparedWithNull(Condition condition)
         {

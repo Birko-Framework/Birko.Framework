@@ -3,7 +3,7 @@ id: TASK-861
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P1
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -36,14 +36,39 @@ Found by TASK-859 (2026-11-07), measured on SQLite. It predates TASK-859.
 
 ## Acceptance criteria
 
-- [ ] Reproduced per SQL provider (SQLite in-process, PostgreSQL / MySQL / SQL Server live): Delete, Update(filter,
+- [x] Reproduced per SQL provider (SQLite in-process, PostgreSQL / MySQL / SQL Server live): Delete, Update(filter,
       PropertyUpdate), Update(filter, Action) and a count with `!(alwaysFalse && x)`, `!(alwaysFalse)`, and
       `!(a && (b && alwaysFalse))`. Record rows affected.
-- [ ] The condition tree is simplified with three-valued logic before the guard: `X AND FALSE` → FALSE, `NOT FALSE` →
+      → Measured 2026-11-07, 6 seeded rows, the same on SQLite, PostgreSQL, MySQL and SQL Server (live):
+        - `!(empty.Contains(A) && …)` and nested and `||` forms: Delete removed 6, Update(PropertyUpdate) updated 6,
+          Update(Action) was refused.
+        - `!(Score > nul && …)` (TASK-859's route): all three removed or updated 6.
+        - Bare `!(Score > nul)`: Delete and PropertyUpdate were refused; Update(Action) updated 6.
+        - `!(A > 0 && off)`, with `off` a `false` closure: 6, 6, refused.
+        - Reads and counts already returned all rows.
+- [x] The condition tree is simplified with three-valued logic before the guard: `X AND FALSE` → FALSE, `NOT FALSE` →
       TRUE, `X OR TRUE` → TRUE. A destructive statement whose simplified filter is TRUE is refused by the existing
       whole-table guard (`WholeTableWriteException`), and a read returns all rows as before. The guard tests what the
       statement means, not what text it renders (rule 3).
-- [ ] Regression tests per shape, destructive and read, red before the fix. Every SQL importer suite stays green.
+      → `ConstantTruth` in `AbstractConnectorBase` is a three-valued reduction of the condition tree, plus
+        `ConstantChain` for flat lists. The guard (`IsAlwaysTrueCondition`, `WouldTargetEveryRow`) and the renderer
+        share it: an always-false group renders `1 = 0`, and an always-false OR term is dropped.
+      → `MakeFalseCondition` now produces the empty-IN form, so a NOT the parser applied reduces too. The old
+        `1 = @p` was invisible to the guard.
+      → `Update(filter, Action)` in both SQL bulk stores now checks the same tree through `DataBase.RequireBoundedFilter`,
+        instead of `BoundedFilterGuard`.
+      → `!(a || alwaysFalse)` and the other filters that still constrain stay allowed.
+- [x] Regression tests per shape, destructive and read, red before the fix. Every SQL importer suite stays green.
+      → New shared `tests/Shared/StoreContract/AlwaysFalseGroupContract.cs` (161 cases) in the four provider suites,
+        plus `AlwaysFalseGroupReductionTests` in `Birko.Data.SQL.Tests` (reduction, guard, rendering).
+      → Red proof: with production reverted, 56 of 161 failed per provider, all of them destructive; 161 of 161 pass
+        after the fix.
+      → 35 SQL importer suites run live. Green, with these exceptions:
+        - TimescaleDB has no container (green without require-live).
+        - MySQL `TASK295_a_vanished_table_heals…` was flaky once and passed on rerun.
+        - PostgreSQL `DeadlockRetryLiveTests.With_retry_off…` fails the same way on HEAD. It runs raw SQL, unrelated.
+      → **Found, filed:** TASK-865 (P1): the non-SQL guard (`PredicateScope`) misses an ordering against null, so
+        InMemory deleted 6 of 6 for `!(x.Score > nul)`. TASK-866: `Condition.IsOr` means two things in a flat list.
 
 ## Out of scope
 

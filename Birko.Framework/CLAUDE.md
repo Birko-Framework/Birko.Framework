@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL write whose filter can only be true is refused (2026-11-08)
+[[TASK-861]]. A negated group holding an always-false term made the filter always true: `!(empty.Contains(x.A) &&
+x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` deleted or updated every row, silently
+(measured on all four SQL providers). The guard and the renderer now share one three-valued reduction
+(`ConstantTruth`), so such a Delete or Update throws `WholeTableWriteException`; `Update(filter, Action)` checks the same
+tree. Reads are unchanged. The non-SQL guard has the same gap for null orderings ([[TASK-865]]).
 ### SQL filters treat NULL the way C# does — BREAKING (2026-11-07)
 [[TASK-859]] (the user's decision: always, no flag). Measured on all four SQL providers: 34 of 61 nullable shapes
 returned different rows than the C# expression. `x.Score != 5` missed the NULL rows, and `{null, 10}.Contains(x.Score)`
@@ -384,14 +390,6 @@ that is not an address or a CIDR network, an unset `${VAR}`, `0.0.0.0/0`, or a s
 untrusted and every request read as coming from the proxy. `AuthenticationConfiguration.TrustedProxyParsing = Lenient`
 opts back in. The static `GetClientIpAddress` takes a mode, `Lenient` by default (the user's decisions). A WebSocket
 list refuses when its endpoint is mapped.
-### One trusted-proxy list behind a reverse proxy (2026-11-07)
-[[TASK-829]]. New `AddBirkoForwardedHeaders(section)` (Birko.Security.AspNetCore, `Birko:ForwardedHeaders`): the host's one
-list of trusted proxies, registered as `TrustedProxySettings`. There is no `Use…` call; a startup filter puts ASP.NET's
-forwarded headers first. An empty list trusts nobody, even through a manual `UseForwardedHeaders()`, and a bad entry stops
-the host. The WebSocket token binding takes the address those headers produced, and refuses a list of its own that
-differs. The loopback bypass refuses to start behind a trusted proxy. The forwarded values it leaves unread are removed, so a
-second `UseForwardedHeaders()` cannot believe a client-written hop (rule 67, measured). One parser, `TrustedProxyList`,
-for every list (the user's decisions). Presenter, Symbio and Affiliate replace their own copies (notes in the task).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
