@@ -242,7 +242,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     private void AppendOrderAndPage(StringBuilder sb, OrderBy<TView>? orderBy, int? limit, int? offset)
     {
         // ORDER BY clause — order keys are view property names; map group keys back to their source
-        // field and reference aggregate results by their SELECT alias (CR-H044).
+        // field (CR-H044). An aggregate key is refused (TASK-848).
         if (orderBy?.Fields.Count > 0)
         {
             var orderParts = orderBy.Fields
@@ -382,14 +382,23 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
     /// <summary>
     /// Resolves an ORDER BY key expressed as a TView property name (CR-H044): a group key maps back
-    /// to its source field (<c>c["Source"]</c>, bracket-quoted, TASK-844); an aggregate result orders by its SELECT alias.
+    /// to its source field (<c>c["Source"]</c>, bracket-quoted, TASK-844). An aggregate view property is refused.
     /// </summary>
+    /// <remarks>
+    /// TASK-848: Cosmos DB cannot sort a grouped query by an aggregate in any form. Measured on the emulator
+    /// (vnext-preview, 2026-11-07): a bare alias (<c>ORDER BY Total</c>) is SC2001, a quoted alias or the aggregate
+    /// itself (<c>ORDER BY SUM(c["Amount"])</c>) is 2206, also as a second key after a group key; a group key sorts and
+    /// pages correctly. The store used to send the statement and get a 400. Not sorted in memory instead: a grouped read
+    /// pages on the server (<c>OFFSET … LIMIT</c>, measured), so a correct page would need every group read first, an
+    /// unbounded read behind a paged call. Refused by name before any request, as every statement this store builds is.
+    /// </remarks>
     private string ResolveOrderKey(string viewProperty)
     {
-        // Aggregate result column — order by the projected alias, not a raw document field.
         if (_definition.Aggregates.Any(a => a.ViewProperty == viewProperty))
         {
-            return viewProperty;
+            throw new NotSupportedException(
+                $"Cosmos DB cannot sort a grouped view by an aggregate: '{typeof(TView).Name}.{viewProperty}' is one. "
+                + "Sort by a group key, or read the groups and sort them in the caller. (TASK-848)");
         }
 
         // Group key / passthrough field — order by the source field the GROUP BY uses, bracket-quoted (TASK-844: a
