@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.CosmosDB.Aggregation;
+using Birko.Data.CosmosDB.Stores;
 using Birko.Data.Stores;
 using Birko.Data.Views;
 using Microsoft.Azure.Cosmos;
@@ -16,11 +17,23 @@ namespace Birko.Data.CosmosDB.Views;
 /// <summary>
 /// Azure Cosmos DB (NoSQL API) implementation of <see cref="IViewStore{TView}"/>.
 /// Builds Cosmos SQL itself, with filter values bound as parameters by <c>CosmosFilterTranslator</c>: a projection
-/// for non-aggregate views, GROUP BY for aggregate ones, both run through <c>GetItemQueryIterator</c>. A collection
-/// <c>Contains</c> in a filter is refused before any request (TASK-837); it rendered <c>CONTAINS()</c> and matched
-/// nothing.
+/// for non-aggregate views, GROUP BY for aggregate ones, both run through <c>GetItemQueryIterator</c>.
 /// Joins are not supported (Cosmos DB does not support cross-container joins).
 /// </summary>
+/// <remarks>
+/// <para>A collection <c>Contains</c> in a filter (TASK-839) is <c>ARRAY_CONTAINS</c>, an exact comparison, in two
+/// shapes: <c>ids.Contains(v.Key)</c>, the list bound as one array parameter, and <c>v.Tags.Contains(x)</c> on a view
+/// array property. Guid, int, string and enum values; an empty list matches nothing; <c>!</c> and <c>||</c> compose.
+/// Other shapes (a comparer, a computed or nested operand, a nested collection) are refused by name before any request.
+/// Before TASK-837 a collection Contains rendered <c>CONTAINS()</c> and matched nothing.</para>
+/// <para>The server counts the serialized parameter values toward its 524,288-character query limit (measured on the
+/// emulator, 2026-11-07: 13,795 Guids pass, 25,000 fail with SC3020), so a list longer than
+/// <see cref="InListChunkSize"/> is split by TASK-834's planner (<c>CosmosInListChunking</c>): a read or count whose
+/// list is a plain AND conjunct of non-string values runs once per chunk of distinct values, rows concatenated and
+/// counts summed. Past <see cref="MaxQueryTextLength"/> a list that cannot be split (under NOT or OR, string values,
+/// a sort, limit or offset, <see cref="QueryFirstAsync"/>, or a grouped view) is refused with
+/// <see cref="NotSupportedException"/> before any request; below it, it runs as one query.</para>
+/// </remarks>
 public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new()
 {
     private readonly Container _container;
@@ -60,6 +73,45 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
     private bool Grouped => _definition.HasAggregates || _definition.HasGroupBy;
 
+    /// <summary>Distinct list values per query when a filter's <c>Contains</c> list is split (TASK-839).</summary>
+    protected virtual int InListChunkSize => CosmosInListChunking.DefaultChunkSize;
+
+    /// <summary>
+    /// The server's query limit in characters, counted over the query text plus the serialized parameter values
+    /// (TASK-839, measured on the emulator).
+    /// </summary>
+    protected virtual int MaxQueryTextLength => CosmosInListChunking.DefaultMaxQueryTextLength;
+
+    /// <summary>
+    /// Plans a non-grouped query's filter through TASK-834's planner: <c>null</c> runs it as one query, otherwise the
+    /// chunk filters. Refuses before any request what cannot be split past the limit.
+    /// </summary>
+    private IReadOnlyList<Expression<Func<TView, bool>>>? PlanChunks(
+        Expression<Func<TView, bool>>? filter,
+        string operation,
+        bool sortedOrPaged,
+        Func<Expression<Func<TView, bool>>, QueryDefinition> build)
+        => CosmosInListChunking.Plan(filter, operation, InListChunkSize, MaxQueryTextLength, sortedOrPaged, f => Length(build(f)));
+
+    /// <summary>
+    /// A grouped view's query is never split: a group can span chunks, so its rows and its count cannot be combined.
+    /// Past the limit it is refused before any request.
+    /// </summary>
+    private void RequireUnsplitGrouped(QueryDefinition query, string operation)
+    {
+        var length = Length(query);
+        if (length <= MaxQueryTextLength) return;
+        throw new NotSupportedException(
+            $"Cosmos DB view {operation} of {typeof(TView).Name} refused: its query text and parameter values would be "
+            + $"{length} characters, over Cosmos DB's limit of {MaxQueryTextLength}. A grouped view cannot be split into "
+            + "chunks, because a group can span them. Split the list in the caller, or narrow the filter. (TASK-839)");
+    }
+
+    /// <summary>The query text plus each parameter value as JSON: what the server counts against its limit.</summary>
+    private static int Length(QueryDefinition query)
+        => query.QueryText.Length
+           + query.GetQueryParameters().Sum(p => System.Text.Json.JsonSerializer.Serialize(p.Value).Length);
+
     /// <inheritdoc />
     public async Task<IEnumerable<TView>> QueryAsync(
         Expression<Func<TView, bool>>? filter = null,
@@ -69,15 +121,30 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         CancellationToken ct = default)
     {
         RequireComputable();
+        filter = Birko.Data.Expressions.SpanContains.Rewrite(filter);
 
         // Take the SQL path for group-by-only (distinct/grouping) views too, not just aggregate views —
         // otherwise a HasGroupBy && !HasAggregates view would return raw ungrouped docs via LINQ (CR-L110).
         if (Grouped)
         {
+            RequireUnsplitGrouped(BuildAggregateSql(filter, orderBy, limit, offset), "read");
             return await QueryAggregateAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
         }
 
-        return await RunAsync<TView>(BuildProjectionSql(filter, orderBy, limit, offset), ct).ConfigureAwait(false);
+        var sortedOrPaged = orderBy?.Fields.Count > 0 || limit.HasValue || offset.HasValue;
+        var chunks = PlanChunks(filter, "view read", sortedOrPaged, f => BuildProjectionSql(f, orderBy, limit, offset));
+        if (chunks == null)
+        {
+            return await RunAsync<TView>(BuildProjectionSql(filter, orderBy, limit, offset), ct).ConfigureAwait(false);
+        }
+
+        // Disjoint chunks of distinct values, no sort or paging: the union is the concatenation.
+        var rows = new List<TView>();
+        foreach (var chunk in chunks)
+        {
+            rows.AddRange(await RunAsync<TView>(BuildProjectionSql(chunk, null, null, null), ct).ConfigureAwait(false));
+        }
+        return rows;
     }
 
     /// <inheritdoc />
@@ -86,14 +153,18 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         CancellationToken ct = default)
     {
         RequireComputable();
+        filter = Birko.Data.Expressions.SpanContains.Rewrite(filter);
 
         // TASK-151 (SH-M379): grouped on the same condition as QueryAsync; a group-by-only view answered a raw document.
         if (Grouped)
         {
+            RequireUnsplitGrouped(BuildAggregateSql(filter, null, 1, null), "first read");
             var results = await QueryAggregateAsync(filter, null, 1, null, ct).ConfigureAwait(false);
             return results.FirstOrDefault();
         }
 
+        // LIMIT 1 is paging: a list past the limit is refused, never split (the planner returns null or throws).
+        PlanChunks(filter, "view first read", true, f => BuildProjectionSql(f, null, 1, null));
         return (await RunAsync<TView>(BuildProjectionSql(filter, null, 1, null), ct).ConfigureAwait(false)).FirstOrDefault();
     }
 
@@ -103,15 +174,33 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         CancellationToken ct = default)
     {
         RequireComputable();
+        filter = Birko.Data.Expressions.SpanContains.Rewrite(filter);
 
         if (Grouped)
         {
+            RequireUnsplitGrouped(BuildAggregateSql(filter, null, null, null), "count");
             return await CountAggregateAsync(filter, ct).ConfigureAwait(false);
         }
 
+        var chunks = PlanChunks(filter, "view count", false, f => BuildCountSql(f));
+        if (chunks == null)
+        {
+            return (await RunAsync<long>(BuildCountSql(filter), ct).ConfigureAwait(false)).Sum();
+        }
+
+        // Disjoint chunks of distinct values: the counts add up.
+        long total = 0;
+        foreach (var chunk in chunks)
+        {
+            total += (await RunAsync<long>(BuildCountSql(chunk), ct).ConfigureAwait(false)).Sum();
+        }
+        return total;
+    }
+
+    private QueryDefinition BuildCountSql(Expression<Func<TView, bool>>? filter)
+    {
         var parameters = new List<KeyValuePair<string, object?>>();
-        var sql = "SELECT VALUE COUNT(1) FROM c" + Where(filter, parameters);
-        return (await RunAsync<long>(Bind(sql, parameters), ct).ConfigureAwait(false)).Sum();
+        return Bind("SELECT VALUE COUNT(1) FROM c" + Where(filter, parameters), parameters);
     }
 
     #region Projection (non-aggregate)
@@ -353,6 +442,8 @@ internal static class CosmosFilterTranslator
             return string.Empty;
         }
 
+        // Rule 47: on .NET 9+ an array's Contains binds MemoryExtensions over a span; rewritten to Enumerable.Contains.
+        filter = Birko.Data.Expressions.SpanContains.Rewrite(filter)!;
         return TranslateExpression(filter.Body, parameters, mapMember);
     }
 
@@ -411,16 +502,12 @@ internal static class CosmosFilterTranslator
         IList<KeyValuePair<string, object?>> parameters,
         Func<string, string>? mapMember)
     {
-        // TASK-837: only a string's Contains is a substring test. A collection's (`ids.Contains(v.Col)`, an IN list, in
-        // its instance, static and span forms) used to reach the string path and fail on an unrelated message, or, on a
-        // collection-valued field, render CONTAINS(c.Field, @p) over an array, which matches nothing. It is refused by
-        // name, before any request; Cosmos DB view filters have no IN. A list is never chunked here, so TASK-834's query
-        // text ceiling cannot be reached through a view.
+        // TASK-837: only a string's Contains is a substring test. A collection's used to reach the string path and, on a
+        // collection-valued field, render CONTAINS(c.Field, @p) over an array, which matches nothing. TASK-839: a
+        // collection Contains is ARRAY_CONTAINS, in two shapes only; every other one is refused by name.
         if (method.Method.Name == "Contains" && (method.Object == null || method.Object.Type != typeof(string)))
         {
-            throw new NotSupportedException(
-                "A Contains on a collection (an IN list, such as ids.Contains(v.Col)) is not supported in a Cosmos DB view "
-                + "filter; only a string's Contains is. Filter the source container through its store, or narrow the view. (TASK-837)");
+            return TranslateCollectionContains(method, parameters, mapMember);
         }
 
         if (method.Method.Name == "Contains" && method.Object != null)
@@ -431,6 +518,135 @@ internal static class CosmosFilterTranslator
         }
 
         throw new NotSupportedException($"Method {method.Method.Name} is not supported for SQL translation.");
+    }
+
+    /// <summary>
+    /// TASK-839: a collection <c>Contains</c>, in the two shapes Cosmos SQL's exact <c>ARRAY_CONTAINS</c> expresses:
+    /// <list type="bullet">
+    /// <item>a caller's list against a view property, <c>ids.Contains(v.Key)</c>: <c>ARRAY_CONTAINS(@p, c.Key)</c>, the
+    /// whole list bound as ONE array parameter (the query text does not grow with the list; its serialized values
+    /// still count toward the server's 524,288-character limit, so the store splits a long list);</item>
+    /// <item>a view array property containing a caller's value, <c>v.Tags.Contains(x)</c>:
+    /// <c>ARRAY_CONTAINS(c.Tags, @p)</c>.</item>
+    /// </list>
+    /// An empty list renders <c>false</c>: it matches nothing, and is never "no constraint" (rule 42). Measured on the
+    /// emulator (vnext-preview, 2026-11-07): Guid, int and string values match exactly, with NOT and in a count. Every
+    /// other shape is refused by name, before any request: a comparer, a computed or nested operand, a nested
+    /// collection, a list that depends on the document and is tested against it, or a test that names no view property.
+    /// The message names the shape, never the values.
+    /// </summary>
+    private static string TranslateCollectionContains(
+        MethodCallExpression method,
+        IList<KeyValuePair<string, object?>> parameters,
+        Func<string, string>? mapMember)
+    {
+        Expression source;
+        Expression item;
+        Type elementType;
+        if (method.Object == null && method.Method.DeclaringType == typeof(Enumerable) && method.Arguments.Count == 2)
+        {
+            source = method.Arguments[0];
+            item = method.Arguments[1];
+            elementType = method.Method.GetGenericArguments()[0];
+        }
+        else if (method.Object != null && method.Arguments.Count == 1
+                 && typeof(IEnumerable<>).MakeGenericType(method.Method.GetParameters()[0].ParameterType).IsAssignableFrom(method.Object.Type))
+        {
+            source = method.Object;
+            item = method.Arguments[0];
+            elementType = method.Method.GetParameters()[0].ParameterType;
+        }
+        else
+        {
+            // A comparer (Enumerable's or MemoryExtensions' three-argument form, which SpanContains leaves alone) cannot
+            // be honoured by ARRAY_CONTAINS's equality.
+            throw ContainsRefusal("it is not a plain Contains(value): a comparer or another overload has no Cosmos SQL form");
+        }
+
+        if (elementType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(elementType))
+        {
+            throw ContainsRefusal($"its elements are collections ({elementType.Name}); a nested collection is not supported");
+        }
+
+        var sourceReadsDocument = ParameterFinder.Uses(source);
+        var itemReadsDocument = ParameterFinder.Uses(item);
+
+        if (!sourceReadsDocument && itemReadsDocument)
+        {
+            var path = ViewPropertyPath(item, mapMember, "the tested value");
+            var values = EvaluateValue(Birko.Data.Expressions.SpanContains.UnwrapConvert(source)!);
+            if (values is not System.Collections.IEnumerable sequence || values is string)
+            {
+                throw ContainsRefusal("its list evaluates to null or to no sequence");
+            }
+
+            var bound = new List<object?>();
+            foreach (var v in sequence)
+            {
+                bound.Add(v is Enum e ? Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture) : v);
+            }
+
+            if (bound.Count == 0) return "false";
+            return $"ARRAY_CONTAINS({Bind(bound.ToArray(), parameters)}, {path})";
+        }
+
+        if (sourceReadsDocument && !itemReadsDocument)
+        {
+            var path = ViewPropertyPath(source, mapMember, "the collection");
+            return $"ARRAY_CONTAINS({path}, {BindValue(item, parameters)})";
+        }
+
+        throw ContainsRefusal(sourceReadsDocument
+            ? "both the collection and the value read the view, which ARRAY_CONTAINS cannot compare"
+            : "neither side reads a view property");
+    }
+
+    /// <summary>
+    /// The path of a view property read directly off the filter's parameter, mapped to its source field. A computed
+    /// operand or a nested member (<c>v.Inner.X</c>) is refused here; the comparison paths' handling of a nested member
+    /// is TASK-840.
+    /// </summary>
+    private static string ViewPropertyPath(Expression expression, Func<string, string>? mapMember, string role)
+    {
+        var unwrapped = Birko.Data.Expressions.SpanContains.UnwrapConvert(expression);
+        if (unwrapped is MemberExpression { Expression: ParameterExpression } member)
+        {
+            return $"c.{Map(member.Member.Name, mapMember)}";
+        }
+
+        throw ContainsRefusal(unwrapped is MemberExpression
+            ? $"{role} is a nested member (v.A.B), not a view property read directly"
+            : $"{role} is a computed expression ({unwrapped?.NodeType}), not a view property read directly");
+    }
+
+    private static NotSupportedException ContainsRefusal(string reason)
+        => new("A collection Contains in a Cosmos DB view filter must be a caller's list tested against a view property "
+             + "(ids.Contains(v.Col)) or a view array property tested for a caller's value (v.Tags.Contains(x)); this one is "
+             + $"not supported: {reason}. (TASK-839)");
+
+    private static string Bind(object? value, IList<KeyValuePair<string, object?>> parameters)
+    {
+        var name = "@p" + parameters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        parameters.Add(new KeyValuePair<string, object?>(name, value));
+        return name;
+    }
+
+    private sealed class ParameterFinder : ExpressionVisitor
+    {
+        private bool _found;
+
+        public static bool Uses(Expression expression)
+        {
+            var finder = new ParameterFinder();
+            finder.Visit(expression);
+            return finder._found;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            _found = true;
+            return node;
+        }
     }
 
     private static string TranslateFieldAccess(Expression expression, Func<string, string>? mapMember)
@@ -528,8 +744,6 @@ internal static class CosmosFilterTranslator
             value = Convert.ToInt64(e, System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        var name = "@p" + parameters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        parameters.Add(new KeyValuePair<string, object?>(name, value));
-        return name;
+        return Bind(value, parameters);
     }
 }

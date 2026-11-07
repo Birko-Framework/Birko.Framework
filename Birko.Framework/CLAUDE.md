@@ -296,13 +296,17 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
-### SQL views split a long IN list; Cosmos DB views refuse a collection Contains (2026-11-07)
-[[TASK-837]].
-- **SQL views:** they ran no planner, and a view read with 33,000 ids threw "too many SQL variables" (measured). They
-  now split and refuse through TASK-833's planner. An on-the-fly aggregate view refuses past the limit.
-- **Cosmos DB views:** they render their own SQL (not LINQ), and `v.Tags.Contains(x)` matched nothing, silently. Every
-  collection `Contains` in a view filter now refuses by name before any request. **A filter that returned nothing now
-  throws.**
+### View stores handle a long IN list; Cosmos DB views support Contains (2026-11-07)
+- **SQL views** ([[TASK-837]]): they ran no planner, and a view read with 33,000 ids threw "too many SQL variables"
+  (measured). They now split and refuse through TASK-833's planner. An on-the-fly aggregate view refuses past the
+  limit.
+- **Cosmos DB views:** they render their own SQL, not LINQ.
+  - **Before:** `v.Tags.Contains(x)` rendered `CONTAINS()` and matched nothing, silently.
+  - **Now** ([[TASK-839]]): `ids.Contains(v.Key)` and `v.Tags.Contains(x)` render as `ARRAY_CONTAINS` with the list
+    as one parameter.
+  - **Still split:** the parameter counts toward the 524,288-character limit (13,795 Guids pass, measured), so past
+    it a plain AND list is split through TASK-834's planner. Negated, `||` and grouped forms refuse.
+  - **Refused by name:** other collection shapes.
 ### Rendering SQL parameters is linear (2026-11-07)
 [[TASK-836]]. `AddParameter` looked every name up in the command's parameter collection, which is a linear scan, so a
 4000-value IN list took 341 ms to render; it now takes 23–28 ms.

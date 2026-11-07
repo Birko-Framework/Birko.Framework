@@ -37,7 +37,16 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 
 ### CosmosFilterTranslator
 - Internal helper that translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses
-- Supports binary comparisons (==, !=, <, >, <=, >=), logical AND/OR, NOT, and string Contains
+- Supports binary comparisons (==, !=, <, >, <=, >=), logical AND/OR, NOT, and string Contains (a substring test)
+- Collection `Contains` (TASK-839) renders `ARRAY_CONTAINS`, an exact comparison (no collation), in two shapes:
+  - `ids.Contains(v.Key)` (list, array, any `IEnumerable<T>`; span form normalised by `SpanContains.Rewrite`, rule 47) → `ARRAY_CONTAINS(@p, c.Key)`, the whole list bound as **one** array parameter. Guid, int, string, enum (as its number) values
+  - `v.Tags.Contains(x)` on a view array property → `ARRAY_CONTAINS(c.Tags, @p)`
+  - An empty list renders `false` (matches nothing; `!` of it matches everything). `!` and `||` compose
+  - Paths go through `MapViewPropertyToSource`; an aggregate view property is refused by name
+  - Refused by name, before any request: a comparer overload, a computed operand (`ids.Contains(v.N + 1)`), a nested member (`v.Inner.Tags`), a collection of collections, both sides reading the view
+- **The list still counts toward the 524,288-character limit.** Measured on the emulator (vnext-preview, 2026-11-07): the server counts the serialized parameter values with the query text (13,795 Guids pass, 25,000 fail with SC3020; 65,530 seven-digit ints pass). So `CosmosViewStore` plans every non-grouped read and count through TASK-834's `CosmosInListChunking.Plan` (one producer, Birko.Data.CosmosDB): a list of more than `InListChunkSize` (1000) distinct values in a plain AND conjunct is run once per chunk, rows concatenated and counts summed. Its length is measured as query text + each parameter as JSON
+- Past `MaxQueryTextLength` the planner refuses with `NotSupportedException`, before any request, what it cannot split: NOT, OR, a sort / limit / offset, `QueryFirstAsync`, and **string values** (the planner's TASK-833 rule, kept although `ARRAY_CONTAINS` is exact; relaxing it means changing the shared planner). A grouped view is never split (a group can span chunks) and is refused past the limit. Below the limit all of these run as one query
+- `InListChunkSize` and `MaxQueryTextLength` are `protected virtual` so a test (or a consumer) can lower them
 
 ## Dependencies
 - Birko.Data.Views (IViewStore, IViewManager, ViewDefinition)
