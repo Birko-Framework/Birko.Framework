@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Every store refuses a write whose filter negates a null ordering (2026-11-08)
+[[TASK-865]]. In C#, `x.Score > null` is always false, so `!(x.Score > nul)` matches every row. On InMemory, JSON and
+XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos DB wrote part of the table, all
+silently (measured). `PredicateScope` now treats a lifted ordering against null as always false, so the whole-table
+guard refuses it with `WholeTableWriteException`; `==` / `!=` null are unchanged. RavenDB and Cosmos DB still translate
+such orderings differently from C# ([[TASK-867]]).
 ### A SQL write whose filter can only be true is refused (2026-11-08)
 [[TASK-861]]. A negated group holding an always-false term made the filter always true: `!(empty.Contains(x.A) &&
 x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` deleted or updated every row, silently
@@ -383,13 +389,6 @@ value containing a parameter name is no longer rewritten. Chunking a list past a
 an IPv4 client as `::ffff:127.0.0.1` (measured), so a binding listing `127.0.0.1` refused it. Both sides are now parsed
 addresses, IPv4-mapped reduced to IPv4. An entry that is not an address is skipped and logged; it used to match a client
 spelled the same way.
-### A bad TrustedProxies entry refuses at construction (2026-11-07)
-[[TASK-830]]. **Breaking:** `AuthenticationService` (REST, SOAP, SSE and WebSocket token auth) now refuses an entry
-that is not an address or a CIDR network, an unset `${VAR}`, `0.0.0.0/0`, or a short or bracketed address. It throws
-`InvalidOperationException` naming the configuration type. Such an entry used to be skipped, so its proxy stayed
-untrusted and every request read as coming from the proxy. `AuthenticationConfiguration.TrustedProxyParsing = Lenient`
-opts back in. The static `GetClientIpAddress` takes a mode, `Lenient` by default (the user's decisions). A WebSocket
-list refuses when its endpoint is mapped.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

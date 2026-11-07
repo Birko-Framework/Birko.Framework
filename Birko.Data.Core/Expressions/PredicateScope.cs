@@ -114,6 +114,10 @@ namespace Birko.Data.Expressions
                 case MethodCallExpression call:
                     return IsEmptySetContains(call);
 
+                // `x.Score > nul` with a null `nul` matches nothing, so `!(x.Score > nul)` matches everything (TASK-865).
+                case BinaryExpression ordering when IsNullOrdering(ordering):
+                    return true;
+
                 case BinaryExpression andExpr when andExpr.NodeType is ExpressionType.AndAlso or ExpressionType.And:
                     return IsAlwaysFalse(andExpr.Left) || IsAlwaysFalse(andExpr.Right);
                 case BinaryExpression orExpr when orExpr.NodeType is ExpressionType.OrElse or ExpressionType.Or:
@@ -180,6 +184,34 @@ namespace Birko.Data.Expressions
             }
             return false;
         }
+
+        /// <summary>
+        /// True when <paramref name="ordering"/> is a LIFTED <c>&lt;</c>, <c>&lt;=</c>, <c>&gt;</c> or <c>&gt;=</c> one of whose
+        /// operands is the null constant — which, once <see cref="ExpressionNormalizer"/> has folded captured values,
+        /// covers <c>x.Score &gt; nul</c>, <c>nul &lt; x.Score</c> and <c>x.Score &lt;= (int?)null</c>. C# defines a lifted
+        /// ordering with a null operand as <c>false</c>, so the comparison matches no entity.
+        /// </summary>
+        /// <remarks>
+        /// <c>==</c> / <c>!=</c> are not here: <c>x.Score == nul</c> is true of the null rows, an ordinary filter. Neither is
+        /// an ordering that is not lifted — a user-defined operator declared on nullable operands decides for itself what
+        /// null means, and claiming it false could refuse a filter that constrains.
+        /// </remarks>
+        private static bool IsNullOrdering(BinaryExpression ordering)
+        {
+            if (ordering.NodeType is not (ExpressionType.LessThan or ExpressionType.LessThanOrEqual
+                    or ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual))
+            {
+                return false;
+            }
+            if (!ordering.IsLifted || ordering.IsLiftedToNull)
+            {
+                return false;
+            }
+            return IsNullConstant(ordering.Left) || IsNullConstant(ordering.Right);
+        }
+
+        private static bool IsNullConstant(Expression operand)
+            => Unwrap(operand) is ConstantExpression { Value: null };
 
         private static bool ReferencesParameter(Expression expr)
             => new ParameterFinder().Found(expr);

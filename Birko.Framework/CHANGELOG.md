@@ -4,6 +4,14 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — A bad TrustedProxies entry refuses at construction
+[[TASK-830]]. **Breaking:** `AuthenticationService` (REST, SOAP, SSE and WebSocket token auth) now refuses an entry
+that is not an address or a CIDR network, an unset `${VAR}`, `0.0.0.0/0`, or a short or bracketed address. It throws
+`InvalidOperationException` naming the configuration type. Such an entry used to be skipped, so its proxy stayed
+untrusted and every request read as coming from the proxy. `AuthenticationConfiguration.TrustedProxyParsing = Lenient`
+opts back in. The static `GetClientIpAddress` takes a mode, `Lenient` by default (the user's decisions). A WebSocket
+list refuses when its endpoint is mapped.
+
 ## 2026-11-07 — One trusted-proxy list behind a reverse proxy
 [[TASK-829]]. New `AddBirkoForwardedHeaders(section)` (Birko.Security.AspNetCore, `Birko:ForwardedHeaders`): the host's one
 list of trusted proxies, registered as `TrustedProxySettings`. There is no `Use…` call; a startup filter puts ASP.NET's
