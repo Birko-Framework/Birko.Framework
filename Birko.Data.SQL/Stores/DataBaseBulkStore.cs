@@ -96,58 +96,20 @@ namespace Birko.Data.SQL.Stores
         /// One exception commits: <see cref="EntityNotFoundException"/> from a collection update is TASK-555's report of
         /// the items that were not stored, raised AFTER every stored item was written, which is that contract. It is a
         /// zero-row UPDATE, not a database error, so the transaction is still usable.
+        /// <para>
+        /// The boundary itself is the connector's <c>RunAtomically</c> (TASK-838, its one producer): the store's own
+        /// transaction context is published as the ambient first, so the connector joins it.
+        /// </para>
         /// </remarks>
         protected void Atomically(Action write)
         {
-            if (Connector == null || TransactionContext != null || AmbientSqlTransaction.Find(Connector.Settings.GetId()) != null)
+            using var joined = EnterTransactionScope();
+            if (Connector == null)
             {
-                using var joined = EnterTransactionScope();
                 write();
                 return;
             }
-
-            // TASK-305: opened through the connector so a busy database at BEGIN is retried; the write below is not.
-            var (opened, begun) = Connector.OpenOwnedTransaction();
-            using var connection = opened;
-            using var transaction = begun;
-            var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
-            try
-            {
-                write();
-            }
-            catch (EntityNotFoundException)
-            {
-                scope.Dispose();
-                CommitAndRunCallbacks(transaction);
-                throw;
-            }
-            catch
-            {
-                scope.Dispose();
-                AmbientSqlTransaction.DiscardCommitted(transaction);
-                transaction.Rollback();
-                throw;
-            }
-            scope.Dispose();
-            CommitAndRunCallbacks(transaction);
-        }
-
-        /// <summary>
-        /// Commits a batch's own transaction, then runs the work registered to follow it (TASK-669). A failed commit
-        /// discards that work; a callback's failure is recorded on the connector (channel <c>AfterCommit</c>).
-        /// </summary>
-        private void CommitAndRunCallbacks(System.Data.Common.DbTransaction transaction)
-        {
-            try
-            {
-                transaction.Commit();
-            }
-            catch
-            {
-                AmbientSqlTransaction.DiscardCommitted(transaction);
-                throw;
-            }
-            AmbientSqlTransaction.RunCommitted(transaction, ex => Connector?.RecordSubscriberFailure("AfterCommit", ex));
+            Connector.RunAtomically(() => { write(); return true; }, ex => ex is EntityNotFoundException);
         }
 
         /// <summary>

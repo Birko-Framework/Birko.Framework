@@ -103,59 +103,24 @@ namespace Birko.Data.SQL.Stores
         /// One exception commits: <see cref="EntityNotFoundException"/> from a collection update is TASK-555's report of
         /// the items that were not stored, raised AFTER every stored item was written, which is that contract. It is a
         /// zero-row UPDATE, not a database error, so the transaction is still usable.
+        /// <para>
+        /// The boundary itself is the connector's <c>RunAtomicallyAsync</c> (TASK-838, its one producer): the store's own
+        /// transaction context is published as the ambient first, so the connector joins it.
+        /// </para>
         /// </remarks>
         protected async Task AtomicallyAsync(Func<Task> write, CancellationToken ct)
         {
-            if (Connector == null || TransactionContext != null || AmbientSqlTransaction.Find(Connector.Settings.GetId()) != null)
+            using var joined = EnterTransactionScope();
+            if (Connector == null)
             {
-                using var joined = EnterTransactionScope();
                 await write().ConfigureAwait(false);
                 return;
             }
-
-            // TASK-305: opened through the connector so a busy database at BEGIN is retried; the write below is not.
-            var (opened, begun) = await Connector.OpenOwnedTransactionAsync(ct).ConfigureAwait(false);
-            await using var connection = opened;
-            await using var transaction = begun;
-            var scope = AmbientSqlTransaction.Enter(Connector.Settings.GetId(), connection, transaction);
-            try
+            await Connector.RunAtomicallyAsync(async () =>
             {
                 await write().ConfigureAwait(false);
-            }
-            catch (Exceptions.EntityNotFoundException)
-            {
-                scope.Dispose();
-                await CommitAndRunCallbacksAsync(transaction, ct).ConfigureAwait(false);
-                throw;
-            }
-            catch
-            {
-                scope.Dispose();
-                AmbientSqlTransaction.DiscardCommitted(transaction);
-                // Not the caller's token: a cancelled batch must still be rolled back.
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            scope.Dispose();
-            await CommitAndRunCallbacksAsync(transaction, ct).ConfigureAwait(false);
-        }
-
-        /// <summary>
-        /// Commits a batch's own transaction, then runs the work registered to follow it (TASK-669). A failed commit
-        /// discards that work; a callback's failure is recorded on the connector (channel <c>AfterCommit</c>).
-        /// </summary>
-        private async Task CommitAndRunCallbacksAsync(System.Data.Common.DbTransaction transaction, CancellationToken ct)
-        {
-            try
-            {
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                AmbientSqlTransaction.DiscardCommitted(transaction);
-                throw;
-            }
-            await AmbientSqlTransaction.RunCommittedAsync(transaction, ex => Connector?.RecordSubscriberFailure("AfterCommit", ex)).ConfigureAwait(false);
+                return true;
+            }, ct, ex => ex is Exceptions.EntityNotFoundException).ConfigureAwait(false);
         }
 
         /// <inheritdoc />

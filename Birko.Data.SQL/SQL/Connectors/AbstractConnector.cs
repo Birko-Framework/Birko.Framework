@@ -1065,10 +1065,17 @@ namespace Birko.Data.SQL.Connectors
         /// commit runs after it and is discarded on a rollback or a failed commit (TASK-669).
         /// </summary>
         /// <remarks>
-        /// The one producer of this boundary on the connector. The bulk stores' <c>Atomically(Async)</c> is the same shape
-        /// with a store's own transaction context and TASK-555's commit-on-<c>EntityNotFoundException</c> on top.
+        /// The one producer of this boundary (TASK-838, rule 16): the bulk stores' <c>Atomically(Async)</c> delegate here,
+        /// adding only what is a store's — joining its own transaction context, which they publish as the ambient before
+        /// calling — and passing <paramref name="commitsDespite"/> for TASK-555's <c>EntityNotFoundException</c>.
         /// </remarks>
-        protected TResult RunAtomically<TResult>(Func<TResult> body)
+        /// <param name="body">The write.</param>
+        /// <param name="commitsDespite">
+        /// An exception from <paramref name="body"/> this matches is a report raised after the write was applied, not a
+        /// failure: an owned transaction is committed (and its after-commit work run) before it is rethrown. A failed
+        /// commit replaces it. Null rolls back on every exception.
+        /// </param>
+        protected internal TResult RunAtomically<TResult>(Func<TResult> body, Func<Exception, bool>? commitsDespite = null)
         {
             if (body == null) throw new ArgumentNullException(nameof(body));
             if (AmbientTransaction != null) return body();
@@ -1082,6 +1089,12 @@ namespace Birko.Data.SQL.Connectors
             {
                 result = body();
             }
+            catch (Exception ex) when (commitsDespite != null && commitsDespite(ex))
+            {
+                scope.Dispose();
+                CommitOwned(transaction);
+                throw;
+            }
             catch
             {
                 scope.Dispose();
@@ -1090,23 +1103,15 @@ namespace Birko.Data.SQL.Connectors
                 throw;
             }
             scope.Dispose();
-            try
-            {
-                transaction.Commit();
-            }
-            catch
-            {
-                AmbientSqlTransaction.DiscardCommitted(transaction);
-                throw;
-            }
-            AmbientSqlTransaction.RunCommitted(transaction, ex => RecordSubscriberFailure("AfterCommit", ex));
+            CommitOwned(transaction);
             return result;
         }
 
         /// <summary>The async twin of <see cref="RunAtomically{TResult}"/>.</summary>
-        protected async System.Threading.Tasks.Task<TResult> RunAtomicallyAsync<TResult>(
+        protected internal async System.Threading.Tasks.Task<TResult> RunAtomicallyAsync<TResult>(
             Func<System.Threading.Tasks.Task<TResult>> body,
-            System.Threading.CancellationToken ct = default)
+            System.Threading.CancellationToken ct = default,
+            Func<Exception, bool>? commitsDespite = null)
         {
             if (body == null) throw new ArgumentNullException(nameof(body));
             if (AmbientTransaction != null) return await body().ConfigureAwait(false);
@@ -1120,6 +1125,12 @@ namespace Birko.Data.SQL.Connectors
             {
                 result = await body().ConfigureAwait(false);
             }
+            catch (Exception ex) when (commitsDespite != null && commitsDespite(ex))
+            {
+                scope.Dispose();
+                await CommitOwnedAsync(transaction, ct).ConfigureAwait(false);
+                throw;
+            }
             catch
             {
                 scope.Dispose();
@@ -1129,6 +1140,31 @@ namespace Birko.Data.SQL.Connectors
                 throw;
             }
             scope.Dispose();
+            await CommitOwnedAsync(transaction, ct).ConfigureAwait(false);
+            return result;
+        }
+
+        /// <summary>
+        /// Commits an owned boundary, then runs the work registered to follow it (TASK-669). A failed commit discards that
+        /// work; a callback's failure is recorded on channel <c>AfterCommit</c>.
+        /// </summary>
+        private void CommitOwned(DbTransaction transaction)
+        {
+            try
+            {
+                transaction.Commit();
+            }
+            catch
+            {
+                AmbientSqlTransaction.DiscardCommitted(transaction);
+                throw;
+            }
+            AmbientSqlTransaction.RunCommitted(transaction, ex => RecordSubscriberFailure("AfterCommit", ex));
+        }
+
+        /// <summary>The async twin of <see cref="CommitOwned"/>.</summary>
+        private async System.Threading.Tasks.Task CommitOwnedAsync(DbTransaction transaction, System.Threading.CancellationToken ct)
+        {
             try
             {
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
@@ -1139,7 +1175,6 @@ namespace Birko.Data.SQL.Connectors
                 throw;
             }
             await AmbientSqlTransaction.RunCommittedAsync(transaction, ex => RecordSubscriberFailure("AfterCommit", ex)).ConfigureAwait(false);
-            return result;
         }
 
         private void RunBulkCore(
