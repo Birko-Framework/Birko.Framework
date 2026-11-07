@@ -21,12 +21,18 @@ namespace Birko.Data.SQL.Connectors
     /// compare as decimals. A conversion of a decimal fragment to another type is refused: C# truncates or rounds
     /// there, and the portable fragment drops the conversion.
     /// </para>
+    /// <para>
+    /// TASK-857: <c>Math.Round</c> is the computed set's <see cref="SqLiteDecimal.RoundCall"/>, a decimal <c>Math.Abs</c> is
+    /// <see cref="SqLiteDecimal.AbsFunction"/> and a decimal unary minus is <c>0 - x</c> through
+    /// <see cref="SqLiteDecimal.SubtractFunction"/>, as a computed set negates. SQLite's own <c>ABS</c> and <c>-</c> read
+    /// the TEXT as a REAL.
+    /// </para>
     /// </remarks>
     public sealed class SqLiteValueFragmentDialect : SqlValueFragmentDialect
     {
         public static readonly SqLiteValueFragmentDialect Instance = new();
 
-        private SqLiteValueFragmentDialect() { }
+        private SqLiteValueFragmentDialect() : base(SqLiteDecimal.RoundCall) { }
 
         private static bool IsDecimal(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal);
 
@@ -63,6 +69,14 @@ namespace Birko.Data.SQL.Connectors
             // A number becoming a decimal: through C#'s own conversion, to the decimal TEXT form.
             return $"{SqLiteDecimal.AddFunction}({operand}, '0.0')";
         }
+
+        /// <inheritdoc />
+        public override string Abs(string operand, Type type)
+            => IsDecimal(type) ? $"{SqLiteDecimal.AbsFunction}({operand})" : base.Abs(operand, type);
+
+        /// <inheritdoc />
+        public override string Negate(string operand, Type type)
+            => IsDecimal(type) ? $"{SqLiteDecimal.SubtractFunction}({Literal(0m)}, {operand})" : base.Negate(operand, type);
 
         /// <inheritdoc />
         public override string Compared(string operand, Type comparedType)

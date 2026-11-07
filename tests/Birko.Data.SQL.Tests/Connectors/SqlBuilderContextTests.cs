@@ -272,5 +272,25 @@ namespace Birko.Data.SQL.Tests.Connectors
             // Assert
             result.Should().BeNull();
         }
+
+        /// <summary>
+        /// TASK-857: a value-fragment name (a rounded CASE runs to hundreds of characters) made a parameter name SQL Server
+        /// refuses past 128 characters. The stem is cut; the count suffix keeps two names apart.
+        /// </summary>
+        [Fact]
+        public void GenerateParameterName_CutsALongFragmentName_AndStaysUnique()
+        {
+            var context = new SqlBuilderContext(_connectorMock.Object);
+            var fragment = "(CASE WHEN ABS((CAST(T.Amount AS DECIMAL(32,12)) * 10) - ROUND((CAST(T.Amount AS DECIMAL(32,12)) * 10), 0, 1)) = 0.5 "
+                + "THEN (ROUND(CAST(T.Amount AS DECIMAL(32,12)) * 10, 0, 1) + 1) * 0.1 ELSE ROUND(CAST(T.Amount AS DECIMAL(32,12)), 1) END)";
+
+            var first = context.GenerateParameterName(fragment, 0, _command);
+            _command.Parameters.Add(_command.CreateParameter());
+            var second = context.GenerateParameterName(fragment, 0, _command);
+
+            first.Length.Should().BeLessThanOrEqualTo(128);
+            first.Should().StartWith("@WHERECASEWHENABSCASTTAmount").And.EndWith("0_0");
+            second.Should().NotBe(first);
+        }
     }
 }

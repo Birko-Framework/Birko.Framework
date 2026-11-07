@@ -27,6 +27,9 @@ namespace Birko.Data.SQL.Connectors
             _stringBuilder = new StringBuilder();
         }
 
+        /// <summary>The longest field-name part of a generated parameter name.</summary>
+        private const int MaxNameStem = 64;
+
         /// <summary>
         /// Generates a unique parameter name for the given field
         /// </summary>
@@ -39,6 +42,9 @@ namespace Birko.Data.SQL.Connectors
 
             var count = command.Parameters?.Count ?? 0;
             var sanitizedName = _sanitizeRegex.Replace(fieldName, string.Empty);
+            // TASK-857: the field name may be a value fragment (a rounded CASE runs to hundreds of characters), and SQL Server
+            // refuses a parameter name over 128. The name only has to be unique, which the count suffix already makes it.
+            if (sanitizedName.Length > MaxNameStem) sanitizedName = sanitizedName.Substring(0, MaxNameStem);
             var name = $"@WHERE{sanitizedName}{index}_{count}";
             _generatedName = name;
             _generatedFor = command;

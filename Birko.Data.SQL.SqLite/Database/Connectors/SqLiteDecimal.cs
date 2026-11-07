@@ -40,6 +40,7 @@ namespace Birko.Data.SQL.Connectors
         public const string DivideFunction = "birko_decimal_div";
         public const string RoundFunction = "birko_decimal_round";
         public const string ModuloFunction = "birko_decimal_mod";
+        public const string AbsFunction = "birko_decimal_abs";
 
         /// <summary>
         /// The text form Microsoft.Data.Sqlite binds a <c>decimal</c> parameter as (measured: <c>10.10m</c>
@@ -71,6 +72,10 @@ namespace Birko.Data.SQL.Connectors
             connection.CreateFunction<object?, object?, string?>(ModuloFunction,
                 (a, b) => a == null || b == null ? null : Format(ToDecimal(a) % ToDecimal(b)),
                 isDeterministic: true);
+            // TASK-857: a decimal Math.Abs in a filter value fragment.
+            connection.CreateFunction<object?, string?>(AbsFunction,
+                a => a == null ? null : Format(Math.Abs(ToDecimal(a))),
+                isDeterministic: true);
             connection.CreateFunction<object?, long, long, string?>(RoundFunction,
                 (a, digits, awayFromZero) => a == null ? null : Format(Math.Round(ToDecimal(a), (int)digits,
                     awayFromZero != 0 ? MidpointRounding.AwayFromZero : MidpointRounding.ToEven)),
@@ -88,6 +93,14 @@ namespace Birko.Data.SQL.Connectors
         }
 
         public static string Format(decimal value) => value.ToString(TextFormat, CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// <c>Math.Round(value, digits, mode)</c> through <see cref="RoundFunction"/>: the SQL a computed set (TASK-826) and a
+        /// filter value fragment (TASK-857) both run.
+        /// </summary>
+        public static string RoundCall(string value, int digits, MidpointRounding mode)
+            => string.Format(CultureInfo.InvariantCulture, "{0}({1}, {2}, {3})",
+                RoundFunction, value, digits, mode == MidpointRounding.AwayFromZero ? 1 : 0);
 
         internal static int Compare(string? x, string? y)
         {

@@ -112,33 +112,52 @@ namespace Birko.Data.Stores
 
         private static ComputedValue BuildRound(MethodCallExpression call, ParameterExpression parameter, LambdaExpression whole)
         {
+            var refusal = ReadRound(call, node => ReadsParameter(node, parameter), out var digits, out var mode);
+            if (refusal != null) throw Refuse(whole, refusal);
+            return new ComputedRound(Build(call.Arguments[0], parameter, whole), digits, mode);
+        }
+
+        /// <summary>
+        /// Reads the digits and the mode of a <c>decimal</c> <c>Math.Round</c> / <c>decimal.Round</c> call, or says why it cannot
+        /// be translated exactly: no explicit <see cref="MidpointRounding"/>, a mode other than <see cref="MidpointRounding.ToEven"/>
+        /// or <see cref="MidpointRounding.AwayFromZero"/>, digits outside 0 to 28, or digits or mode that read the row. The one
+        /// rule for a computed set and for a SQL filter (TASK-857).
+        /// </summary>
+        /// <param name="call">A call for which <see cref="IsDecimalRound"/> is true.</param>
+        /// <param name="readsRow">True for a subtree that reads the row.</param>
+        /// <returns>Null when the call translates, otherwise the reason it does not.</returns>
+        public static string? ReadRound(MethodCallExpression call, Func<Expression, bool> readsRow, out int digits, out MidpointRounding mode)
+        {
+            digits = 0;
+            mode = MidpointRounding.ToEven;
             var parameters = call.Method.GetParameters();
             if (parameters.Length == 0 || parameters[^1].ParameterType != typeof(MidpointRounding))
             {
-                throw Refuse(whole, $"'{call}' does not name its MidpointRounding. C# and MongoDB round half to even by default, "
+                return $"'{call}' does not name its MidpointRounding. C# and MongoDB round half to even by default, "
                     + "SQL half away from zero, so the mode must be explicit: Math.Round(value, digits, MidpointRounding.ToEven) "
-                    + "or MidpointRounding.AwayFromZero.");
+                    + "or MidpointRounding.AwayFromZero.";
             }
 
-            var digits = 0;
             if (parameters.Length == 3)
             {
-                if (ReadsParameter(call.Arguments[1], parameter))
-                    throw Refuse(whole, $"the digits of '{call}' must not depend on the row.");
+                if (readsRow(call.Arguments[1]))
+                    return $"the digits of '{call}' must not depend on the row.";
                 digits = (int)Expression.Lambda(Expression.Convert(call.Arguments[1], typeof(object))).Compile().DynamicInvoke()!;
             }
             if (digits is < 0 or > 28)
-                throw Refuse(whole, $"'{call}' rounds to {digits} digits; 0 to 28 are supported.");
+                return $"'{call}' rounds to {digits} digits; 0 to 28 are supported.";
 
             var modeArgument = call.Arguments[^1];
-            if (ReadsParameter(modeArgument, parameter))
-                throw Refuse(whole, $"the rounding mode of '{call}' must not depend on the row.");
-            var mode = (MidpointRounding)Expression.Lambda(Expression.Convert(modeArgument, typeof(object))).Compile().DynamicInvoke()!;
+            if (readsRow(modeArgument))
+                return $"the rounding mode of '{call}' must not depend on the row.";
+            mode = (MidpointRounding)Expression.Lambda(Expression.Convert(modeArgument, typeof(object))).Compile().DynamicInvoke()!;
             if (mode is not (MidpointRounding.ToEven or MidpointRounding.AwayFromZero))
-                throw Refuse(whole, $"'{call}' rounds {mode}; only MidpointRounding.ToEven and AwayFromZero are supported.");
-
-            return new ComputedRound(Build(call.Arguments[0], parameter, whole), digits, mode);
+                return $"'{call}' rounds {mode}; only MidpointRounding.ToEven and AwayFromZero are supported.";
+            return null;
         }
+
+        /// <summary><c>Math.Round</c> or <c>decimal.Round</c> over a <c>decimal</c>.</summary>
+        public static bool IsDecimalRound(MethodInfo method) => IsRound(method);
 
         private static bool IsRound(MethodInfo method)
             => method.Name == nameof(Math.Round)

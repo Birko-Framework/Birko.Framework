@@ -1367,10 +1367,13 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// TASK-856 — how this provider renders a value fragment in a filter. The portable form, already in
-        /// <see cref="Conditions.Condition.Name"/>, unless a provider compares it wrongly (SQLite's decimals).
+        /// TASK-856 — how this provider renders a value fragment in a filter: the portable form, with this provider's
+        /// <see cref="ComputedRound"/> (TASK-857), unless a provider compares it wrongly too (SQLite's decimals).
         /// </summary>
-        protected virtual Conditions.SqlValueFragmentDialect FragmentDialect => Conditions.SqlValueFragmentDialect.Portable;
+        protected virtual Conditions.SqlValueFragmentDialect FragmentDialect
+            => _fragmentDialect ??= Conditions.SqlValueFragmentDialect.WithRounding(ComputedRound);
+
+        private Conditions.SqlValueFragmentDialect? _fragmentDialect;
 
         private Conditions.Condition InFragmentDialect(Conditions.Condition condition)
         {

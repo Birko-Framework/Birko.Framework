@@ -377,8 +377,7 @@ namespace Birko.Data.SQL.Connectors
 
         /// <inheritdoc />
         public override string ComputedRound(string value, int digits, MidpointRounding mode)
-            => string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}({1}, {2}, {3})",
-                SqLiteDecimal.RoundFunction, value, digits, mode == MidpointRounding.AwayFromZero ? 1 : 0);
+            => SqLiteDecimal.RoundCall(value, digits, mode);
 
         /// <summary>
         /// TASK-513 — a decimal default is the text a decimal parameter binds as (<c>'0.0'</c>), so a

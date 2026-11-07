@@ -1566,7 +1566,28 @@ namespace Birko.Data.SQL
         private static bool IsValueExpressionOperand(Expression expr)
             => IsArithmeticOperand(expr)
                 || (expr is BinaryExpression b && b.NodeType == ExpressionType.Coalesce)
-                || expr is ConditionalExpression;
+                || expr is ConditionalExpression
+                || IsMathOperand(expr);
+
+        /// <summary>
+        /// TASK-857 — a <c>Math</c> / <c>MathF</c> / <c>decimal</c> call or a numeric unary operator over the row. These are
+        /// value fragments too: <see cref="RenderValueFragment"/> translates <c>Round</c> (explicit mode), <c>Abs</c> and a
+        /// unary minus, and refuses every other one by name. Before, the comparison parser recursed into the call's
+        /// arguments and compared the bare column: <c>Math.Round(x.Amount, 1, ToEven) == 10.1m</c> read <c>Amount = 10.1</c>,
+        /// and a unary minus produced a condition with no name.
+        /// </summary>
+        private static bool IsMathOperand(Expression expr)
+            => ContainsParameter(expr)
+                && (IsMathCall(expr)
+                    || (expr is UnaryExpression u
+                        && u.NodeType is ExpressionType.Negate or ExpressionType.NegateChecked or ExpressionType.UnaryPlus
+                            or ExpressionType.OnesComplement or ExpressionType.Not
+                        && IsNumericType(u.Type)));
+
+        private static bool IsMathCall(Expression expr)
+            => expr is MethodCallExpression { Method.IsStatic: true } call
+                && (call.Method.DeclaringType == typeof(Math) || call.Method.DeclaringType == typeof(MathF)
+                    || call.Method.DeclaringType == typeof(decimal));
 
         private static Type UnwrapNullable(Type type) => Nullable.GetUnderlyingType(type) ?? type;
 
@@ -1618,6 +1639,20 @@ namespace Birko.Data.SQL
             {
                 case UnaryExpression u when u.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked:
                     return dialect.Conversion(RenderValueFragment(u.Operand, exprType, dialect), u.Operand.Type, u.Type);
+                case UnaryExpression u when u.NodeType is ExpressionType.Negate or ExpressionType.NegateChecked
+                        && ContainsParameter(u):
+                    return dialect.Negate(RenderValueFragment(u.Operand, exprType, dialect), u.Type);
+                case UnaryExpression u when u.NodeType == ExpressionType.UnaryPlus && ContainsParameter(u):
+                    return RenderValueFragment(u.Operand, exprType, dialect);
+                case UnaryExpression u when ContainsParameter(u) && (u.NodeType != ExpressionType.Not || IsNumericType(u.Type)):
+                    // An integer `~` is a Not node in an expression tree, which the predicate parser read as a negation of
+                    // the comparison (TASK-857, measured): `~x.Hits == -3` became NOT (Hits = -3).
+                    throw new NotSupportedException(
+                        $"Cannot translate the {(u.NodeType == ExpressionType.Not ? "bitwise complement (~)" : u.NodeType.ToString())} "
+                        + "operator over the row to SQL: no provider computes it as C# does. "
+                        + "Compute the value in memory, or compare the column itself.");
+                case MethodCallExpression call when IsMathCall(call) && ContainsParameter(call):
+                    return RenderMathCall(call, exprType, dialect);
                 case ConditionalExpression cond:
                     return $"CASE WHEN {RenderBoolFragment(cond.Test, exprType, dialect)} "
                         + $"THEN {RenderValueFragment(cond.IfTrue, exprType, dialect)} "
@@ -1654,6 +1689,41 @@ namespace Birko.Data.SQL
                     }
                     throw new NotSupportedException(
                         $"Cannot translate operand '{expr}' inside a value-expression filter predicate to SQL.");
+            }
+        }
+
+        /// <summary>
+        /// TASK-857 — a <c>Math</c> / <c>MathF</c> / <c>decimal</c> call over the row. <c>Round</c> over a <c>decimal</c> with an
+        /// explicit <see cref="MidpointRounding"/> is the provider's computed-set rounding (TASK-826, through the dialect),
+        /// <c>Abs</c> is <c>ABS</c> and <c>decimal.Negate</c> a unary minus. Everything else is refused by name: no provider
+        /// computes a <c>Floor</c>, <c>Max</c> or <c>Pow</c> exactly as C# does on every type, and a <c>Round</c> without a mode
+        /// rounds half to even in C# and half away from zero in SQL.
+        /// </summary>
+        private static string RenderMathCall(MethodCallExpression call, Type? exprType, SqlValueFragmentDialect dialect)
+        {
+            var name = $"{call.Method.DeclaringType?.Name}.{call.Method.Name}";
+            switch (call.Method.Name)
+            {
+                case nameof(Math.Round) when Birko.Data.Stores.ComputedValue.IsDecimalRound(call.Method):
+                {
+                    var refusal = Birko.Data.Stores.ComputedValue.ReadRound(call, ContainsParameter, out var digits, out var mode);
+                    if (refusal != null)
+                        throw new NotSupportedException($"Cannot translate {name} to SQL: {refusal}");
+                    return dialect.Round(RenderValueFragment(call.Arguments[0], exprType, dialect), digits, mode, call.Type);
+                }
+                case nameof(Math.Round):
+                    throw new NotSupportedException(
+                        $"Cannot translate {name} over a {call.Method.ReturnType.Name} to SQL: a binary floating-point value rounds "
+                        + "differently in SQL than in C#. Round a decimal, with an explicit MidpointRounding.");
+                case nameof(Math.Abs) when call.Arguments.Count == 1:
+                    return dialect.Abs(RenderValueFragment(call.Arguments[0], exprType, dialect), call.Type);
+                case nameof(decimal.Negate) when call.Arguments.Count == 1 && call.Method.DeclaringType == typeof(decimal):
+                    return dialect.Negate(RenderValueFragment(call.Arguments[0], exprType, dialect), call.Type);
+                default:
+                    throw new NotSupportedException(
+                        $"Cannot translate {name} over the row to SQL: only Math.Round (decimal, explicit MidpointRounding), "
+                        + "Math.Abs and a unary minus are translated. Before this was refused the call was dropped and its "
+                        + "argument compared instead. Compute the value in memory, or compare the column itself.");
             }
         }
 
@@ -1828,7 +1898,11 @@ namespace Birko.Data.SQL
             if (!nullable || nodeType is not (ExpressionType.Equal or ExpressionType.NotEqual))
                 return compared;
 
-            Condition Null(string fragment, bool not) => new Condition(fragment, null, ConditionType.IsNull, isNot: not);
+            // TASK-857: each IS [NOT] NULL leg keeps its provider rendering, as the comparison does; the portable form of a
+            // Round is no server's SQL.
+            Condition Null(Expression operand, string fragment, bool not)
+                => WithFragments(new Condition(fragment, null, ConditionType.IsNull, isNot: not),
+                    dialect => RenderValueFragment(operand, exprType, dialect));
             Condition All(params Condition[] subs) => new Condition(null, null) { IsOr = false, SubConditions = subs.ToList() };
 
             if (nodeType == ExpressionType.Equal)
@@ -1837,7 +1911,7 @@ namespace Birko.Data.SQL
                 return new Condition(null, null)
                 {
                     IsOr = true,
-                    SubConditions = new List<Condition> { compared, All(Null(leftFragment, false), Null(rightFragment, false)) },
+                    SubConditions = new List<Condition> { compared, All(Null(left, leftFragment, false), Null(right, rightFragment, false)) },
                 };
             }
             // A <> B OR (A IS NULL AND B IS NOT NULL) OR (A IS NOT NULL AND B IS NULL)
@@ -1847,8 +1921,8 @@ namespace Birko.Data.SQL
                 SubConditions = new List<Condition>
                 {
                     compared,
-                    All(Null(leftFragment, false), Null(rightFragment, true)),
-                    All(Null(leftFragment, true), Null(rightFragment, false)),
+                    All(Null(left, leftFragment, false), Null(right, rightFragment, true)),
+                    All(Null(left, leftFragment, true), Null(right, rightFragment, false)),
                 },
             };
         }
