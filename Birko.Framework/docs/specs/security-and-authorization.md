@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: 83059adb00eea2a8d1d729065a8cce772ae67bad
-generated-on: 2026-11-06
+generated-at: df2156c0549a453f4072c1d23fd70f92bea70b81
+generated-on: 2026-11-07
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnerAccess.cs
@@ -109,7 +109,8 @@ shaped-by: [FEATURE-014]
 # Evidence pass ran 2026-11-06 over 421 feature-linked tasks: 185 resolved, 236 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 tasks the state gate refuses have a commit leading with their id. This area's evidence is all
-# FEATURE-014 (TASK-161, 165, 176, 641, 651). Earlier entries kept append-only.
+# FEATURE-014 (TASK-161, 165, 176, 641, 651). Earlier entries kept append-only. Respec 2026-11-07 (TASK-824):
+# TASK-824 has `feature: null`, so it adds no evidence and the counts above are carried unchanged.
 shaped-by-derived: true
 shaped-by-unresolved: 236
 ---
@@ -692,9 +693,13 @@ resolver or was granted by Birko (TASK-823).
 - **When** `Roles` is read
 - **Then** the set is `{ "Admin", "Auditor" }`
 
-### Requirement: Permission resolution runs only for an authenticated, identifiable caller
+### Requirement: Permission resolution runs only for an authenticated, identifiable caller, never for the loopback bypass
 
-The system SHALL make `PermissionResolutionMiddleware.InvokeAsync` call `IUserPermissionResolver.GetAsync`
+When the principal's identity `AuthenticationType` is `LoopbackBypass.AuthenticationType`, the system SHALL make
+`PermissionResolutionMiddleware.InvokeAsync` ask the resolver nothing: it SHALL store the principal's own claim values of
+the configured `PermissionClaim` (the bypass's `"*"`) under `ItemsKey` and an empty set under `RolesItemsKey`, without
+applying `WildcardPermissionEnabled` — the bypass principal is Birko's own, not a user the host's resolver knows (its id
+is `Guid.Empty`), and its `"*"` is kept (TASK-823, TASK-824). Otherwise the system SHALL make it call `IUserPermissionResolver.GetAsync`
 and `GetRolesAsync` — storing their results under `ItemsKey` and `RolesItemsKey` — only when
 `context.User?.Identity?.IsAuthenticated == true` **and** the configured `UserIdClaim` value parses as a
 `Guid`. The tenant argument SHALL be the parsed `TenantGuidClaim`, coerced to `null` when it is absent,
@@ -741,6 +746,12 @@ resolved anything; its constructor SHALL throw `ArgumentNullException` for a nul
 - **Given** `WildcardPermissionEnabled = false` and a resolver implementing `IAppliesWildcardOption` answering `{ "*" }`
 - **When** the middleware runs for an authenticated, identifiable caller
 - **Then** `{ "*" }` is stored under `ItemsKey`
+
+#### Scenario: The loopback bypass principal is not resolved
+
+- **Given** `UseResolvedPermissions` with the loopback bypass active, a resolver that answers an empty set for every id, and `WildcardPermissionEnabled` either true or false
+- **When** a request without a token reaches an endpoint guarded by `.RequirePermission(...)`
+- **Then** the resolver is never asked about `Guid.Empty`, `{ "*" }` is stored under `ItemsKey`, and the endpoint answers 200 — before TASK-824 the resolver's answer for `Guid.Empty` was stored and the request was answered 403
 
 ### Requirement: Endpoint permission filtering distinguishes 401 from 403
 
@@ -956,7 +967,8 @@ address in the server's `IServerAddressesFeature` is loopback. Unknown, wildcard
 authentication, and an authenticated request SHALL keep its own principal. An enabled bypass without the middleware
 SHALL refuse to start (TASK-522). The bypass principal (authentication type `LoopbackBypass.AuthenticationType`, user
 id `Guid.Empty`) is Birko's own, so with `WildcardPermissionEnabled = false` `ClaimsCurrentUser` keeps its `*`
-(TASK-823); under `ResolvedPermissionsCurrentUser` its permission claim is not consulted, as for any principal.
+(TASK-823); under `ResolvedPermissionsCurrentUser`, `PermissionResolutionMiddleware` stores the bypass principal's own
+permission claims (its `*`) instead of asking the resolver, so a bypassed request passes there too (TASK-824).
 
 #### Scenario: Configured loopback URL but bound to all interfaces
 
