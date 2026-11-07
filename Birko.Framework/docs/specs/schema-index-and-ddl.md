@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 8e19ad1bba0ef39cb7b55a1e95a5b53019f7adc6
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
@@ -112,8 +112,8 @@ own `IIndexManager` implementations — `MongoDBIndexManager`, `RavenDBIndexMana
 
 Two further surfaces sit on top of the reflected model. **Fluent mapping** (`Birko.Models.SQL.Mapping`):
 `ModelMap<T>` / `FieldBuilder<T>` collect portable `FieldDescriptor`s, and `ModelMapRegistry.ApplyToDatabase`
-patches them onto the loaded tables — table names, column names, flags, lengths, decimal precision and
-indexes. **Connector DDL and drift** (`AbstractConnector` / `AbstractAsyncConnector`): `CREATE TABLE`,
+applies them to the tables — table names, flags, lengths and decimal precision registered before a table loads,
+and column names, keys and indexes written by the table build itself, before the table is published. **Connector DDL and drift** (`AbstractConnector` / `AbstractAsyncConnector`): `CREATE TABLE`,
 `CREATE INDEX` with degrade-and-report on schema-ensure, `ALTER TABLE ADD/DROP`, the on-demand
 `DetectDrift` / `EnsureColumns` / `PlanRepair` trio, the health checks that surface them, and the
 ElasticSearch mapping-drift twin.
@@ -442,10 +442,20 @@ table. `LoadTable` SHALL throw `Exceptions.TableAttributeException` for a type t
 #### Scenario: Registration invalidates the cache for that type only
 
 - **Given** `LoadTable(typeof(Foo))` has already cached a table
-- **When** `RegisterTableName(typeof(Foo), "other")` is called
+- **When** `RegisterTableName(typeof(Foo), "other")` is called, changing the registered name or schema
 - **Then** the entry is removed from `_tableCache` — and so is a cached "maps to no table" answer and the
   type's recorded schema — so the next `LoadTable` recomputes, while the separate `_fieldsCache` entry for
   `Foo` is left intact
+
+#### Scenario: An unchanged registration evicts nothing (TASK-825)
+
+- **Given** a type whose table name was registered as `"T825Translations"` with no schema, and whose table
+  `LoadTable` has cached
+- **When** `RegisterTableName(type, "T825Translations")` is called again (the same name and the same schema,
+  null here)
+- **Then** the call returns without touching any cache, and the next `LoadTable` returns the same table instance
+  (before, every call evicted the cached table, so each re-apply of a mapping published a rebuilt table to
+  concurrent readers)
 
 #### Scenario: An unmapped type is refused by LoadTable and answered null by TryLoadTable
 
@@ -455,7 +465,8 @@ table. `LoadTable` SHALL throw `Exceptions.TableAttributeException` for a type t
 - **Then** a `TableAttributeException` is thrown stating that the type maps to no table and must carry a
   `[Table("name")]` attribute (or a registered name) and at least one mapped property
 - **And** `DataBase.TryLoadTable(type)` returns `null`, and that answer is remembered in `_unmappedTypes` so the
-  type is not recomputed until a `RegisterTableName` for it clears the entry
+  type is not recomputed until a `RegisterTableName` that changes its name or schema clears the entry (an
+  unchanged registration clears nothing)
 
 #### Scenario: Duplicate column names abort table load
 
@@ -463,6 +474,32 @@ table. `LoadTable` SHALL throw `Exceptions.TableAttributeException` for a type t
   on one and a property literally named `Code` on the other)
 - **When** `LoadTable` builds `LoadFields(type).ToDictionary(x => x.Name)`
 - **Then** an `ArgumentException` for the duplicate key propagates out of table load
+
+### Requirement: A registered table configurator runs inside the build, before the table is published
+
+The system SHALL let `DataBase.RegisterTableConfigurator(modelType, signature, configure)` register, per model type,
+an `Action<Tables.Table>` that `TryLoadTable` (and so `LoadTable`) SHALL run on every freshly computed table of that
+type, under the build lock and **before** the table enters `_tableCache`; a table that comes out null SHALL not run
+it. One registration SHALL exist per type, the last one winning. Registering the same `signature` again SHALL change
+nothing; a different signature SHALL replace the registration and evict the type's cached table; a null `configure`
+SHALL remove the registration and, when one existed, evict the cached table. A null `modelType` or `signature` SHALL
+throw `ArgumentNullException`. A configurator that throws SHALL propagate out of the load, leaving nothing cached for
+the type. (TASK-825: the fluent part was written onto the table after `LoadTable` had published it.)
+
+#### Scenario: Same signature again is a no-op
+
+- **Given** a configurator registered for `Foo` with signature `"s1"`, and `LoadTable(typeof(Foo))` has cached a
+  table
+- **When** `RegisterTableConfigurator(typeof(Foo), "s1", configure)` is called again
+- **Then** the registration is kept and the next `LoadTable` returns the same table instance
+
+#### Scenario: A changed signature or a removal evicts the cached table
+
+- **Given** the same cached table
+- **When** `RegisterTableConfigurator(typeof(Foo), "s2", other)` — or `RegisterTableConfigurator(typeof(Foo), "", null)`
+  — is called
+- **Then** `Foo`'s `_tableCache` entry is removed, and the next `LoadTable` builds a table that `other` has
+  configured (or that no configurator touches)
 
 ### Requirement: Bulk table load rejects an empty input but tolerates unmapped types
 
@@ -649,8 +686,9 @@ qualifier to `avpersons`, and the statement failed with *missing FROM-clause ent
 - **When** the table is used after that assignment
 - **Then** `Fields` is still keyed `"Sku"` and `Table.Indexes` still names the column `"Sku"`, while the
   field's own `Name` reads `"sku_code"` — neither the dictionary key nor the index columns are recomputed,
-  because both were fixed when `ComputeTable` ran; `ModelMapRegistry.ApplyToDatabase` is the one caller that
-  repairs this after its own `HasColumnName` assignment (see the fluent-mapping requirements)
+  because both were fixed when `ComputeTable` ran; the table configurator `ModelMapRegistry.ApplyToDatabase`
+  registers is the one caller that repairs this after its own `HasColumnName` assignment, and it does so on a
+  table still being built, before it is published (see the fluent-mapping requirements)
 
 ### Requirement: Column exclusion attributes
 
@@ -1730,15 +1768,33 @@ branch and the class-level `[CompositeIndex]` branch — before any DDL is emitt
 
 ### Requirement: A fluent index reaches the table's index declarations, and marks its columns
 
-`ModelMapRegistry.ApplyToDatabase` SHALL write every fluent `HasIndex` / `HasUniqueIndex` into the loaded table's
-`Indexes` (the declarations schema-ensure creates), with columns ordered by their order in that index and named by
+`ModelMapRegistry.ApplyToDatabase` SHALL have every fluent `HasIndex` / `HasUniqueIndex` written into the table's
+`Indexes` (the declarations schema-ensure creates) by the table configurator it registers, so on every build of the
+table before it is published — including a rebuild after any later eviction — and never onto a published table, with columns ordered by their order in that index and named by
 their physical column. A column SHALL belong to every index declared on it, one `HasIndex` / `HasUniqueIndex` call each
 (`FieldDescriptor.Indexes`), with its own order, direction and uniqueness per index; declaring one index twice on a
 column SHALL be refused with `InvalidOperationException`, and a blank name with `ArgumentException` (TASK-695). It SHALL
 set `IsIndexed` on each of those fields, as `DataBase.LoadIndexes` does for the attribute path, so a provider bounds the
 column type. A `HasUniqueIndex` SHALL make that index, and only that one, UNIQUE across all its columns. One index whose
 columns disagree on uniqueness SHALL be refused. Applying the registry twice SHALL NOT duplicate a column. (TASK-595: before this, the fluent index was metadata nothing read, and every
-`Birko.Models.Users.SQL` table had zero indexes.)
+`Birko.Models.Users.SQL` table had zero indexes. TASK-825: the indexes were written after `LoadTable` had published
+the table, so a concurrent reader saw it without them — measured: 84% of loads racing a re-apply — and a later
+eviction rebuilt it without them for good.)
+
+#### Scenario: A reader racing a re-apply never sees the table without its fluent indexes (TASK-825)
+
+- **Given** a mapping with no `[Table]` attribute declaring `ToTable("T825Translations")`, a unique index
+  `UX_T825_Key` on (Key, Culture) and `IX_T825_ValueHash` on ValueHash, applied once
+- **When** one thread re-applies the same mapping in a loop while four threads call `LoadTable` on the type
+- **Then** every table returned holds both fluent indexes and no load throws
+
+#### Scenario: A table rebuilt after a later eviction keeps its fluent indexes (TASK-825)
+
+- **Given** the same mapping applied and its table loaded
+- **When** a changed registration evicts the table (here `RegisterMaxLength` on `Value` with 777, then 778) and
+  `LoadTable` is called again
+- **Then** a new table instance is returned, it holds `UX_T825_Key` and `IX_T825_ValueHash`, and `UX_T825_Key` is
+  unique
 
 #### Scenario: A composite natural key is unique on SQLite
 
@@ -1810,16 +1866,24 @@ empty list for an unregistered type) SHALL read the registered maps.
 - **When** `GetPropertyMaps(typeof(Foo))` and `GetMap<Foo>()` are called
 - **Then** an empty list and `null` are returned
 
-### Requirement: ApplyToDatabase patches registered maps onto the loaded tables in a fixed order
+### Requirement: ApplyToDatabase applies registered maps to the tables in a fixed order
 
-The system SHALL, on `ModelMapRegistry.ApplyToDatabase`, first register every map's table name
-(`DataBase.RegisterTableNames`) and, for a map with both a table name and a schema, the schema; then, for every map,
-register its `HasMaxLength`, `HasPrecision` / `HasScale` and `IsUnique` / `IsRequired` / `Ignore` values **before any
-table loads** (the flags through `DataBase.RegisterColumnFlags`, TASK-712); then, for every map with at least one
-descriptor, load the table and per descriptor whose property maps to a field: apply `HasColumnName` (recording the
-rename), `IsPrimary` through `Table.DeclarePrimary`, and set `IsAutoincrement`; then re-key the table's `Fields` by the
-new column names and rename every index column and predicate column that named an old one; then apply the fluent
-indexes. `IsUnique`, `IsRequired`, `IsPrimary`, `IsAutoIncrement` or `HasColumnName` on a property that is no column
+The system SHALL, on `ModelMapRegistry.ApplyToDatabase`, first register every map that has a non-empty table name
+once, with its schema (`DataBase.RegisterTableName(type, name, schema)`, the schema null when none was declared —
+TASK-825: it was registered without the schema and then again with it, and each registration evicted the cached
+table); then, for every map, register its `HasMaxLength`, `HasPrecision` / `HasScale` and `IsUnique` / `IsRequired` /
+`Ignore` values **before any table loads** (the flags through `DataBase.RegisterColumnFlags`, TASK-712); then, for
+every map with at least one descriptor, register a table configurator (`DataBase.RegisterTableConfigurator`) over a
+snapshot of its descriptors — so a mapping changed later cannot change a registered build — whose signature is
+everything the configurator reads (per descriptor: name, column name, `IsPrimary`, `IsAutoIncrement` and each index
+membership's name, order, direction and uniqueness), and then call `LoadTable` so a mapping that cannot be honoured is
+refused at apply rather than at a store's first use, removing the configurator again and rethrowing when the load
+throws. For a map with no descriptor it SHALL remove any configurator an earlier apply registered for the type, so a
+rebuild no longer carries that fluent part. The configurator SHALL, on the table being built and per descriptor whose property maps to a field, apply
+`HasColumnName` (recording the rename), `IsPrimary` through `Table.DeclarePrimary`, and set `IsAutoincrement`; then
+re-key the table's `Fields` by the new column names and rename every index column and predicate column that named an
+old one; then apply the fluent indexes. Applying the same mappings again SHALL register the same name, schema and
+signature and so evict nothing: the published table instance SHALL be kept and nothing SHALL be written to it. `IsUnique`, `IsRequired`, `IsPrimary`, `IsAutoIncrement` or `HasColumnName` on a property that is no column
 (ignored fluently or by `[IgnoreField]`, or without a setter) SHALL be refused with `InvalidOperationException` naming the
 calls, the type and the property, before any table loads (TASK-712: skipped silently, measured). A fluent `IsUnique` on
 a nullable column SHALL get the synthesised `ux_{table}_{column}` index a `[UniqueField]` gets (TASK-712: it got none
@@ -1833,6 +1897,14 @@ one, measured).
 - **When** `ApplyToDatabase` runs
 - **Then** the field's `Name` is `"sku_code"`, `table.Fields` is keyed `"sku_code"`, and `IX_Sku`'s column is
   `"sku_code"`, so `CREATE INDEX` names a column the table has
+
+#### Scenario: Re-applying unchanged mappings keeps the published table (TASK-825)
+
+- **Given** a registry whose mapping declares `ToTable("T825Translations")` (or `ToTable("T825SchemaTranslations", "loc")`)
+  and fluent indexes, applied once, and the table loaded
+- **When** a new registry with the same mapping runs `ApplyToDatabase` again
+- **Then** `LoadTable` returns the same table instance as before (with `Schema == "loc"` in the schema case): the
+  unchanged name, schema and configurator signature evicted nothing and nothing was rewritten
 
 #### Scenario: A fluent unique flag on a nullable column (TASK-712)
 
