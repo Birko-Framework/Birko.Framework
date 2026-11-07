@@ -1,6 +1,6 @@
 ---
 area: security-and-authorization
-generated-at: f2e572cedb05dd54d2a39f34ae3d4da23c22d456
+generated-at: 0d1cea50f5c9441144f33eb40e5fca568bf6cb86
 generated-on: 2026-11-07
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
@@ -1156,8 +1156,13 @@ The system SHALL evaluate `TokenBindings` first, in configuration order, compari
 presented one by `CryptographicOperations.FixedTimeEquals` over their UTF-8 bytes (exact, ordinal equality, whose
 time does not depend on how much of the content matched; lengths may still differ observably). On the **first**
 binding whose token matches, the outcome SHALL be decided there:
-`false` when the client IP is null or whitespace, `true` when the binding's `AllowedIps` contains the IP
-exactly, and `false` otherwise — the plain `Tokens` list is not consulted afterwards. Only when no binding
+`false` when the client IP is null or whitespace, `true` when the binding's `AllowedIps` contains the client's
+address, and `false` otherwise — the plain `Tokens` list is not consulted afterwards. The comparison SHALL be of
+parsed IP addresses, never of text (TASK-831): each `AllowedIps` entry is parsed at construction and the client IP
+at each call (an `IP:port` or `[IPv6]:port` client is reduced to its address), both with an IPv4-mapped IPv6
+address reduced to IPv4, so one address matches however either side writes it, and a client IP that is not an
+address matches nothing. An `AllowedIps` entry that is not an IP address SHALL be skipped and logged at error level
+at construction; it never matches a client spelled the same way. Only when no binding
 token matched SHALL the expanded `Tokens` be checked for an exact match, comparing the presented token with
 **every** configured token in fixed time, without stopping at a match. A configuration that is
 enabled but yields neither collection after expansion SHALL return `false` and log
@@ -1181,6 +1186,24 @@ enabled but yields neither collection after expansion SHALL return `false` and l
 - **When** `ValidateToken("T", "10.0.0.1")` is called
 - **Then** it returns `false` for every possible IP, while the binding still makes `IsAuthenticationEnabled()` true
 - **And** an error was logged at construction saying the binding has no allowed IP after expansion, so its token is refused from every address — the binding is kept, so a plain `Tokens` entry for the same token is still not reached
+
+#### Scenario: IPv4-mapped client against an IPv4 entry
+
+- **Given** a binding `{ Token = "T", AllowedIps = ["203.0.113.7"] }` — or the entry written `"::ffff:203.0.113.7"` and the client plain
+- **When** `ValidateToken("T", "::ffff:203.0.113.7")` is called, the form a dual-stack socket (Kestrel bound to `[::]`) reports for an IPv4 client, including through the WebSocket token binding with or without `AddBirkoForwardedHeaders`
+- **Then** it returns `true`, while `"::ffff:203.0.113.8"` is refused
+
+#### Scenario: Two spellings of one IPv6 address
+
+- **Given** a binding `{ Token = "T", AllowedIps = ["2001:db8::1"] }`
+- **When** `ValidateToken("T", "2001:DB8:0:0::0001")` is called
+- **Then** it returns `true`, and `ValidateToken("T", "2001:db8::2")` returns `false`
+
+#### Scenario: An entry that is not an address is skipped
+
+- **Given** a binding `{ Token = "T", AllowedIps = ["unknown", "203.0.113.7"] }`
+- **When** `ValidateToken("T", "unknown")` and `ValidateToken("T", "203.0.113.7")` are called
+- **Then** the first returns `false` and the second `true` — `"unknown"` was logged at error level at construction and dropped, where it used to be kept as text and match a client spelled the same way; a binding whose every entry is dropped is the empty allow-list above
 
 #### Scenario: Plain token accepted
 
