@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -41,6 +41,7 @@ sources:
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_CreateView.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectViewCount.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_ViewInListChunking.cs
   - ../Birko.Data.SQL.View/SQL/Connectors/ViewSelectSqlBuilder.cs
   - ../Birko.Data.SQL.View/SQL/DataBase_View.cs
   - ../Birko.Data.SQL.View/SQL/DataBase_ViewConditions.cs
@@ -126,6 +127,12 @@ capability.
 
 ## Regen provenance
 
+Scoped regen at `22cd73f3` over the 16 sources changed since TASK-724's in-place edit (`c1a9d7a6`): TASK-833 (aggregate
+IN-list refusal), TASK-837 (SQL view IN chunking; Cosmos collection `Contains` no longer a substring test), TASK-839 /
+841 / 842 (Cosmos view `ARRAY_CONTAINS` and chunking), TASK-840 (Cosmos nested filter paths), TASK-843 (nested `Select`
+paths on every provider), TASK-844 (quoted Cosmos aliases and paths), TASK-847 (`ViewMapRegistry` names the mapping),
+TASK-848 (Cosmos grouped sort by an aggregate refused). One new source: `AbstractConnector_ViewInListChunking.cs`.
+
 Regen at `50828c68` (TASK-696): the area now covers the whole of `Birko.Data.SQL.View`, so most of this run is new
 requirements for files the map newly reaches. Two existing scenarios were amended rather than kept verbatim: the persistent
 view's sort key is the view property for every field, unquoted (TASK-209, `728243ea`), which the old text contradicted.
@@ -188,11 +195,29 @@ value for the same key replaces the earlier one.
 
 ### Requirement: Member-name extraction from selector expressions
 
-The system SHALL extract the property name from a selector lambda by accepting either a
-direct `MemberExpression` body or a `UnaryExpression` (conversion) whose operand is a
-`MemberExpression`, and SHALL throw `ArgumentException` with the message "Expression must be
-a member access expression." for any other expression shape. `OrderBy<T>` applies the same
-rule with the message "Expression must be a property access expression.".
+The system SHALL extract a selector lambda's member path off its parameter (`GetMemberPath`, the one producer of a
+view's source paths): conversions (`Convert` / `ConvertChecked`) around the whole path are looked through, and so is a
+final `Nullable<T>.Value` (`c => c.Guid!.Value` is `["Guid"]`). It SHALL throw `ArgumentException` (parameter
+`expression`) reading "Expression must be a member access on its parameter ('<TObj>'), such as x => x.Name or x =>
+x.Sub.Name." when the body is not a member chain or the chain does not start at the parameter (a captured variable), and
+`NotSupportedException` naming the member when a member is read off something that is not a stored object (a string's
+`Length`, a collection's `Count`, a struct's member) — each of those used to be recorded as its last name (TASK-843).
+Only `Select` SHALL record a nested path; every other builder call — join keys, `GroupBy` keys, an aggregate's source,
+any view property — SHALL refuse a path of more than one segment with `NotSupportedException` reading "<role>
+'<TObj>.<path>' is a nested member path; only a property of '<TObj>' itself is supported here. …". `OrderBy<T>` applies
+its own rule with the message "Expression must be a property access expression.".
+
+#### Scenario: A nested Select path is recorded whole
+
+- **Given** a builder with `From<Order>()`
+- **When** `Select<Order,string>(o => o.Shipping.City, v => v.City)` is built
+- **Then** the `FieldSelector` has `SourcePath == ["Shipping", "City"]`, `IsNested == true` and `SourceProperty == "Shipping.City"`; a one-segment path keeps `SourceProperty` equal to the property name. It used to be recorded as `City`, and every provider read the document's top-level `City`
+
+#### Scenario: A nested path outside Select is refused
+
+- **Given** a builder with `From<Order>()`
+- **When** `GroupBy<Order>(o => o.Shipping.City)`, a join key `o => o.Shipping.CustomerGuid`, or an aggregate source `o => o.Totals.Net` is passed
+- **Then** a `NotSupportedException` names the role ("GroupBy key", "Join key", "Aggregate source") and the dotted path
 
 #### Scenario: Boxed / converted member access is accepted
 
@@ -293,7 +318,11 @@ The system SHALL let `ViewMapRegistry` hold at most one `ViewDefinition` per vie
 keyed by `Type`, populated either by `Register<TView>(IViewMapping<TView>)` — which
 constructs a builder, calls `Configure`, and stores `Build()`'s result — or by
 `RegisterFromAssembly(Assembly)`, which reflects over the assembly's concrete, non-abstract,
-non-interface types implementing `IViewMapping<>` and registers each. Lookups
+non-interface types implementing `IViewMapping<>` and registers each. An exception from a scanned mapping's
+constructor, its `Configure` or the builder's `Build` SHALL arrive as an `InvalidOperationException` reading "View
+mapping '<mapping FullName>' failed in <its constructor | Configure | Build>: <original message>", the original as
+`InnerException` with its type and stack (TASK-847); `Register<TView>` SHALL let the exception through as itself, and
+mappings scanned before the failing one stay registered. Lookups
 (`GetDefinition`, `HasDefinition`) SHALL return `null` / `false` for an unregistered type
 rather than throwing.
 
@@ -319,7 +348,7 @@ rather than throwing.
 
 - **Given** an assembly containing an `IViewMapping<T>` whose `Configure` omits `From<TSource>()`
 - **When** `RegisterFromAssembly` runs
-- **Then** the `InvalidOperationException` raised by `Build()` surfaces (wrapped by reflection invocation) — the scan does not skip invalid mappings
+- **Then** an `InvalidOperationException` naming the mapping type and "Build" surfaces, the builder's `InvalidOperationException` as its `InnerException` — the scan does not skip invalid mappings. It used to surface as a `TargetInvocationException` naming nothing
 
 ### Requirement: Query-mode semantics
 
@@ -491,7 +520,8 @@ referenced source type through `DataBase.TryLoadTable`, and SHALL fail fast with
 rather than silently dropping a column or a join, specifically: `ArgumentNullException` for a
 null definition; `NotSupportedException` when a `GroupBy` field is not also `Select`ed, or
 when a join's type is not `Inner`, `LeftOuter` or `Cross` (an unknown type used to map to
-`Cross`, whose condition is not rendered);
+`Cross`, whose condition is not rendered), or when a field selects a nested member (`IsNested`, TASK-843: a table has
+a column only for a top-level property, and the last name used to read the row's top-level column of that name);
 `InvalidOperationException` for an unmapped source type, an unmapped source property, a
 missing public instance view property, or a `Count(*)` whose base table has no fields.
 
@@ -938,8 +968,7 @@ with the resolved conditions, the resolved `ORDER BY` when sort keys are given, 
 SHALL throw `InvalidOperationException` for an empty view name or a view with no fields. Rows SHALL be
 transformed with `GetPersistentViewSelectFields()` on this path and `GetSelectFields()` on the
 on-the-fly path. A persistent count SHALL be `SELECT COUNT(*) FROM <quoted name>` with the resolved
-conditions; when the persistent path is chosen but the view's name is empty, the count SHALL instead run
-the on-the-fly count (the read throws).
+conditions, run against the view's name with no on-the-fly fallback (TASK-724).
 
 #### Scenario: Offset alone pages on SQL Server
 
@@ -952,6 +981,32 @@ the on-the-fly count (the read throws).
 - **Given** a persistent view `"order_summary"` and a filter on `PersonName`
 - **When** `SelectCount` runs
 - **Then** the command is `SELECT COUNT(*) FROM "order_summary"` followed by a `WHERE` on `PersonName` (the condition already resolved to the view's column)
+
+### Requirement: A view read or count splits a long IN list as a table read does
+
+The system SHALL plan every SQL view read and count (`SelectView` / `SelectViewAsync`, `SelectCountView` /
+`SelectCountViewAsync`, both paths) through the connector's `PlanInListChunks` — the planner table reads use (TASK-833)
+— once the conditions are resolved for the chosen path, with a probe that builds the command the read will run (the
+persistent `SELECT` / count, or the on-the-fly one), so a view has no chunking rules of its own (TASK-837; the four view
+funnels used to run no planner). An `ids.Contains(x.Col)` list past `PreferredInListChunkSize` (1000) that is a plain
+`AND` conjunct of non-string values SHALL run as one statement per chunk: read rows streamed chunk after chunk, counts
+summed. A list that cannot be split — a string list, `NOT IN`, under `OR`, a sorted or paged read, or an on-the-fly view
+with aggregate fields (filtered before its `GROUP BY`, so a group could span chunks) — SHALL stay one statement while
+it is within the provider's `MaxCommandParameters`, and past it SHALL be refused with `NotSupportedException` naming
+the operation ("view read" / "view count") and the reason, before anything runs. A grouped **persistent** view filters
+its own output rows and SHALL split like any other read.
+
+#### Scenario: A long id list over a view is read in chunks
+
+- **Given** a view read with `v => ids.Contains(v.PersonId)` where `ids` holds 2 500 Guids, no sort and no paging
+- **When** `SelectView` runs on either path
+- **Then** three statements run, each with a slice of at most 1000 values, and their rows are yielded in order; `SelectCountView` with the same filter returns the sum of three counts
+
+#### Scenario: An on-the-fly aggregate view past the limit is refused
+
+- **Given** an on-the-fly view with a `SUM` field, filtered by an id list longer than the provider's parameter maximum
+- **When** it is read or counted
+- **Then** a `NotSupportedException` explains that the view is an aggregate filtered before its `GROUP BY`, whose groups would span chunks; below the maximum the same read runs as one statement
 
 ### Requirement: Connector view DDL operations
 
@@ -1092,6 +1147,12 @@ translated pipeline — it is added at query time. A null definition SHALL raise
 - **When** the non-aggregate `$project` is built
 - **Then** the projected value is `"$_joined_Customer.Name"`
 
+#### Scenario: A nested source is projected down its whole path
+
+- **Given** a field selector whose `SourcePath` is `["Shipping", "City"]` (TASK-843)
+- **When** the `$project` is built
+- **Then** the first segment resolves as any field path (prefix, `Guid` → `_id`) and each deeper segment is named as the driver stores it — by the class map of the declaring type (registered, or auto-mapped without registering), its `[BsonElement]` name or `_id` for an id member — giving `"$Shipping.City"`; a member the class map does not store, or a missing public member, is refused with `NotSupportedException` naming it. It used to read `"$City"`, the document's top-level field
+
 #### Scenario: Guid maps to _id
 
 - **Given** a field selector or join key named `Guid`
@@ -1174,7 +1235,8 @@ read `from entity in docs.{collection(PrimarySource)}`, emit one
 `let joined[N] = LoadDocument("{right}/" + {leftAlias}.{LeftProperty}, "{right}")` per join
 (aliases `joined`, `joined2`, `joined3`, …; `{right}` the right type's collection, `{leftAlias}`
 the alias of the join's `LeftType`), followed by `where joined[N] != null` for an `Inner` join,
-and select each field as `{ViewProperty} = {alias}.{SourceProperty}`. A join whose
+and select each field as `{ViewProperty} = {alias}.{SourceProperty}` — for a nested source (TASK-843) the whole
+path, null-guarded per object on the way: `({alias}.Sub == null ? null : {alias}.Sub.X)`. A join whose
 `RightProperty` is not `Guid`, or whose type is neither `Inner` nor `LeftOuter`, SHALL be
 refused with `NotSupportedException`. For aggregates the map SHALL emit `1` for
 `Count`, the raw source value for `Sum`/`Min`/`Max`, and for `Avg` both the raw value and a
@@ -1204,6 +1266,12 @@ refused with `NotSupportedException`. For aggregates the map SHALL emit `1` for
 - **Given** a field selector whose `SourceType` is neither the primary source nor any join's `RightType`
 - **When** `GetSourceAlias` resolves it
 - **Then** `"entity"` is returned, so the map reads the property off the primary-source document
+
+#### Scenario: A nested source is read through explicit null guards
+
+- **Given** a field selector `Order.Shipping.City → TView.City`
+- **When** the map is built
+- **Then** it selects `City = (entity.Shipping == null ? null : entity.Shipping.City)`; a two-level path guards each prefix joined by `||`. Without the guard a missing object yields an implicit null the index does not store, and the projection fell back to the document's same-named top-level field (measured on RavenDB 6)
 
 #### Scenario: Average is re-reduce safe
 
@@ -1303,7 +1371,11 @@ view with a name (view-shaped documents in the view's own index). Every name a c
 **view** property and SHALL be mapped to the stored field of the document property it selects —
 through `ElasticSearch.StoredFieldName` for `_source` includes and `ElasticSearch.ExactFieldName`
 for sorts, group keys and metric fields — and each returned document SHALL be projected into a
-`TView` field by field. The effective page size SHALL be clamped so `From + Size` never exceeds
+`TView` field by field. A nested source (TASK-843) SHALL be named segment by segment under its parent's stored name
+(`sub.x`, the last segment exact where an exact field is asked for) and projected down its whole path, a null object on
+the way reading as null; a **filter** on a view property that selects a nested member SHALL be refused with
+`NotSupportedException` naming the path, because the entity store's translator does not translate a member below the
+document. The effective page size SHALL be clamped so `From + Size` never exceeds
 10000.
 
 A grouping view SHALL be read as a `CompositeAggregation("group_by")` with one
@@ -1355,6 +1427,12 @@ aggregate with no group-by SHALL yield exactly one row.
 - **Given** a non-grouping view and `OrderBy<TView>.By(v => v.Status)` where `Status` selects `Order.StatusCode`
 - **When** the search request is built
 - **Then** its `FieldSort.Field` is the exact (sortable) stored field of `StatusCode` — it used to be the CLR view-property name, which ElasticSearch rejected
+
+#### Scenario: A nested source is read down its path, and not filtered
+
+- **Given** a non-grouping view selecting `Order.Shipping.City` into `TView.City`
+- **When** it is queried, then queried with `v => v.City == "Bratislava"`
+- **Then** the first query includes the stored field `shipping.city` (as the entity store names it) and each row's `City` reads `document.Shipping.City`, or null when `Shipping` is null — it used to read the top-level `City`; the filtered query throws `NotSupportedException` naming `Order.Shipping.City` before any request
 
 #### Scenario: Count of a grouping view counts its rows
 
@@ -1447,13 +1525,28 @@ aggregation holding `DefaultGroupBySize` buckets or more.
 The system SHALL take the hand-built grouping Cosmos SQL path in `QueryAsync`,
 `QueryFirstAsync` and `CountAsync` alike whenever the definition has aggregates **or** group-by
 clauses, and otherwise a hand-built projection —
-`SELECT c["{SourceProperty}"] AS {ViewProperty}, … FROM c` (or `SELECT VALUE c` when there are
+`SELECT c["{Source}"]["{Nested}"…] AS "{ViewProperty}", … FROM c` (or `SELECT VALUE c` when there are
 no field selectors) for queries, `SELECT VALUE COUNT(1) FROM c` (results summed) for a count.
+A nested source SHALL be selected by its whole bracket-quoted path (`CosmosAggregationHelper.PathRef`, TASK-843), and
+every SELECT alias — projection, group key and aggregate, in the view store and in store-level aggregation alike —
+SHALL be a quoted, escaped string through `CosmosAggregationHelper.Alias` (TASK-844: a bare alias named like a keyword,
+`AS Inner` / `AS Value`, failed every query with a 400).
 Both paths SHALL map view property names back to source field names in the `WHERE` clause,
-order aggregate results by their SELECT alias and other keys by `c.{source field}`, and SHALL
+order group keys and other fields by their bracket-quoted source path `c["{source}"]`, refuse an `ORDER BY` on an
+aggregate view property with `NotSupportedException` before any request (TASK-848: Cosmos DB refuses every form of it —
+bare alias SC2001, quoted alias or the aggregate expression 2206, also as a second key — and a grouped read pages on the
+server, so it is not sorted in memory either), and SHALL
 emit `OFFSET {offset ?? 0} LIMIT {limit ?? int.MaxValue}` whenever either paging argument is
 present. A grouping view's `CountAsync` SHALL run the view's own grouping query and return the
-number of groups it yields. A definition with joins SHALL be refused at construction with
+number of groups it yields. Every call SHALL first rewrite a span-bound `Contains` (`SpanContains.Rewrite`). A
+non-grouped read or count whose filter carries a long `Contains` list SHALL be planned by `CosmosInListChunking`
+(`InListChunkSize` 1000, `MaxQueryTextLength` 524 288 characters counted over the query text plus each parameter value
+serialized as JSON): a list that is a plain `AND` conjunct runs as one query per chunk of distinct values — strings
+included, Cosmos DB comparing them exactly (TASK-841), chunks cut by serialized length as well as count (TASK-842) — rows
+concatenated and counts summed; a list that cannot be split (under `NOT` or `OR`, a sort, limit or offset,
+`QueryFirstAsync`) stays one query while it fits and past the limit is refused with `NotSupportedException` before any
+request. A grouped view's query SHALL never be split, and past the limit SHALL be refused naming the length and the
+limit, a group being able to span chunks (TASK-839). A definition with joins SHALL be refused at construction with
 `NotSupportedException`, and every call on a `Persistent` definition SHALL throw
 `NotSupportedException`, Cosmos DB having no stored views; `OnTheFly` and `Auto` are computed
 on the fly.
@@ -1468,7 +1561,7 @@ on the fly.
 
 - **Given** a definition without aggregates or group-by, selecting `Order.StatusCode` into `TView.Status`
 - **When** `QueryAsync(v => v.Status == 3)` runs
-- **Then** the statement is `SELECT c["StatusCode"] AS Status FROM c WHERE c.StatusCode = @p0` with `3` bound — the old LINQ path deserialised raw documents into the view, so a renamed field stayed default and a filter or sort on a view name tested a field that does not exist
+- **Then** the statement is `SELECT c["StatusCode"] AS "Status" FROM c WHERE c["StatusCode"] = @p0` with `3` bound — the old LINQ path deserialised raw documents into the view, so a renamed field stayed default and a filter or sort on a view name tested a field that does not exist
 
 #### Scenario: A Persistent definition or a join is refused
 
@@ -1486,13 +1579,31 @@ on the fly.
 
 - **Given** a field selector mapping `Order.StatusCode` → `TView.Status` and the filter `v => v.Status == 3`
 - **When** the aggregate SQL is built
-- **Then** the emitted predicate is `c.StatusCode = 3`, because the query runs `FROM c` over raw documents
+- **Then** the emitted predicate is `c["StatusCode"] = @p0`, because the query runs `FROM c` over raw documents
 
 #### Scenario: Order key resolution distinguishes aggregates from group keys
 
 - **Given** an aggregate view with `TView.Total` produced by a `Sum` and `TView.Status` mapped from `Order.StatusCode`
-- **When** ordering by `Total` then `Status` descending
-- **Then** the clause is `ORDER BY Total ASC, c.StatusCode DESC`
+- **When** ordering by `Status` descending, and separately by `Total` (alone or after `Status`)
+- **Then** the first clause is `ORDER BY c["StatusCode"] DESC`; the second throws `NotSupportedException` ("Cosmos DB cannot sort a grouped view by an aggregate: '<TView>.Total' is one. …") before any request — it used to send `ORDER BY Total ASC` and get a 400
+
+#### Scenario: A view property named like a keyword is aliased as a quoted string
+
+- **Given** a view selecting `Order.Sub` into `TView.Inner` and `Order.Amount` into `TView.Value`
+- **When** it is queried, filtered or sorted on those properties
+- **Then** the projection reads `c["Sub"] AS "Inner", c["Amount"] AS "Value"`, filter and sort paths are `c["Amount"]`, and a quote or backslash in an alias is escaped — the bare `AS Inner` / dotted `c.Value` forms were 400 syntax errors (SC1001)
+
+#### Scenario: A nested source is selected by its whole path
+
+- **Given** a plain view selecting `Order.Shipping.City` into `TView.City`
+- **When** it is queried, filtered or sorted on `City`
+- **Then** the projection is `c["Shipping"]["City"] AS "City"`, and the filter and sort read `c["Shipping"]["City"]` too — it used to select `c["City"]`, the document's top-level field
+
+#### Scenario: A long id list is read in chunks, a grouped one is refused
+
+- **Given** a plain view filtered by `v => ids.Contains(v.Key)` with 2 500 distinct values, and an aggregate view with a list whose query would pass 524 288 characters
+- **When** each is queried and counted
+- **Then** the plain view runs one query per chunk of at most 1000 values, rows concatenated and counts summed; the aggregate view throws `NotSupportedException` explaining that a grouped view cannot be split because a group can span chunks
 
 #### Scenario: Only offset supplied still emits a LIMIT
 
@@ -1503,9 +1614,26 @@ on the fly.
 ### Requirement: Cosmos DB filter translation refuses what it cannot express
 
 The system SHALL translate a filter expression into a Cosmos SQL `WHERE` fragment supporting
-`AndAlso`, `OrElse`, `Not`, the six binary comparisons, `Contains` on a member target, and a
+`AndAlso`, `OrElse`, `Not`, the six binary comparisons, a string's `Contains` (a substring test,
+`CONTAINS(field, @p)`), a collection `Contains`, and a
 boolean constant, and SHALL throw `NotSupportedException` whenever any part of the expression
 cannot be translated.
+
+A field SHALL be a view property or a member path under one (`v.Inner.X`), rendered in full and bracket-quoted
+(`c["Src"]["X"]`) with only its first segment mapped to the source field — itself a dotted path for a nested source,
+split into segments (TASK-840, TASK-843, TASK-844; it used to render `c.X` and read the wrong field). Only a conversion is
+looked through, and `Nullable<T>.Value` is the value itself; a member that is not a field of the stored document (a
+string's `Length`, `HasValue`, a collection's `Count`, a struct's member) or a chain that does not start at the view's
+parameter (a captured variable) SHALL be refused by name before any request.
+
+A collection `Contains` SHALL be `ARRAY_CONTAINS`, an exact comparison, in two shapes only (TASK-839): a caller's list
+tested against a view property, `ids.Contains(v.Key)` → `ARRAY_CONTAINS(@p, <path>)` with the whole list bound as one
+array parameter (enum values as their integral value), and a view array property tested for a caller's value,
+`v.Tags.Contains(x)` → `ARRAY_CONTAINS(<path>, @p)`. An empty list SHALL render `false` (it matches nothing). A comparer
+overload, a nested-collection element type, a computed operand, a list that evaluates to null or no sequence, both sides
+reading the view, or neither side reading it SHALL be refused with `NotSupportedException` naming the shape, never the
+values. Before TASK-837 a collection `Contains` took the string path and rendered `CONTAINS()` over an array, which
+matched nothing.
 
 An empty return SHALL mean exactly one thing — the predicate is the explicit constant `true`,
 which constrains nothing. It SHALL NOT mean that translation failed: both callers append the
@@ -1572,7 +1700,7 @@ API with no caller text in them.
 
 - **Given** the filter `v => v.Total > 0 && true`
 - **When** the conjunction is translated
-- **Then** the emitted clause is `(c.Amount > 0 AND true)` — a constant is rendered wherever it appears, because an empty fragment would be joined between the `AND` separators into invalid SQL
+- **Then** the emitted clause is `(c["Amount"] > @p0 AND true)` — a constant is rendered wherever it appears, because an empty fragment would be joined between the `AND` separators into invalid SQL
 
 #### Scenario: Enum and DateTime values reach the parameter, not the statement
 
@@ -1590,7 +1718,7 @@ API with no caller text in them.
 
 - **Given** a filter value crafted to close the literal and append `OR 1=1 --`
 - **When** the aggregate and count statements are built
-- **Then** both emit `WHERE c.Category = @p0`, neither contains `OR` or `--`, and the value reaches the parameter verbatim
+- **Then** both emit `WHERE c["Category"] = @p0`, neither contains `OR` or `--`, and the value reaches the parameter verbatim
 
 #### Scenario: Several values bind in order
 
@@ -1603,6 +1731,24 @@ API with no caller text in them.
 - **Given** a `null` filter, or the explicit constant `v => true`
 - **When** the statement is built
 - **Then** no `WHERE` is appended and the `QueryDefinition` carries no parameters
+
+#### Scenario: A caller's list is one array parameter
+
+- **Given** the filters `v => ids.Contains(v.Key)`, `v => !ids.Contains(v.Key)` and `v => v.Tags.Contains("x")`
+- **When** they are translated
+- **Then** they render `ARRAY_CONTAINS(@p0, c["Key"])` with the whole list bound to `@p0`, `NOT (ARRAY_CONTAINS(@p0, c["Key"]))`, and `ARRAY_CONTAINS(c["Tags"], @p0)`; with an empty `ids` the first renders `false`
+
+#### Scenario: An unsupported Contains shape is refused by name
+
+- **Given** `v => ids.Contains(v.Key, comparer)`, `v => v.Tags.Contains(v.Key)` or `v => ids.Contains(v.Key.ToString())`
+- **When** they are translated
+- **Then** each throws `NotSupportedException` explaining the two supported shapes and the reason (a comparer, both sides reading the view, a computed operand); no query is sent
+
+#### Scenario: A nested filter path is rendered in full
+
+- **Given** a view property `Inner` selecting `Order.Src`, and the filters `v => v.Inner.X == 5` and `v => v.Name.Length > 3`
+- **When** they are translated
+- **Then** the first renders `c["Src"]["X"] = @p0` — it used to be `c.X`, a same-named top-level field, with no error; the second throws `NotSupportedException` because `Length` of `String` is not a field of the stored document
 
 ### Requirement: Store-agnostic aggregation query specification
 
@@ -1730,6 +1876,10 @@ group-by field (property or column name) to its column, an aggregate alias to th
 AS bucket_time`, grouped by `bucket_time`: the base connector throws `NotSupportedException`, and TimescaleDB renders
 `time_bucket(INTERVAL '<seconds> seconds', column)` from the parsed `TimeSpan`, so no caller text reaches the SQL.
 Each row SHALL become an `AggregateResult` keyed by the reader's column names, `DBNull` read as `null`.
+An aggregate SHALL never be split by IN-list chunking (its groups would span chunks): it is planned through
+`PlanInListChunks("aggregate", …)` with that reason, so a filter whose `IN` list is within the provider's
+`MaxCommandParameters` runs as one statement and one past it is refused with `NotSupportedException` before the reader
+runs, rather than failing in the driver (TASK-833).
 
 #### Scenario: A grouped sum is one GROUP BY statement
 

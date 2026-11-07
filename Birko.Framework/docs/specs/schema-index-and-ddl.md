@@ -1,6 +1,6 @@
 ---
 area: schema-index-and-ddl
-generated-at: 8e19ad1bba0ef39cb7b55a1e95a5b53019f7adc6
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
 generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/IndexManagement/CosmosDBIndexManager.cs
@@ -1846,10 +1846,17 @@ declared twice past the builder's refusal), whose `HasColumnName`, `IsUnique`,
 `HasUniqueIndex` set that descriptor and return the builder (`And()` returning the map); and `HasUnique`,
 `HasPrimary` and `Ignore` SHALL set the flag on the first existing descriptor for the member, appending one only
 when none exists. A member expression SHALL be a `MemberExpression` or a `UnaryExpression` over one, else
-`ArgumentException("Expression must be a member access expression.")`. `ModelMapRegistry.Register` SHALL configure a
-fresh map and replace any map for the type; `RegisterFromAssembly` SHALL instantiate every non-abstract,
+`ArgumentException("Expression must be a member access expression.")`; a member not read directly off the lambda's
+parameter (`x => x.Sub.Code`, a string's `Length`, a captured object's member) SHALL throw `NotSupportedException` naming
+the dotted path and stating that a SQL table has no nested member (TASK-845: the last name was kept, so the settings
+landed on a top-level member of that name). `ModelMapRegistry.Register` SHALL configure a
+fresh map and replace any map for the type, letting an exception from `Configure` through as itself;
+`RegisterFromAssembly` SHALL instantiate every non-abstract,
 non-interface type implementing `IModelMapping<>` through its parameterless constructor and register each model type
-it maps; `GetMap<T>`, `HasMap`, `GetTableNames` (only maps with a non-empty table name) and `GetPropertyMaps` (an
+it maps, and an exception thrown by a mapping's constructor or its `Configure` SHALL arrive as
+`InvalidOperationException("Model mapping '<full type name>' failed in <its constructor|Configure>: <original message>")`
+with the original as `InnerException` (TASK-846 / TASK-847: it arrived as a `TargetInvocationException` naming nothing);
+mappings scanned before the failing one stay registered and the failing one is not; `GetMap<T>`, `HasMap`, `GetTableNames` (only maps with a non-empty table name) and `GetPropertyMaps` (an
 empty list for an unregistered type) SHALL read the registered maps.
 
 #### Scenario: Property and HasUnique reuse the member's descriptor
@@ -1865,6 +1872,20 @@ empty list for an unregistered type) SHALL read the registered maps.
 - **Given** a registry with no map for `Foo`
 - **When** `GetPropertyMaps(typeof(Foo))` and `GetMap<Foo>()` are called
 - **Then** an empty list and `null` are returned
+
+#### Scenario: A nested member is refused by name
+
+- **Given** `map.Property(x => x.Sub.Code)` (or `HasUnique`, `HasPrimary`, `Ignore` over the same expression)
+- **When** the call is made
+- **Then** `NotSupportedException` is thrown naming `Sub.Code`, and no descriptor is recorded for a top-level `Code`
+
+#### Scenario: A scanned mapping's failure names the mapping
+
+- **Given** an assembly holding an `IModelMapping<T>` whose constructor or `Configure` throws
+- **When** `RegisterFromAssembly` scans it
+- **Then** `InvalidOperationException` is thrown whose message names the mapping type, the stage and the original
+  message, with the original exception (its type and stack) as `InnerException`; the same mapping passed to
+  `Register<T>` throws its own exception unwrapped
 
 ### Requirement: ApplyToDatabase applies registered maps to the tables in a fixed order
 

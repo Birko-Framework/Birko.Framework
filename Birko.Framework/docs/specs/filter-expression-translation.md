@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.Core/Expressions/DateTruncation.cs
@@ -1156,11 +1156,108 @@ the literal `NULL`) directly into the SQL.
 - **When** the value expression is built
 - **Then** `Other.Col` is written straight into the SQL with no parameter
 
+### Requirement: Binding a generated parameter name skips the name lookup
+
+`AbstractConnectorBase.AddParameter` SHALL be non-virtual and SHALL overwrite the value of a name the command
+already holds rather than add it twice (the multi-row insert re-binds the same names per row); that check is a
+`Parameters.Contains(name)` lookup, a linear scan on SQLite's and SQL Server's collections. `SqlBuilderContext`
+SHALL remember the last name `GenerateParameterName` produced, the command it was produced for and that command's
+parameter count at the time, and `SqlBuilderContext.AddParameter` SHALL add that name WITHOUT the lookup
+(`AddUniqueParameter`) only while all three still hold — same command, same name (ordinal), unchanged count — and
+then forget it. Every other name SHALL take the lookup path. Both paths SHALL apply the same provider conversion
+(`ConvertParameterValue`) and parameter shape (`CreateParameter`), so an IN list of n values costs no name scans
+(TASK-836; measured before: a 4,000-value IN list took 341 ms to render).
+
+#### Scenario: An IN list is rendered without looking any name up
+
+- **Given** an `In` condition over `Id` with 100 values, rendered on a fresh command
+- **When** the clause is built
+- **Then** the SQL is `Id IN (@WHEREId0_0, @WHEREId1_1, … @WHEREId99_99)`, every value is bound once under a unique
+  name, and the collection's by-name `Contains` is called zero times
+
+#### Scenario: The generated path keeps the value conversion
+
+- **Given** an `In` condition over an enum `State` with one value whose underlying integer is `2`
+- **When** the clause is built through the lookup-free path
+- **Then** the SQL is `State IN (@WHEREState0_0)` and the bound value is the integer `2`; on SQLite a `Guid` list is
+  bound as strings on this path too
+
+#### Scenario: A name added twice is overwritten, not duplicated
+
+- **Given** one generated name added twice through the context (values `1`, then `2`), or any name added twice
+  through the connector
+- **When** the second add runs
+- **Then** the command holds one parameter of that name with the second value: the first add consumed the
+  remembered name, so the second takes the lookup
+
+#### Scenario: A stale or foreign generated name is looked up
+
+- **Given** a name generated for the command, after which another parameter was added, or a name generated for a
+  different command
+- **When** the context adds it
+- **Then** it takes the `Contains` lookup, because the count moved or the command differs
+
+### Requirement: The diagnostic SQL text is built in one linear pass
+
+`DataBase.GetGeneratedQuery(DbCommand)` — the command text with each parameter's value written in place of its
+name, built eagerly by every SQL read for its diagnostics (the `InitException` command text) and never executed —
+SHALL return the command text unchanged when the command has no parameters or no text; otherwise it SHALL scan the
+text once and, at each position where a parameter name can start, substitute the LONGEST parameter name matching
+there (names carry a `_{count}` suffix, so `@WHEREA0_5` prefixes `@WHEREA0_50`, and `@LIMIT` prefixes `@LIMITx`).
+A value of a string `DbType` SHALL be written in single quotes (its own quotes not escaped), any other as its
+`ToString()`; the first of two parameters with the same name wins. Text already substituted SHALL NOT be scanned
+again (TASK-832; measured before: one `StringBuilder.Replace` per parameter, 6.5 s of a 6.8 s SQLite read of 2,000
+ids).
+
+#### Scenario: The longest name wins where one name prefixes another
+
+- **Given** `SELECT 1 WHERE A IN (@WHEREA0_5, @WHEREA0_50) LIMIT @LIMIT OFFSET @LIMITx` with string values `five`,
+  `fifty`, `10`, `20`
+- **When** `GetGeneratedQuery` runs
+- **Then** it returns `SELECT 1 WHERE A IN ('five', 'fifty') LIMIT '10' OFFSET '20'`
+
+#### Scenario: A value containing a parameter name is not rewritten
+
+- **Given** `SELECT 1 WHERE A = @a AND B = @b` with `@a = "@b"` and `@b = "x"`
+- **When** `GetGeneratedQuery` runs
+- **Then** it returns `SELECT 1 WHERE A = '@b' AND B = 'x'`
+
+#### Scenario: A command without parameters is returned as is
+
+- **Given** `SELECT 1` with no parameters
+- **When** `GetGeneratedQuery` runs
+- **Then** it returns `SELECT 1`
+
+### Requirement: Each provider declares how many parameters one command may bind
+
+`AbstractConnectorBase.MaxCommandParameters` SHALL default to `int.MaxValue` (no limit) and each provider SHALL
+declare its own ceiling: SQL Server `2098` (2100 per request less the two `sp_executesql` takes, measured: 2098
+binds, 2099 fails), PostgreSQL `65535` (the protocol's 16-bit count, inherited by TimescaleDB), MySQL `65535` (the
+prepared-statement ceiling, kept although the framework's filtered statements are not prepared), SQLite `32766`
+(`SQLITE_MAX_VARIABLE_NUMBER`). `PreferredInListChunkSize` SHALL be `1000` on every provider. `PlanInListChunks`
+SHALL hand both to `InListChunkPlanner` (specified with the filtered operations), measuring a statement's
+non-list parameter overhead by building it once on a command of a connection that is never opened. A read SHALL
+report a sort (`ORDER BY`) or a page (limit / offset) as the reason it cannot be chunked (TASK-833).
+
+#### Scenario: SQL Server's ceiling
+
+- **Given** an `MSSqlConnector`
+- **When** `MaxCommandParameters` is read
+- **Then** it is `2098`, and a list that would take a statement past it is split or refused by the planner, never
+  sent
+
+#### Scenario: A sorted or paged read is not chunkable
+
+- **Given** a read with order fields, or with a limit or an offset
+- **When** `SortOrPageReason` runs
+- **Then** it names the sort (checked first) or the page as the reason; with neither it returns `null`
+
 ### Requirement: Enum parameter normalisation across providers
 
 `AbstractConnectorBase.NormalizeParameterValue` SHALL convert a boxed enum to its underlying integral
-value and pass every other value through unchanged, and EVERY provider's `AddParameter` override SHALL
-funnel its value through it because those overrides do not chain to the base implementation.
+value and pass every other value through unchanged. The base `ConvertParameterValue` SHALL call it, and EVERY
+provider's `ConvertParameterValue` override SHALL call the base first, because `AddParameter` applies only the
+most-derived conversion; a provider types a new parameter by overriding `CreateParameter`.
 
 #### Scenario: Enum bound as its integer
 
@@ -1171,27 +1268,29 @@ funnel its value through it because those overrides do not chain to the base imp
 #### Scenario: All four providers normalise
 
 - **Given** `SqLiteConnector`, `MSSqlConnector`, `PostgreSQLConnector` and `MySQLConnector`
-- **When** each one's `AddParameter` is inspected
-- **Then** each calls `NormalizeParameterValue(value)` as its first statement before creating or updating the parameter
+- **When** a value is bound through the shared `AddParameter`
+- **Then** it passes through `NormalizeParameterValue` before the parameter is created or updated: SQLite and
+  PostgreSQL override `ConvertParameterValue` and call the base first, SQL Server overrides only `CreateParameter`,
+  MySQL overrides neither
 
 #### Scenario: SQLite additionally stringifies Guid
 
-- **Given** a `Guid` value bound through `SqLiteConnector.AddParameter`
+- **Given** a `Guid` value bound through `SqLiteConnector`'s `ConvertParameterValue`
 - **When** the value is normalised
 - **Then** it is additionally converted with `ToString()`, because SQLite stores `DbType.Guid` as TEXT
 
 #### Scenario: PostgreSQL additionally strips DateTimeKind
 
-- **Given** a `DateTime` with `Kind = Utc` bound through `PostgreSQLConnector.AddParameter`
+- **Given** a `DateTime` with `Kind = Utc` bound through `PostgreSQLConnector`'s `ConvertParameterValue`
 - **When** the value is normalised
-- **Then** it is re-specified as `DateTimeKind.Unspecified` before binding, so Npgsql infers `timestamp` rather
-  than `timestamptz` and the server does not shift the instant by the session's time zone into the
-  timezone-less column (TASK-256)
+- **Then** it is re-specified as `DateTimeKind.Unspecified` before binding, for a new and an overwritten parameter
+  alike, so Npgsql infers `timestamp` rather than `timestamptz` and the server does not shift the instant by the
+  session's time zone into the timezone-less column (TASK-256)
 
 #### Scenario: SQL Server binds a new DateTime parameter as DATETIME2
 
-- **Given** a `DateTime` value bound through `MSSqlConnector.AddParameter` under a name the command does not yet hold
-- **When** the parameter is created with `AddWithValue`
+- **Given** a `DateTime` value bound through `MSSqlConnector` under a name the command does not yet hold
+- **When** the parameter is created by its `CreateParameter` override
 - **Then** its `SqlDbType` is set to `DateTime2`, so the value keeps every tick and a filter on the exact value
   matches the stored row. Before TASK-656 SqlClient inferred `DateTime` and rounded to ~3.33 ms (`...56.1234567`
   bound as `...56.1233333`), and the filter matched nothing. A parameter that already exists has only its `Value`
@@ -1200,7 +1299,7 @@ funnel its value through it because those overrides do not chain to the base imp
 #### Scenario: Null becomes DBNull
 
 - **Given** a `null` value
-- **When** any provider's `AddParameter` runs
+- **When** `AddParameter` runs on any provider
 - **Then** the parameter value is set to `DBNull.Value`
 
 ### Requirement: Provider identifier quoting
@@ -2070,13 +2169,39 @@ the parameter-free operand as the value(s), handling both the instance form `col
 and the static form `Enumerable.Contains(source, item)`; SHALL return `null` when both or neither
 operand references the parameter; SHALL emit `TermsQuery` for a non-empty collection value, a single
 `TermQuery` for a scalar value, and `MatchNoneQuery` for BOTH a null value and an empty (or all-null)
-collection.
+collection. A non-null collection longer than `ElasticSearch.MaxTermsCount` (a process-wide static, default
+`65_536`, Elasticsearch's `index.max_terms_count`; setting it below 1 throws `ArgumentOutOfRangeException`) SHALL
+instead be one `BoolQuery { Should = [...], MinimumShouldMatch = 1 }` of `TermsQuery` parts on the same field, each
+of at most `MaxTermsCount` terms, keeping every term in order, in the same request, so it composes under `||` and `!`
+like a single terms query (`TermsWithin`, TASK-835; measured before: 65,537 ids gave HTTP 400).
 
 #### Scenario: IN pattern
 
 - **Given** `x => ids.Contains(x.Guid)` with three ids
 - **When** the call is translated
 - **Then** a `TermsQuery { Field = "guid", Terms = [3 ids] }` is produced
+
+#### Scenario: A list past the terms limit is a should of terms queries
+
+- **Given** `x => ids.Contains(x.Guid!.Value)` with 65,537 ids (or 131,072; 131,073)
+- **When** the filter is translated with the default `MaxTermsCount`
+- **Then** a `BoolQuery` with only `Should` clauses and `MinimumShouldMatch = 1` is produced, holding 2 (2; 3)
+  `TermsQuery` parts on one field, each within the limit, whose terms concatenated equal `ids`; exactly 65,536 ids
+  stay one `TermsQuery`
+
+#### Scenario: The split keeps every term and the order
+
+- **Given** ten terms and a limit of 3
+- **When** `TermsWithin` runs
+- **Then** the parts hold 3, 3, 3 and 1 terms in the original order; with a limit of 10 a single `TermsQuery` is
+  returned
+
+#### Scenario: A negated long list is must-not of the should
+
+- **Given** `x => !ids.Contains(x.Guid!.Value)` with more ids than the limit
+- **When** the filter is translated
+- **Then** the outer `BoolQuery` has a single `MustNot` clause holding the should of terms queries, and live it
+  returns exactly the stored documents not in `ids`; `ids.Contains(...) || x.Name == "d1"` counts the matches plus one
 
 #### Scenario: Empty collection matches nothing and survives clause combination
 

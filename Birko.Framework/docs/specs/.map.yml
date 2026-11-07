@@ -454,6 +454,8 @@ areas:
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
+      # TASK-833: decides when a filtered read / count / delete / update is split past the parameter limit
+      - ../Birko.Data.SQL/SQL/Connectors/InListChunkPlanner.cs
       # moved to Birko.Data.Core by TASK-212 so a non-SQL backend can throw it; path repaired here,
       # the area is unchanged
       - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs

@@ -1,6 +1,6 @@
 ---
 area: bulk-filter-operations
-generated-at: 3ec3a29a5a8994e4b2d37a4abfd16131a5e7d081
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
 generated-on: 2026-11-07
 sources:
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
@@ -23,6 +23,7 @@ sources:
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
+  - ../Birko.Data.SQL/SQL/Connectors/InListChunkPlanner.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
   - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
@@ -173,6 +174,15 @@ connectors, `SqLiteDecimal.cs` and `AbstractConnectorBase.cs` are now sources �
 `AbstractConnectorBase.cs` gap reported at the TASK-137 regen above, so `WouldTargetEveryRow` / `AddRequiredWhere` are
 now reachable by this area's globs. The localization replay refusal and the event-sourcing record of a computed set
 live in files outside this area and are not specified here.
+
+Scoped regen at `22cd73f3630d64bfb02524fa2b85dc025bf59474` for **TASK-833** (a SQL `IN` list past the provider's
+parameter limit, or past 1000 values, is split into chunks by the new `InListChunkPlanner`, or refused; the chunked
+writes run in one boundary; each provider names `MaxCommandParameters`), **TASK-838** (the SQL bulk stores'
+`Atomically` / `AtomicallyAsync` delegate to the connector's `RunAtomically` / `RunAtomicallyAsync`) and **TASK-836**
+(`AddParameter` is non-virtual; providers override `ConvertParameterValue` / `CreateParameter`). **`.map.yml` was
+edited at the fix**: `InListChunkPlanner.cs` is a source. TASK-832 (`DataBase.GetGeneratedQuery` linear) touched no
+source of this area. The count and aggregate funnels that also plan chunks (`AbstractConnector_SelectCount`,
+`AbstractConnector_Aggregate`) are reached by no glob here and are specified only through the planner's rules.
 
 ## Requirements
 
@@ -1462,6 +1472,100 @@ delegation SHALL be pinned by a test.
   overrides SHALL therefore call `RequireBoundedFilter` themselves. A null check is not a scope check —
   the same distinction that separates `RequireFilter` from `RequireBoundedFilter` everywhere else
 
+### Requirement: A SQL IN list past the provider's parameter limit is split into chunks or refused
+
+The SQL connector's read, delete and update funnels (`Select` / `SelectAsync`, `Delete` / `DeleteAsync`,
+`Update` / `UpdateAsync` on the table name) SHALL plan each statement through `InListChunkPlanner.Plan` (TASK-833)
+before anything runs. When the statement's `IN` lists hold no more than `PreferredInListChunkSize` values in total
+(1000 on every provider) the plan SHALL be `Unchanged` and no probe is built. Otherwise the planner SHALL build the
+statement once on a command of a never-opened connection with the chosen list cut to one value, take the parameters
+it leaves as the statement's overhead (tenant, soft delete, SET values, limit), and decide:
+
+- **split** the largest list that can be split into chunks of `min(PreferredInListChunkSize, MaxCommandParameters −
+  overhead)` distinct values, list order kept and duplicates dropped, when its distinct values exceed the chunk size
+  or the statement exceeds `MaxCommandParameters`; only that one list is split, the rest of the condition tree is the
+  caller's, shared and unmodified;
+- **leave it unchanged** when no list can be split but the statement is within `MaxCommandParameters` — nothing that
+  ran before starts refusing;
+- **refuse** with `NotSupportedException` when no list can be split and the statement exceeds the maximum, or when the
+  overhead leaves no room for even one value. The message names the operation, the parameter count, the maximum, the
+  column and the reason, never a value, and ends `(TASK-833)`. It SHALL be thrown before `DoCommand`, so its type is
+  not re-wrapped and no statement is sent.
+
+A list SHALL be splittable only when it is reached from the root through AND alone (no root term after the first joins
+with OR, no enclosing group is OR or negated), is not a `NOT IN`, not column-to-column and not empty; its non-null values
+are all one type among Guid, the integral and floating numerics, `decimal`, enums, `bool`, `DateTime`, `DateTimeOffset`,
+`DateOnly`, `TimeOnly`, `TimeSpan`; no date/time value carries sub-microsecond ticks; `DateTime` kinds do not mix; and no
+instant appears at two offsets. A string or `char` list SHALL never be split (a case- or accent-insensitive collation can
+make two C# strings one value). A sorted or paged read SHALL not be split (`SortOrPageReason`), and an update SHALL not
+split a list on a column its SET writes (`WrittenColumns`, compared without qualifier or quotes).
+
+`MaxCommandParameters` SHALL be `int.MaxValue` on the base, 2098 on SQL Server (2100 less `sp_executesql`'s two),
+32766 on SQLite and 65535 on PostgreSQL (inherited by TimescaleDB) and MySQL.
+
+A chunked read SHALL run each chunk's select in turn and yield the union, outside any boundary of its own, so outside a
+transaction it is not one snapshot. A chunked delete or update SHALL run every chunk through the single-statement path
+(`DeleteStatement` / `UpdateCore`, which repeats the whole-table guard per statement) inside **one** `RunAtomically`
+boundary: it joins an ambient transaction, otherwise a failure at any chunk rolls back every chunk. A chunked update
+SHALL return the sum of its chunks' matched rows (each `-1` counted as 0). `Update` / `UpdateAsync` on the connector
+SHALL be non-virtual (rule 12); the per-statement seam is the `protected virtual` `UpdateCore` / `UpdateCoreAsync`.
+
+#### Scenario: A delete past the chunk size removes exactly the matching rows in one boundary
+
+- **Given** a SQL bulk store and `ids` holding 1500 distinct Guids, some duplicated and some unknown, and a filter
+  `x => ids.Contains(x.Guid) && x.TenantGuid == t`
+- **When** `Delete(filter)` / `DeleteAsync(filter, ct)` is called outside a transaction
+- **Then** two `DELETE` statements run, each with a non-empty slice of at most 1000 distinct values and the tenant
+  term, inside one owned transaction, and exactly the rows a single statement would remove are removed
+
+#### Scenario: A failure at any chunk leaves every row in place
+
+- **Given** a chunked delete or update whose k-th statement fails
+- **When** the call runs outside a transaction
+- **Then** the exception propagates and the owned transaction is rolled back, so no earlier chunk's write survives
+- **And** inside a unit of work that later rolls back, no chunk survives either
+
+#### Scenario: A list that cannot be split is refused past the limit, before anything runs
+
+- **Given** a statement past `MaxCommandParameters` whose list is a `NOT IN`, sits beside an OR, holds strings, or
+  belongs to a sorted or paged read
+- **When** the read, count, delete or update is called
+- **Then** `NotSupportedException` naming the operation, the count, the maximum and the column is thrown, no statement
+  is executed and no row changes
+
+#### Scenario: The same shapes within the limit stay one statement
+
+- **Given** a `NOT IN` delete or a sorted read whose list keeps the statement within `MaxCommandParameters`
+- **When** it is called
+- **Then** exactly one statement runs and returns what it always did
+
+#### Scenario: An update that writes the filtered column is never split
+
+- **Given** `UpdateAsync(x => scores.Contains(x.Score), new PropertyUpdate<T>().Increment(x => x.Score, 1))`
+- **When** the statement is within the maximum
+- **Then** it runs as one `UPDATE`, so each row is incremented once — chunked, a row the first chunk moved into a later
+  chunk's values was incremented twice (measured)
+- **And when** the same update is past the maximum
+- **Then** it is refused ("the update writes the filtered column …") and nothing is written
+- **And** an update that writes a different column is still chunked
+
+### Requirement: SQL parameter binding is one non-virtual funnel with per-provider conversion
+
+`AbstractConnectorBase.AddParameter` SHALL be non-virtual (TASK-836, rule 12): it converts the value through
+`protected virtual ConvertParameterValue` (base: `NormalizeParameterValue`; a provider override calls the base first),
+overwrites the value of a name the command already holds — never adding it twice, which the multi-row insert relies on —
+and otherwise adds `CreateParameter(command, name, value)` (`DBNull` for null). SQLite's conversion SHALL bind a Guid as
+its string, PostgreSQL's SHALL strip `DateTimeKind`, and SQL Server's `CreateParameter` SHALL type a `DateTime` as
+`DateTime2`; MySQL uses the base. A name `SqlBuilderContext` generated SHALL skip the lookup (`AddUniqueParameter`,
+internal), so rendering an `IN` list of n values costs no n linear `Contains` scans.
+
+#### Scenario: A long IN list renders without a lookup per value
+
+- **Given** a filter `ids.Contains(x.Col)` with n values
+- **When** the statement is built
+- **Then** each generated parameter is added without `Parameters.Contains`, while a re-bound name through
+  `AddParameter` still overwrites the existing parameter's value
+
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 
 The system SHALL run `EnsureInitialized()` / `EnsureInitializedAsync(ct)` at the entry of every public
@@ -1477,6 +1581,10 @@ otherwise it opens a connection and transaction, publishes them as the ambient s
 and a provider's native bulk insert join it, commits at the end and rolls back on any failure or cancellation.
 As that transaction's owner it SHALL run the work registered on it with `AmbientSqlTransaction.OnCommitted` once
 after the commit succeeds, and drop it on rollback or a failed commit (TASK-669).
+That boundary SHALL be the connector's `RunAtomically` / `RunAtomicallyAsync` (TASK-838), the one producer the
+chunked `IN`-list writes use too: the store first publishes its own `TransactionContext` as the ambient scope, then
+hands the write to the connector, which joins any ambient transaction and otherwise owns one, committing despite an
+`EntityNotFoundException` (its `commitsDespite` predicate) and rolling back on anything else.
 The collection `Create` SHALL translate a duplicate-key failure into the shared duplicate-create
 refusal, and the collection `Update` SHALL translate a unique-index violation into
 `StoreUniqueViolationException`, on the abstract bases and the SQL bulk stores alike (TASK-567, TASK-625,

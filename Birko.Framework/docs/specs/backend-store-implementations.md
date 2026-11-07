@@ -1,12 +1,14 @@
 ---
 area: backend-store-implementations
-generated-at: 773367ed5925aad9234c1a6c72b92d5193e5d9ac
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
 generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Repositories/CosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Stores/AsyncCosmosDBStore.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosChunkedWriteException.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosDBStore.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosInListChunking.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosTransactionScopeException.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
   - ../Birko.Data.ElasticSearch/Repositories/AsyncElasticSearchModelRepository.cs
@@ -465,9 +467,10 @@ The system SHALL run `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` as
   `OverflowException` with nothing written to any document. Otherwise (a session, or no patch) the base implementation
   (TASK-827, the user's decision).
 - RavenDB `Delete(filter)`, and Cosmos DB, InfluxDB, JSON and XML: the base implementation (read the matches, then write
-  each through `*Core`).
+  each through `*Core`); on Cosmos DB once per IN-list chunk when the filter is chunked (see the IN-list requirement).
 
-`Update(filter, Action<T>)` SHALL be the base read-modify-save on every backend.
+`Update(filter, Action<T>)` SHALL be the base read-modify-save on every backend; on Cosmos DB, run once per IN-list chunk
+when the filter is chunked.
 
 #### Scenario: MongoDB filtered delete
 
@@ -589,6 +592,69 @@ added SHALL fix the batch's partition, and an item with any other Guid SHALL thr
 - **Given** an `AsyncCosmosDBStore<T>` with a batch set and entity A already added
 - **When** entity B (another Guid) is created in the same batch
 - **Then** `CosmosTransactionScopeException` is thrown (`AsyncCosmosDBStore.cs:76-88`)
+
+### Requirement: Cosmos DB splits a long IN list into chunks, or refuses it before any request
+
+The Cosmos LINQ provider writes `list.Contains(x.Col)` into the query TEXT, and the server refuses a text over 524,288
+characters (SC3020). The system SHALL, in `CosmosDBStore<T>` and `AsyncCosmosDBStore<T>`, plan every filtered read
+(`Read`, `ReadFirst`), `Count`, `Update(filter, Action<T>)` (and so `Update(filter, PropertyUpdate<T>)`) and
+`Delete(filter)` through `CosmosInListChunking.Plan` (TASK-834, TASK-841, TASK-842):
+- An IN is a `Contains` whose list does not reference the document and whose item does; its values are deduplicated
+  (default equality: ordinal for strings, one `null` kept). An empty list is never chunked; the caller's expression and
+  list are never modified.
+- A list is split when it holds more than `InListChunkSize` (1000) distinct values, or when the query text would exceed
+  the budget (`MaxQueryTextLength` 524,288 less a sixteenth, 491,520). Within both, the filter runs as one query.
+- Only the list with the largest estimated length is split. Chunks are filled while their count stays within 1000 and
+  their estimated text (each value's JSON plus 2, plus the rest of the query) within the budget; each chunk is then
+  measured with the store's own rendered query text and halved until it fits. A single-value chunk may use the full
+  limit. A split that yields one chunk runs as the original query.
+- A list may be split only when its element type is a value type or a string and the IN is a plain AND conjunct, and
+  for reads only with no sort, limit or offset. A list that may not be split SHALL still run as one query while its text
+  is within 524,288 characters; past it, `NotSupportedException` is thrown before any request, naming the operation,
+  the value count, the length, the limit and the reason (under OR, NOT IN, under NOT, nested, non-scalar type, or sort /
+  limit / offset), never the values.
+- A single value whose query alone exceeds the limit SHALL throw `NotSupportedException` naming its approximate
+  length, not the value; a chunk still over the limit because the rest of the filter is too long throws the general
+  refusal.
+- Chunked reads concatenate the chunks' results in list order; `ReadFirst` returns the first chunk's match; counts are
+  summed. Chunked writes run the base filtered write once per chunk, in order, with no rollback: a failure in the first
+  chunk, and any `OperationCanceledException`, propagate as themselves; a later failure throws
+  `CosmosChunkedWriteException` (a `StoreException`; `Operation`, `ChunksApplied`, `ChunkCount`, the cause as inner
+  exception), whose message says the applied chunks stay and the failing chunk may be partly applied.
+- `InListChunkSize` and `MaxQueryTextLength` are `protected virtual`; a chunk size below 1 throws
+  `InvalidOperationException`.
+
+#### Scenario: A filtered delete past the query-text ceiling (TASK-834)
+
+- **Given** an `AsyncCosmosDBStore<T>` and a list of 20,000 Guids (13,105 is the measured one-query ceiling)
+- **When** `DeleteAsync(x => ids.Contains(x.Guid))` runs
+- **Then** the delete runs in chunks of 1000 and removes exactly the matched items
+  (`tests/Birko.Data.CosmosDB.Tests/Task834InListChunkingTests.cs`)
+
+#### Scenario: A sorted read past the ceiling (TASK-834)
+
+- **Given** a list whose query text exceeds 524,288 characters
+- **When** `ReadAsync(x => ids.Contains(x.Guid), orderBy)` runs
+- **Then** `NotSupportedException` is thrown before any request, giving the sort, limit or offset as the reason
+
+#### Scenario: A chunked update failing in its second chunk (TASK-834)
+
+- **Given** a filtered update split into chunks, and a failure while writing the second chunk
+- **When** `UpdateAsync(filter, action)` runs
+- **Then** `CosmosChunkedWriteException` reports `ChunksApplied = 1`, and the first chunk's updates stay stored
+
+#### Scenario: A list of long strings (TASK-841, TASK-842)
+
+- **Given** 1,200 distinct 600-character strings in `names.Contains(x.Name)`
+- **When** `ReadAsync` and `CountAsync` run
+- **Then** the list is cut into chunks whose measured query text is within the budget, and the results equal one
+  query's (`tests/Birko.Data.CosmosDB.Tests/Task842LongStringChunkingTests.cs`)
+
+#### Scenario: One value too long for any chunk (TASK-842)
+
+- **Given** a list holding one 600,000-character string
+- **When** a filtered read runs
+- **Then** `NotSupportedException` is thrown before any request, naming the lengths and not the value
 
 ### Requirement: RavenDB sessions copy onto tracked documents and save only at commit
 

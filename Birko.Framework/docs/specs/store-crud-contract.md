@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.Core/Exceptions/EntityNotFoundException.cs
   - ../Birko.Data.Core/Exceptions/StoreConcurrencyException.cs
@@ -548,8 +548,8 @@ add the entity with `TryAdd` (a concurrent create of the same key also throws it
 
 - **Given** `data` is `null`
 - **When** `Create(null)` is called
-- **Then** `Guid.Empty` is returned and `_items` is unchanged — a value no successful create returns any more, since
-  `Guid.Empty` is never a key (TASK-556)
+- **Then** the public wrapper throws `ArgumentNullException` before the gate opens and `_items` is unchanged
+  (TASK-714); `CreateCore`'s `Guid.Empty` answer for `null` is reached only by a caller of the core itself
 
 #### Scenario: Creating an entity whose identifier is already Guid.Empty
 
@@ -705,7 +705,9 @@ writes to items with `Guid.HasValue` whose key already exists in `_items`, repla
 does, and SHALL then throw one `EntityNotFoundException` naming every other item (an item with no `Guid` is named
 as `Guid.Empty`) — so bulk update does fail, after writing the stored items (TASK-555); SHALL
 refuse a bulk create containing a key already stored, or a key repeated inside the batch, with
-`StoreUniqueViolationException` **before writing anything**; and SHALL restrict bulk delete to items with `Guid.HasValue`.
+`StoreUniqueViolationException` **before writing anything** — checking the caller-supplied keys before any `Guid` is
+assigned, then assigning identities, then running every delegate, and only then storing (TASK-714); and SHALL restrict
+bulk delete to items with `Guid.HasValue`.
 
 #### Scenario: Bulk create over a collection containing nulls
 
@@ -720,6 +722,15 @@ refuse a bulk create containing a key already stored, or a key repeated inside t
 - **When** bulk `Create(data)` runs
 - **Then** `StoreUniqueViolationException` is thrown and **neither** entity is written — the whole batch is checked
   first
+
+#### Scenario: A refused bulk create leaves the caller's entities as they were
+
+- **Given** a batch whose entities without a `Guid` sit beside one carrying a stored key, or a batch whose delegate
+  throws (or returns a copy with another `Guid`) for a later item
+- **When** bulk `Create(data, delegate)` runs
+- **Then** for the key collision the identity-less entities still have `Guid == null` (keys are checked before any is
+  assigned), and for the delegate failure nothing is stored — every delegate runs before the first add (TASK-714; it
+  used to store the items before the failing one)
 
 #### Scenario: Bulk update where only some items exist
 
@@ -1052,7 +1063,8 @@ the raw store directly.
 
 - **Given** two wrappers whose inner stores reference each other
 - **When** `StoreChain.Walk` enumerates the chain
-- **Then** each instance is yielded once and the walk ends — unlike `GetUnwrappedStore`, which has no visited set
+- **Then** each instance is yielded once and the walk ends — unlike `GetUnwrappedStore`, which refuses such a chain
+  with `InvalidOperationException` (TASK-714)
 
 ### Requirement: A write refused for a key or unique value already held surfaces as StoreUniqueViolationException
 
@@ -1182,14 +1194,15 @@ call on `Task.Run`, and its `ReadCoreAsync` fallback selects without a limit and
 
 - **Given** a stored row under `g` and an update delegate that returns a copy carrying its own `Guid` `h`
 - **When** `Update(entity, delegate)` runs on a SQL store
-- **Then** the `WHERE` clause still addresses `g`, because the conditions were built before the delegate ran, and the
-  copy's values — `h` included — are written to that row
+- **Then** `StoreDelegates.Apply` throws `InvalidOperationException` before the connector `Update` runs, and the row
+  under `g` is unchanged (TASK-714: the copy's values, `h` included, used to be written to that row)
 
 #### Scenario: Creating null on the sync and the async store
 
 - **Given** a SQL store pair over the same table
 - **When** `CreateAsync(null!)` and `Create(null!)` are called
-- **Then** the async store returns `Guid.Empty` and the sync store throws `NullReferenceException`
+- **Then** both throw `ArgumentNullException` from the base wrapper (TASK-714: the async store returned `Guid.Empty`
+  and the sync store threw `NullReferenceException`)
 
 ### Requirement: The SQL connector inserts a batch as one statement shape, one row at a time, inside one transaction
 
@@ -1206,7 +1219,10 @@ transaction; otherwise in an owned transaction serialized by the connector's loc
 other; recorded, not changed, by TASK-724: the monitor is reentrant and a shared semaphore would deadlock a locked
 command that issues another, and the async stores use only the async path). `null` models in a model collection SHALL be
 skipped. The async insert SHALL pass its token to `DoCommandWithTransactionAsync` too, so a cancelled insert stops
-waiting for the gate (TASK-724: it waited the holder out, measured).
+waiting for the gate (TASK-724: it waited the holder out, measured). The owned transaction SHALL run under the
+connector's retry policy with the attempt marked sent once the transaction has begun, so a transient failure is retried
+only before that point or when the provider's `IsNotAppliedException` says the server applied nothing (TASK-305); on an
+ambient transaction the insert is never retried.
 
 #### Scenario: A heterogeneous batch
 
@@ -1237,6 +1253,36 @@ token to the connection's open as well as to the statement.
 - **When** `Count()` is called
 - **Then** `0` is returned rather than an exception — where a write in the identical condition throws
 
+### Requirement: The SQL count splits an IN list past the provider's parameter limit and sums the chunks
+
+The system SHALL make the public `SelectCount(tableNames, joins, conditions)` / `SelectCountAsync` non-virtual: after
+the empty-table-list check it SHALL plan the conditions with the connector's `IN`-list chunk planner (probing the
+statement through `CreateCountCommand`, the one producer of a count statement), throw `NotSupportedException` with the
+planner's refusal when a list past the limit cannot be split, before anything runs, and otherwise run one statement per
+chunk through the `protected virtual` seam `SelectCountCore` / `SelectCountCoreAsync` and return the sum (TASK-833,
+rule 12). The chunks are disjoint (duplicates dropped; only lists whose .NET equality is the database's are split). A
+chunked count outside a transaction is not one snapshot: a write committed between two chunks may be counted by one
+chunk and missed by the other. The missing-table answer of `0` applies per statement, in the seam.
+
+#### Scenario: Counting by more ids than the provider can bind
+
+- **Given** a filter `ids.Contains(x.Guid)` whose list is longer than the provider's parameter limit
+- **When** `SelectCount` runs
+- **Then** it issues several `SELECT count(*)` statements, each with a slice of the list, and returns their sum
+
+#### Scenario: A list that cannot be split
+
+- **Given** a list past the limit whose values the planner refuses to split
+- **When** `SelectCount` runs
+- **Then** `NotSupportedException` is thrown and no statement is executed
+
+#### Scenario: A provider that customises the count
+
+- **Given** a connector subclass that needs to change how a count runs
+- **When** it overrides `SelectCountCore`
+- **Then** its override runs once per chunk statement and cannot skip the planning, which sits in the non-virtual
+  public method
+
 ### Requirement: StoreException is the store-layer exception type and carries an optional inner exception
 
 The system SHALL declare `Birko.Data.Exceptions.StoreException : Exception` with a `(string message)`
@@ -1255,7 +1301,8 @@ subclass `StoreUniqueViolationException(string message, Exception? innerExceptio
 - **When** invalid input is supplied
 - **Then** an in-memory create of a key already stored throws `StoreUniqueViolationException`, and an in-memory update (single or
   bulk) of an entity with no `Guid` or an unstored one throws its subclass `EntityNotFoundException` ([[TASK-555]]);
-  a `null` entity, a read or delete of an unknown key, and a delete with no identifier are still answered with
+  a `null` entity passed to `Create` / `Update` throws `ArgumentNullException` (TASK-714); a `null` entity passed to
+  `Save` or `Delete`, a read or delete of an unknown key, and a delete with no identifier are still answered with
   `Guid.Empty`, `null`, `false` or a silent no-op. `StoreLocator` refuses with `ArgumentException` (not a store) and
   `InvalidOperationException` (colliding settings); reflection failures (`MissingMethodException`) and
   cancellation (`OperationCanceledException`) surface as before
