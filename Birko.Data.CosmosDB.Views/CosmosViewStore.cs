@@ -24,8 +24,12 @@ namespace Birko.Data.CosmosDB.Views;
 /// <para>A collection <c>Contains</c> in a filter (TASK-839) is <c>ARRAY_CONTAINS</c>, an exact comparison, in two
 /// shapes: <c>ids.Contains(v.Key)</c>, the list bound as one array parameter, and <c>v.Tags.Contains(x)</c> on a view
 /// array property. Guid, int, string and enum values; an empty list matches nothing; <c>!</c> and <c>||</c> compose.
-/// Other shapes (a comparer, a computed or nested operand, a nested collection) are refused by name before any request.
+/// Other shapes (a comparer, a computed operand, a nested collection) are refused by name before any request.
 /// Before TASK-837 a collection Contains rendered <c>CONTAINS()</c> and matched nothing.</para>
+/// <para>A member path under a view property (<c>v.Inner.X</c>, also in a <c>Contains</c>) renders in full,
+/// <c>c.Src.X</c>, only its first segment mapped to the source field (TASK-840; it used to render <c>c.X</c> and read the
+/// wrong field). A member that is not a document field (<c>Length</c>, <c>HasValue</c>, <c>Count</c>, a struct's member)
+/// or a captured variable is refused by name before any request.</para>
 /// <para>The server counts the serialized parameter values toward its 524,288-character query limit (measured on the
 /// emulator, 2026-11-07: 13,795 Guids pass, 25,000 fail with SC3020), so a list longer than
 /// <see cref="InListChunkSize"/> is split by TASK-834's planner (<c>CosmosInListChunking</c>): a read or count whose
@@ -531,7 +535,7 @@ internal static class CosmosFilterTranslator
     /// </list>
     /// An empty list renders <c>false</c>: it matches nothing, and is never "no constraint" (rule 42). Measured on the
     /// emulator (vnext-preview, 2026-11-07): Guid, int and string values match exactly, with NOT and in a count. Every
-    /// other shape is refused by name, before any request: a comparer, a computed or nested operand, a nested
+    /// other shape is refused by name, before any request: a comparer, a computed operand, a nested
     /// collection, a list that depends on the document and is tested against it, or a test that names no view property.
     /// The message names the shape, never the values.
     /// </summary>
@@ -602,21 +606,19 @@ internal static class CosmosFilterTranslator
     }
 
     /// <summary>
-    /// The path of a view property read directly off the filter's parameter, mapped to its source field. A computed
-    /// operand or a nested member (<c>v.Inner.X</c>) is refused here; the comparison paths' handling of a nested member
-    /// is TASK-840.
+    /// The document path of a view property or a member path under one (<c>v.Inner.Tags</c>, TASK-840), its first
+    /// segment mapped to its source field. A computed operand is refused here, a member that is not a document field in
+    /// <see cref="DocumentPath"/>.
     /// </summary>
     private static string ViewPropertyPath(Expression expression, Func<string, string>? mapMember, string role)
     {
         var unwrapped = Birko.Data.Expressions.SpanContains.UnwrapConvert(expression);
-        if (unwrapped is MemberExpression { Expression: ParameterExpression } member)
+        if (unwrapped is MemberExpression member)
         {
-            return $"c.{Map(member.Member.Name, mapMember)}";
+            return DocumentPath(member, mapMember);
         }
 
-        throw ContainsRefusal(unwrapped is MemberExpression
-            ? $"{role} is a nested member (v.A.B), not a view property read directly"
-            : $"{role} is a computed expression ({unwrapped?.NodeType}), not a view property read directly");
+        throw ContainsRefusal($"{role} is a computed expression ({unwrapped?.NodeType}), not a view property read directly");
     }
 
     private static NotSupportedException ContainsRefusal(string reason)
@@ -651,18 +653,71 @@ internal static class CosmosFilterTranslator
 
     private static string TranslateFieldAccess(Expression expression, Func<string, string>? mapMember)
     {
-        if (expression is MemberExpression member)
+        // Only a conversion is looked through (an enum or a nullable lift); another unary (a negation) is an operation
+        // on the field, not the field, and used to render as the bare field.
+        if (Birko.Data.Expressions.SpanContains.UnwrapConvert(expression) is MemberExpression member)
         {
-            return $"c.{Map(member.Member.Name, mapMember)}";
-        }
-
-        if (expression is UnaryExpression unary && unary.Operand is MemberExpression unaryMember)
-        {
-            return $"c.{Map(unaryMember.Member.Name, mapMember)}";
+            return DocumentPath(member, mapMember);
         }
 
         throw new NotSupportedException("Cannot translate field access expression.");
     }
+
+    /// <summary>
+    /// TASK-840: the document path of a member chain read off the filter's parameter, <c>v.Inner.X</c> →
+    /// <c>c.Inner.X</c>. Only the first segment, the view property, goes through the view-to-source map: the projection
+    /// selects that source field whole (<c>c["Src"] AS Inner</c>, and <c>Select</c> requires the same type on both
+    /// sides), so every deeper name is the same in the view and in the document. Before TASK-840 only the last name was
+    /// kept (<c>c.X</c>), which compared a same-named top-level field, or a missing one, with no error.
+    /// <c>Nullable&lt;T&gt;.Value</c> is the value itself. Any other member that is not a document field (a string's
+    /// <c>Length</c>, <c>HasValue</c>, a collection's <c>Count</c>, a struct's member) or a chain that does not start at
+    /// the view (a captured variable) is refused by name, before any request.
+    /// </summary>
+    private static string DocumentPath(MemberExpression member, Func<string, string>? mapMember)
+    {
+        var names = new List<string>();
+        Expression? current = member;
+        while (Birko.Data.Expressions.SpanContains.UnwrapConvert(current) is MemberExpression m)
+        {
+            var owner = m.Expression?.Type;
+            if (owner != null && Nullable.GetUnderlyingType(owner) != null && m.Member.Name == "Value")
+            {
+                current = m.Expression;
+                continue;
+            }
+
+            if (owner != null && !IsDocumentObject(owner))
+            {
+                throw NotAPath($"it reads '{m.Member.Name}' of {TypeName(owner)}, which is not a field of the stored document");
+            }
+
+            names.Add(m.Member.Name);
+            current = m.Expression;
+        }
+
+        if (Birko.Data.Expressions.SpanContains.UnwrapConvert(current) is not ParameterExpression || names.Count == 0)
+        {
+            throw NotAPath("the member chain does not read the view's parameter (a captured variable or a static member)");
+        }
+
+        names.Reverse();
+        names[0] = Map(names[0], mapMember);
+        return "c." + string.Join(".", names);
+    }
+
+    /// <summary>A type whose members are fields of a JSON object: a class that is not a string or a collection.</summary>
+    private static bool IsDocumentObject(Type type)
+        => type.IsClass && type != typeof(string) && !typeof(System.Collections.IEnumerable).IsAssignableFrom(type);
+
+    private static string TypeName(Type type)
+    {
+        var tick = type.Name.IndexOf('`');
+        return tick < 0 ? type.Name : type.Name.Substring(0, tick);
+    }
+
+    private static NotSupportedException NotAPath(string reason)
+        => new($"A Cosmos DB view filter must compare a view property or a member path under one (v.Inner.X); this one "
+             + $"is not supported: {reason}. (TASK-840)");
 
     private static string Map(string name, Func<string, string>? mapMember) => mapMember?.Invoke(name) ?? name;
 

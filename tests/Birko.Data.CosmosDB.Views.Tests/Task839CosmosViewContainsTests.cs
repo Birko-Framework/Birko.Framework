@@ -282,7 +282,7 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
     {
         new object[] { "computed", "computed expression" }, new object[] { "comparer", "comparer" },
         new object[] { "nested collection", "nested collection" }, new object[] { "both sides", "both" },
-        new object[] { "nested member", "nested member" }, new object[] { "aggregate property", "'RegionTotalView.Total'" },
+        new object[] { "aggregate property", "'RegionTotalView.Total'" },
     };
 
     [Theory]
@@ -302,7 +302,6 @@ public sealed class Task839CosmosViewContainsTests : IAsyncLifetime
             "comparer" => () => store.CountAsync(v => ids.Contains(v.Key, EqualityComparer<Guid>.Default)),
             "nested collection" => () => store.QueryAsync(v => lists.Contains(v.Labels!)),
             "both sides" => () => store.QueryAsync(v => v.Labels!.Contains(v.Label!)),
-            "nested member" => () => store.QueryAsync(v => v.Inner!.Tags.Contains("a")),
             "aggregate property" => () => totals.QueryAsync(v => ints.Contains(v.Total)),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),
         };
