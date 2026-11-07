@@ -13,12 +13,17 @@ ElasticSearch platform implementation for Birko.Data.Views. Translates ViewDefin
 
 ## Filter translation
 
-`BuildFilterQuery` delegates to `ElasticSearch.ParseFilterQuery` — the shared boundary helper that enforces
-CR-H047 (a supplied filter that cannot be translated throws `NotSupportedException` instead of widening to
-match-all, which a `null` NEST query would). This invariant used to be implemented here **only**; it now lives
-in `Birko.Data.ElasticSearch` and covers the entity stores' 14 conversion sites too, so the two paths cannot
-drift. A null filter still means "no filter" and yields `MatchAllQuery` here, which is this view store's own
-deliberate contract for an unfiltered view.
+`BuildFilterQuery` rewrites the view filter onto the document type (SH-M382) and translates it with
+`ElasticSearch.ParseExpression` (passing the store's `MaxTermsCount`, TASK-851). It enforces CR-H047 itself: a supplied
+filter that cannot be translated throws `NotSupportedException` instead of widening to match-all, which a `null` NEST
+query would. The entity stores enforce the same rule through `ElasticSearch.ParseFilterQuery`. The view store keeps
+its own copy because it translates the rewritten document filter, not the caller's lambda; keep the two in step. A
+null filter still means "no filter" and yields `MatchAllQuery` here, which is this view store's own deliberate
+contract for an unfiltered view.
+
+`MaxTermsCount` (init, `null` by default) is the read index's `index.max_terms_count`: a filter's collection
+`Contains` is split at it (TASK-835), passed to `ParseExpression` per call; `null` uses the process-wide default
+(TASK-851).
 
 ## Dependencies
 - Birko.Data.Views (ViewDefinition, IViewStore, IViewManager)

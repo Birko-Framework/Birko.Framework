@@ -46,6 +46,14 @@ namespace Birko.Data.ElasticSearch.Stores
         /// </summary>
         public int? MaxResultWindow { get; set; }
 
+        /// <summary>
+        /// Gets or sets the index's <c>index.max_terms_count</c>: the most terms one <c>terms</c> query may hold, past
+        /// which a collection <c>Contains</c> is split (TASK-835). <c>null</c> uses the process-wide default,
+        /// <see cref="Birko.Data.ElasticSearch.ElasticSearch.MaxTermsCount"/> (65,536). Declared, not read from the
+        /// index (TASK-851). Must be at least 1.
+        /// </summary>
+        public int? MaxTermsCount { get; set; }
+
         #endregion
     }
 }

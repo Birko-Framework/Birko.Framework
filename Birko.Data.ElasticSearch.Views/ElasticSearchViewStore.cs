@@ -43,6 +43,22 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
     internal int GroupPageSize { get; init; } = 1000;
 
     /// <summary>
+    /// The <c>index.max_terms_count</c> of the index this view reads: a filter's collection <c>Contains</c> longer than
+    /// this is split into several terms queries (TASK-835). <c>null</c> uses the process-wide default,
+    /// <see cref="Data.ElasticSearch.ElasticSearch.MaxTermsCount"/> (TASK-851).
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Set to less than 1.</exception>
+    public int? MaxTermsCount
+    {
+        get => _maxTermsCount;
+        init => _maxTermsCount = value is null or >= 1
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), value, "MaxTermsCount must be at least 1.");
+    }
+
+    private readonly int? _maxTermsCount;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ElasticSearchViewStore{TView}"/> class.
     /// </summary>
     /// <param name="connector">The NEST ElasticClient instance.</param>
@@ -411,7 +427,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         QueryBase? query;
         try
         {
-            query = Data.ElasticSearch.ElasticSearch.ParseExpression(documentFilter);
+            query = Data.ElasticSearch.ElasticSearch.ParseExpression(documentFilter, maxTermsCount: _maxTermsCount);
         }
         catch (Exception ex) when (ex is not NotSupportedException)
         {

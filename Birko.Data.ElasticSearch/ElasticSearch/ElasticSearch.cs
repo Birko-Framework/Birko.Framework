@@ -20,9 +20,9 @@ namespace Birko.Data.ElasticSearch
         /// </summary>
         /// <remarks>
         /// TASK-835. A collection <c>Contains</c> longer than this is sent as a bool <c>should</c> of terms queries, each
-        /// within it, in the same request, so it stays correct under <c>||</c> and <c>!</c>. Declared rather than read
-        /// from the index: the translator is static and has no client, and reading the setting would cost a request per
-        /// query. Lower it for indexes created with a smaller <c>index.max_terms_count</c>.
+        /// within it, in the same request, so it stays correct under <c>||</c> and <c>!</c>. This is the DEFAULT: an
+        /// index whose <c>index.max_terms_count</c> differs declares its own in <c>IndexSettings.MaxTermsCount</c>
+        /// (or a view store's <c>MaxTermsCount</c>), which the store passes to the translator per call (TASK-851).
         /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException">Set to less than 1.</exception>
         public static int MaxTermsCount
@@ -144,17 +144,18 @@ namespace Birko.Data.ElasticSearch
         /// </para>
         /// </remarks>
         /// <exception cref="NotSupportedException">The filter was supplied but could not be translated.</exception>
-        public static QueryBase? ParseFilterQuery<T>(Expression<Func<T, bool>>? filter)
+        public static QueryBase? ParseFilterQuery<T>(Expression<Func<T, bool>>? filter, int? maxTermsCount = null)
         {
             if (filter == null)
             {
                 return null;
             }
 
+            var termsLimit = ResolveTermsLimit(maxTermsCount);
             QueryBase? query;
             try
             {
-                query = ParseExpression(filter);
+                query = Parse(filter, null, null, termsLimit);
             }
             catch (Exception ex)
             {
@@ -175,7 +176,7 @@ namespace Birko.Data.ElasticSearch
         /// would mean "every document in the index", which is never an acceptable default for a
         /// destructive operation, so it is rejected rather than translated.
         /// </summary>
-        public static QueryBase ParseRequiredFilterQuery<T>(Expression<Func<T, bool>> filter)
+        public static QueryBase ParseRequiredFilterQuery<T>(Expression<Func<T, bool>> filter, int? maxTermsCount = null)
         {
             if (filter == null)
             {
@@ -184,36 +185,58 @@ namespace Birko.Data.ElasticSearch
                     "A filter is required for a by-query delete/update: a missing filter would target every document in the index.");
             }
 
-            return ParseFilterQuery(filter)!;
+            return ParseFilterQuery(filter, maxTermsCount)!;
         }
 
         private static string UntranslatableFilterMessage(Expression filter)
             => $"The filter expression could not be translated to an ElasticSearch query: {filter}. "
              + "Use a simpler filter (binary comparisons, && / ||, and the supported string/collection methods).";
 
-        public static QueryBase? ParseExpression(Expression? expr = null, Type? exprType = null, string? fieldPrefix = null)
+        /// <param name="maxTermsCount">
+        /// TASK-851: the <c>index.max_terms_count</c> of the index the query is for; <c>null</c> means <see cref="MaxTermsCount"/>.
+        /// </param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxTermsCount"/> is less than 1.</exception>
+        public static QueryBase? ParseExpression(Expression? expr = null, Type? exprType = null, string? fieldPrefix = null, int? maxTermsCount = null)
+            => Parse(expr, exprType, fieldPrefix, ResolveTermsLimit(maxTermsCount));
+
+        /// <summary>
+        /// TASK-851: the terms limit one translation splits at, passed down the recursion rather than read from shared
+        /// state. A store passes its index's limit; <c>null</c> falls back to <see cref="MaxTermsCount"/>.
+        /// </summary>
+        internal static int ResolveTermsLimit(int? maxTermsCount)
+        {
+            if (maxTermsCount == null)
+            {
+                return MaxTermsCount;
+            }
+            return maxTermsCount.Value >= 1
+                ? maxTermsCount.Value
+                : throw new ArgumentOutOfRangeException(nameof(maxTermsCount), maxTermsCount.Value, "MaxTermsCount must be at least 1.");
+        }
+
+        private static QueryBase? Parse(Expression? expr, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             return expr switch
             {
                 null => null,
-                LambdaExpression lambda => ParseLambda(lambda, fieldPrefix),
-                BinaryExpression binary => ParseBinary(binary, exprType, fieldPrefix),
-                MethodCallExpression method => ParseMethodCall(method, exprType, fieldPrefix),
+                LambdaExpression lambda => ParseLambda(lambda, fieldPrefix, termsLimit),
+                BinaryExpression binary => ParseBinary(binary, exprType, fieldPrefix, termsLimit),
+                MethodCallExpression method => ParseMethodCall(method, exprType, fieldPrefix, termsLimit),
                 MemberExpression member => ParseMember(member, exprType, fieldPrefix),
-                UnaryExpression unary => ParseUnary(unary, exprType, fieldPrefix),
+                UnaryExpression unary => ParseUnary(unary, exprType, fieldPrefix, termsLimit),
                 ConstantExpression constant => ParseConstant(constant),
                 _ => null
             };
         }
 
-        private static QueryBase? ParseLambda(LambdaExpression lambda, string? fieldPrefix)
+        private static QueryBase? ParseLambda(LambdaExpression lambda, string? fieldPrefix, int termsLimit)
         {
             var type = lambda.Parameters.FirstOrDefault()?.Type;
             // Canonicalise once at the lambda boundary via the shared normalizer (Birko.Data.Core):
             // funcletize parameter-free subtrees and desugar boolean ternary (c ? t : f) and boolean
             // null-coalescing (a ?? b) into AND/OR/NOT, which the query builder below already handles.
             var body = Birko.Data.Expressions.ExpressionNormalizer.Normalize(lambda.Body) ?? lambda.Body;
-            return ParsePredicate(body, type, fieldPrefix);
+            return ParsePredicate(body, type, fieldPrefix, termsLimit);
         }
 
         /// <summary>
@@ -222,11 +245,11 @@ namespace Birko.Data.ElasticSearch
         /// boolean member (<c>x.IsActive</c>) becomes <c>IsActive == true</c> and a constant boolean
         /// (<c>x =&gt; true</c>) becomes a match-all / match-none query, rather than a value-carrying term.
         /// </summary>
-        private static QueryBase? ParsePredicate(Expression expr, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParsePredicate(Expression expr, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             // Unwrap Convert(..., object) inserted by Func<T, object> filters.
             if (expr is UnaryExpression convert && convert.NodeType == ExpressionType.Convert)
-                return ParsePredicate(convert.Operand, exprType, fieldPrefix);
+                return ParsePredicate(convert.Operand, exprType, fieldPrefix, termsLimit);
 
             // Constant-foldable boolean predicate: x => true, x => false, closure bool, 1 < 2, etc.
             if (expr.Type == typeof(bool) && !ContainsParameter(expr))
@@ -254,25 +277,25 @@ namespace Birko.Data.ElasticSearch
                 return name != null ? new TermQuery { Field = name, Value = true } : null;
             }
 
-            return ParseExpression(expr, exprType, fieldPrefix);
+            return Parse(expr, exprType, fieldPrefix, termsLimit);
         }
 
-        private static QueryBase? ParseBinary(BinaryExpression binary, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseBinary(BinaryExpression binary, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             switch (binary.NodeType)
             {
                 // Short-circuit && and bitwise & on booleans both mean logical AND in a predicate.
                 case ExpressionType.AndAlso:
-                    return CombineBool(binary, isOr: false, exprType, fieldPrefix);
+                    return CombineBool(binary, isOr: false, exprType, fieldPrefix, termsLimit);
                 case ExpressionType.And when binary.Type == typeof(bool):
-                    return CombineBool(binary, isOr: false, exprType, fieldPrefix);
+                    return CombineBool(binary, isOr: false, exprType, fieldPrefix, termsLimit);
                 // Short-circuit || and bitwise | on booleans both mean logical OR in a predicate.
                 case ExpressionType.OrElse:
-                    return CombineBool(binary, isOr: true, exprType, fieldPrefix);
+                    return CombineBool(binary, isOr: true, exprType, fieldPrefix, termsLimit);
                 case ExpressionType.Or when binary.Type == typeof(bool):
-                    return CombineBool(binary, isOr: true, exprType, fieldPrefix);
+                    return CombineBool(binary, isOr: true, exprType, fieldPrefix, termsLimit);
                 default:
-                    return ParseComparison(binary, exprType, fieldPrefix);
+                    return ParseComparison(binary, exprType, fieldPrefix, termsLimit);
             }
         }
 
@@ -296,17 +319,17 @@ namespace Birko.Data.ElasticSearch
         /// matches nothing is a <see cref="MatchNoneQuery"/> (TASK-266), which is non-null and composes
         /// normally. So refusing on null cannot break an empty-collection filter.</para>
         /// </remarks>
-        private static QueryBase? CombineBool(BinaryExpression binary, bool isOr, Type? exprType, string? fieldPrefix)
+        private static QueryBase? CombineBool(BinaryExpression binary, bool isOr, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var leftQuery = ParsePredicate(binary.Left, exprType, fieldPrefix);
-            var rightQuery = ParsePredicate(binary.Right, exprType, fieldPrefix);
+            var leftQuery = ParsePredicate(binary.Left, exprType, fieldPrefix, termsLimit);
+            var rightQuery = ParsePredicate(binary.Right, exprType, fieldPrefix, termsLimit);
             if (leftQuery == null || rightQuery == null)
                 return null;
             var queries = new List<QueryContainer>(2) { new(leftQuery), new(rightQuery) };
             return isOr ? new BoolQuery { Should = queries } : new BoolQuery { Must = queries };
         }
 
-        private static QueryBase? ParseComparison(BinaryExpression binary, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseComparison(BinaryExpression binary, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             // Value-expression operand — column arithmetic (x.A + x.B > 5), value null-coalescing
             // ((x.Score ?? 0) > 5) or a value-position ternary ((x.Vip ? x.A : x.B) > 5, i.e. CASE compared
@@ -315,8 +338,8 @@ namespace Birko.Data.ElasticSearch
             if (IsScriptValueOperand(UnwrapConvertEs(binary.Left)) || IsScriptValueOperand(UnwrapConvertEs(binary.Right)))
                 return BuildScriptComparison(binary, exprType, fieldPrefix);
 
-            var left = ParseExpression(binary.Left, exprType, fieldPrefix) as ITermQuery;
-            var right = ParseExpression(binary.Right, exprType, fieldPrefix) as ITermQuery;
+            var left = Parse(binary.Left, exprType, fieldPrefix, termsLimit) as ITermQuery;
+            var right = Parse(binary.Right, exprType, fieldPrefix, termsLimit) as ITermQuery;
 
             // SH-M126 (TASK-153): two fields. `x.A == x.B` took A as the field and no value, so it became the null
             // comparison: "A is missing", an unrelated set of documents. A term or range query compares a field
@@ -662,7 +685,7 @@ namespace Birko.Data.ElasticSearch
             throw new NotSupportedException($"Cannot inline a constant of type {value.GetType()} into an ElasticSearch script.");
         }
 
-        private static QueryBase? ParseMethodCall(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseMethodCall(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             return call.Method.Name switch
             {
@@ -670,27 +693,27 @@ namespace Birko.Data.ElasticSearch
                     new TermQuery { Field = FormatFieldName(propName.Value as string, fieldPrefix) },
 
                 "IsNullOrEmpty" =>
-                    ParseIsNullOrEmpty(call, exprType, fieldPrefix),
+                    ParseIsNullOrEmpty(call, exprType, fieldPrefix, termsLimit),
 
                 "StartsWith" =>
-                    ParseStartsWith(call, exprType, fieldPrefix),
+                    ParseStartsWith(call, exprType, fieldPrefix, termsLimit),
 
                 "EndsWith" =>
-                    ParseEndsWith(call, exprType, fieldPrefix),
+                    ParseEndsWith(call, exprType, fieldPrefix, termsLimit),
 
                 "Contains" =>
-                    ParseContains(call, exprType, fieldPrefix),
+                    ParseContains(call, exprType, fieldPrefix, termsLimit),
 
                 "MultiMatch" =>
-                    ParseMultiMatch(call, exprType, fieldPrefix),
+                    ParseMultiMatch(call, exprType, fieldPrefix, termsLimit),
 
                 "Any" =>
-                    ParseAny(call, exprType, fieldPrefix),
+                    ParseAny(call, exprType, fieldPrefix, termsLimit),
 
                 // Case-normalising calls have no term/keyword ES equivalent; treat them as transparent so the
                 // wrapped column still resolves (case-sensitivity is delegated to the field's analyzer).
                 "ToLower" or "ToLowerInvariant" or "ToUpper" or "ToUpperInvariant" =>
-                    ParseExpression(call.Object, exprType, fieldPrefix),
+                    Parse(call.Object, exprType, fieldPrefix, termsLimit),
 
                 _ => ParseConstantCall(call)
             };
@@ -702,9 +725,9 @@ namespace Birko.Data.ElasticSearch
             return value != null ? new TermQuery { Value = value } : null;
         }
 
-        private static QueryBase? ParseIsNullOrEmpty(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseIsNullOrEmpty(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var field = ParseExpression(call.Arguments.First(), exprType, fieldPrefix) as ITermQuery;
+            var field = Parse(call.Arguments.First(), exprType, fieldPrefix, termsLimit) as ITermQuery;
             if (field?.Field == null)
                 return null;
 
@@ -739,10 +762,10 @@ namespace Birko.Data.ElasticSearch
                 .Replace("*", "\\*")
                 .Replace("?", "\\?");
 
-        private static QueryBase? ParseStartsWith(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseStartsWith(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var swField = ParseExpression(call.Object, exprType, fieldPrefix) as ITermQuery;
-            var swVal = ParseExpression(call.Arguments.First(), exprType, fieldPrefix) as ITermQuery;
+            var swField = Parse(call.Object, exprType, fieldPrefix, termsLimit) as ITermQuery;
+            var swVal = Parse(call.Arguments.First(), exprType, fieldPrefix, termsLimit) as ITermQuery;
 
             if (swField?.Field == null || swVal?.Value == null)
                 return null;
@@ -750,10 +773,10 @@ namespace Birko.Data.ElasticSearch
             return new PrefixQuery { Field = swField.Field, Value = swVal.Value };
         }
 
-        private static QueryBase? ParseEndsWith(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseEndsWith(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var ewField = ParseExpression(call.Object, exprType, fieldPrefix) as ITermQuery;
-            var ewVal = ParseExpression(call.Arguments.First(), exprType, fieldPrefix) as ITermQuery;
+            var ewField = Parse(call.Object, exprType, fieldPrefix, termsLimit) as ITermQuery;
+            var ewVal = Parse(call.Arguments.First(), exprType, fieldPrefix, termsLimit) as ITermQuery;
 
             if (ewField?.Field == null || ewVal?.Value == null)
                 return null;
@@ -766,13 +789,13 @@ namespace Birko.Data.ElasticSearch
             return new WildcardQuery { Field = ewField.Field, Value = "*" + EscapeWildcardValue((string)ewVal.Value) };
         }
 
-        private static QueryBase? ParseContains(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseContains(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             // String.Contains(substring) → substring match (mirrors SQL LIKE '%x%').
             if (call.Method.DeclaringType == typeof(string))
             {
-                var cField = ParseExpression(call.Object, exprType, fieldPrefix) as ITermQuery;
-                var cVal = ParseExpression(call.Arguments.First(), exprType, fieldPrefix) as ITermQuery;
+                var cField = Parse(call.Object, exprType, fieldPrefix, termsLimit) as ITermQuery;
+                var cVal = Parse(call.Arguments.First(), exprType, fieldPrefix, termsLimit) as ITermQuery;
 
                 if (cField?.Field == null || cVal?.Value == null)
                     return null;
@@ -819,7 +842,7 @@ namespace Birko.Data.ElasticSearch
             else if (ContainsParameter(b) && !ContainsParameter(a)) { fieldExpr = b; valueExpr = a; }
             else return null;
 
-            var fieldQuery = ParseExpression(fieldExpr, exprType, fieldPrefix) as ITermQuery;
+            var fieldQuery = Parse(fieldExpr, exprType, fieldPrefix, termsLimit) as ITermQuery;
             if (fieldQuery?.Field == null)
                 return null;
 
@@ -838,7 +861,7 @@ namespace Birko.Data.ElasticSearch
             {
                 var terms = enumerable.Cast<object>().Where(v => v != null).ToArray();
                 if (terms.Length > 0)
-                    return TermsWithin(fieldQuery.Field, terms, MaxTermsCount);
+                    return TermsWithin(fieldQuery.Field, terms, termsLimit);
 
                 // EMPTY collection → matches NOTHING. Returning null here was a silent-wrong-rows bug:
                 // null means "no query produced", and CombineBool DROPS null sub-queries, so
@@ -876,14 +899,14 @@ namespace Birko.Data.ElasticSearch
             return new BoolQuery { Should = parts, MinimumShouldMatch = 1 };
         }
 
-        private static QueryBase? ParseMultiMatch(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseMultiMatch(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var mmVal = ParseExpression(call.Arguments.Last(), exprType, fieldPrefix) as ITermQuery;
+            var mmVal = Parse(call.Arguments.Last(), exprType, fieldPrefix, termsLimit) as ITermQuery;
             if (mmVal?.Value == null)
                 return null;
 
             var fields = (call.Arguments.First() as NewArrayExpression)?.Expressions
-                .Select(m => (ParseExpression(m, exprType, fieldPrefix) as ITermQuery)?.Field)
+                .Select(m => (Parse(m, exprType, fieldPrefix, termsLimit) as ITermQuery)?.Field)
                 .Where(f => f != null)
                 .ToArray();
 
@@ -893,9 +916,9 @@ namespace Birko.Data.ElasticSearch
             return new MultiMatchQuery { Query = (string)mmVal.Value, Fields = fields };
         }
 
-        private static QueryBase? ParseAny(MethodCallExpression call, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseAny(MethodCallExpression call, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var anyField = ParseExpression(call.Arguments.First(), exprType, fieldPrefix) as ITermQuery;
+            var anyField = Parse(call.Arguments.First(), exprType, fieldPrefix, termsLimit) as ITermQuery;
             if (anyField?.Field == null)
                 return null;
 
@@ -904,7 +927,7 @@ namespace Birko.Data.ElasticSearch
             if (call.Arguments.Count == 1)
                 return new NestedQuery { Path = anyField.Field, Query = new MatchAllQuery() };
 
-            var query = ParseExpression(call.Arguments.Last(), exprType, anyField.Field.Name);
+            var query = Parse(call.Arguments.Last(), exprType, anyField.Field.Name, termsLimit);
             if (query == null)
                 return null;
 
@@ -960,19 +983,19 @@ namespace Birko.Data.ElasticSearch
             return null;
         }
 
-        private static QueryBase? ParseUnary(UnaryExpression unary, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseUnary(UnaryExpression unary, Type? exprType, string? fieldPrefix, int termsLimit)
         {
             return unary.NodeType switch
             {
-                ExpressionType.Convert => ParseExpression(unary.Operand, exprType, fieldPrefix),
-                ExpressionType.Not => ParseNot(unary, exprType, fieldPrefix),
+                ExpressionType.Convert => Parse(unary.Operand, exprType, fieldPrefix, termsLimit),
+                ExpressionType.Not => ParseNot(unary, exprType, fieldPrefix, termsLimit),
                 _ => null
             };
         }
 
-        private static QueryBase? ParseNot(UnaryExpression unary, Type? exprType, string? fieldPrefix)
+        private static QueryBase? ParseNot(UnaryExpression unary, Type? exprType, string? fieldPrefix, int termsLimit)
         {
-            var operandQuery = ParsePredicate(unary.Operand, exprType, fieldPrefix);
+            var operandQuery = ParsePredicate(unary.Operand, exprType, fieldPrefix, termsLimit);
             if (operandQuery == null)
                 return null;
 

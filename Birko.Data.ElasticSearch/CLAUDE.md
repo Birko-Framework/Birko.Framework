@@ -153,8 +153,14 @@ public IEnumerable<Product> Search(string query)
 
 **A long `Contains` list (TASK-835).** Past `ElasticSearch.MaxTermsCount` (default 65,536, Elasticsearch's
 `index.max_terms_count`) the list is sent as a bool `should` of terms queries, each within the limit, in the same
-request (`TermsWithin`). It stays correct under `||` and `!`. Measured before: 65,537 ids gave HTTP 400. Lower the
-static for an index created with a smaller setting.
+request (`TermsWithin`). It stays correct under `||` and `!`. Measured before: 65,537 ids gave HTTP 400.
+
+**The limit is per index (TASK-851).** An index created with another `index.max_terms_count` declares it in
+`IndexSettings.MaxTermsCount`; the store resolves it per call (`IndexMaxTermsCount`) and passes it to
+`ParseFilterQuery` / `ParseRequiredFilterQuery` / `ParseExpression(..., maxTermsCount)`, which thread it down the
+recursion. Nothing shared is written per call. The static `MaxTermsCount` is only the default for an index that
+declares nothing; never lower it for one index. Declared, not read from the index: the setting is dynamic, so a
+cached read goes stale, and a wrong declaration fails loudly (HTTP 400), never with wrong rows.
 
 Store CRUD filters (`Expression<Func<T, bool>>`) are translated to NEST queries by the hand-rolled
 `ElasticSearch.ParseExpression`. Supported forms — kept in parity with the SQL parser and the native-LINQ

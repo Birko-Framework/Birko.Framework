@@ -245,7 +245,7 @@ namespace Birko.Data.ElasticSearch.Stores
                 {
                     Size = 1,
                     From = 0,
-                    Query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter)
+                    Query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter, IndexMaxTermsCount)
                 };
                 var searchResponse = Connector!.Search<T>(query);
 
@@ -410,7 +410,7 @@ namespace Birko.Data.ElasticSearch.Stores
             var indexName = GetIndexName();
             var response = Connector.DeleteByQuery(new Nest.DeleteByQueryRequest(indexName)
             {
-                Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter)
+                Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter, IndexMaxTermsCount)
             });
             // TASK-502: a conflicted, failed or timed-out delete is partial and must not report success.
             ElasticSearchStoreHelper.RequireComplete(response, indexName);
@@ -431,7 +431,7 @@ namespace Birko.Data.ElasticSearch.Stores
 
             var response = Connector.UpdateByQuery(new Nest.UpdateByQueryRequest(indexName)
             {
-                Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter),
+                Query = Data.ElasticSearch.ElasticSearch.ParseRequiredFilterQuery(filter, IndexMaxTermsCount),
                 Script = new Nest.InlineScript(script)
                 {
                     Params = scriptParams
@@ -532,7 +532,7 @@ namespace Birko.Data.ElasticSearch.Stores
         /// <inheritdoc />
         protected override long CountCore(Expression<Func<T, bool>>? filter = null)
         {
-            return Count(Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter));
+            return Count(Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter, IndexMaxTermsCount));
         }
 
         /// <summary>
@@ -580,7 +580,7 @@ namespace Birko.Data.ElasticSearch.Stores
             int? limit = null,
             int? offset = null)
         {
-            var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
+            var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter, IndexMaxTermsCount);
             foreach (var item in ReadStream(query, orderBy, limit, offset))
             {
                 yield return item;
@@ -778,7 +778,7 @@ namespace Birko.Data.ElasticSearch.Stores
             if (highlightOptions == null) throw new ArgumentNullException(nameof(highlightOptions));
             RequireConnector();
 
-            var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
+            var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter, IndexMaxTermsCount);
             return SearchWithHighlights(query, highlightOptions, orderBy, limit, offset);
         }
 
@@ -889,6 +889,12 @@ namespace Birko.Data.ElasticSearch.Stores
         }
 
         /// <summary>
+        /// TASK-851: the terms limit of this store's index (<see cref="IndexSettings.MaxTermsCount"/>), passed to the
+        /// translator per call; <c>null</c> uses the process-wide default.
+        /// </summary>
+        protected int? IndexMaxTermsCount => ElasticSearchStoreHelper.ResolveMaxTermsCount(_settings, typeof(T));
+
+        /// <summary>
         /// Deletes the index for this store.
         /// </summary>
         public void DeleteIndex()
@@ -996,7 +1002,7 @@ namespace Birko.Data.ElasticSearch.Stores
             QueryContainer? filterQuery = null;
             if (query.Filter != null)
             {
-                filterQuery = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(query.Filter);
+                filterQuery = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(query.Filter, IndexMaxTermsCount);
             }
 
             var metricAggregations = StoreAggregationHelper.BuildMetricAggregations(query.Aggregates);

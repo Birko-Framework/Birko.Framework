@@ -34,6 +34,13 @@ namespace Birko.Data.ElasticSearch.Stores
         }
 
         /// <summary>
+        /// TASK-851: the terms limit declared for <paramref name="type"/>'s index, or <c>null</c> for the process-wide
+        /// default. Read per call from the store's own settings; nothing shared is written.
+        /// </summary>
+        public static int? ResolveMaxTermsCount(Settings? settings, Type type)
+            => settings?.IndexSettings?.FirstOrDefault(x => x.TypeName == type.FullName)?.MaxTermsCount;
+
+        /// <summary>
         /// Sanitizes a raw index name according to ElasticSearch rules:
         /// lowercase; cannot start with <c>_</c>, <c>-</c>, or <c>.</c>; cannot contain spaces or any of
         /// <c># \ / * ? " &lt; &gt; | ` , +</c>. Throws when the result is empty or exceeds 255 characters.
