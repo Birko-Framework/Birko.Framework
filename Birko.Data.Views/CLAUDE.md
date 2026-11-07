@@ -18,7 +18,7 @@ Unified fluent view builder for defining cross-platform views/projections/aggreg
 - **ViewDefinition** — Immutable result produced by builder
 
 ### DTOs
-- **FieldSelector** — Source type + property + alias
+- **FieldSelector** — Source type + property + alias. `SourcePath` is the member path (`r => r.Sub.X` is `["Sub", "X"]`, `SourceProperty` `"Sub.X"`, `IsNested`); one segment is the property name as before. Only `Select()` records a nested path; join keys, group keys, aggregate sources and view properties refuse one by name, as does a member that is not stored (`Length`, `Count`, a struct member, a captured variable). A final `Nullable` `.Value` is the value itself (`c => c.Guid!.Value` is `Guid`; it was recorded as `Value`). Before TASK-843 only the last name was kept, and every provider read the top-level field of that name.
 - **JoinClause** — Left/right types + keys + join type
 - **AggregateClause** — Function + source property + output alias
 - **GroupByClause** — Source type + property

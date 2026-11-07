@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Birko.Data.Stores;
 using Birko.Data.Views;
+using System.Reflection;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 
 namespace Birko.Data.MongoDB.Views;
 
@@ -95,7 +97,11 @@ public static class MongoViewTranslator
             }
             else
             {
-                var fieldPath = ResolveFieldPath(field.SourceType, field.SourceProperty, definition);
+                var fieldPath = ResolveFieldPath(field.SourceType, field.SourcePath[0], definition);
+                if (field.IsNested)
+                {
+                    fieldPath += "." + NestedElementPath(field);
+                }
                 project.Add(field.ViewProperty, "$" + fieldPath);
             }
         }
@@ -138,6 +144,49 @@ public static class MongoViewTranslator
         // Otherwise it's from a joined collection
         var joinedAs = "_joined_" + GetCollectionName(sourceType);
         return joinedAs + "." + fieldName;
+    }
+
+    /// <summary>
+    /// TASK-843: the element names below a nested source's first segment, <c>Sub.X</c> → <c>X</c>, so the projection
+    /// reads <c>$Sub.X</c>. It used to read <c>$X</c>, the document's top-level field (measured on MongoDB 7). Each
+    /// segment is named as the driver stores it: by the class map of the type that declares the member (its
+    /// <c>[BsonElement]</c> name, or <c>_id</c> for an id member), registered or, when not registered yet, auto-mapped
+    /// with the same conventions and not registered. A member the class map does not store is refused by name.
+    /// </summary>
+    private static string NestedElementPath(FieldSelector field)
+    {
+        var names = new List<string>();
+        var owner = MemberType(field.SourceType, field.SourcePath[0], field);
+        for (var i = 1; i < field.SourcePath.Count; i++)
+        {
+            var name = field.SourcePath[i];
+            var member = (MemberInfo?)owner.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)
+                ?? owner.GetField(name, BindingFlags.Public | BindingFlags.Instance);
+            var declaring = member?.DeclaringType ?? owner;
+            var classMap = BsonClassMap.IsClassMapRegistered(declaring) ? BsonClassMap.LookupClassMap(declaring) : AutoMapped(declaring);
+            var memberMap = classMap.GetMemberMap(name) ?? throw new NotSupportedException(
+                $"View field '{field.ViewProperty}' selects '{field.SourceType.Name}.{field.SourceProperty}', but '{declaring.Name}.{name}' "
+                + "is not a member MongoDB stores (its class map does not map it). (TASK-843)");
+            names.Add(ReferenceEquals(classMap.IdMemberMap, memberMap) ? "_id" : memberMap.ElementName);
+            owner = MemberType(owner, name, field);
+        }
+        return string.Join(".", names);
+    }
+
+    private static Type MemberType(Type owner, string name, FieldSelector field)
+    {
+        var property = owner.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+        if (property != null) return property.PropertyType;
+        var member = owner.GetField(name, BindingFlags.Public | BindingFlags.Instance);
+        return member?.FieldType ?? throw new NotSupportedException(
+            $"View field '{field.ViewProperty}' selects '{field.SourceType.Name}.{field.SourceProperty}', but '{owner.Name}' has no public member '{name}'. (TASK-843)");
+    }
+
+    private static BsonClassMap AutoMapped(Type type)
+    {
+        var classMap = new BsonClassMap(type);
+        classMap.AutoMap();
+        return classMap;
     }
 
     /// <summary>

@@ -42,14 +42,18 @@ public class ViewDefinitionBuilder<TView> where TView : class
         return this;
     }
 
-    /// <summary>Selects a field from a source entity, mapped to a view property.</summary>
+    /// <summary>
+    /// Selects a field from a source entity, mapped to a view property. The source may be a nested member path
+    /// (<c>r =&gt; r.Sub.X</c>), recorded whole in <see cref="FieldSelector.SourcePath"/> (TASK-843); a provider that
+    /// cannot read it refuses the definition by name.
+    /// </summary>
     public ViewDefinitionBuilder<TView> Select<TSource, TProp>(
         Expression<Func<TSource, TProp>> sourceProperty,
         Expression<Func<TView, TProp>> viewProperty) where TSource : class
     {
-        var sourceName = GetMemberName(sourceProperty);
-        var viewName = GetMemberName(viewProperty);
-        _fields.Add(new FieldSelector(typeof(TSource), sourceName, viewName));
+        var sourcePath = GetMemberPath(sourceProperty);
+        var viewName = GetMemberName(viewProperty, "View property");
+        _fields.Add(new FieldSelector(typeof(TSource), sourcePath, viewName));
         return this;
     }
 
@@ -59,8 +63,8 @@ public class ViewDefinitionBuilder<TView> where TView : class
         Expression<Func<TRight, TKey>> rightKey,
         JoinType joinType = JoinType.Inner) where TLeft : class where TRight : class
     {
-        var leftProp = GetMemberName(leftKey);
-        var rightProp = GetMemberName(rightKey);
+        var leftProp = GetMemberName(leftKey, "Join key");
+        var rightProp = GetMemberName(rightKey, "Join key");
         _joins.Add(new JoinClause(typeof(TLeft), typeof(TRight), leftProp, rightProp, joinType));
         return this;
     }
@@ -77,7 +81,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
     public ViewDefinitionBuilder<TView> GroupBy<TSource, TProp>(
         Expression<Func<TSource, TProp>> property) where TSource : class
     {
-        var propName = GetMemberName(property);
+        var propName = GetMemberName(property, "GroupBy key");
         _groupBy.Add(new GroupByClause(typeof(TSource), propName));
         return this;
     }
@@ -88,8 +92,8 @@ public class ViewDefinitionBuilder<TView> where TView : class
         Expression<Func<TSource, TProp>> sourceProperty,
         Expression<Func<TView, TProp>> viewProperty) where TSource : class
     {
-        var sourceName = GetMemberName(sourceProperty);
-        var viewName = GetMemberName(viewProperty);
+        var sourceName = GetMemberName(sourceProperty, "Aggregate source");
+        var viewName = GetMemberName(viewProperty, "View property");
         _aggregates.Add(new AggregateClause(function, typeof(TSource), sourceName, viewName));
         return this;
     }
@@ -98,7 +102,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
     public ViewDefinitionBuilder<TView> Count<TSource>(
         Expression<Func<TView, int>> viewProperty) where TSource : class
     {
-        var viewName = GetMemberName(viewProperty);
+        var viewName = GetMemberName(viewProperty, "View property");
         _aggregates.Add(new AggregateClause(AggregateFunction.Count, typeof(TSource), null, viewName));
         return this;
     }
@@ -107,7 +111,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
     public ViewDefinitionBuilder<TView> Count<TSource>(
         Expression<Func<TView, long>> viewProperty) where TSource : class
     {
-        var viewName = GetMemberName(viewProperty);
+        var viewName = GetMemberName(viewProperty, "View property");
         _aggregates.Add(new AggregateClause(AggregateFunction.Count, typeof(TSource), null, viewName));
         return this;
     }
@@ -252,18 +256,80 @@ public class ViewDefinitionBuilder<TView> where TView : class
         }
     }
 
-    private static string GetMemberName<TObj, TProp>(Expression<Func<TObj, TProp>> expression)
+    /// <summary>
+    /// The member a builder call names, which must be a property of the expression's parameter itself: a join key,
+    /// a group key, an aggregate's source or any view property. A nested path (<c>r.Sub.X</c>) is refused by name
+    /// (TASK-843): it used to be recorded as its last segment, <c>X</c>, and every provider read that top-level field.
+    /// Only <see cref="Select{TSource, TProp}"/> records a nested source path.
+    /// </summary>
+    private static string GetMemberName<TObj, TProp>(Expression<Func<TObj, TProp>> expression, string role)
     {
-        if (expression.Body is MemberExpression member)
+        var path = GetMemberPath(expression);
+        if (path.Count == 1)
         {
-            return member.Member.Name;
+            return path[0];
         }
 
-        if (expression.Body is UnaryExpression unary && unary.Operand is MemberExpression unaryMember)
-        {
-            return unaryMember.Member.Name;
-        }
-
-        throw new ArgumentException("Expression must be a member access expression.", nameof(expression));
+        throw new NotSupportedException(
+            $"{role} '{typeof(TObj).Name}.{string.Join(".", path)}' is a nested member path; only a property of "
+            + $"'{typeof(TObj).Name}' itself is supported here. A nested member can be read by Select() from a source "
+            + "entity. (TASK-843)");
     }
+
+    /// <summary>
+    /// TASK-843: the member path an expression reads off its parameter, from the parameter down: <c>r =&gt; r.Name</c>
+    /// is <c>["Name"]</c>, <c>r =&gt; r.Sub.X</c> is <c>["Sub", "X"]</c>. The one producer of a view's source paths.
+    /// A conversion around the whole path is looked through (a nullable lift or an enum cast), and so is a final
+    /// <c>Nullable</c> <c>.Value</c> (<c>c =&gt; c.Guid!.Value</c> is <c>["Guid"]</c>). Refused, by name: a chain that
+    /// does not start at the parameter (a captured variable), and a member read off something that is not a stored
+    /// object (a string's <c>Length</c>, a collection's <c>Count</c>, a struct's member) - each of those, and a
+    /// <c>.Value</c>, used to be recorded as its last name.
+    /// </summary>
+    private static IReadOnlyList<string> GetMemberPath<TObj, TProp>(Expression<Func<TObj, TProp>> expression)
+    {
+        var body = expression.Body;
+        while (body is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } convert)
+        {
+            body = convert.Operand;
+        }
+
+        var names = new List<string>();
+        var current = body;
+        while (current is MemberExpression member)
+        {
+            var owner = member.Expression?.Type;
+
+            // A Nullable's Value is the value itself, as TASK-840's filter path reads it: c => c.Guid!.Value is Guid.
+            // It used to be recorded as source field "Value".
+            if (names.Count == 0 && owner != null && Nullable.GetUnderlyingType(owner) != null && member.Member.Name == "Value")
+            {
+                current = member.Expression;
+                continue;
+            }
+
+            if (member.Expression is not ParameterExpression && owner != null && !IsStoredObject(owner))
+            {
+                throw new NotSupportedException(
+                    $"'{expression}' reads '{member.Member.Name}' of {owner.Name}, which is not a stored member of "
+                    + $"'{typeof(TObj).Name}'. Select a property, or a property path through nested objects. (TASK-843)");
+            }
+
+            names.Add(member.Member.Name);
+            current = member.Expression;
+        }
+
+        if (names.Count == 0 || current is not ParameterExpression)
+        {
+            throw new ArgumentException(
+                $"Expression must be a member access on its parameter ('{typeof(TObj).Name}'), such as x => x.Name or x => x.Sub.Name.",
+                nameof(expression));
+        }
+
+        names.Reverse();
+        return names.AsReadOnly();
+    }
+
+    /// <summary>An object whose properties are stored members: a class that is not a string or a collection.</summary>
+    private static bool IsStoredObject(Type type)
+        => type.IsClass && type != typeof(string) && !typeof(System.Collections.IEnumerable).IsAssignableFrom(type);
 }

@@ -192,15 +192,25 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         return response.Documents.Cast<object>().ToList();
     }
 
-    /// <summary>A view row from a document: each field read from the property it selects (SH-M382).</summary>
+    /// <summary>
+    /// A view row from a document: each field read from the property it selects (SH-M382), down its whole path
+    /// (TASK-843: <c>Sub.X</c> used to read the top-level <c>X</c>). A null object on the way reads as null.
+    /// </summary>
     private TView Project(object document)
     {
         var row = new TView();
         foreach (var field in _definition.Fields)
         {
-            var source = _documentType.GetProperty(SourceOf(field), BindingFlags.Public | BindingFlags.Instance)
-                ?? throw new NotSupportedException($"'{_documentType.Name}' has no property '{SourceOf(field)}' for view field '{field.ViewProperty}'.");
-            SetPropertyValue(row, field.ViewProperty, source.GetValue(document));
+            object? value = document;
+            var owner = _documentType;
+            foreach (var name in SourceOf(field))
+            {
+                var source = owner.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)
+                    ?? throw new NotSupportedException($"'{owner.Name}' has no property '{name}' for view field '{field.ViewProperty}'.");
+                value = value == null ? null : source.GetValue(value);
+                owner = source.PropertyType;
+            }
+            SetPropertyValue(row, field.ViewProperty, value);
         }
         return row;
     }
@@ -328,11 +338,14 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
     #region Names
 
-    /// <summary>The document property a view field reads: its source's, or its own in a Persistent view's index.</summary>
-    private string SourceOf(FieldSelector field) => _documentType == typeof(TView) ? field.ViewProperty : field.SourceProperty;
+    /// <summary>
+    /// The document property path a view field reads: its source's (<c>["Sub", "X"]</c> for a nested one, TASK-843), or
+    /// its own in a Persistent view's index.
+    /// </summary>
+    private IReadOnlyList<string> SourceOf(FieldSelector field) => _documentType == typeof(TView) ? new[] { field.ViewProperty } : field.SourcePath;
 
-    /// <summary>The document property behind a view property a caller named (in a filter or a sort).</summary>
-    private string SourceOfViewProperty(string viewProperty)
+    /// <summary>The document property path behind a view property a caller named (in a filter or a sort).</summary>
+    private IReadOnlyList<string> SourceOfViewProperty(string viewProperty)
     {
         // A WHERE runs on the documents: an aggregate exists only after grouping (HAVING).
         if (_definition.Aggregates.Any(a => a.ViewProperty == viewProperty))
@@ -343,20 +356,34 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
         var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
         if (field != null) return SourceOf(field);
-        if (_documentType.GetProperty(viewProperty, BindingFlags.Public | BindingFlags.Instance) != null) return viewProperty;
+        if (_documentType.GetProperty(viewProperty, BindingFlags.Public | BindingFlags.Instance) != null) return new[] { viewProperty };
         throw new NotSupportedException($"View property '{typeof(TView).Name}.{viewProperty}' selects no field of '{_documentType.Name}'.");
     }
 
-    /// <summary>The stored field of a document property, through the one producer the entity store uses.</summary>
-    private string StoredField(string property, bool exact)
+    /// <summary>
+    /// The stored field of a document property path, through the one producer the entity store uses: each segment
+    /// is named by <c>StoredFieldName</c> under its parent's (<c>sub.x</c>, TASK-843), the last as an exact field when
+    /// <paramref name="exact"/>.
+    /// </summary>
+    private string StoredField(IReadOnlyList<string> path, bool exact)
     {
-        var member = _documentType.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)
-            ?? throw new NotSupportedException($"'{_documentType.Name}' has no property '{property}'.");
-        var name = exact
-            ? Data.ElasticSearch.ElasticSearch.ExactFieldName(member, member.PropertyType, null)
-            : Data.ElasticSearch.ElasticSearch.StoredFieldName(member, null);
-        return name ?? throw new NotSupportedException($"'{_documentType.Name}.{property}' has no stored field.");
+        var owner = _documentType;
+        string? prefix = null;
+        for (var i = 0; i < path.Count; i++)
+        {
+            var member = owner.GetProperty(path[i], BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new NotSupportedException($"'{owner.Name}' has no property '{path[i]}'.");
+            var last = i == path.Count - 1;
+            prefix = last && exact
+                ? Data.ElasticSearch.ElasticSearch.ExactFieldName(member, member.PropertyType, prefix)
+                : Data.ElasticSearch.ElasticSearch.StoredFieldName(member, prefix);
+            if (prefix == null) break;
+            owner = member.PropertyType;
+        }
+        return prefix ?? throw new NotSupportedException($"'{_documentType.Name}.{string.Join(".", path)}' has no stored field.");
     }
+
+    private string StoredField(string property, bool exact) => StoredField(new[] { property }, exact);
 
     #endregion
 
@@ -415,7 +442,17 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 return base.VisitMember(node);
             }
 
-            var source = Expression.Property(_document, _store.SourceOfViewProperty(node.Member.Name));
+            var path = _store.SourceOfViewProperty(node.Member.Name);
+            if (path.Count > 1)
+            {
+                // TASK-843: the entity store's translator does not translate a member below the document (SH-M142), so
+                // a filter on a view property read from a nested member is refused by name rather than sent elsewhere.
+                throw new NotSupportedException(
+                    $"A filter on view property '{typeof(TView).Name}.{node.Member.Name}' tests the nested member "
+                    + $"'{_store._documentType.Name}.{string.Join(".", path)}', which an ElasticSearch view filter cannot translate. (TASK-843)");
+            }
+
+            var source = Expression.Property(_document, path[0]);
             return source.Type == node.Type ? source : Expression.Convert(source, node.Type);
         }
 

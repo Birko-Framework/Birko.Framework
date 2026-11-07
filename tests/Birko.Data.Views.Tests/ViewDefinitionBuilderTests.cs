@@ -46,7 +46,7 @@ public class ViewDefinitionBuilderTests
 
         def.Fields.Should().HaveCount(2);
         def.Fields[0].SourceType.Should().Be(typeof(Customer));
-        def.Fields[0].SourceProperty.Should().Be("Value");
+        def.Fields[0].SourceProperty.Should().Be("Guid", "a Nullable's .Value is the value itself; it was recorded as \"Value\" before TASK-843");
         def.Fields[0].ViewProperty.Should().Be("CustomerId");
         def.Fields[1].SourceProperty.Should().Be("Name");
         def.Fields[1].ViewProperty.Should().Be("CustomerName");

@@ -83,6 +83,23 @@ namespace Birko.Data.CosmosDB.Aggregation
         }
 
         /// <summary>
+        /// TASK-843: the bracket-quoted accessor of a member path, <c>["Sub", "X"]</c> → <c>c["Sub"]["X"]</c>, each
+        /// segment quoted as <see cref="FieldRef(string?)"/> quotes one. A one-segment path is exactly
+        /// <see cref="FieldRef(string?)"/>'s output.
+        /// </summary>
+        internal static string PathRef(IReadOnlyList<string> path)
+        {
+            var sb = new System.Text.StringBuilder("c");
+            foreach (var segment in path)
+            {
+                // FieldRef(segment) is c["segment"]: the accessor is everything after the leading "c".
+                var single = FieldRef(segment);
+                sb.Append(single, 1, single.Length - 1);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Builds a complete Cosmos DB SQL aggregation query (SELECT ... FROM c GROUP BY ...).
         /// For queries that don't need WHERE/ORDER BY between SELECT and GROUP BY.
         /// </summary>

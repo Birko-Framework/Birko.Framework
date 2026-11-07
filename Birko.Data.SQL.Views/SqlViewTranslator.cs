@@ -70,6 +70,15 @@ public static class SqlViewTranslator
         // silently dropping the column and producing a structurally-wrong view (CR-L201).
         foreach (var field in definition.Fields)
         {
+            // TASK-843: a nested source (r.Sub.X) used to arrive as its last name, X, and read the row's top-level X
+            // column (measured on SQLite). A table maps one column per top-level property, so there is nothing to read.
+            if (field.IsNested)
+            {
+                throw new NotSupportedException(
+                    $"View field '{field.ViewProperty}' selects the nested member '{field.SourceType.Name}.{field.SourceProperty}', "
+                    + "and a SQL table has a column only for a top-level property. Map the value to its own column and select that. (TASK-843)");
+            }
+
             if (!tableCache.TryGetValue(field.SourceType, out var table))
             {
                 throw new InvalidOperationException(

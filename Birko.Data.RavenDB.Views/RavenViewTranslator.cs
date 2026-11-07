@@ -118,7 +118,7 @@ public static class RavenViewTranslator
         foreach (var field in definition.Fields)
         {
             var sourceAlias = GetSourceAlias(field.SourceType, definition);
-            parts.Add($"{field.ViewProperty} = {sourceAlias}.{field.SourceProperty}");
+            parts.Add($"{field.ViewProperty} = {SourcePath(sourceAlias, field)}");
         }
 
         // Add aggregate fields for map phase (emit raw values for reduce)
@@ -159,6 +159,29 @@ public static class RavenViewTranslator
         }
 
         return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// TASK-843: the whole member path, <c>entity.Sub.X</c>; a nested source used to arrive as its last name and read
+    /// the document's top-level field (measured on RavenDB 6). A document stores member names as declared. Each object
+    /// on the way is null-guarded into an explicit <c>null</c>: reading through a missing object yields an implicit
+    /// null, which the index does not store, and the projection then fell back to the document's same-named top-level
+    /// field (measured: a null <c>Sub.Deep</c> read the row's <c>Level</c>). One segment renders as it always did.
+    /// </summary>
+    private static string SourcePath(string sourceAlias, FieldSelector field)
+    {
+        var path = $"{sourceAlias}.{string.Join(".", field.SourcePath)}";
+        if (!field.IsNested)
+        {
+            return path;
+        }
+
+        var guards = new List<string>();
+        for (var i = 1; i < field.SourcePath.Count; i++)
+        {
+            guards.Add($"{sourceAlias}.{string.Join(".", field.SourcePath.Take(i))} == null");
+        }
+        return $"({string.Join(" || ", guards)} ? null : {path})";
     }
 
     private static string GetSourceAlias(Type sourceType, ViewDefinition definition)

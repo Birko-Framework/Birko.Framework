@@ -8,7 +8,7 @@ MongoDB platform implementation for Birko.Data.Views. Translates ViewDefinition 
 
 ## Components
 
-- **MongoViewTranslator** — Converts ViewDefinition → List\<BsonDocument\> pipeline stages ($lookup, $unwind, $group, $project). Group stage built via shared `StoreAggregationHelper.BuildGroupStageFromPaths()`
+- **MongoViewTranslator** — Converts ViewDefinition → List\<BsonDocument\> pipeline stages ($lookup, $unwind, $group, $project). Group stage built via shared `StoreAggregationHelper.BuildGroupStageFromPaths()`. A nested source (`r.Sub.X`, TASK-843) projects `$Sub.X`, each nested segment named by the class map of its declaring type (registered, else auto-mapped unregistered: `[BsonElement]`, `_id` for an id member); it used to read the top-level `$X`
 - **MongoViewStore\<TView\>** — Implements IViewStore\<TView\> by executing aggregation pipelines. Supports Persistent (MongoDB view collection), OnTheFly (pipeline on source collection), and Auto modes
 - **MongoViewManager** — Implements IViewManager using MongoDB `db.createView()` command (requires MongoDB 3.4+)
 

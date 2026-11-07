@@ -215,6 +215,8 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     /// <remarks>
     /// TASK-151 (SH-M410): the LINQ path deserialised the raw documents into the view, so a renamed field stayed
     /// default, and a filter or order on a view name tested a document field that does not exist.
+    /// TASK-843: a nested source is selected by its whole path, <c>c["Sub"]["X"]</c>; it used to be <c>c["X"]</c>, the
+    /// document's top-level field (measured on the emulator).
     /// </remarks>
     private QueryDefinition BuildProjectionSql(Expression<Func<TView, bool>>? filter, OrderBy<TView>? orderBy, int? limit, int? offset)
     {
@@ -222,7 +224,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         var sb = new StringBuilder("SELECT ");
         sb.Append(_definition.Fields.Count == 0
             ? "VALUE c"
-            : string.Join(", ", _definition.Fields.Select(f => $"{CosmosAggregationHelper.FieldRef(f.SourceProperty)} AS {f.ViewProperty}")));
+            : string.Join(", ", _definition.Fields.Select(f => $"{CosmosAggregationHelper.PathRef(f.SourcePath)} AS {f.ViewProperty}")));
         sb.Append(" FROM c").Append(Where(filter, parameters));
         AppendOrderAndPage(sb, orderBy, limit, offset);
         return Bind(sb.ToString(), parameters);
@@ -370,6 +372,8 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
                 $"A filter on aggregate view property '{typeof(TView).Name}.{viewProperty}' would need HAVING, which view filters do not emit.");
         }
 
+        // A nested source (TASK-843) maps to its dotted path, Sub.X, which DocumentPath and ResolveOrderKey render as
+        // c.Sub.X: the same field the projection selects as c["Sub"]["X"].
         var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
         return field?.SourceProperty ?? viewProperty;
     }
