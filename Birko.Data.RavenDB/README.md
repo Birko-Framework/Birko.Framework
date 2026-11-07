@@ -102,6 +102,14 @@ await indexManager.CreateFromTaskAsync<Orders_ByCustomer>();
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.RavenDB.ViewModel](../Birko.Data.RavenDB.ViewModel/) - ViewModel repositories
 
+## Reading your own writes
+
+Every write the stores make (and a `RavenDbUnitOfWork` commit) waits for the indexes to include it before returning
+(`RavenIndexWait`, TASK-828), so a query that follows a write sees it, as on every other provider. RavenDB answers a
+query from an index that may lag the documents; without the wait, a query on a value just written missed a document
+under load (measured). The cost is on the write. The wait gives up after 15 seconds **without throwing**: the write is
+already applied, and reporting it as failed would invite a retry that repeats it.
+
 ## Filter-Based Bulk Operations
 
 Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Native RavenDB `PatchByQueryOperation` support may be added in a future release.

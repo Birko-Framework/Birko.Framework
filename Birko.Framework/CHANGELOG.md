@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — InfluxDB reads page after filtering and keep UTC dates
+[[TASK-720]]. The InfluxDB stores sent `limit` / `offset` to the server and filtered what came back, so a filtered page
+held the wrong rows; a sort took the first field's direction for all; a UTC `DateTime` came back local; `Read(Guid)`
+skipped lazy-init and wrapped a cancellation (measured against a stand-in query API). New `InfluxReadPlan` decides
+what runs where for both stores. A duplicate create is still accepted (a decision left open).
+
 ## 2026-11-04 — Store write edges agree across providers
 [[TASK-719]]. A new store contract (`WriteEdgeContract`, all 12 providers, live) found: Cosmos DB and Elasticsearch
 threw on a delete of a key that is not stored (now a no-op); Cosmos DB's and RavenDB's `SaveAsync` gave the delegate a

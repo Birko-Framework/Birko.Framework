@@ -207,7 +207,7 @@ public class RavenDBStore<T>
             return data.Guid.Value;
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         session.Store(data, string.Empty, IdOf(data.Guid.Value));
         try
         {
@@ -248,7 +248,7 @@ public class RavenDBStore<T>
             return Session.Load<T>(IdOf(guid));
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         return session.Load<T>(IdOf(guid));
     }
 
@@ -263,7 +263,7 @@ public class RavenDBStore<T>
             return Session.Query<T>().ToList();
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         return session.Query<T>().ToList();
     }
 
@@ -287,7 +287,7 @@ public class RavenDBStore<T>
             return Session.Query<T>().FirstOrDefault();
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
 
         if (filter != null)
         {
@@ -319,7 +319,7 @@ public class RavenDBStore<T>
             return;
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         var existingItem = session.Load<T>(IdOf(data.Guid.Value))
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
@@ -338,7 +338,7 @@ public class RavenDBStore<T>
             return;
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         session.Delete(IdOf(data.Guid.Value));
         session.SaveChanges();
     }
@@ -362,7 +362,7 @@ public class RavenDBStore<T>
             return Session.Query<T>().Count();
         }
 
-        using var session = _documentStore.OpenSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
 
         if (filter != null)
         {
@@ -382,7 +382,7 @@ public class RavenDBStore<T>
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return Enumerable.Empty<T>();
 
-        var session = Session ?? _documentStore.OpenSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
             IRavenQueryable<T> query = session.Query<T>();
@@ -458,7 +458,7 @@ public class RavenDBStore<T>
 
         foreach (var chunk in data.Where(x => x != null).Chunk(CreateChunkSize))
         {
-            using var session = _documentStore.OpenSession();
+            using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
             foreach (var itemSource in chunk)
             {
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
@@ -484,7 +484,7 @@ public class RavenDBStore<T>
 
         // TASK-555: an entity that is not stored is reported, not created — the stored ones are still written.
         var missing = new List<Guid>();
-        var session = Session ?? _documentStore.OpenSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
             foreach (var itemSource in data)
@@ -532,7 +532,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null || data == null) return;
 
-        var session = Session ?? _documentStore.OpenSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
             foreach (var item in data)
@@ -607,7 +607,7 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
-        var session = Session ?? _documentStore.OpenSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
             bool canUseNative = query.GroupByFields.Count == 1
@@ -666,7 +666,7 @@ public class RavenDBStore<T>
 
         try
         {
-            using var session = _documentStore.OpenSession();
+            using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
             session.Query<T>().Take(0).ToList();
             return true;
         }

@@ -17,14 +17,14 @@ public class ComputedSetDoc : AbstractModel
 }
 
 /// <summary>TASK-826's computed-set contract on <see cref="RavenDBStore{T}"/>, live: the read-modify-save fallback (a
-/// server-side patch is TASK-827).</summary>
+/// server-side patch is TASK-827). No settle step: the store's writes wait for the indexes (TASK-828), and without that
+/// this contract's query on the value just written missed a document under suite load.</summary>
 public sealed class RavenComputedSetContractTests : ComputedSetContract<ComputedSetDoc>, IDisposable
 {
     private readonly RavenLive _live;
     public RavenComputedSetContractTests(ITestOutputHelper output) => _live = new RavenLive(output);
     protected override bool Ready() => _live.Ready();
     protected override IBulkStore<ComputedSetDoc> NewStore() => _live.Track((url, db) => new RavenDBStore<ComputedSetDoc>(url, db));
-    protected override void Settle(IBulkStore<ComputedSetDoc> store) => _live.WaitForIndexes();
     protected override ComputedSetDoc NewRow(string code, decimal gross, decimal net) => new() { Code = code, Gross = gross, Net = net };
     protected override Expression<Func<ComputedSetDoc, string?>> Code => x => x.Code;
     protected override Expression<Func<ComputedSetDoc, decimal>> Gross => x => x.Gross;
@@ -39,7 +39,6 @@ public sealed class AsyncRavenComputedSetContractTests : AsyncComputedSetContrac
     public AsyncRavenComputedSetContractTests(ITestOutputHelper output) => _live = new RavenLive(output);
     protected override bool Ready() => _live.Ready();
     protected override IAsyncBulkStore<ComputedSetDoc> NewStore() => _live.Track((url, db) => new AsyncRavenDBStore<ComputedSetDoc>(url, db));
-    protected override void Settle(IAsyncBulkStore<ComputedSetDoc> store) => _live.WaitForIndexes();
     protected override ComputedSetDoc NewRow(string code, decimal gross, decimal net) => new() { Code = code, Gross = gross, Net = net };
     protected override Expression<Func<ComputedSetDoc, string?>> Code => x => x.Code;
     protected override Expression<Func<ComputedSetDoc, decimal>> Gross => x => x.Gross;

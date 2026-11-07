@@ -295,6 +295,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB writes wait for the indexes, so a query after a write sees it (2026-11-07)
+[[TASK-828]], found by the TASK-826 contract. Under load, an update applied to all 6 documents while a query on the value it
+wrote returned 5 (stale index, measured). Every store session and the unit of work now save with
+`WaitForIndexesAfterSaveChanges` (15 s, no throw: an applied write is never reported failed), the user's decision. The cost
+is write latency.
 ### A decimal column can be computed from the same row in one write (2026-11-07)
 [[TASK-826]], requested by Symbio (TASK-1063: recompute net prices when a tax rate changes, without read-modify-write).
 `PropertyUpdate.Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven))`: `+ - * /` over
@@ -373,11 +378,6 @@ the timestamps (both lost them, measured).
 nested), and escaping it did not help: the emulator kept `a~1b` literally. Patch-based steps now refuse a name holding
 `/` or `~`. The InfluxDB "delete everything" stopped at now, so future-dated points survived; it covers every storable
 time. `MongoMigrationRunner(null)` is `ArgumentNullException`. TimescaleDB introspection without a transaction: harmless.
-### InfluxDB reads page after filtering and keep UTC dates (2026-11-04)
-[[TASK-720]]. The InfluxDB stores sent `limit` / `offset` to the server and filtered what came back, so a filtered page
-held the wrong rows; a sort took the first field's direction for all; a UTC `DateTime` came back local; `Read(Guid)`
-skipped lazy-init and wrapped a cancellation (measured against a stand-in query API). New `InfluxReadPlan` decides
-what runs where for both stores. A duplicate create is still accepted (a decision left open).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

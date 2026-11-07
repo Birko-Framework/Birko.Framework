@@ -129,6 +129,13 @@ public override IEnumerable<KeyValuePair<Customer, Guid>> CreateAll(IEnumerable<
 }
 ```
 
+## Index wait (TASK-828)
+
+Every session the stores and `RavenDbUnitOfWork` open goes through `Stores/RavenIndexWait.Apply`, which sets
+`WaitForIndexesAfterSaveChanges(15 s, throwOnTimeout: false)`: a write returns once the indexes include it, so a query
+after it reads it. **Open a new store session through `RavenIndexWait.Apply`**, never `_documentStore.OpenSession()`
+directly, or that path is eventually consistent again. `Task828IndexWaitTests` asserts every write batch carries the wait.
+
 ## Querying
 
 ### Load by ID

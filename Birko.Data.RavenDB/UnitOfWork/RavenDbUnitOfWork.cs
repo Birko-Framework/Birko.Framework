@@ -87,10 +87,11 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         if (IsActive)
             throw new TransactionAlreadyActiveException();
 
-        _session = _documentStore.OpenAsyncSession(new SessionOptions
+        // TASK-828: a committed unit of work is visible to the queries that follow it.
+        _session = Stores.RavenIndexWait.Apply(_documentStore.OpenAsyncSession(new SessionOptions
         {
             TransactionMode = TransactionMode.ClusterWide
-        });
+        }));
         _endedByFailedCommit = false;
         if (_ambientKey != null)
         {

@@ -214,7 +214,7 @@ public class AsyncRavenDBStore<T>
             return data.Guid.Value;
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         await session.StoreAsync(data, string.Empty, IdOf(data.Guid.Value), ct);
         try
         {
@@ -258,7 +258,7 @@ public class AsyncRavenDBStore<T>
             return await Session.LoadAsync<T>(IdOf(guid), ct);
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         return await session.LoadAsync<T>(IdOf(guid), ct);
     }
 
@@ -280,7 +280,7 @@ public class AsyncRavenDBStore<T>
             return await Session.Query<T>().FirstOrDefaultAsync(ct);
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
 
         if (filter != null)
         {
@@ -315,7 +315,7 @@ public class AsyncRavenDBStore<T>
             return;
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         var existingItem = await session.LoadAsync<T>(IdOf(data.Guid.Value), ct)
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
@@ -353,7 +353,7 @@ public class AsyncRavenDBStore<T>
 
         for (var attempt = 1; attempt <= MaxConditionalUpdateAttempts; attempt++)
         {
-            using var session = _documentStore.OpenAsyncSession();
+            using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
             session.Advanced.UseOptimisticConcurrency = true;
             var item = await session.LoadAsync<T>(IdOf(guid), ct).ConfigureAwait(false);
             if (item == null || !condition(item)) return null;
@@ -388,7 +388,7 @@ public class AsyncRavenDBStore<T>
             return;
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         session.Delete(IdOf(data.Guid.Value));
         await session.SaveChangesAsync(ct);
     }
@@ -415,7 +415,7 @@ public class AsyncRavenDBStore<T>
             return await Session.Query<T>().CountAsync(ct);
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
 
         if (filter != null)
         {
@@ -454,7 +454,7 @@ public class AsyncRavenDBStore<T>
             return data.Guid.Value;
         }
 
-        using var session = _documentStore.OpenAsyncSession();
+        using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
         await session.SaveChangesAsync(ct);
 
@@ -480,7 +480,7 @@ public class AsyncRavenDBStore<T>
 
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
 
-        var session = Session ?? _documentStore.OpenAsyncSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
             IRavenQueryable<T> query = session.Query<T>();
@@ -561,7 +561,7 @@ public class AsyncRavenDBStore<T>
         foreach (var chunk in data.Where(x => x != null).Chunk(CreateChunkSize))
         {
             ct.ThrowIfCancellationRequested();
-            using var session = _documentStore.OpenAsyncSession();
+            using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
             foreach (var itemSource in chunk)
             {
                 // TASK-556 (CR-L190 reversed): a caller-supplied Guid is kept, as on every other path.
@@ -590,7 +590,7 @@ public class AsyncRavenDBStore<T>
 
         // TASK-555: an entity that is not stored is reported, not created — the stored ones are still written.
         var missing = new List<Guid>();
-        var session = Session ?? _documentStore.OpenAsyncSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
             foreach (var itemSource in data)
@@ -641,7 +641,7 @@ public class AsyncRavenDBStore<T>
             return;
         }
 
-        var session = Session ?? _documentStore.OpenAsyncSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
             foreach (var item in data)
@@ -762,7 +762,7 @@ public class AsyncRavenDBStore<T>
 
         try
         {
-            using var session = _documentStore.OpenSession();
+            using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
             session.Query<T>().Take(0).ToList();
             return true;
         }
@@ -786,7 +786,7 @@ public class AsyncRavenDBStore<T>
     {
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
-        var session = Session ?? _documentStore.OpenAsyncSession();
+        var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
             // Native faceted aggregation: single GROUP BY, no time bucketing
