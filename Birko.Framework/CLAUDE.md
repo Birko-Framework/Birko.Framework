@@ -295,6 +295,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A fluent mapping's indexes are on the table before anyone can read it (2026-11-07)
+[[TASK-825]], reported by Symbio, whose gate twice created `EntityTranslations` without its unique index. Each
+`ApplyToDatabase` evicted the cached table, `LoadTable` published the rebuild bare, and the fluent indexes were written
+onto it afterwards (84% of loads racing a re-apply saw none, measured); a later eviction lost them for good. The fluent
+part now runs inside the build (`DataBase.RegisterTableConfigurator`), and re-applying unchanged mappings or table names
+evicts nothing.
 ### Security low findings: 23 verified and fixed (2026-11-06)
 [[TASK-176]]. Behaviour a consumer can notice: `AddBirkoJwtBearer` refuses a secret under 32 characters and both JWT
 paths accept HS256 only; `WildcardPermissionEnabled = false` now disables a `"*"` from the host's claims or resolver
@@ -371,11 +377,6 @@ threw on a delete of a key that is not stored (now a no-op); Cosmos DB's and Rav
 Guid-less entity; Elasticsearch, the async JSON and XML stores and a Cosmos DB batch skipped a bulk-update item with no
 Guid (now `EntityNotFoundException`, as elsewhere); a MongoDB `SaveAsync` unique collision was the driver's exception
 (now `StoreUniqueViolationException`). Unconfigured stores answering success, SQL included, are [[TASK-812]].
-### SQL unit of work reads its own rollback mark; a failed savepoint release is not a failed write (2026-11-04)
-[[TASK-718]]. `SqlUnitOfWork.CommitAsync` looked for a participant's rollback mark in the calling flow, so an owner
-committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it
-published (new `AmbientSqlTransaction.Enter(…, out entry)`). A `SqlSavepoint` release that threw after the write
-applied reported the write as failed, inviting a retry to repeat it; it no longer does.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

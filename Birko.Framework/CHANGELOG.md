@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-04 — SQL unit of work reads its own rollback mark; a failed savepoint release is not a failed write
+[[TASK-718]]. `SqlUnitOfWork.CommitAsync` looked for a participant's rollback mark in the calling flow, so an owner
+committed from a flow without its cell committed over the rollback (measured on SQLite); it now reads the entry it
+published (new `AmbientSqlTransaction.Enter(…, out entry)`). A `SqlSavepoint` release that threw after the write
+applied reported the write as failed, inviting a retry to repeat it; it no longer does.
+
 ## 2026-11-04 — SQL views are created and replaced on every provider
 [[TASK-717]]. A migration's `CreateView` sent `CREATE OR REPLACE VIEW`, which SQLite refuses (measured); it now drops,
 then creates. SQLite's connector `CreateView` kept an old definition with no error; it now replaces it. On SQL Server a

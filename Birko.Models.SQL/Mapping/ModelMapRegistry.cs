@@ -108,11 +108,11 @@ namespace Birko.Models.SQL.Mapping
         /// </summary>
         public void ApplyToDatabase()
         {
-            Birko.Data.SQL.DataBase.RegisterTableNames(GetTableNames());
+            // TASK-272: with the schema declared by ToTable(name, schema). TASK-825: once per table. It was registered
+            // without the schema and then again with it, and each registration evicted the cached table.
             foreach (var (type, map) in _maps)
             {
-                // TASK-272: a schema declared with ToTable(name, schema).
-                if (!string.IsNullOrEmpty(map.TableName) && map.TableSchema != null)
+                if (!string.IsNullOrEmpty(map.TableName))
                     Birko.Data.SQL.DataBase.RegisterTableName(type, map.TableName!, map.TableSchema);
             }
 
@@ -125,39 +125,75 @@ namespace Birko.Models.SQL.Mapping
                 RegisterColumnFlags(type, GetPropertyMaps(type));
             }
 
+            // TASK-825: the rest is written by the table build itself, before the table is published. Written onto the
+            // table LoadTable had already published, a concurrent reader saw it without the fluent indexes (measured: 84%
+            // of loads racing a re-apply), and a later eviction rebuilt it without them for good. The same mappings
+            // again register the same signature, which evicts nothing.
             foreach (var (type, _) in _maps)
             {
-                var properties = GetPropertyMaps(type);
+                var properties = Snapshot(GetPropertyMaps(type));
                 if (properties.Count == 0) continue;
 
-                var table = Birko.Data.SQL.DataBase.LoadTable(type);
-                if (table?.Fields == null) continue;
-
-                var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var field in properties)
+                Birko.Data.SQL.DataBase.RegisterTableConfigurator(type, Signature(properties), table => Configure(table, properties));
+                try
                 {
-                    var sqlField = table.GetFieldByPropertyName(field.Name);
-                    if (sqlField == null) continue;
+                    // Built now, so a mapping that cannot be honoured is refused here, as before, not at a store's first use.
+                    Birko.Data.SQL.DataBase.LoadTable(type);
+                }
+                catch
+                {
+                    Birko.Data.SQL.DataBase.RegisterTableConfigurator(type, string.Empty, null);
+                    throw;
+                }
+            }
+        }
 
-                    // HasColumnName overrides the physical column name — previously dropped silently
-                    // even though AbstractField.Name is settable, so the mapping appeared to work.
-                    if (!string.IsNullOrEmpty(field.ColumnName) && field.ColumnName != sqlField.Name)
-                    {
-                        renamed[sqlField.Name] = field.ColumnName!;
-                        sqlField.Name = field.ColumnName!;
-                    }
+        /// <summary>A copy of what <see cref="Configure"/> reads, so a mapping changed later cannot change a registered build.</summary>
+        private static IReadOnlyList<FieldDescriptor> Snapshot(IReadOnlyList<FieldDescriptor> properties)
+            => properties.Select(p =>
+            {
+                var copy = new FieldDescriptor(p.Name) { ColumnName = p.ColumnName, IsPrimary = p.IsPrimary, IsAutoIncrement = p.IsAutoIncrement };
+                copy.Indexes.AddRange(p.Indexes);
+                return copy;
+            }).ToList();
 
-                    // TASK-567: through DeclarePrimary, so a fluent key replaces the implicit Guid key.
-                    if (field.IsPrimary) table.DeclarePrimary(sqlField);
-                    if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
+        /// <summary>Everything <see cref="Configure"/> reads, so the same mappings applied again are recognised as unchanged.</summary>
+        private static string Signature(IReadOnlyList<FieldDescriptor> properties)
+            => string.Join("\n", properties.Select(p => string.Join("|", p.Name, p.ColumnName, p.IsPrimary, p.IsAutoIncrement,
+                string.Join(",", p.Indexes.Select(i => $"{i.Name}:{i.Order}:{i.Descending}:{i.Unique}")))));
 
-                    // MaxLength, Precision and Scale were registered before the load (TASK-691, TASK-692), and
-                    // IsUnique, IsRequired and Ignore too (TASK-712).
+        /// <summary>
+        /// Writes the fluent column names, keys, auto-increment and indexes onto <paramref name="table"/>, which is being
+        /// built and is not yet published (TASK-825).
+        /// </summary>
+        private static void Configure(Birko.Data.SQL.Tables.Table table, IReadOnlyList<FieldDescriptor> properties)
+        {
+            if (table.Fields == null) return;
+
+            var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var field in properties)
+            {
+                var sqlField = table.GetFieldByPropertyName(field.Name);
+                if (sqlField == null) continue;
+
+                // HasColumnName overrides the physical column name — previously dropped silently
+                // even though AbstractField.Name is settable, so the mapping appeared to work.
+                if (!string.IsNullOrEmpty(field.ColumnName) && field.ColumnName != sqlField.Name)
+                {
+                    renamed[sqlField.Name] = field.ColumnName!;
+                    sqlField.Name = field.ColumnName!;
                 }
 
-                if (renamed.Count > 0) RenameColumns(table, renamed);
-                ApplyIndexes(table, properties);
+                // TASK-567: through DeclarePrimary, so a fluent key replaces the implicit Guid key.
+                if (field.IsPrimary) table.DeclarePrimary(sqlField);
+                if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
+
+                // MaxLength, Precision and Scale were registered before the load (TASK-691, TASK-692), and
+                // IsUnique, IsRequired and Ignore too (TASK-712).
             }
+
+            if (renamed.Count > 0) RenameColumns(table, renamed);
+            ApplyIndexes(table, properties);
         }
 
         /// <summary>

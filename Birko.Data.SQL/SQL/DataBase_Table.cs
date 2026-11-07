@@ -30,6 +30,11 @@ namespace Birko.Data.SQL
         /// </summary>
         public static void RegisterTableName(Type modelType, string tableName, string? schema)
         {
+            // TASK-825: the same name and schema again changes nothing, as with RegisterMaxLength. It evicted the cached
+            // table on every call, so each re-apply of a mapping published a rebuilt table to concurrent readers.
+            if (_tableNameOverrides.TryGetValue(modelType, out var registeredName) && registeredName == tableName
+                && (_tableSchemaOverrides.TryGetValue(modelType, out var registeredSchema) ? registeredSchema : null) == schema)
+                return;
             if (schema == null)
                 _tableSchemaOverrides.TryRemove(modelType, out _);
             else
@@ -109,6 +114,10 @@ namespace Birko.Data.SQL
                     return null;
 
                 var table = ComputeTable(type);
+                // TASK-825: the registered fluent part is applied before the table is published, so no reader sees the
+                // table without it and nothing writes to a table another thread may be reading.
+                if (table != null && _tableConfigurators.TryGetValue(type, out var configurator))
+                    configurator.Configure(table);
                 if (table != null)
                     _tableCache.TryAdd(type, table);
                 else
@@ -118,6 +127,34 @@ namespace Birko.Data.SQL
         }
 
         private static readonly object _tableBuildLock = new();
+        private static readonly ConcurrentDictionary<Type, (string Signature, Action<Tables.Table> Configure)> _tableConfigurators = new();
+
+        /// <summary>
+        /// Registers what a fluent mapping writes onto <paramref name="modelType"/>'s table (column names, keys, indexes),
+        /// run inside every build of it before the table is published (TASK-825). <paramref name="signature"/> identifies
+        /// the content: the same signature again changes nothing; a different one, or a null <paramref name="configure"/>
+        /// (which removes the registration), evicts the cached table. One registration per type; the last one wins.
+        /// </summary>
+        /// <remarks>
+        /// Writing onto the table after <see cref="LoadTable"/> had published it let a concurrent reader see it without
+        /// the fluent indexes (measured: 84% of loads racing a re-apply), and a later eviction rebuilt it without them
+        /// for good.
+        /// </remarks>
+        public static void RegisterTableConfigurator(Type modelType, string signature, Action<Tables.Table>? configure)
+        {
+            ArgumentNullException.ThrowIfNull(modelType);
+            ArgumentNullException.ThrowIfNull(signature);
+            if (configure == null)
+            {
+                if (_tableConfigurators.TryRemove(modelType, out _))
+                    _tableCache.TryRemove(modelType, out _);
+                return;
+            }
+            if (_tableConfigurators.TryGetValue(modelType, out var registered) && registered.Signature == signature)
+                return;
+            _tableConfigurators[modelType] = (signature, configure);
+            _tableCache.TryRemove(modelType, out _);
+        }
         private static readonly ConcurrentDictionary<Type, byte> _unmappedTypes = new();
 
         private static Tables.Table? ComputeTable(Type type)
