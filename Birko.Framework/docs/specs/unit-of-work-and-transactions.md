@@ -1,7 +1,7 @@
 ---
 area: unit-of-work-and-transactions
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: fc4c807731169e50b7c842f593690ca7f53e0a1a
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/UnitOfWork/CosmosDbUnitOfWork.cs
   - ../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs
@@ -854,7 +854,9 @@ The system SHALL implement `RavenDbUnitOfWork` as `IUnitOfWork<IAsyncDocumentSes
 an `IDocumentStore` (null → `ArgumentNullException`), with `FromStore<T>(AsyncRavenDBStore<T>)` throwing
 `InvalidOperationException("Store DocumentStore is not initialized. Call SetSettings() first.")` when the
 store has no document store. `BeginAsync` SHALL open an async session with
-`TransactionMode = TransactionMode.ClusterWide` without contacting the server; `IsActive` SHALL be
+`TransactionMode = TransactionMode.ClusterWide` without contacting the server, through `RavenIndexWait.Apply`
+(`WaitForIndexesAfterSaveChanges(15 s, throwOnTimeout: false)`), so a committed unit of work is visible to the
+index-backed queries that follow it (TASK-828, the user's decision); `IsActive` SHALL be
 whether a session is held; `CommitAsync` SHALL await `SaveChangesAsync(ct)` and dispose and drop the session
 whatever the outcome; a failed commit SHALL propagate the driver's exception unchanged and make the first
 `RollbackAsync` that follows a no-op, as on every other backend (TASK-658). `RollbackAsync` SHALL dispose and drop the
@@ -876,6 +878,13 @@ session without saving.
   `RollbackAsync()` returns without effect, and a second `CommitAsync()` throws `NoActiveTransactionException`.
   Nothing was applied. Before TASK-658 the session stayed held: every retry after a conflict hit the same conflict,
   and a retry after a cancellation wrote the changes late
+
+#### Scenario: A committed unit of work is visible to the next query (TASK-828)
+
+- **Given** an `AsyncRavenDBStore<T>` enlisted in an active `RavenDbUnitOfWork`, which creates a document named `in-uow`
+- **When** `CommitAsync()` runs and the store then reads `x => x.Name == "in-uow"` outside the unit of work
+- **Then** every batch the commit sent asked the server to wait for the indexes (`waitForIndexesTimeout=`), and the
+  query returns the document (`tests/Birko.Data.RavenDB.Tests/Stores/Task828IndexWaitTests.cs`)
 
 ### Requirement: Document-store sessions are published per flow through AmbientSession
 
