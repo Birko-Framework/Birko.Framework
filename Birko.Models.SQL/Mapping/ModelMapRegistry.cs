@@ -28,9 +28,10 @@ namespace Birko.Models.SQL.Mapping
         /// <see cref="Register{T}(IModelMapping{T})"/> or the owning project's helper (for the translation table,
         /// <c>LocalizationSqlMappings.Register&lt;TTranslation&gt;(registry, table)</c>).
         /// <para>
-        /// <b>An exception from a mapping's <c>Configure</c> arrives as an <see cref="InvalidOperationException"/> whose
-        /// message names the mapping type</b> and repeats the original message, with the original as
-        /// <see cref="Exception.InnerException"/> (TASK-846, the user's decision). Before, it arrived as a
+        /// <b>An exception from a mapping's constructor or its <c>Configure</c> arrives as an
+        /// <see cref="InvalidOperationException"/> whose message names the mapping type</b> and the stage, and repeats
+        /// the original message, with the original as <see cref="Exception.InnerException"/> (TASK-846 for
+        /// <c>Configure</c>, the user's decision; TASK-847 for the constructor). Before, it arrived as a
         /// <see cref="TargetInvocationException"/> naming nothing; a scan over an assembly does not say which mapping
         /// failed unless the exception does. <see cref="Register{T}(IModelMapping{T})"/>, whose caller passed the mapping
         /// itself, still lets the exception through as itself. Mappings scanned before it stay registered; it registers
@@ -47,7 +48,7 @@ namespace Birko.Models.SQL.Mapping
 
             foreach (var entry in mappingTypes)
             {
-                var instance = Activator.CreateInstance(entry.MappingType);
+                var instance = Invoke(entry.MappingType, "its constructor", () => Activator.CreateInstance(entry.MappingType));
                 if (instance == null) continue;
 
                 var mapType = typeof(ModelMap<>).MakeGenericType(entry.ModelType);
@@ -55,20 +56,32 @@ namespace Birko.Models.SQL.Mapping
                 if (map is not IModelMap modelMap) continue;
 
                 var configureMethod = entry.Interface.GetMethod("Configure");
-                try
-                {
-                    configureMethod?.Invoke(instance, new[] { map });
-                }
-                catch (TargetInvocationException wrapped) when (wrapped.InnerException is Exception thrown)
-                {
-                    // TASK-846: the reflection layer is dropped and the mapping is named in the message. Rule 9 weighed:
-                    // the type a caller sees changes to InvalidOperationException, which the user chose so that a scan's
-                    // failure says which mapping failed; the original stays as InnerException.
-                    throw new InvalidOperationException(
-                        $"Model mapping '{entry.MappingType.FullName}' failed in Configure: {thrown.Message}", thrown);
-                }
+                Invoke(entry.MappingType, "Configure", () => configureMethod?.Invoke(instance, new[] { map }));
 
                 _maps[entry.ModelType] = modelMap;
+            }
+        }
+
+        /// <summary>
+        /// Runs one reflective step of <see cref="RegisterFromAssembly"/> on a mapping. TASK-846 / TASK-847: the reflection
+        /// layer is dropped and the mapping is named in the message. Rule 9 weighed: the type a caller sees changes to
+        /// <see cref="InvalidOperationException"/>, which the user chose so that a scan's failure says which mapping failed;
+        /// the original stays as <see cref="Exception.InnerException"/>, with its type and stack.
+        /// </summary>
+        /// <remarks>
+        /// <c>ViewMapRegistry.RegisterFromAssembly</c> in Birko.Data.Views carries its own copy: the two projects share no
+        /// direct dependency (CLAUDE-projects.md § Dependency Flow), and the message is read by people, not parsed.
+        /// </remarks>
+        private static object? Invoke(Type mappingType, string stage, Func<object?> step)
+        {
+            try
+            {
+                return step();
+            }
+            catch (TargetInvocationException wrapped) when (wrapped.InnerException is Exception thrown)
+            {
+                throw new InvalidOperationException(
+                    $"Model mapping '{mappingType.FullName}' failed in {stage}: {thrown.Message}", thrown);
             }
         }
 

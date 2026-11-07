@@ -28,7 +28,12 @@ Unified fluent view builder for defining cross-platform views/projections/aggreg
 - **ViewMapRegistry** — Register\<T\>(), RegisterFromAssembly(), GetDefinition\<T\>(). `Register<T>` is
   last-wins for a repeated `TView`; `RegisterFromAssembly` tolerates unloadable types (a
   `ReflectionTypeLoadException` falls back to the types that loaded — CR-L240) so one bad optional
-  dependency can't hard-fail discovery.
+  dependency can't hard-fail discovery. TASK-847: an exception from a scanned mapping's constructor, its
+  `Configure` or the builder's `Build` arrives as an `InvalidOperationException` whose message names the mapping
+  type and the stage and repeats the original, with the original (type and stack) as `InnerException`; before, it
+  arrived as a `TargetInvocationException` naming nothing. Same shape as `ModelMapRegistry` (TASK-846, the user's
+  decision); each project keeps its own small `Invoke` helper, as the two share no direct dependency. `Register<T>`
+  still lets the exception through as itself.
 
 ### Interfaces
 - **IViewStore\<TView\>** — QueryAsync, QueryFirstAsync, CountAsync (read-only)

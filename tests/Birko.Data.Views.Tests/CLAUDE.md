@@ -14,6 +14,7 @@ Unit tests for Birko.Data.Views — view definition builder, view map registry, 
 - **TestModels.cs** — Shared test source entities and view models
 - **ViewDefinitionBuilderTests.cs** — ViewDefinitionBuilder fluent API tests (column mapping, joins, filters, ordering, grouping)
 - **ViewMapRegistryTests.cs** — ViewMapRegistry registration and lookup tests
+- **Task847RegisterFromAssemblyExceptionTests.cs** — a scanned mapping's constructor / `Configure` / `Build` exception arrives named by mapping and stage (TASK-847); the fault is injected through an `AsyncLocal` so parallel scans of this assembly are unaffected
 - **ViewResultTests.cs** — ViewResult type tests
 
 ## Dependencies

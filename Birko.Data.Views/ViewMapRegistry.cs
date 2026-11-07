@@ -22,6 +22,14 @@ public class ViewMapRegistry
     }
 
     /// <summary>Scan an assembly for all IViewMapping implementations and register them.</summary>
+    /// <remarks>
+    /// <b>An exception from a mapping's constructor, its <c>Configure</c>, or the builder's <c>Build</c> arrives as an
+    /// <see cref="InvalidOperationException"/> whose message names the mapping type</b> and the stage, and repeats the
+    /// original message, with the original as <see cref="Exception.InnerException"/> (TASK-847, following TASK-846's
+    /// decision for <c>ModelMapRegistry</c>). Before, it arrived as a <see cref="TargetInvocationException"/> naming
+    /// nothing. <see cref="Register{TView}(IViewMapping{TView})"/>, whose caller passed the mapping itself, still lets the
+    /// exception through as itself. Mappings scanned before it stay registered; it registers nothing.
+    /// </remarks>
     public void RegisterFromAssembly(Assembly assembly)
     {
         // CR-L240: Assembly.GetTypes() throws ReflectionTypeLoadException if any type in the assembly
@@ -35,7 +43,7 @@ public class ViewMapRegistry
 
         foreach (var entry in mappingTypes)
         {
-            var instance = Activator.CreateInstance(entry.MappingType);
+            var instance = Invoke(entry.MappingType, "its constructor", () => Activator.CreateInstance(entry.MappingType));
             if (instance == null)
             {
                 continue;
@@ -51,13 +59,36 @@ public class ViewMapRegistry
             var configureMethod = entry.Interface.GetMethod("Configure");
             // CR-L242: builder is provably non-null here (checked above); use object[] so the element
             // type is explicit object, not the inferred object?[] (keeps nullable-strict consumers clean).
-            configureMethod?.Invoke(instance, new object[] { builder });
+            Invoke(entry.MappingType, "Configure", () => configureMethod?.Invoke(instance, new object[] { builder }));
 
             var buildMethod = builderType.GetMethod("Build");
-            if (buildMethod?.Invoke(builder, null) is ViewDefinition definition)
+            if (Invoke(entry.MappingType, "Build", () => buildMethod?.Invoke(builder, null)) is ViewDefinition definition)
             {
                 _definitions[entry.ViewType] = definition;
             }
+        }
+    }
+
+    /// <summary>
+    /// Runs one reflective step of <see cref="RegisterFromAssembly"/> on a mapping (TASK-847): the reflection layer is
+    /// dropped and the mapping is named in the message. Rule 9 weighed as in TASK-846: the type a caller sees changes to
+    /// <see cref="InvalidOperationException"/> so that a scan's failure says which mapping failed; the original stays as
+    /// <see cref="Exception.InnerException"/>, with its type and stack.
+    /// </summary>
+    /// <remarks>
+    /// <c>ModelMapRegistry.RegisterFromAssembly</c> in Birko.Models.SQL carries its own copy: the two projects share no
+    /// direct dependency (CLAUDE-projects.md § Dependency Flow), and the message is read by people, not parsed.
+    /// </remarks>
+    private static object? Invoke(Type mappingType, string stage, Func<object?> step)
+    {
+        try
+        {
+            return step();
+        }
+        catch (TargetInvocationException wrapped) when (wrapped.InnerException is Exception thrown)
+        {
+            throw new InvalidOperationException(
+                $"View mapping '{mappingType.FullName}' failed in {stage}: {thrown.Message}", thrown);
         }
     }
 
