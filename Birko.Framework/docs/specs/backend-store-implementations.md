@@ -1,7 +1,7 @@
 ---
 area: backend-store-implementations
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: fc4c807731169e50b7c842f593690ca7f53e0a1a
+generated-on: 2026-11-07
 sources:
   - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Repositories/CosmosDBModelRepository.cs
@@ -25,6 +25,7 @@ sources:
   - ../Birko.Data.InfluxDB/Repositories/InfluxDBRepository.cs
   - ../Birko.Data.InfluxDB/Stores/AsyncInfluxDBStore.cs
   - ../Birko.Data.InfluxDB/Stores/InfluxDBStore.cs
+  - ../Birko.Data.InfluxDB/Stores/InfluxReadPlan.cs
   - ../Birko.Data.InfluxDB/Stores/Settings.cs
   - ../Birko.Data.JSON/Repositories/AsyncJsonModelRepository.cs
   - ../Birko.Data.JSON/Repositories/AsyncJsonRepository.cs
@@ -63,6 +64,7 @@ sources:
   - ../Birko.Data.RavenDB/Stores/RavenAmbientKey.cs
   - ../Birko.Data.RavenDB/Stores/RavenDBStore.cs
   - ../Birko.Data.RavenDB/Stores/RavenDocumentId.cs
+  - ../Birko.Data.RavenDB/Stores/RavenIndexWait.cs
   - ../Birko.Data.RavenDB/Stores/RavenTrackedCopy.cs
   - ../Birko.Data.RavenDB/Stores/Settings.cs
   - ../Birko.Data.SQL.MSSql/Repositories/AsyncMSSqlModelRepository.cs
@@ -198,6 +200,26 @@ store then refuses as unconfigured.
 - **When** `SetSettings` receives a non-Elasticsearch `ISettings`
 - **Then** `ArgumentException` is thrown (`AsyncElasticSearchStore.cs:56`)
 
+### Requirement: Backend settings refuse or encode what the connection cannot carry as written
+
+The system SHALL, in RavenDB's `Settings.CreateDocumentStore`, throw `NotSupportedException` when a user name or password
+is set, since RavenDB authenticates with a client certificate (TASK-724: they were accepted and never used). MongoDB's
+composed `Settings.GetConnectionString` SHALL percent-encode the user name, password, database name, `authSource` and
+`replicaSet` (`Uri.EscapeDataString`), leaving `Location` as written because it may be a host list; a set
+`RawConnectionString` is returned unchanged (TASK-707: a password `p@ss/w?rd` made the server `ss` and the database `w`).
+
+#### Scenario: A RavenDB settings object carrying a password (TASK-724)
+
+- **Given** a RavenDB `Settings` with `Password` set
+- **When** `CreateDocumentStore()` is called
+- **Then** `NotSupportedException` is thrown and no `DocumentStore` is created
+
+#### Scenario: A MongoDB password holding URI delimiters (TASK-707)
+
+- **Given** a MongoDB `Settings` with user `u` and password `p@ss/w?rd`
+- **When** `GetConnectionString()` is called
+- **Then** the credentials read `u:p%40ss%2Fw%3Frd@` before the host
+
 ### Requirement: Read by identifier takes a backend fast path that may skip the lazy-initialization gate
 
 The system SHALL implement `Read(Guid)` / `ReadAsync(Guid)` per backend as follows:
@@ -223,13 +245,20 @@ The system SHALL implement `Read(Guid)` / `ReadAsync(Guid)` per backend as follo
 - **When** `ReadAsync(guid)` is called for an id with no item
 - **Then** `null` is returned (the 404 is caught)
 
-### Requirement: Filtered reads on search-indexed backends lag writes; realtime reads do not
+### Requirement: Filtered reads lag writes on Elasticsearch; RavenDB writes wait for their indexes
 
 The system SHALL answer filtered reads and counts on Elasticsearch from the search index, with no refresh requested by
 any single-item or bulk write, so a write is visible to them only after the index refreshes. `ReadRealtime(Async)(guid)`
 SHALL use a realtime GET (`.Realtime()`), set `Guid` from the id when the source lacks it, return `null` on 404 and throw
 `InvalidOperationException` on any other failure. On RavenDB, filtered reads and counts SHALL be `session.Query<T>()`
-(index-backed, no wait for non-stale results), while `ReadRealtime(Async)` is the load by id.
+(index-backed, no wait for non-stale results), while `ReadRealtime(Async)` is the load by id. Every session a RavenDB
+store opens itself, sync and async, SHALL go through `RavenIndexWait.Apply`, which sets
+`WaitForIndexesAfterSaveChanges(RavenIndexWait.Timeout = 15 s, throwOnTimeout: false)`: a write returns only once the
+indexes include it, so a filtered read or count after it sees it, as on the other providers. A wait that times out SHALL
+return without throwing (the write is applied; a query may still briefly miss it). A session the caller supplies
+(`TransactionContext`, or an ambient one) SHALL be used as given; the store applies no wait to it. Decided 2026-11-07 by
+the user (TASK-828: under suite load an update applied to all 6 documents while a query on the value it wrote returned
+5, measured); pinned by `tests/Birko.Data.RavenDB.Tests/Stores/Task828IndexWaitTests.cs`.
 
 #### Scenario: Elasticsearch create then read by filter
 
@@ -241,7 +270,13 @@ SHALL use a realtime GET (`.Realtime()`), set `Guid` from the id when the source
 
 - **Given** an `AsyncRavenDBStore<T>`
 - **When** `ReadRealtimeAsync(guid)` is called
-- **Then** it delegates to `ReadAsync(guid)` (the load by id, `AsyncRavenDBStore.cs:238`)
+- **Then** it delegates to `ReadAsync(guid)` (the load by id, `AsyncRavenDBStore.cs:242`)
+
+#### Scenario: RavenDB filtered read straight after a write (TASK-828)
+
+- **Given** an `AsyncRavenDBStore<T>` (or `RavenDBStore<T>`) with no `TransactionContext`, holding 6 documents
+- **When** a filtered update writes `Code = "done"` to all 6 and `ReadAsync(x => x.Code == "done")` runs right after
+- **Then** all 6 come back, because the update's session waited for the indexes before returning (a query could return 5)
 
 ### Requirement: Duplicate-create refusal is detected per backend, and InfluxDB has none
 
@@ -274,7 +309,7 @@ InfluxDB SHALL write a point for a create of an existing Guid without refusing i
 
 - **Given** an `AsyncRavenDBStore<T>` with an active session and a document already stored under G
 - **When** `CreateAsync` is called with G
-- **Then** `StoreUniqueViolationException` is thrown before anything is stored in the session (`AsyncRavenDBStore.cs:208`)
+- **Then** `StoreUniqueViolationException` is thrown before anything is stored in the session (`AsyncRavenDBStore.cs:212`)
 
 ### Requirement: Bulk create is all-or-nothing only on SQL and the single-file and batch file stores
 
@@ -300,7 +335,7 @@ The system SHALL apply a bulk `Create` with one already-stored key as follows:
 
 - **Given** 600 new entities where item 550 reuses a stored Guid
 - **When** bulk `CreateAsync` runs outside a session
-- **Then** the first 512 are saved and the second chunk is refused (`AsyncRavenDBStore.cs:556`)
+- **Then** the first 512 are saved and the second chunk is refused (`AsyncRavenDBStore.cs:560`)
 
 #### Scenario: SQL bulk create with a duplicate
 
@@ -333,7 +368,7 @@ The system SHALL throw `EntityNotFoundException` for an update of an entity that
   silently, measured).
 
 A bulk update holding an entity with no Guid SHALL report it as `Guid.Empty` in the `EntityNotFoundException`, after the
-stored ones are written, on every backend (TASK-719: Elasticsearch and the async JSON and XML bulk updates dropped it
+stored ones are written, on every backend but InfluxDB (TASK-719: Elasticsearch and the async JSON and XML bulk updates dropped it
 silently, measured by `tests/Shared/StoreContract/WriteEdgeContract.cs`).
 - RavenDB: the miss comes from the load it performs before copying the entity onto the tracked document.
 
@@ -343,11 +378,11 @@ silently, measured by `tests/Shared/StoreContract/WriteEdgeContract.cs`).
 - **When** `Update(entity with G)` is called
 - **Then** a point is written and no exception is thrown
 
-#### Scenario: Elasticsearch bulk update with a Guid-less item
+#### Scenario: Elasticsearch bulk update with a Guid-less item (TASK-719)
 
 - **Given** a batch of one stored entity and one entity whose `Guid` is `null`
 - **When** bulk `UpdateAsync` runs on Elasticsearch
-- **Then** the stored entity is updated and no `EntityNotFoundException` is thrown (`AsyncElasticSearchStore.cs:306`)
+- **Then** the stored entity is updated, then `EntityNotFoundException` reports `Guid.Empty` (`AsyncElasticSearchStore.cs:310-323`)
 
 #### Scenario: Cosmos DB update of a missing item inside a batch
 
@@ -379,7 +414,9 @@ async stores: with a filter, or a sort whose fields do not share one direction, 
 after the filter; otherwise they run in Flux (TASK-720: they always ran in Flux, before the filter, and the sort took
 the first field's direction for all, measured). A filtered count SHALL read all rows and count in memory. Delete SHALL
 use the delete API with predicate `_measurement` + `Guid` over epoch to now + 1 year. Every operation SHALL be retried on
-transient failures per `RetryPolicy` and any failure rethrown as `InvalidOperationException`.
+transient failures per `RetryPolicy` and any failure rethrown as `InvalidOperationException`. A failure is transient when
+it is a timeout, an `HttpRequestException`, or an `InfluxException` with status 429 or 503 (`Settings.IsTransientException`;
+TASK-724: it matched "429", "503" or "unavailable" anywhere in the message text).
 
 #### Scenario: Paging with a filter on InfluxDB (TASK-720)
 
@@ -437,12 +474,18 @@ The system SHALL run `Delete(filter)` and `Update(filter, PropertyUpdate<T>)` as
 
 ### Requirement: PropertyUpdate is translated natively on MongoDB and Elasticsearch
 
-The system SHALL translate each assignment through `Match(set, increment)`:
+The system SHALL translate each assignment through `Match(set, increment, computed)`:
 - MongoDB (`MongoPropertyUpdateTranslator`): a set is `$set` with the value serialized through the member's BSON
   serializer (null as `BsonNull`); an increment is `$inc`, refused with `NotSupportedException` when the member is
-  stored with a string representation.
+  stored with a string representation. An update holding any computed set SHALL instead be one pipeline update (a single
+  `$set` stage reading the document as it was before the update): a set is a `$literal`, an increment `$add`, a formula
+  `$add` / `$subtract` / `$multiply` / `$divide` over the stored elements and Decimal128 constants, a half-even round
+  `$round` and a half-away-from-zero round emulated around `$floor`; the assigned member and every column the formula
+  reads are refused with `NotSupportedException` when stored as a string (TASK-826).
 - Elasticsearch (`ElasticSearchStoreHelper.BuildUpdateScript`): a Painless script `ctx._source.{storedField} = params.p_X`
-  or `+=` for an increment, with a null value written as a literal `null`.
+  or `+=` for an increment, with a null value written as a literal `null`; a computed set is a `BigDecimal` expression
+  (a column parsed from its stored text, a constant a string parameter, division at `MathContext.DECIMAL128`, a round
+  `setScale` with `HALF_EVEN` or `HALF_UP`) stored as `.doubleValue()` (TASK-826).
 
 An assignment whose property cannot be resolved SHALL throw `ArgumentException` on both.
 
@@ -450,7 +493,13 @@ An assignment whose property cannot be resolved SHALL throw `ArgumentException` 
 
 - **Given** a decimal member mapped with `BsonRepresentation(BsonType.String)`
 - **When** `UpdateAsync(filter, new PropertyUpdate<T>().Increment(x => x.Amount, 1))` runs
-- **Then** `NotSupportedException` is thrown before any write (`MongoPropertyUpdateTranslator.cs:68-79`)
+- **Then** `NotSupportedException` is thrown before any write (`MongoPropertyUpdateTranslator.cs:157-169`)
+
+#### Scenario: A computed set on MongoDB (TASK-826)
+
+- **Given** a MongoDB store whose `Net` and `Gross` are stored as Decimal128
+- **When** `UpdateAsync(filter, new PropertyUpdate<T>().Compute(x => x.Net, x => Math.Round(x.Gross / 1.2m, 2, MidpointRounding.ToEven)))` runs
+- **Then** one pipeline update sets `Net` to `$round` of `$divide` of `$Gross` by 1.2, to 2 digits
 
 ### Requirement: Async MongoDB, Cosmos DB and RavenDB save natively; their sync twins use the shared routing
 
