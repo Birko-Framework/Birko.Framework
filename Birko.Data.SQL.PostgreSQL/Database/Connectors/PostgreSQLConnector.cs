@@ -533,30 +533,18 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
-        public override DbCommand AddParameter(DbCommand command, string name, object? value)
+        protected override object? ConvertParameterValue(object? value)
         {
             // Enums persist as INTEGER (IntegerField) — bind the underlying integral value, never the
             // boxed enum, or the provider maps it to its own type and the comparison never matches.
-            value = NormalizeParameterValue(value);
-            // TASK-256: and strip DateTimeKind, for both branches below. No DbType is bound here, so Npgsql
+            value = base.ConvertParameterValue(value);
+            // TASK-256: and strip DateTimeKind, for a new and an overwritten parameter alike. No DbType is bound here, so Npgsql
             // infers from the value: a Kind=Utc DateTime infers timestamptz, which the server then casts into
             // the timezone-less TIMESTAMP column using the SESSION's TimeZone — storing a shifted instant with
             // no error on any non-UTC server. This is the silent twin of the COPY writer's loud refusal, and
             // both must be normalised or the two paths store different instants for one value (and a
             // bulk-written row stops matching a filter bound here).
-            value = NormalizeTimestampValue(value);
-            if (command.Parameters.Contains(name))
-            {
-                ((NpgsqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
-            }
-            else
-            {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
-                command.Parameters.Add(parameter);
-            }
-            return command;
+            return NormalizeTimestampValue(value);
         }
 
         /// <inheritdoc />

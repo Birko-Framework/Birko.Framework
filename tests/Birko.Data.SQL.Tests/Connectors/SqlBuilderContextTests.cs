@@ -16,12 +16,9 @@ namespace Birko.Data.SQL.Tests.Connectors
 
         public SqlBuilderContextTests()
         {
-            _connectorMock = new Mock<AbstractConnector>(MockBehavior.Strict, new Birko.Configuration.PasswordSettings());
+            // TASK-836: AddParameter is not virtual (rule 12), so it cannot be set up; the real one binds onto _command.
+            _connectorMock = new Mock<AbstractConnector>(new Birko.Configuration.PasswordSettings()) { CallBase = true };
             _command = new TestDbCommand();
-
-            _connectorMock
-                .Setup(c => c.AddParameter(It.IsAny<DbCommand>(), It.IsAny<string>(), It.IsAny<object>()))
-                .Returns(_command);
         }
 
         [Fact]
@@ -220,7 +217,7 @@ namespace Birko.Data.SQL.Tests.Connectors
         }
 
         [Fact]
-        public void AddParameter_ShouldCallConnectorAddParameter()
+        public void AddParameter_ShouldBindTheParameterOnTheCommand()
         {
             // Arrange
             var context = new SqlBuilderContext(_connectorMock.Object);
@@ -231,9 +228,8 @@ namespace Birko.Data.SQL.Tests.Connectors
             context.AddParameter(_command, paramName, value);
 
             // Assert
-            _connectorMock.Verify(
-                c => c.AddParameter(_command, paramName, value),
-                Times.Once);
+            _command.TestParameters.All.Should().ContainSingle()
+                .Which.Should().Match<DbParameter>(p => p.ParameterName == paramName && (string)p.Value! == value);
         }
 
         [Fact]

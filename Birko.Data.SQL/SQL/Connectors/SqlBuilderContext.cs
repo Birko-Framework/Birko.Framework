@@ -15,6 +15,12 @@ namespace Birko.Data.SQL.Connectors
         private readonly StringBuilder _stringBuilder;
         private readonly AbstractConnectorBase _connector;
 
+        // TASK-836: the last name generated, the command it was generated for, and that command's parameter count
+        // at the time. A name added while all three still hold cannot be on the command yet.
+        private string? _generatedName;
+        private DbCommand? _generatedFor;
+        private int _generatedAtCount;
+
         public SqlBuilderContext(AbstractConnectorBase connector)
         {
             _connector = connector ?? throw new ArgumentNullException(nameof(connector));
@@ -33,7 +39,11 @@ namespace Birko.Data.SQL.Connectors
 
             var count = command.Parameters?.Count ?? 0;
             var sanitizedName = _sanitizeRegex.Replace(fieldName, string.Empty);
-            return $"@WHERE{sanitizedName}{index}_{count}";
+            var name = $"@WHERE{sanitizedName}{index}_{count}";
+            _generatedName = name;
+            _generatedFor = command;
+            _generatedAtCount = count;
+            return name;
         }
 
         /// <summary>
@@ -100,9 +110,27 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// Adds a parameter to the command
         /// </summary>
+        /// <remarks>
+        /// TASK-836: the name generated last, added to the same command before anything else was, skips the
+        /// connector's lookup for an existing parameter of that name. It cannot exist: every generated name carries the
+        /// command's parameter count when it was generated, and that count only grows. Any other name takes the
+        /// lookup and overwrites a parameter of that name.
+        /// </remarks>
         public void AddParameter(DbCommand command, string name, object? value)
         {
+            if (IsFreshlyGenerated(command, name))
+            {
+                _generatedName = null;
+                _generatedFor = null;
+                _connector.AddUniqueParameter(command, name, value);
+                return;
+            }
             _connector.AddParameter(command, name, value);
         }
+
+        private bool IsFreshlyGenerated(DbCommand command, string name)
+            => ReferenceEquals(command, _generatedFor)
+               && string.Equals(name, _generatedName, StringComparison.Ordinal)
+               && command.Parameters.Count == _generatedAtCount;
     }
 }

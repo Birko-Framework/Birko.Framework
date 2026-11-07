@@ -1103,9 +1103,8 @@ namespace Birko.Data.SQL.Connectors
         /// <c>SqlEnumInPredicateTests</c>).
         /// </para>
         /// <para>
-        /// Every <c>AddParameter</c> override must funnel its value through here — the provider overrides
-        /// deliberately do not chain to this base implementation, so the conversion cannot live in the
-        /// body below.
+        /// Every <see cref="ConvertParameterValue"/> override must funnel its value through here (by calling
+        /// the base), because <see cref="AddParameter"/> applies only the most-derived conversion.
         /// </para>
         /// </summary>
         public static object? NormalizeParameterValue(object? value)
@@ -1121,23 +1120,56 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Adds a parameter to a DbCommand.
+        /// Binds <paramref name="value"/> to <paramref name="name"/> on <paramref name="command"/>. A name the
+        /// command already holds is overwritten, never added twice: the multi-row insert re-binds the same names
+        /// for every row.
         /// </summary>
-        public virtual DbCommand AddParameter(DbCommand command, string name, object? value)
+        /// <remarks>
+        /// TASK-836: not virtual (rule 12). The per-provider conversion is <see cref="ConvertParameterValue"/> and
+        /// the per-provider parameter shape is <see cref="CreateParameter(DbCommand, string, object)"/>; this method
+        /// owns only the overwrite bookkeeping, so the fast path below shares the providers' conversions.
+        /// </remarks>
+        public DbCommand AddParameter(DbCommand command, string name, object? value)
         {
-            value = NormalizeParameterValue(value);
+            value = ConvertParameterValue(value);
+            // Contains is a linear scan on SqliteParameterCollection and SqlParameterCollection.
             if (command.Parameters.Contains(name))
             {
                 command.Parameters[name].Value = value ?? DBNull.Value;
+                return command;
             }
-            else
-            {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
-                command.Parameters.Add(parameter);
-            }
+            command.Parameters.Add(CreateParameter(command, name, value));
             return command;
+        }
+
+        /// <summary>
+        /// TASK-836: <see cref="AddParameter"/> without the name lookup, for a name the command cannot already hold.
+        /// Only <see cref="SqlBuilderContext.AddParameter"/> calls it, and only for a name it generated at the command's
+        /// current parameter count (<see cref="SqlBuilderContext.GenerateParameterName"/>'s strictly increasing
+        /// <c>_{count}</c> suffix). Without it, an IN list of n values cost n linear scans.
+        /// </summary>
+        internal DbCommand AddUniqueParameter(DbCommand command, string name, object? value)
+        {
+            command.Parameters.Add(CreateParameter(command, name, ConvertParameterValue(value)));
+            return command;
+        }
+
+        /// <summary>
+        /// The value a parameter is bound with. A provider override must call the base first
+        /// (<see cref="NormalizeParameterValue"/>).
+        /// </summary>
+        protected virtual object? ConvertParameterValue(object? value) => NormalizeParameterValue(value);
+
+        /// <summary>
+        /// Creates a new parameter holding an already converted <paramref name="value"/> (null binds
+        /// <see cref="DBNull"/>). A provider override may type the parameter, as SQL Server does for a <c>DateTime</c>.
+        /// </summary>
+        protected virtual DbParameter CreateParameter(DbCommand command, string name, object? value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value ?? DBNull.Value;
+            return parameter;
         }
 
         /// <summary>

@@ -30,8 +30,16 @@ namespace Birko.Data.SQL.Tests.TestHelpers
 
         public override bool Contains(object value) => _parameters.Contains((DbParameter)value);
 
-        public override bool Contains(string value) =>
-            _parameters.Any(p => p.ParameterName == value);
+        public override bool Contains(string value)
+        {
+            ContainsByNameCalls++;
+            return _parameters.Any(p => p.ParameterName == value);
+        }
+
+        /// <summary>
+        /// How many times a parameter was looked up by name (TASK-836: the lookup that made an IN list quadratic).
+        /// </summary>
+        public int ContainsByNameCalls { get; private set; }
 
         public override void CopyTo(Array array, int index) =>
             ((ICollection)_parameters).CopyTo(array, index);

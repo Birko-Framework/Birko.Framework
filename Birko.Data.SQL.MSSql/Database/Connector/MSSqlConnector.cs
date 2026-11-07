@@ -592,28 +592,19 @@ namespace Birko.Data.SQL.Connectors
             return result.ToString();
         }
 
-        public override DbCommand AddParameter(DbCommand command, string name, object? value)
+        /// <inheritdoc />
+        protected override DbParameter CreateParameter(DbCommand command, string name, object? value)
         {
-            // Enums persist as INTEGER (IntegerField) — bind the underlying integral value, never the
-            // boxed enum, or the provider maps it to its own type and the comparison never matches.
-            value = NormalizeParameterValue(value);
-            if (command.Parameters.Contains(name))
+            var parameter = base.CreateParameter(command, name, value);
+            // TASK-656 (rule 28): SqlClient infers SqlDbType.DateTime for a DateTime, and a datetime parameter is
+            // rounded to ~3.33 ms before it reaches the DATETIME2 column (measured: ...56.1234567 stored as
+            // ...56.1233333, and a filter on the exact value matched nothing). DATETIME2 carries every tick; against a
+            // legacy datetime column the server converts it as before.
+            if (value is DateTime)
             {
-                ((SqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
+                ((SqlParameter)parameter).SqlDbType = System.Data.SqlDbType.DateTime2;
             }
-            else
-            {
-                var parameter = ((SqlCommand)command).Parameters.AddWithValue(name, value ?? DBNull.Value);
-                // TASK-656 (rule 28): SqlClient infers SqlDbType.DateTime for a DateTime, and a datetime parameter is
-                // rounded to ~3.33 ms before it reaches the DATETIME2 column (measured: ...56.1234567 stored as
-                // ...56.1233333, and a filter on the exact value matched nothing). DATETIME2 carries every tick; against a
-                // legacy datetime column the server converts it as before.
-                if (value is DateTime)
-                {
-                    parameter.SqlDbType = System.Data.SqlDbType.DateTime2;
-                }
-            }
-            return command;
+            return parameter;
         }
 
         // TASK-295 — CreateTableCore, not CreateTable: the public wrapper on AbstractConnector owns

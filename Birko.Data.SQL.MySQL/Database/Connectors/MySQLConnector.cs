@@ -459,26 +459,6 @@ namespace Birko.Data.SQL.Connectors
         public override string CurrentTimestampDefault => "CURRENT_TIMESTAMP(6)";
 
         /// <inheritdoc />
-        public override DbCommand AddParameter(DbCommand command, string name, object? value)
-        {
-            // Enums persist as INTEGER (IntegerField) — bind the underlying integral value, never the
-            // boxed enum, or the provider maps it to its own type and the comparison never matches.
-            value = NormalizeParameterValue(value);
-            if (command.Parameters.Contains(name))
-            {
-                ((MySqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
-            }
-            else
-            {
-                var parameter = command.CreateParameter();
-                parameter.ParameterName = name;
-                parameter.Value = value ?? DBNull.Value;
-                command.Parameters.Add(parameter);
-            }
-            return command;
-        }
-
-        /// <inheritdoc />
         // TASK-295 — CreateTableCore, not CreateTable: the public wrapper on AbstractConnector owns
         // RecordTableCreated, and while this was an override of the public method that bookkeeping was
         // skipped entirely on this provider. TablesCreated was permanently empty here, so TASK-286's

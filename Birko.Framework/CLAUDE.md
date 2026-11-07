@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Rendering SQL parameters is linear (2026-11-07)
+[[TASK-836]]. `AddParameter` looked every name up in the command's parameter collection, which is a linear scan, so a
+4000-value IN list took 341 ms to render; it now takes 23–28 ms.
+- A name the builder just generated is unique by construction, so it skips the lookup (`AddUniqueParameter`).
+- A re-added name still overwrites its value, which the multi-row insert relies on.
+- **Breaking for subclasses:** `AddParameter` is non-virtual (rule 12). Providers override
+  `ConvertParameterValue` / `CreateParameter`.
 ### A SQL IN list past the provider's parameter limit is split (2026-11-07)
 [[TASK-833]] (FIELD-051, Symbio).
 - **Split:** `ids.Contains(x.Col)` past 1000 values becomes several statements: reads streamed, counts summed,

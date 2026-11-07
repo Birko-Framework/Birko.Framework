@@ -496,24 +496,13 @@ namespace Birko.Data.SQL.Connectors
             return result.ToString();
         }
 
-        public override DbCommand AddParameter(DbCommand command, string name, object? value)
+        /// <inheritdoc />
+        protected override object? ConvertParameterValue(object? value)
         {
             // Enums persist as INTEGER (IntegerField) — bind the underlying integral value rather than
             // relying on the provider's own handling of a boxed enum. See NormalizeParameterValue.
-            value = NormalizeParameterValue(value);
-            if(value is Guid)
-            {
-                value = value?.ToString();
-            }
-            if (command.Parameters.Contains(name))
-            {
-                ((SqliteParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
-            }
-            else
-            {
-                ((SqliteCommand)command).Parameters.AddWithValue(name, value ?? DBNull.Value);
-            }
-            return command;
+            value = base.ConvertParameterValue(value);
+            return value is Guid guid ? guid.ToString() : value;
         }
 
         private object? ConvertFieldValue(AbstractField field, object model)
