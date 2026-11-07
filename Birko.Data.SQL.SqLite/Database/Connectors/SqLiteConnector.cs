@@ -361,6 +361,9 @@ namespace Birko.Data.SQL.Connectors
                 ? string.Format("{0}({1}, {2})", SqLiteDecimal.AddFunction, column, parameter)
                 : base.IncrementExpression(field, column, parameter);
 
+        /// <summary>TASK-856 — a decimal value fragment in a filter is computed and compared as the column is.</summary>
+        protected override Conditions.SqlValueFragmentDialect FragmentDialect => SqLiteValueFragmentDialect.Instance;
+
         /// <summary>TASK-826 — every step of a computed set through <see cref="SqLiteDecimal"/>'s exact functions.</summary>
         public override string ComputedArithmetic(Birko.Data.Stores.ComputedOperator op, string left, string right)
             => string.Format("{0}({1}, {2})", op switch

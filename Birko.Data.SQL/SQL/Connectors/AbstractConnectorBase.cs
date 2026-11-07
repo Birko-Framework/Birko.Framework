@@ -1363,7 +1363,26 @@ namespace Birko.Data.SQL.Connectors
                 throw new NotSupportedException($"Condition type {condition.Type} is not supported");
 
             var context = new SqlBuilderContext(this);
-            return strategy.BuildSql(condition, command, context);
+            return strategy.BuildSql(InFragmentDialect(condition), command, context);
+        }
+
+        /// <summary>
+        /// TASK-856 — how this provider renders a value fragment in a filter. The portable form, already in
+        /// <see cref="Conditions.Condition.Name"/>, unless a provider compares it wrongly (SQLite's decimals).
+        /// </summary>
+        protected virtual Conditions.SqlValueFragmentDialect FragmentDialect => Conditions.SqlValueFragmentDialect.Portable;
+
+        private Conditions.Condition InFragmentDialect(Conditions.Condition condition)
+        {
+            var dialect = FragmentDialect;
+            if (ReferenceEquals(dialect, Conditions.SqlValueFragmentDialect.Portable) || condition.NameFragment == null)
+                return condition;
+            var values = condition.IsField && condition.FieldFragment != null
+                ? new object[] { condition.FieldFragment(dialect) }
+                : condition.Values;
+            var rendered = condition.Copy(values, condition.SubConditions);
+            rendered.Name = condition.NameFragment(dialect);
+            return rendered;
         }
 
         /// <summary>

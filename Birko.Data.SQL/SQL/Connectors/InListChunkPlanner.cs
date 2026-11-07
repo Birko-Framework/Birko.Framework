@@ -396,11 +396,11 @@ namespace Birko.Data.SQL.Connectors
         {
             if (depth == path.Length)
             {
-                return new Condition(node.Name, values, node.Type, node.IsField, node.IsNot, node.IsOr, node.SubConditions);
+                return node.Copy(values, node.SubConditions);
             }
             var children = node.SubConditions!.ToList();
             children[path[depth]] = Rebuild(children[path[depth]], path, depth + 1, values);
-            return new Condition(node.Name, node.Values, node.Type, node.IsField, node.IsNot, node.IsOr, children);
+            return node.Copy(node.Values, children);
         }
     }
 }

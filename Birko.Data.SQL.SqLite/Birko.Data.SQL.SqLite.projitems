@@ -19,6 +19,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\SqLiteConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\SqLiteDecimal.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\SqLiteValueFragmentDialect.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\SqLiteRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncSqLiteRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\SqLiteModelRepository.cs" />

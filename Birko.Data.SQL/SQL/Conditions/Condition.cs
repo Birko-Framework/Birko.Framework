@@ -29,6 +29,23 @@ namespace Birko.Data.SQL.Conditions
         public bool IsOr { get; set; } = false;
         public bool IsNot { get; set; } = false;
 
+        /// <summary>
+        /// TASK-856: re-renders <see cref="Name"/> (a value fragment) for a provider whose
+        /// <see cref="SqlValueFragmentDialect"/> is not the portable one. Null for a column name.
+        /// </summary>
+        public Func<SqlValueFragmentDialect, string>? NameFragment { get; set; }
+
+        /// <summary>TASK-856: the same for the single value of an <see cref="IsField"/> condition.</summary>
+        public Func<SqlValueFragmentDialect, string>? FieldFragment { get; set; }
+
+        /// <summary>A copy carrying every property but <paramref name="values"/> and <paramref name="subConditions"/>.</summary>
+        public Condition Copy(IEnumerable? values, IEnumerable<Condition>? subConditions)
+            => new(Name, values, Type, IsField, IsNot, IsOr, subConditions)
+            {
+                NameFragment = NameFragment,
+                FieldFragment = FieldFragment,
+            };
+
         public Condition(string? name, IEnumerable? values, ConditionType type = ConditionType.Equal, bool isField = false, bool isNot = false, bool isOr = false, IEnumerable<Condition>? subConditions = null)
         {
             Name = name;

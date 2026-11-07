@@ -39,6 +39,7 @@ namespace Birko.Data.SQL.Connectors
         public const string MultiplyFunction = "birko_decimal_mul";
         public const string DivideFunction = "birko_decimal_div";
         public const string RoundFunction = "birko_decimal_round";
+        public const string ModuloFunction = "birko_decimal_mod";
 
         /// <summary>
         /// The text form Microsoft.Data.Sqlite binds a <c>decimal</c> parameter as (measured: <c>10.10m</c>
@@ -65,6 +66,10 @@ namespace Birko.Data.SQL.Connectors
                 isDeterministic: true);
             connection.CreateFunction<object?, object?, string?>(DivideFunction,
                 (a, b) => a == null || b == null ? null : Format(ToDecimal(a) / ToDecimal(b)),
+                isDeterministic: true);
+            // TASK-856: a decimal `%` in a filter value fragment, as C# computes it.
+            connection.CreateFunction<object?, object?, string?>(ModuloFunction,
+                (a, b) => a == null || b == null ? null : Format(ToDecimal(a) % ToDecimal(b)),
                 isDeterministic: true);
             connection.CreateFunction<object?, long, long, string?>(RoundFunction,
                 (a, digits, awayFromZero) => a == null ? null : Format(Math.Round(ToDecimal(a), (int)digits,
