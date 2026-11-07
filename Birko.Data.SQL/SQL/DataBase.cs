@@ -151,8 +151,10 @@ namespace Birko.Data.SQL
                 {
                     continue;
                 }
+                // TASK-850: a quote inside the value is doubled by the framework's one escaping producer (rule 20),
+                // so O'Brien renders 'O''Brien', not malformed SQL.
                 values[name] = _stringTypes.Contains(parameter.DbType)
-                    ? "'" + parameter.Value?.ToString() + "'"
+                    ? "'" + SqlLiteral.EscapeLiteral(parameter.Value?.ToString() ?? string.Empty) + "'"
                     : parameter.Value?.ToString();
                 starts.Add(name[0]);
                 longest = Math.Max(longest, name.Length);

@@ -110,6 +110,15 @@ public class Task832InListCostTests : IDisposable
     }
 
     [Fact]
+    public void A_quote_inside_a_string_value_is_doubled()
+    {
+        // TASK-850: rendered as 'O'Brien', which reads as malformed SQL. Escaped by SqlLiteral.EscapeLiteral (rule 20).
+        using var command = Command("SELECT 1 WHERE A = @a AND B = @b", ("@a", "O'Brien"), ("@b", "''"));
+
+        DataBase.GetGeneratedQuery(command).Should().Be("SELECT 1 WHERE A = 'O''Brien' AND B = ''''''");
+    }
+
+    [Fact]
     public void A_command_without_parameters_is_returned_as_is()
     {
         using var command = Command("SELECT 1");

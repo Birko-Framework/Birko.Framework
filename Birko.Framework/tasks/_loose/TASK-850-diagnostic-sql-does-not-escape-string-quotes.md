@@ -3,7 +3,7 @@ id: TASK-850
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -31,9 +31,17 @@ chose to file it.
 
 ## Acceptance criteria
 
-- [ ] String values are escaped by the framework's one escaping producer (rule 20) when rendered into the diagnostic
+- [x] String values are escaped by the framework's one escaping producer (rule 20) when rendered into the diagnostic
       text: `O'Brien` → `'O''Brien'`.
-- [ ] A test pins it, red before the fix. `GetGeneratedQuery` stays a single linear pass (TASK-832).
+      → The string branch renders `"'" + SqlLiteral.EscapeLiteral(value ?? "") + "'"`. `EscapeLiteral` was already
+        public and is unchanged; the `?? ""` keeps today's null rendering.
+- [x] A test pins it, red before the fix. `GetGeneratedQuery` stays a single linear pass (TASK-832).
+      → `A_quote_inside_a_string_value_is_doubled` (in `Task832InListCostTests`): before the fix `'O'Brien'` and
+        `''''`; after, `'O''Brien'` and `''''''`.
+      → Birko.Data.SQL.SqLite.Tests 664 and Birko.Data.SQL.Tests 777 green, the longest-name and no-rewrite tests
+        included.
+      → **Found, filed:** NULL, culture-formatted numbers and dates, bools and `byte[]` render misleadingly in the same
+        text → TASK-853 (one group).
 
 ## Out of scope
 
