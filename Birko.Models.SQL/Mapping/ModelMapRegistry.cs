@@ -132,7 +132,12 @@ namespace Birko.Models.SQL.Mapping
             foreach (var (type, _) in _maps)
             {
                 var properties = Snapshot(GetPropertyMaps(type));
-                if (properties.Count == 0) continue;
+                if (properties.Count == 0)
+                {
+                    // Nothing to write: an earlier apply's fluent part for the type no longer holds.
+                    Birko.Data.SQL.DataBase.RegisterTableConfigurator(type, string.Empty, null);
+                    continue;
+                }
 
                 Birko.Data.SQL.DataBase.RegisterTableConfigurator(type, Signature(properties), table => Configure(table, properties));
                 try

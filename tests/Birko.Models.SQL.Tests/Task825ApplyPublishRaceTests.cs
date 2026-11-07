@@ -145,4 +145,34 @@ public class Task825ApplyPublishRaceTests
         HasFluentIndexes(rebuilt).Should().BeTrue();
         rebuilt.Indexes!["UX_T825_Key"].Unique.Should().BeTrue();
     }
+
+    public class Dropped : Birko.Data.Models.AbstractModel
+    {
+        public string? Code { get; set; }
+    }
+
+    private sealed class DroppedWithIndex : IModelMapping<Dropped>
+    {
+        public void Configure(ModelMap<Dropped> map)
+        {
+            map.ToTable("T825Dropped");
+            map.Property(x => x.Code).HasIndex("IX_T825_Code");
+        }
+    }
+
+    private sealed class DroppedNameOnly : IModelMapping<Dropped>
+    {
+        public void Configure(ModelMap<Dropped> map) => map.ToTable("T825Dropped");
+    }
+
+    [Fact]
+    public void A_mapping_reapplied_without_properties_drops_its_earlier_fluent_part()
+    {
+        Apply(new DroppedWithIndex());
+        DataBase.LoadTable(typeof(Dropped)).Indexes.Should().ContainKey("IX_T825_Code");
+
+        Apply(new DroppedNameOnly());
+
+        (DataBase.LoadTable(typeof(Dropped)).Indexes ?? new()).Should().NotContainKey("IX_T825_Code");
+    }
 }
