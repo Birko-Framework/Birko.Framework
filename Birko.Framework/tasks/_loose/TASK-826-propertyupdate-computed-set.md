@@ -60,8 +60,8 @@ normal save, to the cent, on every provider.
 
 Proposed: the expression must name the rounding explicitly (`Math.Round(v, d, MidpointRounding)`); a `Math.Round`
 without it is refused, not defaulted. Each provider translates the mode it was given, emulating the one it lacks
-natively (half-to-even on the SQL dialects, away-from-zero on MongoDB), and a provider that cannot express one
-refuses it.
+natively (half-to-even on the SQL dialects, away-from-zero on MongoDB). **Every provider supports both modes;
+none may refuse them** (the user's decision, 2026-11-07: the request is that all providers have it).
 
 ## Acceptance criteria
 
@@ -69,14 +69,16 @@ refuses it.
       and captured values. Supported nodes are decided at implementation and kept to what every native provider can
       express exactly: `+ - * /`, a decimal constant, `Math.Round(v, d, MidpointRounding)`. Anything else is refused
       at `Set` time, never dropped or evaluated client-side quietly (rules 41/42).
-- [ ] Every translator handles it or refuses it explicitly. None of them silently does a read-modify-write
-      unless that is already its documented fallback (`ApplyTo`), and that fallback evaluates the same expression in C#.
+- [ ] **Every provider supports it** (the user's decision, 2026-11-07): SQLite, PostgreSQL, SQL Server, MySQL,
+      TimescaleDB, MongoDB, Elasticsearch, Cosmos DB, RavenDB, InfluxDB, InMemory, JSON, XML. No provider refuses the
+      case. Native providers write in one statement; providers on the `ApplyTo` fallback evaluate the same expression
+      in C# and say in their docs whether that path is atomic (a concurrency gap found there is filed, not hidden).
 - [ ] Decorators see the new case: tenant and soft-delete scoping, `UpdatedAt` / `UpdatedBy` stamping, the
       localization and event-sourcing wrappers (an event-sourced update records the computed value or refuses).
 - [ ] SQLite computes exactly: decimal multiply, divide and round functions beside the existing add / sum / avg.
 - [ ] A cross-provider contract at a `.xx5` midpoint for **both** rounding modes: the stored value equals C#'s
       `Math.Round` on the same inputs, on every provider (SQLite, InMemory, JSON, XML, and live PostgreSQL, SQL
-      Server, MySQL, MongoDB; Cosmos, RavenDB, Elasticsearch, InfluxDB as far as they run). A division whose exact
+      Server, MySQL, TimescaleDB, MongoDB, Cosmos DB, RavenDB, Elasticsearch, InfluxDB; every one of them, none skipped). A division whose exact
       result is not representable (e.g. `/ 1.2`) is in the contract too.
 - [ ] Atomicity: one statement per native provider (asserted the way TASK-498 asserted it for `Increment`).
 
