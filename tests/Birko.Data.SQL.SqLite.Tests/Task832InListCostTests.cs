@@ -98,7 +98,7 @@ public class Task832InListCostTests : IDisposable
         using var command = Command("SELECT 1 WHERE A IN (@WHEREA0_5, @WHEREA0_50) LIMIT @LIMIT OFFSET @LIMITx",
             ("@WHEREA0_5", "five"), ("@WHEREA0_50", "fifty"), ("@LIMIT", 10), ("@LIMITx", 20));
 
-        DataBase.GetGeneratedQuery(command).Should().Be("SELECT 1 WHERE A IN ('five', 'fifty') LIMIT '10' OFFSET '20'");
+        DataBase.GetGeneratedQuery(command).Should().Be("SELECT 1 WHERE A IN ('five', 'fifty') LIMIT 10 OFFSET 20");
     }
 
     [Fact]

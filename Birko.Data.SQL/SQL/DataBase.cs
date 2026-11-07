@@ -71,15 +71,6 @@ namespace Birko.Data.SQL
                 _scopedFieldResolver.Value = _previous;
             }
         }
-        private static readonly HashSet<DbType> _stringTypes = new()
-        {
-            DbType.Guid,
-            DbType.String,
-            DbType.StringFixedLength,
-            DbType.AnsiString,
-            DbType.AnsiStringFixedLength
-        };
-
         public static AbstractConnector GetConnector<T>(Settings settings) where T : AbstractConnector
         {
             var connectorType = typeof(T);
@@ -151,11 +142,7 @@ namespace Birko.Data.SQL
                 {
                     continue;
                 }
-                // TASK-850: a quote inside the value is doubled by the framework's one escaping producer (rule 20),
-                // so O'Brien renders 'O''Brien', not malformed SQL.
-                values[name] = _stringTypes.Contains(parameter.DbType)
-                    ? "'" + SqlLiteral.EscapeLiteral(parameter.Value?.ToString() ?? string.Empty) + "'"
-                    : parameter.Value?.ToString();
+                values[name] = RenderDiagnosticValue(parameter.Value);
                 starts.Add(name[0]);
                 longest = Math.Max(longest, name.Length);
             }
@@ -189,6 +176,72 @@ namespace Birko.Data.SQL
             }
 
             return query.ToString();
+        }
+
+        /// <summary>Bytes of a <c>byte[]</c> written out in the diagnostic text before it is truncated.</summary>
+        private const int DiagnosticBytesShown = 32;
+
+        /// <summary>
+        /// A parameter value as it reads in <see cref="GetGeneratedQuery"/>. By the value's CLR type, never by
+        /// <c>DbType</c> (TASK-853): <c>SqliteParameter</c> defaults to <c>DbType.String</c>, so a type-driven
+        /// render quoted every number on SQLite, and a null with any non-string type rendered nothing. Numbers and
+        /// dates use the invariant culture, so the text does not depend on the host (sk-SK wrote <c>1,5</c>).
+        /// </summary>
+        private static string RenderDiagnosticValue(object? value)
+        {
+            static string Quoted(string text) => "'" + SqlLiteral.EscapeLiteral(text) + "'";
+            var invariant = System.Globalization.CultureInfo.InvariantCulture;
+
+            switch (value)
+            {
+                case null:
+                case DBNull:
+                    return "NULL";
+                // TASK-850: a quote inside the value is doubled by the framework's one escaping producer (rule 20).
+                case string text:
+                    return Quoted(text);
+                case char character:
+                    return Quoted(character.ToString());
+                case bool flag:
+                    return flag ? "1" : "0";
+                case Enum enumValue:
+                    return Convert.ChangeType(enumValue, Enum.GetUnderlyingType(enumValue.GetType()), invariant) is IFormattable number
+                        ? number.ToString(null, invariant)
+                        : Quoted(enumValue.ToString());
+                case Guid guid:
+                    return Quoted(guid.ToString("D"));
+                case DateTime dateTime:
+                    return Quoted(dateTime.ToString("O", invariant));
+                case DateTimeOffset dateTimeOffset:
+                    return Quoted(dateTimeOffset.ToString("O", invariant));
+                case DateOnly date:
+                    return Quoted(date.ToString("yyyy-MM-dd", invariant));
+                case TimeOnly time:
+                    return Quoted(time.ToString("HH:mm:ss.FFFFFFF", invariant).TrimEnd('.'));
+                case TimeSpan span:
+                    return Quoted(span.ToString("c", invariant));
+                case byte[] bytes:
+                    return RenderDiagnosticBytes(bytes);
+                case sbyte or byte or short or ushort or int or uint or long or ulong or decimal:
+                    return ((IFormattable)value).ToString(null, invariant);
+                case double or float:
+                    // Shortest round-trip form; NaN and infinities are not SQL numbers, so they are quoted.
+                    var real = ((IFormattable)value).ToString("R", invariant);
+                    return double.IsFinite(Convert.ToDouble(value, invariant)) ? real : Quoted(real);
+                case IFormattable formattable:
+                    return Quoted(formattable.ToString(null, invariant));
+                default:
+                    return Quoted(value.ToString() ?? string.Empty);
+            }
+        }
+
+        private static string RenderDiagnosticBytes(byte[] bytes)
+        {
+            if (bytes.Length <= DiagnosticBytesShown)
+            {
+                return "0x" + Convert.ToHexString(bytes);
+            }
+            return "0x" + Convert.ToHexString(bytes, 0, DiagnosticBytesShown) + "... (" + bytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + " bytes)";
         }
 
         public static Conditions.Condition CreateCondition(AbstractField field, object value)
