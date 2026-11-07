@@ -1,6 +1,6 @@
 ---
 area: security-and-authorization
-generated-at: df2156c0549a453f4072c1d23fd70f92bea70b81
+generated-at: a972f9a45657741346a5a3052ad52e0da4789175
 generated-on: 2026-11-07
 sources:
   - ../Birko.Communication.AspNetCore/OwnedCrud/OwnedCrudResults.cs
@@ -17,6 +17,7 @@ sources:
   - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationConfiguration.cs
   - ../Birko.Communication.WebSocket/Services/WebSocketAuthenticationService.cs
   - ../Birko.Health.Security.Grants/StaleGrantHealthCheck.cs
+  - ../Birko.Security.AspNetCore/Authentication/BirkoForwardedHeadersOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtClaimNames.cs
@@ -28,6 +29,7 @@ sources:
   - ../Birko.Security.AspNetCore/Authorization/PermissionEndpointFilter.cs
   - ../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs
   - ../Birko.Security.AspNetCore/Authorization/WildcardPermission.cs
+  - ../Birko.Security.AspNetCore/Extensions/ForwardedHeadersExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/LoopbackBypassExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs
   - ../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs
@@ -95,6 +97,8 @@ sources:
   - ../Birko.Security/Authentication/AuthenticationConfiguration.cs
   - ../Birko.Security/Authentication/AuthenticationService.cs
   - ../Birko.Security/Authentication/TokenBinding.cs
+  - ../Birko.Security/Authentication/TrustedProxyList.cs
+  - ../Birko.Security/Authentication/TrustedProxySettings.cs
   - ../Birko.Security/Authorization/IRoleProvider.cs
   - ../Birko.Security/Core/IEncryptionProvider.cs
   - ../Birko.Security/Core/IPasswordHasher.cs
@@ -965,7 +969,9 @@ When `BirkoSecurityOptions.LoopbackBypass` is true and `UseBirkoLoopbackBypass()
 authorization, the system SHALL run an unauthenticated request as a principal holding the `*` permission only if every
 address in the server's `IServerAddressesFeature` is loopback. Unknown, wildcard or non-loopback addresses SHALL enforce
 authentication, and an authenticated request SHALL keep its own principal. An enabled bypass without the middleware
-SHALL refuse to start (TASK-522). The bypass principal (authentication type `LoopbackBypass.AuthenticationType`, user
+SHALL refuse to start (TASK-522), and an enabled bypass SHALL also refuse to start when `AddBirkoForwardedHeaders`
+trusts any proxy, whichever of the two registrations came first, because a proxy on the same machine forwards remote
+callers over loopback (TASK-829); an empty proxy list starts. A proxy not registered there is not seen. The bypass principal (authentication type `LoopbackBypass.AuthenticationType`, user
 id `Guid.Empty`) is Birko's own, so with `WildcardPermissionEnabled = false` `ClaimsCurrentUser` keeps its `*`
 (TASK-823); under `ResolvedPermissionsCurrentUser`, `PermissionResolutionMiddleware` stores the bypass principal's own
 permission claims (its `*`) instead of asking the resolver, so a bypassed request passes there too (TASK-824).
@@ -993,6 +999,109 @@ permission claims (its `*`) instead of asking the resolver, so a bypassed reques
 - **Given** the bypass is active, `WildcardPermissionEnabled = false` and `ICurrentUser` → `ClaimsCurrentUser`
 - **When** a request without a token reads `ICurrentUser.Permissions`
 - **Then** the set contains `"*"`
+
+#### Scenario: Bypass behind a trusted proxy (TASK-829)
+
+- **Given** `LoopbackBypass = true`, `UseBirkoLoopbackBypass()` in the pipeline, and `AddBirkoForwardedHeaders` trusting `127.0.0.1`, registered before or after `AddBirkoSecurity`
+- **When** the host starts
+- **Then** it throws `InvalidOperationException` naming the trusted proxies; with an empty proxy list it starts
+
+### Requirement: Forwarded headers are believed only from the host's one registered list, ahead of the whole pipeline
+
+`AddBirkoForwardedHeaders(configure)` (or `(section)`, bound from `Birko:ForwardedHeaders`) SHALL register one list of
+trusted proxies (`BirkoForwardedHeadersOptions.TrustedProxies`, parsed strictly by `TrustedProxyList.Parse`), register
+a copy of it as `TrustedProxySettings` for the other readers, and configure ASP.NET's `ForwardedHeadersOptions` in a
+`PostConfigure`, after every `Configure` whatever the registration order: `KnownProxies`, `KnownIPNetworks` and
+`AllowedHosts` are cleared and refilled from this list only, `ForwardLimit` (default 1) applied, and
+`X-Forwarded-For` read, plus `X-Forwarded-Proto` while `ForwardProto` (default true). With an empty list the system
+SHALL set `ForwardedHeaders = None`, so nobody is trusted even through a manual `UseForwardedHeaders()` or
+`ASPNETCORE_FORWARDEDHEADERS_ENABLED` (ASP.NET reads two empty lists as trust-every-sender, and trusts loopback by
+default). There SHALL be no `Use…` call: a startup filter inserted first in the service collection puts
+`UseForwardedHeaders()` at the front of the pipeline when the list is non-empty, followed by a step that removes
+`X-Forwarded-For`, `-Proto`, `-Host` and `-Prefix` from every request (what ASP.NET consumed stays in `X-Original-*`), so
+a second forwarded-headers pass has nothing left to read, and sets `HttpContext.Items[TrustedProxySettings.ResolvedItemKey]`
+whether or not the peer was trusted (TASK-829).
+
+#### Scenario: Proxy chain through a trusted proxy
+
+- **Given** trusted proxies `["127.0.0.1"]` and a request from `127.0.0.1` with `X-Forwarded-For: 198.51.100.1, 203.0.113.7` and `X-Forwarded-Proto: https`
+- **When** the app reads the connection
+- **Then** `RemoteIpAddress` is `203.0.113.7` and the scheme is `https`
+
+#### Scenario: Untrusted peer
+
+- **Given** trusted proxies `["10.0.0.5"]` and a request from `127.0.0.1` with `X-Forwarded-For: 1.2.3.4`
+- **When** the app reads the connection
+- **Then** `RemoteIpAddress` stays `127.0.0.1`
+
+#### Scenario: Nothing configured, headers switched on elsewhere
+
+- **Given** `AddBirkoForwardedHeaders(_ => { })`, a `Configure<ForwardedHeadersOptions>` switching on `XForwardedFor | XForwardedProto` (registered before or after), and an app calling `UseForwardedHeaders()`
+- **When** a loopback request sends `X-Forwarded-For: 1.2.3.4` and `X-Forwarded-Proto: https`
+- **Then** `RemoteIpAddress` stays `127.0.0.1` and the scheme `http`; without the registration the same setup answers `1.2.3.4`
+
+#### Scenario: A second pass cannot read a hop the client wrote
+
+- **Given** trusted proxies `["127.0.0.0/8"]`, `ForwardLimit = 1`, the app's own `UseForwardedHeaders()`, and `X-Forwarded-For: 1.2.3.4, 127.0.0.9`
+- **When** the request runs
+- **Then** `RemoteIpAddress` is `127.0.0.9`: the first pass stopped at the limit and removed the header, so `1.2.3.4` is never believed
+
+#### Scenario: Applied before the app's first middleware
+
+- **Given** a trusted proxy `127.0.0.1` and an app whose first `Use` reads `RemoteIpAddress`
+- **When** a request with `X-Forwarded-For: 203.0.113.7` arrives
+- **Then** that first middleware already sees `203.0.113.7`
+
+### Requirement: The forwarded-headers registration refuses at startup a list it cannot honour
+
+`AddBirkoForwardedHeaders` SHALL throw `InvalidOperationException` at registration, its message prefixed
+`Birko:ForwardedHeaders:` and naming the offending setting, when a `TrustedProxies` entry is refused by the strict parse
+(see the trusted-proxy list requirement: malformed, blank, an unset `${VAR}`, a short or bracketed address, an address
+with a port, a `/0` network such as `0.0.0.0/0`), when `ForwardLimit` is below 1, when `AllowedHosts` has a blank entry,
+when `AllowedHosts` is non-empty while `TrustedProxies` is empty, and when it is called a second time on the same
+service collection (TASK-829).
+
+#### Scenario: Malformed entry
+
+- **Given** `TrustedProxies = ["10.0.0.300"]` (or `"10.0.0.0/40"`, `"unknown"`)
+- **When** `AddBirkoForwardedHeaders` runs
+- **Then** `InvalidOperationException` is thrown naming the entry
+
+#### Scenario: Limit below one
+
+- **Given** a trusted proxy and `ForwardLimit = 0`
+- **When** `AddBirkoForwardedHeaders` runs
+- **Then** `InvalidOperationException` is thrown naming `ForwardLimit`
+
+#### Scenario: Allowed hosts without a proxy
+
+- **Given** `AllowedHosts = ["app.example.com"]` and no trusted proxies
+- **When** `AddBirkoForwardedHeaders` runs
+- **Then** `InvalidOperationException` is thrown, because no `X-Forwarded-Host` could ever be believed
+
+#### Scenario: Registered twice
+
+- **Given** a service collection that already called `AddBirkoForwardedHeaders`
+- **When** it is called again
+- **Then** `InvalidOperationException` is thrown: a host has one list of trusted proxies
+
+### Requirement: A forwarded host is believed only when listed in AllowedHosts
+
+The system SHALL read `X-Forwarded-Host` only when `BirkoForwardedHeadersOptions.AllowedHosts` is non-empty, and SHALL
+then accept only a value matching one of those entries (trimmed; ASP.NET's `*.example.com` wildcard form allowed); with
+no allowed hosts, or for an unlisted value, `Request.Host` stays the `Host` the proxy sent (TASK-829).
+
+#### Scenario: Host forwarding off by default
+
+- **Given** a trusted proxy and no `AllowedHosts`
+- **When** a request sends `X-Forwarded-Host: app.example.com`
+- **Then** `Request.Host` is the proxy's own host
+
+#### Scenario: Listed and unlisted hosts
+
+- **Given** a trusted proxy and `AllowedHosts = ["app.example.com"]`
+- **When** requests send `X-Forwarded-Host: app.example.com` and `X-Forwarded-Host: evil.example.com`
+- **Then** the first sets `Request.Host` to `app.example.com`, the second leaves the proxy's host
 
 ### Requirement: Static-token authentication allows everything only when deliberately switched off
 
@@ -1125,13 +1234,16 @@ the forwarding headers are then not read at all. Only when the peer is trusted S
 the leftmost hop when every hop is trusted); then `X-Real-IP`; then `CF-Connecting-IP`; and finally `fallbackIp`.
 Only an address is an answer (TASK-651): a returned value is the parsed address, without a port and with an
 IPv4-mapped address unwrapped; a hop that is not an address ends the walk with `fallbackIp`, and a single-address
-header that is not one is skipped (an `X-Forwarded-For: 1.2.3.4, unknown` returned `"unknown"`). A trusted-proxy entry is either an address, compared after mapping IPv4-mapped IPv6
-to IPv4, or a CIDR range (it contains `/`), matched against the address and its IPv4-mapped form; an address
-given with a port (`10.0.0.5:51234`, `[::1]:51234`) is parsed to its address; an unparseable address is never
-trusted. The instance method `ResolveClientIp(getHeaderValue, connectionIp)` SHALL apply the configuration's
-`AuthenticationConfiguration.TrustedProxies` (empty by default), expanded once at construction like tokens
-(`${VAR}` references, blank results dropped). The REST, SOAP, SSE and WebSocket authentication wrappers resolve the
-client IP through `ResolveClientIp`.
+header that is not one is skipped (an `X-Forwarded-For: 1.2.3.4, unknown` returned `"unknown"`). The trusted-proxy
+entries are read by `TrustedProxyList.ParseLenient` (TASK-829) and matched with `TrustedProxyList.Contains`: an address,
+compared after mapping IPv4-mapped IPv6 to IPv4, or a CIDR range (it contains `/`), matched against the address and its
+IPv4-mapped form; an address given with a port (`10.0.0.5:51234`, `[::1]:51234`) is parsed to its address; an
+unparseable address is never trusted, and an entry the lenient parse skips trusts nothing. The instance method
+`ResolveClientIp(getHeaderValue, connectionIp)` SHALL apply the configuration's
+`AuthenticationConfiguration.TrustedProxies` (empty by default), parsed once at construction by
+`TrustedProxyList.ParseLenient`, each skipped entry logged as an error naming it and the reason. The REST, SOAP and SSE
+authentication wrappers resolve the client IP through `ResolveClientIp`; the WebSocket one does too, except behind
+`AddBirkoForwardedHeaders` (see the WebSocket forwarded-headers requirement).
 
 #### Scenario: Proxy chain behind a trusted proxy
 
@@ -1162,6 +1274,58 @@ client IP through `ResolveClientIp`.
 - **Given** a disposed `AuthenticationService`
 - **When** `Dispose()` is called again
 - **Then** it returns without touching the already-disposed lock
+
+#### Scenario: A garbage entry trusts nothing (TASK-829)
+
+- **Given** `X-Forwarded-For: 198.51.100.1, 203.0.113.7, 10.0.0.9`, a fallback of `10.0.0.5` and trusted proxies `["garbage"]`
+- **When** `GetClientIpAddress` is called
+- **Then** `"10.0.0.5"` is returned
+
+### Requirement: A trusted-proxy list has one parser, strict at startup and lenient for the transports
+
+`TrustedProxyList` SHALL be the one parser of every trusted-proxy list (`AuthenticationConfiguration.TrustedProxies`
+and `TrustedProxySettings.TrustedProxies`, TASK-829). Each entry is `${VAR}`-expanded and trimmed; an entry with a `/`
+is a CIDR network, and a network of one address (`/32`, `/128`) is the same entry as the bare address; otherwise it is
+an address, IPv4-mapped addresses reduced to IPv4. A null or empty list is `Empty`, which trusts nobody. `Contains`
+SHALL match an address, or an address inside a network, in its own and its IPv4-mapped form, and SHALL answer false for
+null. `SameAs` SHALL compare the trusted addresses and networks as a set, in any order.
+
+`Parse` (strict) SHALL throw `FormatException` naming the first entry that is blank, names a `${VAR}` that is not set,
+is not a CIDR network, has prefix length 0 (`0.0.0.0/0`, `::/0`: "trusts every sender"), or is not an address written
+in full: IPv4 as four dotted decimal parts (`10.5` refused), IPv6 without brackets (`[::1]`, `[::1]:80` refused), and no
+port (`10.0.0.5:8080` refused). `ParseLenient` SHALL instead skip such an entry and pass it with the reason to an
+optional callback, and SHALL accept what the strict parse refuses only for its form: a `/0` network, a short IPv4 form,
+a bracketed IPv6 address, and an address with a port (the port ignored).
+
+#### Scenario: IPv4-mapped peers match
+
+- **Given** `Parse(["10.0.0.5", "172.18.0.0/16", "::1"])`
+- **When** `Contains` is asked about `::ffff:10.0.0.5`, `::ffff:172.18.44.2` and `::1`
+- **Then** each is `true`; `10.0.0.6`, `172.19.0.1` and null are `false`
+
+#### Scenario: Strict parse refuses and names the entry
+
+- **Given** a list `["10.0.0.5", entry]` with entry `10.0.0.300`, `unknown`, `10.0.0.5:8080`, `10.0.0.0/40`, `10.5`, `[::1]:80`, `[::1]`, `0.0.0.0/0`, `::/0` or a blank
+- **When** `Parse` is called
+- **Then** `FormatException` is thrown whose message quotes the entry and its reason
+
+#### Scenario: Unset variable
+
+- **Given** an entry `${NAME}` with `NAME` unset
+- **When** `Parse` is called
+- **Then** `FormatException` is thrown saying the variable is not set; with `NAME=10.9.8.7` the list contains `10.9.8.7`
+
+#### Scenario: Lenient parse skips and reports
+
+- **Given** `ParseLenient(["10.0.0.300", "10.0.0.0/40", " ", "10.0.0.5:8080", "192.168.0.0/24"], callback)`
+- **When** it parses
+- **Then** the callback receives `10.0.0.300`, `10.0.0.0/40` and `" "`, and the list contains `10.0.0.5` and `192.168.0.9`
+
+#### Scenario: Same list in another spelling
+
+- **Given** `Parse(["10.0.0.5", "172.18.0.0/16"])`
+- **When** `SameAs` compares it with `["172.18.0.0/16", "::ffff:10.0.0.5"]` and with `["10.0.0.5/32", "172.18.0.0/16"]`
+- **Then** both are `true`; against `["10.0.0.5"]` or `Empty` it is `false`
 
 ### Requirement: An inbound OIDC id token is refused, never waved through, whenever it cannot be verified
 
@@ -2350,7 +2514,8 @@ SHALL compare `UserGuid` — for a string owner in its `"D"` form — through `O
 The system SHALL make `RestAuthenticationService`, `SoapAuthenticationService`, `SseAuthenticationService` and
 `WebSocketAuthenticationService` each wrap one `AuthenticationService` over their configuration (a subclass of
 `AuthenticationConfiguration`, a null one replaced by defaults), delegate `ValidateToken` and
-`IsAuthenticationEnabled` to it, resolve the client IP with `ResolveClientIp`, and dispose it; each is `IDisposable`
+`IsAuthenticationEnabled` to it, resolve the client IP with `ResolveClientIp` (the WebSocket one not once the
+forwarded headers resolved it: TASK-829), and dispose it; each is `IDisposable`
 (`SoapAuthenticationService` was not: TASK-709). An `Authorization` header yields a token only under its scheme, through
 `AuthenticationService.TokenFromAuthorizationHeader` (scheme matched in any case, value trimmed); a header of another
 scheme yields none and extraction goes on to the next source. A raw query string is read through
@@ -2433,3 +2598,33 @@ when the service cannot be resolved, and 401 when `ValidateToken` rejects the qu
 - **Given** a registered service and an upgrade to `/ws?token=wrong`
 - **When** the gate runs
 - **Then** 401 is written and the handler is not invoked
+
+### Requirement: Behind registered forwarded headers the WebSocket token binding takes their address and refuses a differing list
+
+`WebSocketAuthenticationService.GetClientIpAddress(context)` SHALL return `Connection.RemoteIpAddress` as is when
+`HttpContext.Items` holds `TrustedProxySettings.ResolvedItemKey` (set by the `AddBirkoForwardedHeaders` pipeline), so
+the client address is decided once and `X-Forwarded-For` or `X-Real-IP` are not walked a second time; without the
+marker it SHALL walk the headers through `ResolveClientIp` as before. When `TrustedProxySettings` is registered (the
+container then picks the constructor that takes it), the service SHALL throw `InvalidOperationException` at
+construction if its own `TrustedProxies` is non-empty and not `SameAs` the host's list (both parsed leniently), naming
+both lists; an empty own list defers to the host's. A mapping that requires authentication SHALL run the same check at
+map time, reading `TrustedProxySettings` and `IOptions<WebSocketAuthenticationConfiguration>` from the root provider,
+so the refusal is a startup failure rather than a first-request one (TASK-829).
+
+#### Scenario: One client address through a trusted proxy
+
+- **Given** `AddBirkoForwardedHeaders` trusting `127.0.0.0/8`, the same WebSocket list, and a request with `X-Forwarded-For: 127.0.0.5` and `X-Real-IP: 1.2.3.4`
+- **When** the token binding resolves the client IP
+- **Then** it is `127.0.0.5`, the address the middleware produced, not the client-written `1.2.3.4`
+
+#### Scenario: Without the registration
+
+- **Given** no `AddBirkoForwardedHeaders` and a WebSocket list `["127.0.0.1"]`
+- **When** a loopback request sends `X-Forwarded-For: 203.0.113.7`
+- **Then** the connection reads `127.0.0.1` and the token binding `203.0.113.7`, as before
+
+#### Scenario: A differing list
+
+- **Given** a host list `["10.0.0.5"]` and a WebSocket list `["10.0.0.6"]`, or a host list that is empty and a non-empty WebSocket list
+- **When** the service is constructed or the endpoint is mapped
+- **Then** `InvalidOperationException` is thrown; an empty WebSocket list or the same list is accepted
