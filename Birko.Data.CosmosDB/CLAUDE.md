@@ -21,6 +21,14 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 ### Stores
 - `CosmosDBStore<T>` - Synchronous Cosmos DB store
 - `AsyncCosmosDBStore<T>` - Asynchronous Cosmos DB store with transactional batch support
+- **A long `Contains` list (TASK-834).** The SDK writes the list into the query text, so past 524,288 characters
+  (13,105 Guids, measured) Cosmos DB answers 400 SC3020.
+  - **Split, by `CosmosInListChunking`:** reads, counts, and filtered updates and deletes, sync and async, in chunks of
+    `InListChunkSize` (1000). The split applies only when the list is a plain AND conjunct of non-string values with
+    no sort or paging.
+  - **Refused:** any other shape past the limit gets `NotSupportedException` before any request.
+  - **Writes are not atomic across chunks.** A failure at chunk 2 or later throws `CosmosChunkedWriteException`
+    naming the chunks applied. `CosmosViewStore` is not chunked.
 
 ### Repositories
 - `CosmosDBRepository<TViewModel, TModel>` - ViewModel repository

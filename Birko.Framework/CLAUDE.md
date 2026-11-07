@@ -296,6 +296,15 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB splits a Contains list past its query-text limit (2026-11-07)
+[[TASK-834]] (FIELD-051).
+- **The limit, measured:** the SDK writes `ids.Contains(x.Col)` into the query text, and past 13,105 Guids (524,288
+  characters) Cosmos DB answers 400 SC3020.
+- **Split, in chunks of 1000:** reads, counts, and filtered updates and deletes, when the list is a plain AND conjunct
+  of non-string values with no sort or paging (the user's decision).
+- **Refused:** any other shape past the limit gets `NotSupportedException` before any request.
+- **Writes are not atomic across chunks:** a later chunk's failure throws `CosmosChunkedWriteException` naming the
+  chunks applied.
 ### Elasticsearch takes a Contains list past 65,536 terms (2026-11-07)
 [[TASK-835]] (FIELD-051). Elasticsearch refuses a terms query past `index.max_terms_count`; measured, 65,537 ids gave
 HTTP 400. A longer list is now a bool `should` of terms queries, each within `ElasticSearch.MaxTermsCount` (default

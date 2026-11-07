@@ -232,7 +232,20 @@ public class CosmosDBStore<T>
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
         if (_container == null) return null;
 
-        var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
+        // TASK-834: with no order, "the first match" is any match, so the chunks are asked in turn.
+        var chunks = PlanInList(filter, "read", sortedOrPaged: false);
+        if (chunks == null) return ReadFirstOne(filter);
+        foreach (var chunk in chunks)
+        {
+            var found = ReadFirstOne(chunk);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private T? ReadFirstOne(Expression<Func<T, bool>>? filter)
+    {
+        var queryable = _container!.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
 
         if (filter != null)
         {
@@ -241,6 +254,64 @@ public class CosmosDBStore<T>
 
         return queryable.AsEnumerable().FirstOrDefault();
     }
+
+    #region IN-list chunking (TASK-834)
+
+    /// <inheritdoc cref="AsyncCosmosDBStore{T}.InListChunkSize"/>
+    protected virtual int InListChunkSize => CosmosInListChunking.DefaultChunkSize;
+
+    /// <inheritdoc cref="AsyncCosmosDBStore{T}.MaxQueryTextLength"/>
+    protected virtual int MaxQueryTextLength => CosmosInListChunking.DefaultMaxQueryTextLength;
+
+    private IReadOnlyList<Expression<Func<T, bool>>>? PlanInList(
+        Expression<Func<T, bool>>? filter, string operation, bool sortedOrPaged,
+        OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        => CosmosInListChunking.Plan(filter, operation, InListChunkSize, MaxQueryTextLength, sortedOrPaged,
+            f => BuildQuery(f, orderBy, limit, offset).ToQueryDefinition().QueryText.Length);
+
+    private IReadOnlyList<Expression<Func<T, bool>>>? PlanInListForWrite(Expression<Func<T, bool>> filter, string operation)
+    {
+        EnsureInitialized();
+        if (_container == null) return null;
+        filter = Data.Expressions.SpanContains.Rewrite(filter)!;
+        filter = Data.Expressions.DateTruncation.Rewrite(filter)!;
+        return PlanInList(filter, operation, sortedOrPaged: false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// TASK-834: an IN list longer than <see cref="InListChunkSize"/> is updated chunk by chunk. A failure after the
+    /// first chunk is a <see cref="CosmosChunkedWriteException"/> naming the chunks applied; nothing is rolled back.
+    /// </remarks>
+    public override void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        RequireFilter(filter, "update");
+        RequireBoundedFilter(filter, "update");
+        var chunks = PlanInListForWrite(filter, "update");
+        if (chunks == null)
+        {
+            base.Update(filter, updateAction);
+            return;
+        }
+        CosmosInListChunking.RunWrites(chunks, "update", chunk => base.Update(chunk, updateAction));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>TASK-834: chunked as <see cref="Update(Expression{Func{T, bool}}, Action{T})"/> is.</remarks>
+    public override void Delete(Expression<Func<T, bool>> filter)
+    {
+        RequireFilter(filter, "delete");
+        RequireBoundedFilter(filter, "delete");
+        var chunks = PlanInListForWrite(filter, "delete");
+        if (chunks == null)
+        {
+            base.Delete(filter);
+            return;
+        }
+        CosmosInListChunking.RunWrites(chunks, "delete", chunk => base.Delete(chunk));
+    }
+
+    #endregion
 
     /// <inheritdoc />
     protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
@@ -305,7 +376,15 @@ public class CosmosDBStore<T>
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return 0;
 
-        var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
+        // TASK-834: the chunks' values are distinct, so their counts are disjoint and add up.
+        var chunks = PlanInList(filter, "count", sortedOrPaged: false);
+        if (chunks == null) return CountOne(filter);
+        return chunks.Sum(CountOne);
+    }
+
+    private long CountOne(Expression<Func<T, bool>>? filter)
+    {
+        var queryable = _container!.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
 
         if (filter != null)
         {
@@ -326,7 +405,17 @@ public class CosmosDBStore<T>
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return Enumerable.Empty<T>();
 
-        IQueryable<T> query = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
+        // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,
+        // limit or offset cannot be reproduced over chunks, so such a read stays one query, refused past the ceiling.
+        var sortedOrPaged = orderBy?.Fields.Count > 0 || limit.HasValue || offset.HasValue;
+        var chunks = PlanInList(filter, "read", sortedOrPaged, orderBy, limit, offset);
+        if (chunks == null) return BuildQuery(filter, orderBy, limit, offset).ToList();
+        return chunks.SelectMany(chunk => BuildQuery(chunk, null, null, null).ToList()).ToList();
+    }
+
+    private IQueryable<T> BuildQuery(Expression<Func<T, bool>>? filter, OrderBy<T>? orderBy, int? limit, int? offset)
+    {
+        IQueryable<T> query = _container!.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
 
         if (filter != null)
         {
@@ -364,7 +453,7 @@ public class CosmosDBStore<T>
             query = query.Take(limit.Value);
         }
 
-        return query.ToList();
+        return query;
     }
 
     /// <inheritdoc />

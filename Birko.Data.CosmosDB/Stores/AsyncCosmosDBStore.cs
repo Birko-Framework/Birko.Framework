@@ -268,7 +268,20 @@ public class AsyncCosmosDBStore<T>
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return null;
 
-        var queryable = _container.GetItemLinqQueryable<T>();
+        // TASK-834: with no order, "the first match" is any match, so the chunks are asked in turn.
+        var chunks = PlanInList(filter, "read", sortedOrPaged: false);
+        if (chunks == null) return await ReadFirstOneAsync(filter, ct);
+        foreach (var chunk in chunks)
+        {
+            var found = await ReadFirstOneAsync(chunk, ct);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private async Task<T?> ReadFirstOneAsync(Expression<Func<T, bool>>? filter, CancellationToken ct)
+    {
+        var queryable = _container!.GetItemLinqQueryable<T>();
 
         if (filter != null)
         {
@@ -284,6 +297,72 @@ public class AsyncCosmosDBStore<T>
 
         return null;
     }
+
+    #region IN-list chunking (TASK-834)
+
+    /// <summary>
+    /// Values per chunk when a filter's <c>list.Contains(x.Col)</c> is split (TASK-834). The measured ceiling is
+    /// 13,105 Guids per query (Cosmos DB's 524,288-character query text); 1000 keeps every chunk far under it.
+    /// </summary>
+    protected virtual int InListChunkSize => CosmosInListChunking.DefaultChunkSize;
+
+    /// <summary>The query-text length, in characters, past which Cosmos DB refuses a query (SC3020).</summary>
+    protected virtual int MaxQueryTextLength => CosmosInListChunking.DefaultMaxQueryTextLength;
+
+    /// <summary>
+    /// The chunk filters for <paramref name="filter"/>, or <c>null</c> to run it as one query. Refuses with
+    /// <see cref="NotSupportedException"/>, before any request, a list past the ceiling that cannot be split.
+    /// </summary>
+    private IReadOnlyList<Expression<Func<T, bool>>>? PlanInList(
+        Expression<Func<T, bool>>? filter, string operation, bool sortedOrPaged,
+        OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        => CosmosInListChunking.Plan(filter, operation, InListChunkSize, MaxQueryTextLength, sortedOrPaged,
+            f => BuildQuery(f, orderBy, limit, offset).ToQueryDefinition().QueryText.Length);
+
+    private async Task<IReadOnlyList<Expression<Func<T, bool>>>?> PlanInListForWriteAsync(
+        Expression<Func<T, bool>> filter, string operation, CancellationToken ct)
+    {
+        await EnsureInitializedAsync(ct).ConfigureAwait(false);
+        if (_container == null) return null;
+        filter = Data.Expressions.SpanContains.Rewrite(filter)!;
+        filter = Data.Expressions.DateTruncation.Rewrite(filter)!;
+        return PlanInList(filter, operation, sortedOrPaged: false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// TASK-834: an IN list longer than <see cref="InListChunkSize"/> is updated chunk by chunk. A failure after the
+    /// first chunk is a <see cref="CosmosChunkedWriteException"/> naming the chunks applied; nothing is rolled back.
+    /// </remarks>
+    public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        RequireFilter(filter, "update");
+        RequireBoundedFilter(filter, "update");
+        var chunks = await PlanInListForWriteAsync(filter, "update", ct).ConfigureAwait(false);
+        if (chunks == null)
+        {
+            await base.UpdateAsync(filter, updateAction, ct).ConfigureAwait(false);
+            return;
+        }
+        await CosmosInListChunking.RunWritesAsync(chunks, "update", chunk => base.UpdateAsync(chunk, updateAction, ct)).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>TASK-834: chunked as <see cref="UpdateAsync(Expression{Func{T, bool}}, Action{T}, CancellationToken)"/> is.</remarks>
+    public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        RequireFilter(filter, "delete");
+        RequireBoundedFilter(filter, "delete");
+        var chunks = await PlanInListForWriteAsync(filter, "delete", ct).ConfigureAwait(false);
+        if (chunks == null)
+        {
+            await base.DeleteAsync(filter, ct).ConfigureAwait(false);
+            return;
+        }
+        await CosmosInListChunking.RunWritesAsync(chunks, "delete", chunk => base.DeleteAsync(chunk, ct)).ConfigureAwait(false);
+    }
+
+    #endregion
 
     /// <inheritdoc />
     protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
@@ -429,7 +508,20 @@ public class AsyncCosmosDBStore<T>
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return 0;
 
-        var queryable = _container.GetItemLinqQueryable<T>();
+        // TASK-834: the chunks' values are distinct, so their counts are disjoint and add up.
+        var chunks = PlanInList(filter, "count", sortedOrPaged: false);
+        if (chunks == null) return await CountOneAsync(filter, ct);
+        long total = 0;
+        foreach (var chunk in chunks)
+        {
+            total += await CountOneAsync(chunk, ct);
+        }
+        return total;
+    }
+
+    private async Task<long> CountOneAsync(Expression<Func<T, bool>>? filter, CancellationToken ct)
+    {
+        var queryable = _container!.GetItemLinqQueryable<T>();
 
         if (filter != null)
         {
@@ -492,7 +584,36 @@ public class AsyncCosmosDBStore<T>
         filter = Data.Expressions.SpanContains.Rewrite(filter);
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
 
-        IQueryable<T> query = _container.GetItemLinqQueryable<T>();
+        // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,
+        // limit or offset cannot be reproduced over chunks, so such a read stays one query, refused past the ceiling.
+        var sortedOrPaged = orderBy?.Fields.Count > 0 || limit.HasValue || offset.HasValue;
+        var chunks = PlanInList(filter, "read", sortedOrPaged, orderBy, limit, offset);
+        if (chunks == null) return await ReadAllAsync(BuildQuery(filter, orderBy, limit, offset), ct);
+
+        var results = new List<T>();
+        foreach (var chunk in chunks)
+        {
+            results.AddRange(await ReadAllAsync(BuildQuery(chunk, null, null, null), ct));
+        }
+        return results;
+    }
+
+    private static async Task<List<T>> ReadAllAsync(IQueryable<T> query, CancellationToken ct)
+    {
+        var results = new List<T>();
+        using var iterator = query.ToFeedIterator();
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(ct);
+            results.AddRange(response);
+        }
+
+        return results;
+    }
+
+    private IQueryable<T> BuildQuery(Expression<Func<T, bool>>? filter, OrderBy<T>? orderBy, int? limit, int? offset)
+    {
+        IQueryable<T> query = _container!.GetItemLinqQueryable<T>();
 
         if (filter != null)
         {
@@ -530,15 +651,7 @@ public class AsyncCosmosDBStore<T>
             query = query.Take(limit.Value);
         }
 
-        var results = new List<T>();
-        using var iterator = query.ToFeedIterator();
-        while (iterator.HasMoreResults)
-        {
-            var response = await iterator.ReadNextAsync(ct);
-            results.AddRange(response);
-        }
-
-        return results;
+        return query;
     }
 
     /// <inheritdoc />
