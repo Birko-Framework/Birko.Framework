@@ -84,6 +84,10 @@ public class SqlExpressionParityTests : IDisposable
     private static readonly int[] PlusOneHits = { 6, 10 };
     private static readonly int[] ScoreHits = { 0, 20 };
 
+    // TASK-859: lists over the nullable Score.
+    private static readonly int?[] NullableIds = { 10, 30 };
+    private static readonly int?[] ScoresOrNull = { 20, null };
+
     // Each case: a label and the predicate. The oracle is expr.Compile() over the same seed.
     public static IEnumerable<object[]> Cases()
     {
@@ -157,6 +161,16 @@ public class SqlExpressionParityTests : IDisposable
             // must reduce away rather than emit the fabricated predicate the old path produced.
             ("containsArithEmptyNot", x => !NoIds.Contains(x.Amount + 1)),
             ("containsArithEmptyIn",  x => NoIds.Contains(x.Amount + 1)),
+
+            // TASK-859 — the NULL-Score row (beta) these cases read is the divergence TASK-213 recorded and left: SQL's
+            // three-valued logic excluded it from `!=`, `NOT (=)` and `NOT IN`, where C# counts it. Now translated to C#.
+            ("nullableNotEq",       x => x.Score != 10),
+            ("nullableNotOfEq",     x => !(x.Score == 10)),
+            ("nullableNotGreater",  x => !(x.Score > 15)),
+            ("nullableNotIn",       x => !NullableIds.Contains(x.Score)),
+            ("nullableInWithNull",  x => ScoresOrNull.Contains(x.Score)),
+            ("nullableArithNotEq",  x => x.Score + 1 != 11),
+            ("nullableInAndNotEq",  x => x.Active && x.Score != 10),
         };
         foreach (var c in cases)
             yield return new object[] { c.label, c.expr };

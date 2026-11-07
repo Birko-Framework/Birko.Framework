@@ -60,7 +60,9 @@ namespace Birko.Data.SQL.Connectors
     /// <para><b>When an IN can be split.</b> <c>IN(L) AND R</c> is the union over the chunks of <c>IN(Lk) AND R</c>, and that
     /// is the only identity used. So the IN must be reached from the root through AND alone: no root term after the first
     /// joins with OR, no group on the path is an OR group or negated, and the leaf is not a NOT IN and not column-to-column.
-    /// A NOT IN is never split (the user's decision): "not in chunk 1" deleted on its own deletes chunk 2's rows.</para>
+    /// A NOT IN is never split (the user's decision): "not in chunk 1" deleted on its own deletes chunk 2's rows. The one OR
+    /// group that splits is <c>IN(L) OR c IS NULL</c> (TASK-859, a list holding <c>null</c>): its NULL leg goes with the first
+    /// chunk only.</para>
     /// <para><b>Values.</b> Only Guid, numeric, enum, date/time and bool lists are split. A string list is refused past the
     /// limit (the user's decision): under a case- or accent-insensitive collation two distinct C# strings can be one database
     /// value, so a row would match two chunks, a count would over-count and an increment would apply twice. Duplicates are
@@ -77,13 +79,20 @@ namespace Birko.Data.SQL.Connectors
     {
         private sealed class Leaf
         {
-            public Leaf(Condition condition, int[] path, int count, string? shapeReason)
+            public Leaf(Condition condition, int[] path, int count, string? shapeReason, bool hasNullLeg = false)
             {
                 Condition = condition;
                 Path = path;
                 Count = count;
                 ShapeReason = shapeReason;
+                HasNullLeg = hasNullLeg;
             }
+
+            /// <summary>
+            /// TASK-859: the IN is the first term of <c>IN(L) OR operand IS NULL</c> (a list that held <c>null</c>). The leg
+            /// stays in the first chunk only, so the chunks stay disjoint: a NULL row is matched once, never once per chunk.
+            /// </summary>
+            public bool HasNullLeg { get; }
 
             public Condition Condition { get; }
 
@@ -180,7 +189,7 @@ namespace Birko.Data.SQL.Connectors
             for (var start = 0; start < distinct.Count; start += chunkSize)
             {
                 var slice = distinct.GetRange(start, Math.Min(chunkSize, distinct.Count - start)).ToArray();
-                chunks.Add(Replace(conditions, chosen.Path, slice));
+                chunks.Add(Replace(conditions, chosen.Path, slice, dropNullLeg: chosen.HasNullLeg && start > 0));
             }
             return InListChunkPlan.Chunked(chunks, chunkSize);
         }
@@ -264,6 +273,17 @@ namespace Birko.Data.SQL.Connectors
         private static void Collect(Condition node, int[] path, string? inherited, List<Leaf> leaves)
         {
             var children = node.SubConditions?.ToList();
+            if (children != null && IsInWithNullLeg(node, children))
+            {
+                // TASK-859: `IN(L) OR c IS NULL` is the union of `IN(L1) OR c IS NULL` and `IN(Lk)` for the other chunks,
+                // and they are disjoint (a NULL is in no list), so it splits as a plain IN does.
+                // A NOT IN with its leg (`NOT IN(L) OR c IS NULL`, C#'s `!ids.Contains(x.C)`) is still a NOT IN, never split.
+                var inCount = Count(children[0].Values);
+                if (inCount > 0)
+                    leaves.Add(new Leaf(children[0], Append(path, 0), inCount, inherited ?? (children[0].IsNot ? NotInReason : null),
+                        hasNullLeg: true));
+                return;
+            }
             if (children != null && children.Count > 0)
             {
                 var reason = inherited
@@ -280,10 +300,11 @@ namespace Birko.Data.SQL.Connectors
             if (node.Type != ConditionType.In || node.IsField) return;
             var count = Count(node.Values);
             if (count == 0) return;
-            var shape = inherited
-                ?? (node.IsNot ? "it is a NOT IN, which is never split: each chunk's NOT IN alone matches the other chunks' rows" : null);
+            var shape = inherited ?? (node.IsNot ? NotInReason : null);
             leaves.Add(new Leaf(node, path, count, shape));
         }
+
+        private const string NotInReason = "it is a NOT IN, which is never split: each chunk's NOT IN alone matches the other chunks' rows";
 
         private static int[] Append(int[] path, int index)
         {
@@ -385,22 +406,38 @@ namespace Birko.Data.SQL.Connectors
         /// A copy of <paramref name="root"/> in which only the nodes on <paramref name="path"/> are new, and the leaf at its
         /// end carries <paramref name="values"/>. Every other node is the caller's, shared, and none is written to.
         /// </summary>
-        private static IReadOnlyList<Condition> Replace(IReadOnlyList<Condition> root, int[] path, object?[] values)
+        private static IReadOnlyList<Condition> Replace(IReadOnlyList<Condition> root, int[] path, object?[] values, bool dropNullLeg = false)
         {
             var copy = root.ToList();
-            copy[path[0]] = Rebuild(root[path[0]], path, 1, values);
+            copy[path[0]] = Rebuild(root[path[0]], path, 1, values, dropNullLeg);
             return copy;
         }
 
-        private static Condition Rebuild(Condition node, int[] path, int depth, object?[] values)
+        private static Condition Rebuild(Condition node, int[] path, int depth, object?[] values, bool dropNullLeg)
         {
             if (depth == path.Length)
             {
                 return node.Copy(values, node.SubConditions);
             }
             var children = node.SubConditions!.ToList();
-            children[path[depth]] = Rebuild(children[path[depth]], path, depth + 1, values);
+            children[path[depth]] = Rebuild(children[path[depth]], path, depth + 1, values, dropNullLeg);
+            // The IN's own group, `IN(L) OR c IS NULL`: a chunk after the first keeps the IN alone.
+            if (dropNullLeg && depth == path.Length - 1)
+                children = children.Take(1).ToList();
             return node.Copy(node.Values, children);
         }
+
+        /// <summary>
+        /// TASK-859: <c>[NOT] IN(L) OR c IS NULL</c> over one operand — what the parser writes for a list that held <c>null</c>
+        /// (or a <c>NOT IN</c> over a nullable operand), or
+        /// a caller's <c>ids.Contains(x.C) || x.C == null</c>.
+        /// </summary>
+        private static bool IsInWithNullLeg(Condition node, IReadOnlyList<Condition> children)
+            => node.IsOr && !node.IsNot && children.Count == 2
+                && children[0].SubConditions?.Any() != true && children[0].Type == ConditionType.In
+                && !children[0].IsField
+                && children[1].SubConditions?.Any() != true && children[1].Type == ConditionType.IsNull && !children[1].IsNot
+                && !string.IsNullOrEmpty(children[0].Name)
+                && string.Equals(children[0].Name, children[1].Name, StringComparison.Ordinal);
     }
 }

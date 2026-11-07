@@ -43,6 +43,7 @@
     <Compile Include="..\Shared\StoreContract\WriteEdgeContract.cs" Link="Shared\WriteEdgeContract.cs" />
     <Compile Include="..\Shared\StoreContract\ComputedSetContract.cs" Link="Shared\ComputedSetContract.cs" />
     <Compile Include="..\Shared\StoreContract\MathFilterContract.cs" Link="Shared\MathFilterContract.cs" />
+    <Compile Include="..\Shared\StoreContract\NullFilterContract.cs" Link="Shared\NullFilterContract.cs" />
     <Compile Include="..\Shared\StoreContract\UnconfiguredContract.cs" Link="Shared\UnconfiguredContract.cs" />
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />

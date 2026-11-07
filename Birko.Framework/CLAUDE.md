@@ -296,6 +296,14 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL filters treat NULL the way C# does — BREAKING (2026-11-07)
+[[TASK-859]] (the user's decision: always, no flag). Measured on all four SQL providers: 34 of 61 nullable shapes
+returned different rows than the C# expression. `x.Score != 5` missed the NULL rows, and `{null, 10}.Contains(x.Score)`
+never matched NULL.
+- **Now:** `!=`, `!Contains` and negated comparisons include NULL rows; `Contains` with `null` matches NULL; an ordering
+  against a null variable matches nothing. Deletes and updates with these filters affect those rows too.
+- The rendered SQL gains `OR col IS NULL` legs only where SQL and C# would differ; non-nullable columns are unchanged.
+- A split IN list keeps the IS NULL leg in its first chunk only, so the chunks stay disjoint.
 ### Cosmos DB view names are quoted; a failing mapping names itself (2026-11-07)
 - [[TASK-844]]: a Cosmos DB view property named like a keyword (`Value`, `Inner`) failed every query with SC1001. Aliases
   are now quoted (`AS "Value"`), and so are paths (`c["Sub"]["Value"]`), measured.
@@ -384,11 +392,6 @@ the host. The WebSocket token binding takes the address those headers produced, 
 differs. The loopback bypass refuses to start behind a trusted proxy. The forwarded values it leaves unread are removed, so a
 second `UseForwardedHeaders()` cannot believe a client-written hop (rule 67, measured). One parser, `TrustedProxyList`,
 for every list (the user's decisions). Presenter, Symbio and Affiliate replace their own copies (notes in the task).
-### RavenDB increments and sets run on the server (2026-11-07)
-[[TASK-827]]. `PropertyUpdate` on RavenDB was read-modify-save, so parallel increments lost some (measured). Exact
-kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments
-(range-checked; a `long` past 2^53 is refused). Patch JavaScript holds numbers as doubles (measured), so decimal and
-floating values, `Compute`, and updates inside a unit of work stay on the exact C# path (the user's decision).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

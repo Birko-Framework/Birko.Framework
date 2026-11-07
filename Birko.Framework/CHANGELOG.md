@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — RavenDB increments and sets run on the server
+[[TASK-827]]. `PropertyUpdate` on RavenDB was read-modify-save, so parallel increments lost some (measured). Exact
+kinds are now patched on the server in one transaction: sets of non-floating values, `short` / `int` / `long` increments
+(range-checked; a `long` past 2^53 is refused). Patch JavaScript holds numbers as doubles (measured), so decimal and
+floating values, `Compute`, and updates inside a unit of work stay on the exact C# path (the user's decision).
+
 ## 2026-11-07 — RavenDB writes wait for the indexes, so a query after a write sees it
 [[TASK-828]], found by the TASK-826 contract. Under load, an update applied to all 6 documents while a query on the value it
 wrote returned 5 (stale index, measured). Every store session and the unit of work now save with

@@ -574,7 +574,8 @@ namespace Birko.Data.SQL
                         }
                     }
                     var res = ParseConditionExpression(body, parent, type);
-                    return res;
+                    // TASK-859: polarity is known only once the whole tree is built, so the NULL legs are added here.
+                    return parent == null ? ApplyCSharpNullSemantics(res) : res;
                 }
                 else if (expr is UnaryExpression unaryExpression)
                 {
@@ -816,6 +817,8 @@ namespace Birko.Data.SQL
                         var left = ParseConditionExpression(comparedLeft, basecondition, exprType);
                         var right = ParseConditionExpression(comparedRight, basecondition, exprType);
                         StoreComparedValues(basecondition, binaryExpression, exprType);
+                        if (basecondition.SubConditions?.Any() != true && IsPlainColumnOperand(comparedLeft, exprType))
+                            MarkNullableComparison(basecondition, comparedLeft, exprType);
                         if (parent != null)
                         {
                             var subs = parent.SubConditions as List<Condition> ?? new List<Condition>(parent.SubConditions ?? []);
@@ -998,6 +1001,15 @@ namespace Birko.Data.SQL
                         // The column is an argument (static Enumerable / MemoryExtensions.Contains) or the Object
                         // (List<T>.Contains); the other side is the list.
                         StoreColumnValues(condition, exprType, methodExpression.Arguments.Concat(new[] { methodExpression.Object }).ToArray());
+                        if (!condition.IsField && condition.SubConditions?.Any() != true)
+                        {
+                            // Not for a call with no row operand: an array's implicit span conversion is parsed through
+                            // here too, as the list argument of the Contains that owns the operand.
+                            var operand = methodExpression.Arguments.Concat(new[] { methodExpression.Object })
+                                .FirstOrDefault(e => e != null && !IsNonOperandArgument(e) && ContainsParameter(e));
+                            if (operand != null)
+                                MarkNullableIn(condition, operand, exprType);
+                        }
                     }
                     return new[] { condition };
                 }
@@ -1030,27 +1042,30 @@ namespace Birko.Data.SQL
                 {
                     if (expr is ConstantExpression || expr is MethodCallExpression)
                     {
-                        IEnumerable<object>? vals = InvokeExpression(expr);
-                        var materialized = vals?.Where(x => x != null).ToArray();
-                        if (materialized?.Length > 0)
+                        if (parent.Type == ConditionType.In
+                            && EvaluateExpression(expr) is IEnumerable list && list is not string)
+                        {
+                            // TASK-859: the list is kept whole, a null included. In C# a null in the list matches a
+                            // NULL column, so MarkNullableIn turns it into the column's IS NULL rather than dropping it
+                            // (which matched no NULL row) or binding it (`NOT IN (5, NULL)` matches no row at all).
+                            parent.Values = list.Cast<object?>().ToArray();
+                        }
+                        else if (InvokeExpression(expr)?.Where(x => x != null).ToArray() is { Length: > 0 } materialized)
                         {
                             parent.Values = materialized;
                         }
                         else if (parent.Type == ConditionType.In)
                         {
-                            // An empty (or all-null) collection in an IN predicate means "matches nothing" —
-                            // NOT "the column is null". Degrading to IsNull here returned rows with a NULL
-                            // column, which is a different, wrong answer. Keep the condition an In with no
-                            // values; InConditionStrategy renders that as the always-false / always-true
-                            // constant (an empty NOT IN matches everything). Note `Col IN (NULL)` is also
-                            // never true in SQL, so collapsing an all-null list to "matches nothing" is
-                            // faithful rather than a shortcut.
+                            // An empty (or null) collection in an IN predicate means "matches nothing" — NOT "the
+                            // column is null". Keep the condition an In with no values; InConditionStrategy renders
+                            // that as the always-false / always-true constant (an empty NOT IN matches everything).
                             parent.Values = System.Array.Empty<object>();
                         }
                         else
                         {
-                            // Not an IN: a null/empty constant is a genuine `= null` → IS NULL.
-                            parent.Type = ConditionType.IsNull;
+                            // Not an IN: a null/empty constant is a genuine `= null` → IS NULL; an ordering against
+                            // null is constant (TASK-859).
+                            ComparedWithNull(parent);
                         }
                     }
                     else if (expr is NewArrayExpression arrayExpresion)
@@ -1083,10 +1098,10 @@ namespace Birko.Data.SQL
                             // literal `== null` does (see the ConstantExpression branch above). Otherwise
                             // `x.Col == nullableVar` (var == null) emits `Col = NULL`, which is always
                             // UNKNOWN in SQL → zero rows. For `!=`, IsNot is already set, so this yields
-                            // IS NOT NULL — symmetric with the literal-null path.
+                            // IS NOT NULL — symmetric with the literal-null path. An ordering against null is constant (TASK-859).
                             if (value == null)
                             {
-                                parent.Type = ConditionType.IsNull;
+                                ComparedWithNull(parent);
                                 return new[] { parent };
                             }
                             parent.Values = (value is not string && value is IEnumerable enumerable)
@@ -1400,6 +1415,8 @@ namespace Birko.Data.SQL
                 parent.Name = surviving.Name;
                 parent.NameFragment = surviving.NameFragment;
                 parent.FieldFragment = surviving.FieldFragment;
+                parent.NullableOperands = surviving.NullableOperands;
+                parent.NullOperandMatches = surviving.NullOperandMatches;
                 parent.Values = surviving.Values;
                 parent.Type = surviving.Type;
                 parent.IsNot = parent.IsNot ^ surviving.IsNot;
@@ -1754,7 +1771,28 @@ namespace Birko.Data.SQL
                     return b.NodeType == ExpressionType.Equal ? $"({frag} IS NULL)" : $"({frag} IS NOT NULL)";
                 }
                 case BinaryExpression b when ComparisonSqlOperator(b.NodeType) is string op:
-                    return $"({dialect.Compared(RenderValueFragment(b.Left, exprType, dialect), b.Left.Type)} {op} {dialect.Compared(RenderValueFragment(b.Right, exprType, dialect), b.Right.Type)})";
+                {
+                    var left = RenderValueFragment(b.Left, exprType, dialect);
+                    var right = RenderValueFragment(b.Right, exprType, dialect);
+                    var leftNull = ContainsParameter(b.Left) && OperandCanBeNull(b.Left, exprType);
+                    var rightNull = ContainsParameter(b.Right) && OperandCanBeNull(b.Right, exprType);
+                    string Compare(string sqlOperator)
+                        => $"({dialect.Compared(left, b.Left.Type)} {sqlOperator} {dialect.Compared(right, b.Right.Type)})";
+                    if (!leftNull && !rightNull)
+                        return Compare(op);
+
+                    // TASK-859: a WHEN test is two-valued, as in C#: a lifted comparison with a NULL operand is false, but
+                    // null == null is true; `!=` is the negation of that. Two-valued, so an enclosing NOT stays exact.
+                    var notNull = string.Join(" AND ", new[] { leftNull ? $"{left} IS NOT NULL" : null, rightNull ? $"{right} IS NOT NULL" : null }
+                        .Where(test => test != null));
+                    string Defined(string sqlOperator) => $"({Compare(sqlOperator)} AND {notNull})";
+                    if (b.NodeType is not (ExpressionType.Equal or ExpressionType.NotEqual))
+                        return Defined(op);
+                    var equal = leftNull && rightNull
+                        ? $"({Defined("=")} OR ({left} IS NULL AND {right} IS NULL))"
+                        : Defined("=");
+                    return b.NodeType == ExpressionType.Equal ? equal : $"(NOT {equal})";
+                }
                 case MemberExpression m when TryResolveParameterColumn(m, exprType, out var column)
                         && UnwrapNullable(m.Type) == typeof(bool):
                     return BoolColumnTest(column);
@@ -1840,14 +1878,18 @@ namespace Birko.Data.SQL
 
             if (leftHasParam && !rightHasParam)
             {
-                return WithFragments(MakeValueCondition(RenderValueFragment(left, exprType), EvaluateExpression(right), type, isNot, isOR),
-                    ComparedFragment(left, comparedType, exprType));
+                return MarkNullableFragment(
+                    WithFragments(MakeValueCondition(RenderValueFragment(left, exprType), EvaluateExpression(right), type, isNot, isOR),
+                        ComparedFragment(left, comparedType, exprType)),
+                    left, exprType);
             }
             if (!leftHasParam && rightHasParam)
             {
                 // Value on the left, column expression on the right — flip the operator to keep the column on the left.
-                return WithFragments(MakeValueCondition(RenderValueFragment(right, exprType), EvaluateExpression(left), FlipComparison(type), isNot, isOR),
-                    ComparedFragment(right, comparedType, exprType));
+                return MarkNullableFragment(
+                    WithFragments(MakeValueCondition(RenderValueFragment(right, exprType), EvaluateExpression(left), FlipComparison(type), isNot, isOR),
+                        ComparedFragment(right, comparedType, exprType)),
+                    right, exprType);
             }
             // Both sides reference the parameter → column expression compared to column expression.
             var leftFragment = RenderValueFragment(left, exprType);
@@ -1895,7 +1937,23 @@ namespace Birko.Data.SQL
                 ComparedFragment(left, comparedType, exprType), ComparedFragment(right, comparedType, exprType));
 
             var nullable = CanBeNull(left.Type) || CanBeNull(right.Type);
-            if (!nullable || nodeType is not (ExpressionType.Equal or ExpressionType.NotEqual))
+            var nullSafe = nullable && nodeType is (ExpressionType.Equal or ExpressionType.NotEqual);
+
+            // TASK-859: the comparison itself answers false in C# when either side is NULL, so under a negation it gains
+            // `AND side IS NOT NULL` (ApplyCSharpNullSemantics). Inside the null-safe group below the NULL cases are the
+            // group's other terms, so the `A <> B` term must answer false on NULL too, and its IsNot reads that as "the
+            // equality it negates answers true".
+            var nullableSides = new[] { (Operand: left, Sql: leftFragment), (Operand: right, Sql: rightFragment) }
+                .Where(side => OperandCanBeNull(side.Operand, exprType))
+                .Select(side => FragmentOperand(side.Sql, side.Operand, exprType))
+                .ToArray();
+            if (nullableSides.Length > 0 && IsComparison(type))
+            {
+                compared.NullableOperands = nullableSides;
+                compared.NullOperandMatches = nullSafe && nodeType == ExpressionType.NotEqual;
+            }
+
+            if (!nullSafe)
                 return compared;
 
             // TASK-857: each IS [NOT] NULL leg keeps its provider rendering, as the comparison does; the portable form of a
@@ -1939,11 +1997,177 @@ namespace Birko.Data.SQL
 
         private static Condition MakeValueCondition(string name, object? value, ConditionType type, bool isNot, bool isOR)
         {
-            // A null-valued equality must become IS NULL (see the literal `== null` path); any other
-            // comparison keeps the (null) value bound so SQL yields UNKNOWN → no rows, matching C#.
-            if (value == null && type == ConditionType.Equal)
-                return new Condition(name, null, ConditionType.IsNull, false, isNot, isOR);
-            return new Condition(name, new[] { value! }, type, false, isNot, isOR);
+            // A null-valued equality must become IS NULL (see the literal `== null` path); an ordering against null is
+            // the constant C# answers (TASK-859): false, and true under a negation.
+            var condition = new Condition(name, new[] { value! }, type, false, isNot, isOR);
+            if (value == null)
+                ComparedWithNull(condition);
+            return condition;
+        }
+
+        /// <summary>
+        /// TASK-859 — a comparison whose value is <c>null</c>. An equality is the operand's <c>IS [NOT] NULL</c>; a lifted
+        /// ordering (<c>&lt;</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&gt;=</c>) is <c>false</c> in C# whatever the row, so it becomes
+        /// the empty <c>IN</c>: <c>1 = 0</c>, or under <see cref="Condition.IsNot"/> the always-true term TASK-137 reduces
+        /// away (and a destructive statement refuses). An ordering used to bind the null (UNKNOWN, so no row, but every row
+        /// under a <c>NOT</c>) or, from a closure, to become <c>IS NULL</c>.
+        /// </summary>
+        private static void ComparedWithNull(Condition condition)
+        {
+            condition.NullableOperands = null;
+            if (condition.Type is ConditionType.Less or ConditionType.Greather or ConditionType.LessAndEqual or ConditionType.GreatherAndEqual)
+            {
+                condition.Type = ConditionType.In;
+                condition.Values = Array.Empty<object>();
+                return;
+            }
+            condition.Type = ConditionType.IsNull;
+            condition.Values = null;
+        }
+
+        /// <summary>
+        /// TASK-859 — true when <paramref name="operand"/> can read NULL: its CLR type can hold null and, for a plain column,
+        /// the column is not declared NOT NULL or primary. A non-nullable <c>int</c> column keeps the SQL it always had.
+        /// </summary>
+        private static bool OperandCanBeNull(Expression operand, Type? exprType)
+        {
+            var inner = UnwrapConvert(operand);
+            if (!CanBeNull(inner.Type)) return false;
+            if (exprType != null && ComparedField(inner, exprType) is { } field && (field.IsNotNull || field.IsPrimary)) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// TASK-859 — records the plain column of an <c>==</c> / <c>!=</c> / ordering against a value as a nullable operand,
+        /// for <see cref="ApplyCSharpNullSemantics"/>.
+        /// </summary>
+        private static void MarkNullableComparison(Condition condition, Expression column, Type? exprType)
+        {
+            if (condition.IsField || string.IsNullOrEmpty(condition.Name) || !IsComparison(condition.Type)
+                || !OperandCanBeNull(column, exprType))
+                return;
+            condition.NullableOperands = new[] { new NullableOperand(condition.Name) };
+            condition.NullOperandMatches = false;
+        }
+
+        /// <summary>TASK-859 — the same for a value fragment (<c>x.Optional + 1m != 8m</c>), which is NULL when its CLR type allows.</summary>
+        private static Condition MarkNullableFragment(Condition condition, Expression operand, Type? exprType)
+        {
+            if (!IsComparison(condition.Type) || !CanBeNull(operand.Type) || string.IsNullOrEmpty(condition.Name))
+                return condition;
+            condition.NullableOperands = new[] { FragmentOperand(condition.Name, operand, exprType) };
+            condition.NullOperandMatches = false;
+            return condition;
+        }
+
+        /// <summary>
+        /// TASK-859 — a set <c>Contains</c>: a <c>null</c> in the list is taken out of the <c>IN</c> (bound, it made
+        /// <c>NOT IN</c> match no row) and recorded as "a NULL operand matches". A list that held only <c>null</c> is the
+        /// operand's <c>IS [NOT] NULL</c>; over a column that cannot be NULL, the null simply goes.
+        /// </summary>
+        private static void MarkNullableIn(Condition condition, Expression operand, Type? exprType)
+        {
+            var values = condition.Values?.Cast<object?>().ToList();
+            var hadNull = values?.Any(v => v == null) == true;
+            if (hadNull)
+                condition.Values = values!.Where(v => v != null).ToArray();
+            if (string.IsNullOrEmpty(condition.Name) || !OperandCanBeNull(operand, exprType)
+                || (operand.Type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(operand.Type)))
+                return;
+
+            var nullable = IsPlainColumnOperand(operand, exprType)
+                ? new NullableOperand(condition.Name)
+                : FragmentOperand(condition.Name, operand, exprType);
+            if (hadNull && values!.All(v => v == null))
+            {
+                condition.Type = ConditionType.IsNull;
+                condition.Values = null;
+                condition.NameFragment = nullable.Fragment;
+                return;
+            }
+            condition.NullableOperands = new[] { nullable };
+            condition.NullOperandMatches = hadNull;
+        }
+
+        private static NullableOperand FragmentOperand(string portable, Expression operand, Type? exprType)
+            => new(portable, dialect => RenderValueFragment(operand, exprType, dialect));
+
+        private static bool IsComparison(ConditionType type)
+            => type is ConditionType.Equal or ConditionType.Less or ConditionType.Greather
+                or ConditionType.LessAndEqual or ConditionType.GreatherAndEqual;
+
+        /// <summary>
+        /// TASK-859 — makes the parsed tree answer what the C# expression answers on a NULL operand. SQL's comparison is
+        /// UNKNOWN there, which a WHERE treats as false at even depth of <c>NOT</c> and as true at odd depth (Kleene logic
+        /// collapses UNKNOWN that way through AND and OR). So a comparison needs a leg only where C# answers the other way:
+        /// <list type="bullet">
+        /// <item>outside a negation, a comparison C# answers <b>true</b> on NULL (<c>!=</c>, <c>NOT IN</c> without a null,
+        /// <c>IN</c> with one) gains <c>OR operand IS NULL</c>;</item>
+        /// <item>inside one, a comparison C# answers <b>false</b> on NULL (<c>==</c>, an ordering, <c>IN</c> without a null)
+        /// gains <c>AND operand IS NOT NULL</c>.</item>
+        /// </list>
+        /// Every other comparison, and every comparison over an operand that cannot be NULL, keeps its SQL. Neither leg can
+        /// widen a filter to every row: each is a column test, never a constant, so TASK-137's whole-table guard still sees
+        /// exactly what it saw. An <c>IN</c> that gains an <c>OR</c> leg sits in an OR group, which TASK-833's planner never
+        /// splits (each chunk would match the NULL rows again).
+        /// </summary>
+        private static IEnumerable<Condition> ApplyCSharpNullSemantics(IEnumerable<Condition> roots)
+        {
+            var terms = roots as IList<Condition> ?? roots.ToList();
+            List<Condition>? result = null;
+            for (var i = 0; i < terms.Count; i++)
+            {
+                var term = terms[i];
+                var rewritten = WithNullLegs(term, negated: false);
+                if (ReferenceEquals(rewritten, term)) continue;
+                // A root after the first joins with its own IsOr; the new group's IsOr joins its children.
+                if (i > 0 && rewritten.IsOr != term.IsOr)
+                    rewritten = new Condition(null, null) { IsOr = term.IsOr, SubConditions = new List<Condition> { rewritten } };
+                result ??= terms.ToList();
+                result[i] = rewritten;
+            }
+            return result ?? terms;
+        }
+
+        private static Condition WithNullLegs(Condition condition, bool negated)
+        {
+            if (condition.SubConditions?.Any() == true)
+            {
+                var inner = negated ^ condition.IsNot;
+                var subs = condition.SubConditions.Select(sub => WithNullLegs(sub, inner)).ToList();
+                // `!(x.Score > nullValue)`: a negated group around the constant empty IN is the constant's complement. Folded
+                // into the leaf, because TASK-137's guard recognises an always-true leaf but not `NOT (1 = 0)`.
+                if (condition.IsNot && subs.Count == 1 && subs[0].SubConditions?.Any() != true
+                    && subs[0].Type == ConditionType.In && subs[0].Values?.Cast<object?>().Any() != true)
+                {
+                    var folded = subs[0];
+                    folded.IsNot = !folded.IsNot;
+                    folded.IsOr = condition.IsOr;
+                    return folded;
+                }
+                condition.SubConditions = subs;
+                return condition;
+            }
+
+            var operands = condition.NullableOperands;
+            if (operands == null || operands.Count == 0) return condition;
+            // An empty IN is a constant (`1 = 0`, or the always-true NOT IN), whatever the operand holds.
+            if (condition.Type == ConditionType.In && condition.Values?.Cast<object?>().Any() != true) return condition;
+
+            var answersTrueOnNull = condition.IsNot ^ condition.NullOperandMatches;
+            if (!negated && answersTrueOnNull)
+                return new Condition(null, null)
+                {
+                    IsOr = true,
+                    SubConditions = new[] { condition }.Concat(operands.Select(o => o.IsNull(isNot: false))).ToList(),
+                };
+            if (negated && !answersTrueOnNull)
+                return new Condition(null, null)
+                {
+                    IsOr = false,
+                    SubConditions = new[] { condition }.Concat(operands.Select(o => o.IsNull(isNot: true))).ToList(),
+                };
+            return condition;
         }
 
         /// <summary>True when one operand of an equality is the literal <c>null</c>; yields the other operand.</summary>

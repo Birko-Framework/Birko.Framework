@@ -27,6 +27,9 @@ dropping applies to other calls and to casts, and it was measured on SQLite, Pos
   rows on every provider.
 - `(decimal)x.Hits / 4m` drops the cast, so PostgreSQL and SQL Server do integer division: wrong rows.
 - Update SET, from code reading only: `ParseExpression` returns null for a unary minus.
+- Also found by the TASK-859 review, on SQLite:
+  - `x.Score.GetValueOrDefault() != 5` drops the call.
+  - `string.Compare(x.Name, "a") > 0` renders `Name > 'a'`, which loses C#'s culture ordering.
 
 A translator that cannot express a node must refuse it (rules 41–44). Today the parser's default for an unknown call
 or conversion is to keep the operand and lose the operation, which turns a filter into a different filter with no

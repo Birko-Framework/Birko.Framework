@@ -96,6 +96,10 @@ public class ComputedContainsOperandTests : IDisposable
         // the right answer — so without a null row the always-true test below passed against the defect and
         // could not witness the fix. With one, SQL's three-valued logic excludes it (`NULL = 0` is UNKNOWN,
         // and `NOT UNKNOWN` is UNKNOWN) while C# counts it, which is the divergence.
+        // TASK-859 (deliberate update): SQL's three-valued answer on a nullable comparison is no longer what the
+        // parser emits — a negated `Score = 0` now carries `AND Score IS NOT NULL` and counts the NULL row, as C#
+        // does. The expectations below are unchanged (they were always C#'s); what changed is that this row's
+        // witness power for TASK-213 now rests on the empty-NOT-IN reduction, not on three-valued logic.
         await store.CreateAsync(new Row { Guid = Guid.NewGuid(), Name = "r4", Amount = 40, Score = null });
         (await store.ReadAsync(CancellationToken.None)).Should().HaveCount(4, "seed");
         return store;
