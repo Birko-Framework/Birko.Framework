@@ -10,7 +10,8 @@ namespace Birko.Data.CosmosDB.Stores;
 
 /// <summary>
 /// TASK-834: splits a filter whose <c>list.Contains(x.Col)</c> is longer than the chunk size into one filter per
-/// chunk of the list, so a long list stays under Cosmos DB's query-text ceiling.
+/// chunk of the list, so a long list stays under Cosmos DB's query-text ceiling. Since TASK-842 a chunk is cut by the
+/// length of its query text as well as by count, so a list of long strings is split smaller instead of refused.
 /// </summary>
 /// <remarks>
 /// <para>The Cosmos LINQ provider writes the list into the query TEXT as <c>IN (...)</c>, not as a parameter, and the
@@ -33,15 +34,34 @@ namespace Birko.Data.CosmosDB.Stores;
 /// </remarks>
 internal static class CosmosInListChunking
 {
-    /// <summary>Values per chunk: 40 KB of query text for Guids, a thirteenth of the measured ceiling.</summary>
+    /// <summary>
+    /// The most values per chunk: 40 KB of query text for Guids, a thirteenth of the measured ceiling. A ceiling, not the
+    /// only rule: a chunk also ends where its query text would pass the budget (TASK-842).
+    /// </summary>
     public const int DefaultChunkSize = 1000;
 
     /// <summary>Cosmos DB's query-text limit in characters (the server's SC3020 message names it).</summary>
     public const int DefaultMaxQueryTextLength = 524288;
 
     /// <summary>
+    /// TASK-842: a chunk's query text is kept this far under the limit, a sixteenth of it (32,768 characters by
+    /// default). Every chunk is measured with the store's own rendering before any request, and on the emulator that
+    /// rendering is exactly what is counted: characters, not UTF-8 bytes (300,000 U+00E9 pass), with 524,253 accepted
+    /// and 524,453 refused (vnext-preview, 2026-11-07). The margin is for what that did not measure, the production
+    /// service; it costs at most one chunk in sixteen, and nothing for Guid lists, whose 1,000-value chunks are 40 KB.
+    /// </summary>
+    public static int MarginFor(int maxQueryTextLength) => maxQueryTextLength / 16;
+
+    /// <summary>
     /// Plans the filter. Returns <c>null</c> when it runs as one query, or the chunk filters in list order.
     /// </summary>
+    /// <remarks>
+    /// TASK-842: a list is split when it has more than <paramref name="chunkSize"/> distinct values, or when the query
+    /// would be over the budget (<paramref name="maxQueryTextLength"/> less <see cref="MarginFor"/>). Chunks are cut by
+    /// serialized length: values are added while the chunk's estimated query text stays within the budget and its count
+    /// within <paramref name="chunkSize"/>; each chunk is then measured with <paramref name="queryTextLength"/>, and one
+    /// over the budget is halved until it fits. A single value whose query is still over the limit is refused by name.
+    /// </remarks>
     /// <param name="queryTextLength">The length of the query text the store would send for a filter; local, no request.</param>
     /// <exception cref="NotSupportedException">The list is past the ceiling and the filter cannot be split.</exception>
     public static IReadOnlyList<Expression<Func<T, bool>>>? Plan<T>(
@@ -57,35 +77,89 @@ internal static class CosmosInListChunking
             throw new InvalidOperationException($"The IN-list chunk size must be at least 1; it is {chunkSize}.");
 
         var lists = InListFinder.Find(filter);
+        if (lists.Count == 0) return null;
+        var budget = maxQueryTextLength - MarginFor(maxQueryTextLength);
+
         var big = lists.Where(l => l.Values.Count > chunkSize).ToList();
-        if (big.Count == 0) return null;
+        int? whole = null;
+        if (big.Count == 0)
+        {
+            // Within the count ceiling, a list is split only when its values cannot fit; the estimate spares a short
+            // list the rendering.
+            if (lists.Sum(l => l.EstimatedLength) <= budget) return null;
+            whole = queryTextLength(filter);
+            if (whole <= budget) return null;
+            big = lists.Where(l => l.Values.Count > 0).ToList();
+            if (big.Count == 0) return null;
+        }
 
         var blocker = big.Where(l => l.Reason != null).OrderByDescending(l => l.Values.Count).FirstOrDefault();
         if (blocker != null || sortedOrPaged)
         {
             var reason = blocker?.Reason ?? "the read has a sort, limit or offset, which chunks cannot reproduce";
             var count = (blocker ?? big.OrderByDescending(l => l.Values.Count).First()).Values.Count;
-            var length = queryTextLength(filter);
+            var length = whole ?? queryTextLength(filter);
             if (length <= maxQueryTextLength) return null;
             throw Refusal<T>(operation, count, length, maxQueryTextLength, chunkSize, reason);
         }
 
-        var target = big.OrderByDescending(l => l.Values.Count).First();
-        var chunks = new List<Expression<Func<T, bool>>>();
-        for (var start = 0; start < target.Values.Count; start += chunkSize)
-        {
-            var slice = target.Values.Skip(start).Take(chunkSize);
-            var body = new NodeReplacer(target.Node, target.WithValues(slice)).Visit(filter.Body)!;
-            chunks.Add(Expression.Lambda<Func<T, bool>>(body, filter.Parameters));
-        }
+        var target = big.OrderByDescending(l => l.EstimatedLength).ThenByDescending(l => l.Values.Count).First();
+        Expression<Func<T, bool>> Build(IEnumerable<object?> values)
+            => Expression.Lambda<Func<T, bool>>(new NodeReplacer(target.Node, target.WithValues(values)).Visit(filter.Body)!, filter.Parameters);
 
-        var first = queryTextLength(chunks[0]);
-        if (first > maxQueryTextLength)
+        // The rest of the query, estimated from one value's rendering; the measurement of each chunk is what decides.
+        var first = target.Values[0];
+        var overhead = Math.Max(0, queryTextLength(Build(new[] { first })) - InList.Cost(first));
+
+        var chunks = new List<Expression<Func<T, bool>>>();
+        var slice = new List<object?>();
+        var sliceLength = overhead;
+        foreach (var value in target.Values)
         {
-            throw Refusal<T>(operation, target.Values.Count, first, maxQueryTextLength, chunkSize,
-                "even one chunk is over the limit: the rest of the filter (another long IN list, for one) is too long");
+            var cost = InList.Cost(value);
+            if (slice.Count > 0 && (slice.Count >= chunkSize || sliceLength + cost > budget))
+            {
+                AddMeasured(slice);
+                slice = new List<object?>();
+                sliceLength = overhead;
+            }
+            slice.Add(value);
+            sliceLength += cost;
         }
-        return chunks;
+        AddMeasured(slice);
+
+        // A list split only for its length that still fits one chunk is the original query.
+        return chunks.Count == 1 ? null : chunks;
+
+        void AddMeasured(List<object?> values)
+        {
+            var chunk = Build(values);
+            var length = queryTextLength(chunk);
+            if (length <= budget || (values.Count == 1 && length <= maxQueryTextLength))
+            {
+                chunks.Add(chunk);
+                return;
+            }
+            if (values.Count > 1)
+            {
+                var half = values.Count / 2;
+                AddMeasured(values.GetRange(0, half));
+                AddMeasured(values.GetRange(half, values.Count - half));
+                return;
+            }
+
+            var valueLength = InList.Cost(values[0]);
+            if (length - valueLength > maxQueryTextLength)
+            {
+                throw Refusal<T>(operation, target.Values.Count, length, maxQueryTextLength, chunkSize,
+                    "even one chunk is over the limit: the rest of the filter (another long IN list, for one) is too long");
+            }
+            throw new NotSupportedException(
+                $"Cosmos DB {operation} of {typeof(T).Name} refused: one value of its IN list (of {target.Values.Count} "
+                + $"distinct values) serializes to about {valueLength} characters, and a query holding that value alone "
+                + $"would be {length} characters, over Cosmos DB's limit of {maxQueryTextLength}. No chunk can hold it. "
+                + "Narrow the filter, or match that value another way. (TASK-842)");
+        }
     }
 
     private static NotSupportedException Refusal<T>(string operation, int count, int length, int max, int chunkSize, string reason)
@@ -148,6 +222,18 @@ internal static class CosmosInListChunking
         public List<object?> Values { get; }
         /// <summary><c>null</c> when the list can be split.</summary>
         public string? Reason { get; }
+
+        private int? _estimatedLength;
+
+        /// <summary>The values' estimated length in a query, separators included (TASK-842).</summary>
+        public int EstimatedLength => _estimatedLength ??= Values.Sum(Cost);
+
+        /// <summary>
+        /// One value's estimated length in a query: its JSON plus a separator. JSON is how the view store measures a
+        /// parameter, and it escapes at least as much as the LINQ provider's literals; each chunk is measured anyway.
+        /// </summary>
+        public static int Cost(object? value)
+            => (value == null ? 4 : System.Text.Json.JsonSerializer.Serialize(value, value.GetType()).Length) + 2;
 
         /// <summary><c>new List&lt;E&gt;(values).Contains(item)</c>: the List spelling the Cosmos provider renders as IN.</summary>
         public Expression WithValues(IEnumerable<object?> values)

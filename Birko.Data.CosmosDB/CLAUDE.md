@@ -24,8 +24,13 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 - **A long `Contains` list (TASK-834).** The SDK writes the list into the query text, so past 524,288 characters
   (13,105 Guids, measured) Cosmos DB answers 400 SC3020.
   - **Split, by `CosmosInListChunking`:** reads, counts, and filtered updates and deletes, sync and async, in chunks of
-    `InListChunkSize` (1000). The split applies only when the list is a plain AND conjunct of scalar values or
-    strings with no sort or paging.
+    at most `InListChunkSize` (1000) values. The split applies only when the list is a plain AND conjunct of scalar
+    values or strings with no sort or paging.
+  - **Cut by length too (TASK-842).** A chunk also ends where its query text would pass the limit less a margin of a
+    sixteenth (32,768 characters), and each chunk is measured with the store's own rendering and halved until it fits.
+    So 1,200 strings of 600 characters, which one 1,000-value chunk overflows, are read; a list under 1,000 values is
+    split when its query is over that budget. The server counts characters, not UTF-8 bytes (measured on the
+    emulator). A single value whose query alone is over the limit is refused by name (`one value ...`), never sent.
   - **Strings split here, not on SQL.** Cosmos DB has no collation: `IN` and `ARRAY_CONTAINS` match only the
     ordinally equal string (case, a trailing space, U+00E9 vs `e`+U+0301 each measured distinct on the emulator,
     TASK-841), so distinct strings make disjoint chunks. The SQL `InListChunkPlanner` refuses strings (TASK-833: a

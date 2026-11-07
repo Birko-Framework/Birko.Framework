@@ -233,7 +233,10 @@ public sealed class Task834InListChunkingLiveTests : IDisposable
         public required List<InListDoc> Seed { get; init; }
         public AsyncCosmosDBStore<InListDoc> Async(int chunk = Chunk) => new ChunkedAsyncStore(Container, chunk);
         public CosmosDBStore<InListDoc> Sync(int chunk = Chunk) => new ChunkedStore(Container, chunk);
-        /// <summary>The oracle: chunk size far above any list here, so every filter runs as one query.</summary>
+        /// <summary>
+        /// The oracle: chunk size far above any list here, so every filter within the length budget runs as one query
+        /// (past it, TASK-842 splits by length whatever the count).
+        /// </summary>
         public AsyncCosmosDBStore<InListDoc> Single() => new ChunkedAsyncStore(Container, 1_000_000);
     }
 
@@ -383,8 +386,13 @@ public sealed class Task834InListChunkingLiveTests : IDisposable
         if (f == null) return;
         var ids = PastCeiling(f);
 
-        // The ceiling this crosses, as one query: SC3020 from the server.
-        var single = () => f.Single().ReadAsync(x => ids.Contains(x.Guid));
+        // The ceiling this crosses, as one query sent past the store's planner: SC3020 from the server.
+        var single = async () =>
+        {
+            using var it = Microsoft.Azure.Cosmos.Linq.CosmosLinqExtensions.ToFeedIterator(
+                f.Container.GetItemLinqQueryable<InListDoc>().Where(x => ids.Contains(x.Guid)));
+            while (it.HasMoreResults) await it.ReadNextAsync();
+        };
         (await single.Should().ThrowAsync<CosmosException>()).Which.Message.Should().Contain("SC3020");
 
         var store = new AsyncCosmosDBStore<InListDoc>(f.Container);
