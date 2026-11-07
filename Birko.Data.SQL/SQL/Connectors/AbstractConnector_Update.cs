@@ -80,14 +80,14 @@ namespace Birko.Data.SQL.Connectors
 
         public void Update<T, P>(string tableName, IDictionary<Expression<Func<T, P>>, Expression<Func<T, P>>> expresions, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            var fields = new Dictionary<int, string>();
+            var fields = new SetClauses();
             var values = new Dictionary<string, object>();
             int i = 0;
             foreach (var kvp in expresions)
             {
                 var field = DataBase.GetField(kvp.Key);
                 var fieldExpr = DataBase.ParseExpression(kvp.Value, values);
-                fields.Add(i, field.Name + " = " + fieldExpr);
+                fields.Add(i, field.Name, fieldExpr ?? string.Empty);
                 i++;
             }
             Update(tableName, fields, values, conditions, true);
@@ -143,7 +143,7 @@ namespace Birko.Data.SQL.Connectors
             var terms = conditions?.ToList();
             var plan = PlanInListChunks("update", terms,
                 (command, chunk) => BuildUpdate(command, tableName, fields, values, chunk, isExpressionValues, allowAllRows),
-                writtenColumns: WrittenColumns(fields, isExpressionValues));
+                updateFields: fields, isExpressionValues: isExpressionValues);
             plan.ThrowIfRefused();
             if (!plan.IsChunked)
             {

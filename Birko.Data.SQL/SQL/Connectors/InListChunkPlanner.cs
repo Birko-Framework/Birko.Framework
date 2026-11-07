@@ -104,9 +104,12 @@ namespace Birko.Data.SQL.Connectors
         /// and only when the lists are longer than <paramref name="preferredChunkSize"/>.</param>
         /// <param name="statementReason">Why this statement is not a union of chunks (sort, limit, offset, aggregate), or
         /// null when it is.</param>
-        /// <param name="writtenColumns">The columns an UPDATE's SET writes. A list on one of them is never split: the chunks
-        /// run one after another, so a row the first chunk moves into a later chunk's values would be matched again (an
-        /// increment applied twice, measured).</param>
+        /// <param name="writtenColumns">The columns an UPDATE's SET writes, as the statement names them
+        /// (<see cref="SetClauses.WrittenBy"/>). A list whose operand reads one of them is never split: the chunks run one
+        /// after another, so a row the first chunk moves into a later chunk's values would be matched again (an increment
+        /// applied twice, measured).</param>
+        /// <param name="writtenColumnsUnknown">True for an UPDATE whose written columns are not known (SET clauses handed in
+        /// already rendered); none of its lists is split.</param>
         public static InListChunkPlan Plan(
             string operation,
             IReadOnlyList<Condition>? conditions,
@@ -114,7 +117,8 @@ namespace Birko.Data.SQL.Connectors
             int preferredChunkSize,
             Func<IReadOnlyList<Condition>, int> countParameters,
             string? statementReason = null,
-            IEnumerable<string>? writtenColumns = null)
+            IEnumerable<string>? writtenColumns = null,
+            bool writtenColumnsUnknown = false)
         {
             if (countParameters == null) throw new ArgumentNullException(nameof(countParameters));
             if (preferredChunkSize < 1) throw new ArgumentOutOfRangeException(nameof(preferredChunkSize));
@@ -129,7 +133,9 @@ namespace Birko.Data.SQL.Connectors
             // Below the chunk size there is nothing to gain and no limit to meet, and no probe is built.
             if (leaves.Sum(l => (long)l.Count) <= preferredChunkSize) return InListChunkPlan.Unchanged;
 
-            var written = new HashSet<string>((writtenColumns ?? Enumerable.Empty<string>()).Select(BareColumn), StringComparer.OrdinalIgnoreCase);
+            // A written column is one name, perhaps qualified: its last part.
+            var written = new HashSet<string>((writtenColumns ?? Enumerable.Empty<string>())
+                .Select(column => Identifiers(column).LastOrDefault() ?? column), StringComparer.OrdinalIgnoreCase);
             var ordered = leaves.OrderByDescending(l => l.Count).ToList();
             Leaf? chosen = null;
             List<object?>? distinct = null;
@@ -137,7 +143,10 @@ namespace Birko.Data.SQL.Connectors
             foreach (var leaf in ordered)
             {
                 var reason = statementReason ?? leaf.ShapeReason
-                    ?? (written.Contains(BareColumn(leaf.Condition.Name ?? string.Empty))
+                    ?? (writtenColumnsUnknown
+                        ? "the update's SET clauses were handed in rendered, so the columns it writes are not known, and a row one chunk changes could be matched by a later chunk"
+                        : null)
+                    ?? (Identifiers(leaf.Condition.Name ?? string.Empty).Any(written.Contains)
                         ? "the update writes the filtered column, so a row one chunk changes could be matched by a later chunk"
                         : null)
                     ?? ValueReason(leaf.Condition.Values, out distinct);
@@ -180,11 +189,76 @@ namespace Birko.Data.SQL.Connectors
             => $"The {operation} binds {total} parameters, more than this provider's maximum of {max}, and its IN list on "
                 + $"'{column}' cannot be split into chunks: {reason}. Split the list in the caller, or narrow the filter. (TASK-833)";
 
-        /// <summary>A column name without its table qualifier or identifier quotes: <c>"T".[Col]</c> → <c>Col</c>.</summary>
-        private static string BareColumn(string name)
+        /// <summary>
+        /// Every identifier <paramref name="sql"/> names, unquoted, each part of a qualified name on its own:
+        /// <c>"T".[Col]</c> → <c>T</c>, <c>Col</c>; <c>(T.Score + 0)</c> → <c>T</c>, <c>Score</c>. A list's operand is a
+        /// column or, since TASK-213, a rendered value fragment (arithmetic, COALESCE, CASE) that may read several columns,
+        /// so the question is whether it reads a written column at all (TASK-849). String literals and parameters are
+        /// skipped. It over-approximates (a keyword or table name that equals a written column keeps the list whole), which
+        /// costs only a split; missing a column would apply the update twice.
+        /// </summary>
+        internal static IEnumerable<string> Identifiers(string sql)
         {
-            var dot = name.LastIndexOf('.');
-            return (dot >= 0 ? name.Substring(dot + 1) : name).Trim().Trim('"', '[', ']', '`');
+            var i = 0;
+            while (i < sql.Length)
+            {
+                var c = sql[i];
+                if (c == '\'')
+                {
+                    i = SkipQuoted(sql, i, '\'');
+                }
+                else if (c == '"' || c == '`' || c == '[')
+                {
+                    var close = c == '[' ? ']' : c;
+                    var end = SkipQuoted(sql, i, close);
+                    var inner = sql.Substring(i + 1, Math.Max(0, end - i - 2));
+                    yield return inner.Replace(new string(close, 2), new string(close, 1));
+                    i = end;
+                }
+                else if (c == '@' || c == ':' || c == '$' || c == '?')
+                {
+                    // A parameter marker and its name.
+                    i++;
+                    while (i < sql.Length && IsIdentifierPart(sql[i])) i++;
+                }
+                else if (char.IsLetter(c) || c == '_')
+                {
+                    var start = i;
+                    while (i < sql.Length && IsIdentifierPart(sql[i])) i++;
+                    yield return sql.Substring(start, i - start);
+                }
+                else if (char.IsDigit(c))
+                {
+                    // A number, including `1e5` and `0x1F`: never an identifier.
+                    while (i < sql.Length && (IsIdentifierPart(sql[i]) || sql[i] == '.')) i++;
+                }
+                else
+                {
+                    i++;
+                }
+            }
+        }
+
+        private static bool IsIdentifierPart(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '$';
+
+        /// <summary>The index just past the quote that closes the one at <paramref name="open"/>; a doubled quote is an escape.</summary>
+        private static int SkipQuoted(string sql, int open, char close)
+        {
+            var i = open + 1;
+            while (i < sql.Length)
+            {
+                if (sql[i] == close)
+                {
+                    if (i + 1 < sql.Length && sql[i + 1] == close)
+                    {
+                        i += 2;
+                        continue;
+                    }
+                    return i + 1;
+                }
+                i++;
+            }
+            return sql.Length;
         }
 
         private static void Collect(Condition node, int[] path, string? inherited, List<Leaf> leaves)

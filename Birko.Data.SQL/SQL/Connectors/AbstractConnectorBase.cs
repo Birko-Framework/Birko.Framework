@@ -153,28 +153,19 @@ namespace Birko.Data.SQL.Connectors
             IReadOnlyList<Conditions.Condition>? conditions,
             Action<DbCommand, IReadOnlyList<Conditions.Condition>> build,
             string? statementReason = null,
-            IEnumerable<string>? writtenColumns = null)
+            IDictionary<int, string>? updateFields = null,
+            bool isExpressionValues = false)
         {
+            // TASK-849: an update's written columns come from its own field list, never from its rendered SQL.
+            var written = updateFields == null ? null : SetClauses.WrittenBy(updateFields, isExpressionValues);
             return InListChunkPlanner.Plan(operation, conditions, MaxCommandParameters, PreferredInListChunkSize, probe =>
             {
                 using var connection = CreateConnection(_settings);
                 using var command = connection.CreateCommand();
                 build(command, probe);
                 return command.Parameters.Count;
-            }, statementReason, writtenColumns);
+            }, statementReason, written, writtenColumnsUnknown: updateFields != null && written == null);
         }
-
-        /// <summary>
-        /// The columns an UPDATE's SET writes (TASK-833): the column names on the value path, the left side of each
-        /// <c>col = expr</c> clause on the expression path.
-        /// </summary>
-        protected static IEnumerable<string> WrittenColumns(IDictionary<int, string> fields, bool isExpressionValues)
-            => fields.Values.Select(clause =>
-            {
-                if (!isExpressionValues) return clause;
-                var equals = clause.IndexOf('=');
-                return equals < 0 ? clause : clause.Substring(0, equals).Trim();
-            });
 
         /// <summary>The statement-level reason a read cannot be chunked, or null (TASK-833).</summary>
         protected static string? SortOrPageReason(IDictionary<string, bool>? orderFields, int? limit, int? offset)

@@ -12,11 +12,12 @@ namespace Birko.Data.SQL.Stores
     /// </summary>
     internal static class PropertyUpdateSqlTranslator
     {
-        internal static (Dictionary<int, string> Fields, Dictionary<string, object> Values) Translate<T>(
+        internal static (Connectors.SetClauses Fields, Dictionary<string, object> Values) Translate<T>(
             PropertyUpdate<T> updates, Connectors.AbstractConnectorBase connector)
             where T : Models.AbstractModel
         {
-            var fields = new Dictionary<int, string>();
+            // TASK-849: each clause is added with the column it writes, which the IN-list chunk planner reads.
+            var fields = new Connectors.SetClauses();
             var values = new Dictionary<string, object>();
             var columnPositions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var columnMembers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -42,12 +43,12 @@ namespace Birko.Data.SQL.Stores
                 columnPositions[column] = i;
                 columnMembers[column] = assignment.MemberPath;
                 var parameter = Connectors.AbstractConnector.SetParameterName(column);
-                var fragment = assignment.Match(
+                var expression = assignment.Match(
                     // Through the field's own conversion, exactly as an entity write (TASK-596).
-                    set => Bind($"{column} = {parameter}", parameter, field.ToStoredValue(set.Value)),
-                    increment => Bind($"{column} = {connector.IncrementExpression(field, column, parameter)}", parameter, increment.Delta),
-                    computed => $"{column} = {Render(computed.Value, typeof(T), connector, parameter, values)}");
-                fields.Add(i, fragment);
+                    set => Bind(parameter, parameter, field.ToStoredValue(set.Value)),
+                    increment => Bind(connector.IncrementExpression(field, column, parameter), parameter, increment.Delta),
+                    computed => Render(computed.Value, typeof(T), connector, parameter, values));
+                fields.Add(i, column, expression);
                 i++;
             }
             return (fields, values);
