@@ -3,7 +3,7 @@ id: TASK-831
 parent: EPIC-020
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -38,12 +38,24 @@ file it as its own task. It is read from the code and has not been measured.
 
 ## Acceptance criteria
 
-- [ ] Measure it first: a binding with `AllowedIps = ["203.0.113.7"]` and client `::ffff:203.0.113.7`. Record the
+- [x] Measure it first: a binding with `AllowedIps = ["203.0.113.7"]` and client `::ffff:203.0.113.7`. Record the
       result here. If it is accepted already, close this task as not-a-bug with the measurement.
-- [ ] Binding addresses and the client address compare as parsed IPs, with IPv4-mapped reduced to IPv4. An entry
+      → **Measured 2026-11-07:**
+      - Kestrel bound to `http://[::]:5831` and called at `127.0.0.1` reports `RemoteIpAddress` =
+        `::ffff:127.0.0.1`, so the mapped form is real.
+      - On the old code, `Task831BindingAddressTests` failed 4 of 9: the mapped client, the mapped entry, two IPv6
+        spellings, and a non-address entry matching by text.
+      - `Task831MappedClientTests` failed 2 of 2.
+- [x] Binding addresses and the client address compare as parsed IPs, with IPv4-mapped reduced to IPv4. An entry
       that is not an address is skipped and logged, as now.
-- [ ] Tests in `tests/Birko.Security.Tests` cover the mapped client against an IPv4 entry, the reverse, and an IPv6
+      → `CachedTokenBinding.AllowedIps` is a `HashSet<IPAddress>` (normalised). The client goes through `ParseAddress` +
+      `Normalize`, and a client that is not an address matches nothing. Correction: a non-address entry was **not**
+      skipped before; it was kept as text. It is skipped and logged now.
+- [x] Tests in `tests/Birko.Security.Tests` cover the mapped client against an IPv4 entry, the reverse, and an IPv6
       entry. A WebSocket test does the same through the short-circuit.
+      → `Task831BindingAddressTests` (9 tests) and `Task831MappedClientTests` (with and without the TASK-829 marker).
+      The Security, WebSocket, Security.AspNetCore, REST, SOAP, SSE, Grants, OAuth.Server and Health.Azure suites are
+      green.
 
 ## Out of scope
 

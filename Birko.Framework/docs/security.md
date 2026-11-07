@@ -181,7 +181,9 @@ service.ValidateToken("api-token-1", "192.168.1.100");  // true
 service.ValidateToken("api-token-1", "10.0.0.1");       // false: a bound token from another address
 ```
 
-A binding's `AllowedIps` are exact addresses. The client address a transport checks them against is the connection's
+A binding's `AllowedIps` are exact addresses, compared as IP addresses rather than text (TASK-831), so a dual-stack
+socket's `::ffff:203.0.113.7` matches `203.0.113.7`, and two spellings of one IPv6 address match. An entry that is
+not an address is skipped and logged at error level. The client address a transport checks them against is the connection's
 own: `X-Forwarded-For`, `X-Real-IP` and `CF-Connecting-IP` are believed **only** when the connection comes from one of
 `TrustedProxies` (an address or a CIDR range), and `X-Forwarded-For` is then read from the right, skipping trusted
 proxies, so the client cannot choose the answer by writing the header itself. Before SH-M249 the headers were believed

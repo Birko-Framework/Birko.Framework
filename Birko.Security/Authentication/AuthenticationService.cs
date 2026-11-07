@@ -26,7 +26,8 @@ namespace Birko.Security.Authentication
         private class CachedTokenBinding
         {
             public string Token { get; set; } = string.Empty;
-            public HashSet<string> AllowedIps { get; set; } = new();
+            /// <summary>TASK-831: parsed, IPv4-mapped reduced to IPv4, so one address matches however it is written.</summary>
+            public HashSet<System.Net.IPAddress> AllowedIps { get; set; } = new();
         }
 
         /// <summary>
@@ -184,7 +185,8 @@ namespace Birko.Security.Authentication
                                 return false;
                             }
 
-                            if (binding.AllowedIps.Contains(clientIp))
+                            var client = ParseAddress(clientIp);
+                            if (client != null && binding.AllowedIps.Contains(Normalize(client)))
                             {
                                 _logger?.LogInformation("Authenticated token with IP binding: {ClientIp}", clientIp);
                                 return true;
@@ -444,15 +446,25 @@ namespace Birko.Security.Authentication
                     var cachedBinding = new CachedTokenBinding
                     {
                         Token = expandedToken,
-                        AllowedIps = new HashSet<string>(StringComparer.Ordinal)
+                        AllowedIps = new HashSet<System.Net.IPAddress>()
                     };
 
                     foreach (var ip in binding.AllowedIps)
                     {
                         var expandedIp = ExpandEnvironmentVariable(ip);
-                        if (!string.IsNullOrWhiteSpace(expandedIp))
+                        if (string.IsNullOrWhiteSpace(expandedIp))
                         {
-                            cachedBinding.AllowedIps.Add(expandedIp);
+                            continue;
+                        }
+                        // TASK-831: an address, or nothing. Kept as text it matched only a client spelled the same way:
+                        // never a dual-stack socket's ::ffff: form of the same IPv4 address (measured on Kestrel).
+                        if (System.Net.IPAddress.TryParse(expandedIp.Trim(), out var allowed))
+                        {
+                            cachedBinding.AllowedIps.Add(Normalize(allowed));
+                        }
+                        else
+                        {
+                            _logger?.LogError("A token binding's AllowedIps entry '{Entry}' is not an IP address; it is ignored.", ip);
                         }
                     }
 
