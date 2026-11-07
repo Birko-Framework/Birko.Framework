@@ -832,36 +832,23 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in updateFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
-                    // type before it will prepare, and these are created as `new SqlParameter(name,
-                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
-                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
-                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
-                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
-                    // in either half. Found by this task's regression suite, which could not otherwise
-                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
-                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
-                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
-                    // MySqlConnector infer the missing types, which is why only this provider broke.)
+                    // NOT command.Prepare(): SqlCommand will not prepare a parameter without an explicit type (it threw on
+                    // the first row, TASK-555), and SQL Server caches the plan of a repeated parameterised statement itself.
+                    // TASK-854 (rule 28): every value is bound per row through AddParameter, so CreateParameter types it
+                    // (DATETIME2 for a DateTime, TASK-656) on the first row and on every re-bind (TASK-852). The placeholders
+                    // this replaced, `new SqlParameter(name, DBNull.Value)` with `.Value` assigned per row, let SqlClient
+                    // infer datetime: a written DateTime was rounded to ~3.33 ms and a DateTime key matched no row (measured).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
@@ -920,25 +907,12 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in updateFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
-                    // type before it will prepare, and these are created as `new SqlParameter(name,
-                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
-                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
-                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
-                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
-                    // in either half. Found by this task's regression suite, which could not otherwise
-                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
-                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
-                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
-                    // MySqlConnector infer the missing types, which is why only this provider broke.)
+                    // NOT command.Prepare(): SqlCommand will not prepare a parameter without an explicit type (it threw on
+                    // the first row, TASK-555), and SQL Server caches the plan of a repeated parameterised statement itself.
+                    // TASK-854 (rule 28): every value is bound per row through AddParameter, so CreateParameter types it
+                    // (DATETIME2 for a DateTime, TASK-656) on the first row and on every re-bind (TASK-852). The placeholders
+                    // this replaced, `new SqlParameter(name, DBNull.Value)` with `.Value` assigned per row, let SqlClient
+                    // infer datetime: a written DateTime was rounded to ~3.33 ms and a DateTime key matched no row (measured).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
@@ -946,11 +920,11 @@ namespace Birko.Data.SQL.Connectors
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
@@ -1004,27 +978,18 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
-                    // type before it will prepare, and these are created as `new SqlParameter(name,
-                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
-                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
-                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
-                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
-                    // in either half. Found by this task's regression suite, which could not otherwise
-                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
-                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
-                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
-                    // MySqlConnector infer the missing types, which is why only this provider broke.)
+                    // NOT command.Prepare(): SqlCommand will not prepare a parameter without an explicit type (it threw on
+                    // the first row, TASK-555), and SQL Server caches the plan of a repeated parameterised statement itself.
+                    // TASK-854 (rule 28): every value is bound per row through AddParameter, so CreateParameter types it
+                    // (DATETIME2 for a DateTime, TASK-656) on the first row and on every re-bind (TASK-852). The placeholders
+                    // this replaced, `new SqlParameter(name, DBNull.Value)` with `.Value` assigned per row, let SqlClient
+                    // infer datetime: a written DateTime was rounded to ~3.33 ms and a DateTime key matched no row (measured).
 
                     foreach (var model in models)
                     {
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         command.ExecuteNonQuery();
                     }
@@ -1072,28 +1037,19 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
-                    // type before it will prepare, and these are created as `new SqlParameter(name,
-                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
-                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
-                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
-                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
-                    // in either half. Found by this task's regression suite, which could not otherwise
-                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
-                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
-                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
-                    // MySqlConnector infer the missing types, which is why only this provider broke.)
+                    // NOT command.Prepare(): SqlCommand will not prepare a parameter without an explicit type (it threw on
+                    // the first row, TASK-555), and SQL Server caches the plan of a repeated parameterised statement itself.
+                    // TASK-854 (rule 28): every value is bound per row through AddParameter, so CreateParameter types it
+                    // (DATETIME2 for a DateTime, TASK-656) on the first row and on every re-bind (TASK-852). The placeholders
+                    // this replaced, `new SqlParameter(name, DBNull.Value)` with `.Value` assigned per row, let SqlClient
+                    // infer datetime: a written DateTime was rounded to ~3.33 ms and a DateTime key matched no row (measured).
 
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }

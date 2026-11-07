@@ -96,6 +96,12 @@ Common SQL Server to .NET type mappings:
 - `DATETIME2` → `DateTime`
 - `BIT` → `bool`
 
+**Every parameter goes through `AddParameter` → `CreateParameter` (TASK-656 / TASK-852 / TASK-854, rule 28).**
+SqlClient infers `datetime` for a `DateTime`, which rounds to ~3.33 ms; `CreateParameter` types it `DATETIME2`.
+`BulkUpdate` / `BulkDelete` used to build `new SqlParameter(name, DBNull.Value)` placeholders and assign `.Value`
+per row, so a bulk-updated `DateTime` was stored rounded and a `DateTime` key deleted nothing (measured). They now
+bind each row through `AddParameter`, which re-creates a re-bound parameter. Never construct a `SqlParameter` here.
+
 
 **`[UtcField]` and the two meanings of a `DateTime` column (TASK-256 / TASK-263).** A plain Birko `DateTime`
 column is a **wall clock** — the value's components as supplied, `Kind` not persisted, reads back
