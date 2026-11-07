@@ -151,6 +151,11 @@ public IEnumerable<Product> Search(string query)
 
 ### Filter translation (`ElasticSearch.ParseExpression`)
 
+**A long `Contains` list (TASK-835).** Past `ElasticSearch.MaxTermsCount` (default 65,536, Elasticsearch's
+`index.max_terms_count`) the list is sent as a bool `should` of terms queries, each within the limit, in the same
+request (`TermsWithin`). It stays correct under `||` and `!`. Measured before: 65,537 ids gave HTTP 400. Lower the
+static for an index created with a smaller setting.
+
 Store CRUD filters (`Expression<Func<T, bool>>`) are translated to NEST queries by the hand-rolled
 `ElasticSearch.ParseExpression`. Supported forms — kept in parity with the SQL parser and the native-LINQ
 backends (verified in `Birko.Data.ElasticSearch.Tests.ExpressionDivergenceTests`):

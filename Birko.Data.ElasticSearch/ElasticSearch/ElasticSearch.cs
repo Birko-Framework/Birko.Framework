@@ -16,6 +16,24 @@ namespace Birko.Data.ElasticSearch
         public static int MaxResultWindow { get; set; } = 10000;
 
         /// <summary>
+        /// The most terms one <c>terms</c> query may hold: Elasticsearch's <c>index.max_terms_count</c>, 65,536 by default.
+        /// </summary>
+        /// <remarks>
+        /// TASK-835. A collection <c>Contains</c> longer than this is sent as a bool <c>should</c> of terms queries, each
+        /// within it, in the same request, so it stays correct under <c>||</c> and <c>!</c>. Declared rather than read
+        /// from the index: the translator is static and has no client, and reading the setting would cost a request per
+        /// query. Lower it for indexes created with a smaller <c>index.max_terms_count</c>.
+        /// </remarks>
+        /// <exception cref="ArgumentOutOfRangeException">Set to less than 1.</exception>
+        public static int MaxTermsCount
+        {
+            get => _maxTermsCount;
+            set => _maxTermsCount = value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(value), value, "MaxTermsCount must be at least 1.");
+        }
+
+        private static volatile int _maxTermsCount = 65_536;
+
+        /// <summary>
         /// Maximum size for bulk operations.
         /// </summary>
         public static readonly int MaxBulkSize = 10000;
@@ -820,7 +838,7 @@ namespace Birko.Data.ElasticSearch
             {
                 var terms = enumerable.Cast<object>().Where(v => v != null).ToArray();
                 if (terms.Length > 0)
-                    return new TermsQuery { Field = fieldQuery.Field, Terms = terms };
+                    return TermsWithin(fieldQuery.Field, terms, MaxTermsCount);
 
                 // EMPTY collection → matches NOTHING. Returning null here was a silent-wrong-rows bug:
                 // null means "no query produced", and CombineBool DROPS null sub-queries, so
@@ -837,6 +855,25 @@ namespace Birko.Data.ElasticSearch
             }
 
             return new TermQuery { Field = fieldQuery.Field, Value = value };
+        }
+
+        /// <summary>
+        /// TASK-835: one terms query when <paramref name="terms"/> fits in <paramref name="limit"/>; past it, a bool
+        /// <c>should</c> (minimum 1) of terms queries of at most <paramref name="limit"/> terms each, in order.
+        /// </summary>
+        internal static QueryBase TermsWithin(Field field, object[] terms, int limit)
+        {
+            if (terms.Length <= limit)
+                return new TermsQuery { Field = field, Terms = terms };
+
+            var parts = new List<QueryContainer>((terms.Length + limit - 1) / limit);
+            for (var start = 0; start < terms.Length; start += limit)
+            {
+                var chunk = terms.AsSpan(start, Math.Min(limit, terms.Length - start)).ToArray();
+                parts.Add(new QueryContainer(new TermsQuery { Field = field, Terms = chunk }));
+            }
+
+            return new BoolQuery { Should = parts, MinimumShouldMatch = 1 };
         }
 
         private static QueryBase? ParseMultiMatch(MethodCallExpression call, Type? exprType, string? fieldPrefix)

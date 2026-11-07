@@ -296,6 +296,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Elasticsearch takes a Contains list past 65,536 terms (2026-11-07)
+[[TASK-835]] (FIELD-051). Elasticsearch refuses a terms query past `index.max_terms_count`; measured, 65,537 ids gave
+HTTP 400. A longer list is now a bool `should` of terms queries, each within `ElasticSearch.MaxTermsCount` (default
+65,536), in the same request, so it stays correct under `||` and `!`.
 ### A SQL read with a long IN list is linear again (2026-11-07)
 [[TASK-832]], reported by Symbio (FIELD-051). Every SQL read builds `DataBase.GetGeneratedQuery`, the diagnostic SQL
 with values filled in, and it ran one `StringBuilder.Replace` per parameter. For `ids.Contains(x.Guid)` on SQLite that
