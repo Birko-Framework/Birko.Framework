@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — A token binding matches an IPv4-mapped client
+[[TASK-831]]. A binding's `AllowedIps` were compared with the client address as text. Kestrel bound to `[::]` reports
+an IPv4 client as `::ffff:127.0.0.1` (measured), so a binding listing `127.0.0.1` refused it. Both sides are now parsed
+addresses, IPv4-mapped reduced to IPv4. An entry that is not an address is skipped and logged; it used to match a client
+spelled the same way.
+
 ## 2026-11-07 — A bad TrustedProxies entry refuses at construction
 [[TASK-830]]. **Breaking:** `AuthenticationService` (REST, SOAP, SSE and WebSocket token auth) now refuses an entry
 that is not an address or a CIDR network, an unset `${VAR}`, `0.0.0.0/0`, or a short or bracketed address. It throws

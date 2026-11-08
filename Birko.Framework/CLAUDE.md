@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL filter comparing a boolean with `false` is no longer inverted (2026-11-08)
+[[TASK-863]]. 34 of 75 boolean shapes returned wrong rows on all four SQL providers (measured): `x.N.HasValue == false`
+rendered `IS NOT NULL`, `(x.A == x.B) == false` rendered the equality, `StartsWith(..) == true` bound `true` as the LIKE
+value, and `x.Opt.HasValue && x.Opt.Value` rendered `Opt = NULL`. On a delete, that removed the rows meant to be kept.
+One rewrite (`RewriteBooleanComparisons`) now turns `e == false` into `!e` and `.Value` on a `bool?` into
+`Opt == true` before parsing, so every shape matches C#. Plain column comparisons render unchanged.
 ### Every store refuses a write whose filter negates a null ordering (2026-11-08)
 [[TASK-865]]. In C#, `x.Score > null` is always false, so `!(x.Score > nul)` matches every row. On InMemory, JSON and
 XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos DB wrote part of the table, all
@@ -384,11 +390,6 @@ with values filled in, and it ran one `StringBuilder.Replace` per parameter. For
 was 6.5 s of a 6.8 s read at 2,000 ids, and 87 s at 4,000 (measured, Release). It is one pass now: 130 ms and 289 ms. A
 value containing a parameter name is no longer rewritten. Chunking a list past a provider's parameter limit is
 [[TASK-833]].
-### A token binding matches an IPv4-mapped client (2026-11-07)
-[[TASK-831]]. A binding's `AllowedIps` were compared with the client address as text. Kestrel bound to `[::]` reports
-an IPv4 client as `::ffff:127.0.0.1` (measured), so a binding listing `127.0.0.1` refused it. Both sides are now parsed
-addresses, IPv4-mapped reduced to IPv4. An entry that is not an address is skipped and logged; it used to match a client
-spelled the same way.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

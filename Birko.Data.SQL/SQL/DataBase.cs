@@ -576,6 +576,8 @@ namespace Birko.Data.SQL
                     // Canonicalise the predicate once, at the lambda boundary: funcletize parameter-free
                     // subtrees and desugar ternary / ?? into boolean algebra the parser below understands.
                     var body = Birko.Data.Expressions.ExpressionNormalizer.Normalize(lambdaExpression.Body) ?? lambdaExpression.Body;
+                    // TASK-863: a boolean compared with a boolean is rewritten into shapes the branches below have.
+                    body = RewriteBooleanComparisons(body);
                     // Handle constant boolean body: _ => true means "no filter" (return empty),
                     // _ => false means "match nothing" (return impossible condition 1=0).
                     if (body is ConstantExpression constBody && constBody.Value is bool boolVal)

@@ -56,6 +56,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\Strategies\LikeConditionStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\Strategies\NullConditionStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_BooleanPredicate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_Field.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_OrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_RuleField.cs" />
