@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL `Contains` / `StartsWith` / `EndsWith` / `Equals` honours an explicit `StringComparison` (2026-11-08)
+[[TASK-869]] (the user's decision: option A). The comparison argument used to be ignored, so the column collation
+decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-insensitive on MySQL (measured: 49–113 of
+240 cases off). `Ordinal` and `OrdinalIgnoreCase` now give C#'s answer on all four providers; `UPPER` and `ILIKE` could
+not, because each server groups case differently from .NET. Other comparisons are refused by name. Without a
+comparison nothing changes: the collation decides, now documented per provider.
 ### A SQL column named like a reserved word is refused by name (2026-11-08)
 [[TASK-862]] (the user's decision: refuse, keep column names unquoted per rule 17). `Order`, `Group` or `Select` broke
 CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Server. On SQLite a column named
@@ -370,17 +376,6 @@ never matched NULL.
   the full path now. The projection side is [[TASK-843]].
 - [[TASK-841]]: Cosmos DB compares strings exactly (measured: case, trailing space, Unicode composition), so a string
   list past the limit is split too, in the base store and in views. SQL keeps its refusal.
-### View stores handle a long IN list; Cosmos DB views support Contains (2026-11-07)
-- **SQL views** ([[TASK-837]]): they ran no planner, and a view read with 33,000 ids threw "too many SQL variables"
-  (measured). They now split and refuse through TASK-833's planner. An on-the-fly aggregate view refuses past the
-  limit.
-- **Cosmos DB views:** they render their own SQL, not LINQ.
-  - **Before:** `v.Tags.Contains(x)` rendered `CONTAINS()` and matched nothing, silently.
-  - **Now** ([[TASK-839]]): `ids.Contains(v.Key)` and `v.Tags.Contains(x)` render as `ARRAY_CONTAINS` with the list
-    as one parameter.
-  - **Still split:** the parameter counts toward the 524,288-character limit (13,795 Guids pass, measured), so past
-    it a plain AND list is split through TASK-834's planner. Negated, `||` and grouped forms refuse.
-  - **Refused by name:** other collection shapes.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

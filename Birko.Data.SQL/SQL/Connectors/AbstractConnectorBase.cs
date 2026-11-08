@@ -1395,6 +1395,9 @@ namespace Birko.Data.SQL.Connectors
 
         private Conditions.SqlValueFragmentDialect? _fragmentDialect;
 
+        /// <summary>TASK-869 — <see cref="FragmentDialect"/>, for the condition strategies (a string comparison's exact form).</summary>
+        internal Conditions.SqlValueFragmentDialect RenderDialect => FragmentDialect;
+
         private Conditions.Condition InFragmentDialect(Conditions.Condition condition)
         {
             var dialect = FragmentDialect;

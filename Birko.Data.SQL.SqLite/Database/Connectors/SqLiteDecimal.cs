@@ -90,6 +90,8 @@ namespace Birko.Data.SQL.Connectors
                 (acc, value) => value == null ? acc : (acc.Sum + ToDecimal(value), acc.Count + 1),
                 acc => acc.Count == 0 ? null : Format(acc.Sum / acc.Count),
                 isDeterministic: true);
+            // TASK-869: registered here because this is the one call every framework connection makes (rule 64).
+            SqLiteStringMatch.Register(connection);
         }
 
         public static string Format(decimal value) => value.ToString(TextFormat, CultureInfo.InvariantCulture);

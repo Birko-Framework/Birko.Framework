@@ -30,6 +30,9 @@ Found by TASK-860 (2026-11-08). None of these is measured yet, except where note
 - **SQLite integer overflow in SET** (found by TASK-860's fix): `SET Hits = Hits + 1` past `int.MaxValue` stores the
   value silently, and every later read of the row throws. That is plain arithmetic overflow, not a cast. TASK-860
   refuses narrowing SETs on SQLite for the same reason (`StoresIntegerOverflowLoudly`).
+- **`ToLower` / `ToUpper` before a comparison** (TASK-869): `x.Col.ToLower() == v` and `x.Col.ToLower().Contains(..)`
+  use SQL's `LOWER` / `UPPER`, which group characters differently from .NET (measured by TASK-869: 13 to 72 of 240
+  cases off per provider). `StringComparison.OrdinalIgnoreCase` is now the exact form.
 
 ## Acceptance criteria
 

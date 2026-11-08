@@ -960,6 +960,11 @@ namespace Birko.Data.SQL
                     if (ContainsParameter(methodExpression))
                         RequireTranslatableCall(methodExpression);
 
+                    // TASK-869: an explicit Ordinal / OrdinalIgnoreCase is rendered exactly by the provider's dialect.
+                    if (methodExpression.Method.DeclaringType == typeof(string) && IsStringComparisonEquals(methodExpression.Method)
+                        && methodExpression.Method.IsStatic)
+                        return new[] { ParseStringEquals(methodExpression, condition, exprType) };
+
                     switch (methodExpression.Method.Name)
                     {
                         case "StartsWith":
@@ -1081,6 +1086,10 @@ namespace Birko.Data.SQL
                     {
                         ParseConditionExpression(methodExpression.Object, condition, exprType);
                     }
+                    if (methodExpression.Method.DeclaringType == typeof(string) && methodExpression.Object != null
+                        && methodExpression.Method.Name is "StartsWith" or "EndsWith" or "Contains"
+                        && TranslatableComparison(methodExpression) is { } comparison)
+                        WithComparison(condition, comparison, methodExpression.Method.Name);
                     if (condition.Type == ConditionType.In)
                     {
                         // TASK-606: the list is bound in the column's stored form, as a comparison's value is (TASK-596).
@@ -1516,16 +1525,10 @@ namespace Birko.Data.SQL
         {
             if (parent != null)
             {
+                // TASK-869: one producer for "every property that says what the predicate is" (Condition.Copy shares it).
+                parent.BecomePredicateOf(surviving);
                 parent.IsOr = isOr;
-                parent.Name = surviving.Name;
-                parent.NameFragment = surviving.NameFragment;
-                parent.FieldFragment = surviving.FieldFragment;
-                parent.NullableOperands = surviving.NullableOperands;
-                parent.NullOperandMatches = surviving.NullOperandMatches;
-                parent.Values = surviving.Values;
-                parent.Type = surviving.Type;
                 parent.IsNot = parent.IsNot ^ surviving.IsNot;
-                parent.SubConditions = surviving.SubConditions;
                 return new[] { parent };
             }
             return new[] { surviving };

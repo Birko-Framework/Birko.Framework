@@ -27,6 +27,9 @@ namespace Birko.Data.SQL.Connectors
             _stringBuilder = new StringBuilder();
         }
 
+        /// <summary>TASK-869 — the provider's dialect, which renders a string comparison with an explicit StringComparison.</summary>
+        internal Conditions.SqlValueFragmentDialect Dialect => _connector.RenderDialect;
+
         /// <summary>The longest field-name part of a generated parameter name.</summary>
         private const int MaxNameStem = 64;
 

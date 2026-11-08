@@ -107,5 +107,27 @@ namespace Birko.Data.SQL.Conditions
 
         /// <summary>TASK-857 — <c>-operand</c> in <paramref name="type"/>. Parenthesised, so two minus signs never meet as a comment.</summary>
         public virtual string Negate(string operand, Type type) => $"(-({operand}))";
+
+        /// <summary>
+        /// TASK-869 — the predicate for <c>operand.Contains(term, comparison)</c> (<paramref name="kind"/>
+        /// <see cref="ConditionType.Like"/>), <c>StartsWith</c>, <c>EndsWith</c> or <c>string.Equals</c>
+        /// (<see cref="ConditionType.TextEqual"/>), matching exactly what C# matches. <paramref name="comparison"/> is
+        /// <see cref="StringComparison.Ordinal"/> (case- and accent-sensitive) or <see cref="StringComparison.OrdinalIgnoreCase"/>
+        /// (C#'s own case classes, accent-sensitive); the parser refuses every other one. <paramref name="bind"/> binds a
+        /// value as a parameter and returns its name. NULL when the operand is NULL, like the <c>LIKE</c> it replaces.
+        /// </summary>
+        /// <remarks>
+        /// The no-argument forms never come here: they render <c>LIKE</c> and follow the column's collation (TASK-869,
+        /// the user's decision). The base refuses, so a provider without an exact form fails loudly instead of matching by
+        /// its collation.
+        /// </remarks>
+        public virtual string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)
+            => throw new NotSupportedException(
+                $"Cannot translate a string comparison with StringComparison.{comparison} to SQL on this provider: it has no form "
+                + "that matches exactly what C# matches. Compare in memory.");
+
+        /// <summary>TASK-869 — <c>operand COLLATE binary LIKE pattern ESCAPE '!'</c>, the ordinal LIKE every server but SQLite uses.</summary>
+        protected static string CollatedLike(string operand, string collation, string pattern)
+            => $"{operand} COLLATE {collation} LIKE {pattern} ESCAPE '{Connectors.SqlBuilderContext.LikeEscapeCharacter}'";
     }
 }

@@ -259,8 +259,27 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   reject as a syntax error.
 - **Enum collections work.** `statuses.Contains(x.Status)` translates to a real `IN` on all providers; enum
   parameters bind as their underlying integer, matching how enums are persisted (`INTEGER`).
-- **Culture/comparer arguments are ignored** as operands — `Title.Contains(q, StringComparison.OrdinalIgnoreCase)`
-  filters on `q` alone, with case-sensitivity delegated to the column collation.
+- **String matching (TASK-869).** Without a comparison, `Contains` / `StartsWith` / `EndsWith` render `LIKE` and
+  follow the column's collation, so they differ per provider and from C#:
+
+  | Provider (default collation) | Case | Accents | e.g. `Contains("caf")` matches |
+  |---|---|---|---|
+  | SQLite | insensitive for ASCII only | sensitive | `café`, `CAFÉ` (but `Contains("é")` misses `É`) |
+  | PostgreSQL (deterministic) | sensitive | sensitive | `café` only (as C#) |
+  | MySQL 8 (`utf8mb4_0900_ai_ci`) | insensitive | **insensitive** | `café`, `CAFE`, `Café`… and `Contains("cafe")` matches `café` |
+  | SQL Server (`SQL_Latin1_General_CP1_CI_AS`) | insensitive | sensitive | `café`, `CAFÉ`, `Café` |
+
+  `x.Title.ToLower().Contains(q.ToLower())` follows the collation too (SQL's `LOWER` is not .NET's: SQLite folds
+  ASCII only). For C#'s answer on every provider, pass the comparison:
+  - `StringComparison.Ordinal` — exact, case- and accent-sensitive.
+  - `StringComparison.OrdinalIgnoreCase` — C#'s own case classes (`ı` and `ſ` stay apart from `I` / `S`, as in C#),
+    accent-sensitive. On SQL Server a term holding a cased letter outside the BMP (e.g. Deseret) is refused, and so is
+    a term whose LIKE pattern passes SQL Server's 4000-character limit (each cased letter costs four: `[Aa]`).
+  - On MySQL `Ordinal` names `COLLATE utf8mb4_bin`, so the column must be `utf8mb4` (every framework-created table is);
+    on a `utf8mb3` / `latin1` column MySQL fails the statement with ERROR 1253.
+  - `string.Equals(x.Col, v, comparison)` and `x.Col.Equals(v, comparison)` translate the same way.
+  - Any other comparison (`CurrentCulture*`, `InvariantCulture*`) and the `(string, bool, CultureInfo)` overloads
+    throw `NotSupportedException` before anything runs. Before TASK-869 the comparison was silently ignored.
 - **Two columns compare** (`x.A == x.B`, `x.Opened < x.Closed`); `==` / `!=` on nullable columns treat two nulls
   as equal, as C# does. `x.Opened.Date == x.Closed.Date` throws `NotSupportedException` (no portable SQL form).
 - Predicates also accept ternaries, `??`, and column arithmetic — see

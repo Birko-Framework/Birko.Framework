@@ -19,8 +19,9 @@ namespace Birko.Data.SQL
         /// for every type the mapping has (string is ordinal in both), and on a non-nullable <c>bool</c> <c>a ^ b</c> is
         /// <c>a != b</c>, which TASK-863 expands. Before (measured on all four providers): the parser dropped
         /// <c>GetValueOrDefault</c> and compared the bare column, so <c>x.Score.GetValueOrDefault() != 5</c> missed every NULL row,
-        /// and <c>x.Hits.Equals(x.Score.Value)</c> matched nothing. <c>Equals(object)</c>, an <c>Equals</c> with a
-        /// <see cref="StringComparison"/> and a lifted <c>bool?</c> XOR are not rewritten, and the parser refuses them.
+        /// and <c>x.Hits.Equals(x.Score.Value)</c> matched nothing. <c>Equals(object)</c> and a lifted <c>bool?</c> XOR are not
+        /// rewritten, and the parser refuses them. A string <c>Equals</c> with a <see cref="StringComparison"/> becomes the
+        /// static <c>string.Equals(row, value, comparison)</c>, which the parser translates or refuses (TASK-869).
         /// </remarks>
         internal static Expression RewriteTranslatableCalls(Expression body) => new TranslatableCallRewriter().Visit(body)!;
 
@@ -62,6 +63,16 @@ namespace Birko.Data.SQL
                     if (method.IsStatic && method.DeclaringType == typeof(string) && parameters.Length == 2
                         && parameters[0].ParameterType == typeof(string) && parameters[1].ParameterType == typeof(string))
                         return Expression.Equal(visited.Arguments[0], visited.Arguments[1]);
+                    // TASK-869: a.Equals(b, comparison) is string.Equals(a, b, comparison), with the row's side first, so the
+                    // parser has one shape. Static, a null receiver is false rather than a NullReferenceException.
+                    if (method.DeclaringType == typeof(string) && IsStringComparisonEquals(method))
+                    {
+                        var (a, b, comparison) = method.IsStatic
+                            ? (visited.Arguments[0], visited.Arguments[1], visited.Arguments[2])
+                            : (visited.Object!, visited.Arguments[0], visited.Arguments[1]);
+                        if (!ContainsParameter(a) && ContainsParameter(b)) (a, b) = (b, a);
+                        return Expression.Call(StaticStringEqualsWithComparison, a, b, comparison);
+                    }
                 }
 
                 // Contains / StartsWith / EndsWith with a char is the string overload with a one-character string. The char
@@ -175,18 +186,33 @@ namespace Birko.Data.SQL
         /// <c>Name = NULL</c>, <c>"Abcdef".StartsWith(x.Code)</c> rendered <c>Code LIKE 'Abcdef%'</c> (the reverse question).
         /// </summary>
         /// <remarks>
-        /// The LIKE family keeps its existing translation, comparison overloads included: case sensitivity is the column's
-        /// collation there, as for <c>==</c>, a property of string comparison in general rather than of these calls.
+        /// TASK-869 (the user's decision, option A): the no-argument LIKE family keeps following the column's collation, as
+        /// <c>==</c> does. With a <see cref="StringComparison"/> argument, <c>Ordinal</c> and <c>OrdinalIgnoreCase</c> translate
+        /// exactly (<see cref="SqlValueFragmentDialect.StringMatch"/>) and every other comparison is refused by name, as is
+        /// the <c>(string, bool, CultureInfo)</c> overload; before, the argument was ignored. <c>string.Equals(row, value,
+        /// comparison)</c> translates the same way.
         /// </remarks>
         private static void RequireTranslatableCall(MethodCallExpression call)
         {
             var method = call.Method;
             if (method.DeclaringType == typeof(string) && method.Name is "StartsWith" or "EndsWith" or "Contains")
             {
-                if (call.Object != null && ContainsParameter(call.Object)) return;
+                if (call.Object != null && ContainsParameter(call.Object))
+                {
+                    TranslatableComparison(call);
+                    return;
+                }
                 throw new NotSupportedException(
                     $"Cannot translate String.{method.Name} to SQL when the string searched is a value and the pattern a "
                     + "column: LIKE answers the reverse question. Compare against a value instead.");
+            }
+            if (method.DeclaringType == typeof(string) && IsStringComparisonEquals(method) && method.IsStatic)
+            {
+                TranslatableComparison(call);
+                if (!ContainsParameter(call.Arguments[1])) return;
+                throw new NotSupportedException(
+                    "Cannot translate String.Equals with a StringComparison to SQL when both strings are read from the row: only "
+                    + "a column compared with a value is translated. Compare in memory.");
             }
             if (method.Name == "Contains")
             {
@@ -201,15 +227,118 @@ namespace Birko.Data.SQL
             throw RefuseCall(call);
         }
 
+        /// <summary>
+        /// TASK-869 — a <c>Contains</c> / <c>StartsWith</c> / <c>EndsWith</c> with an explicit Ordinal or OrdinalIgnoreCase,
+        /// already parsed into <paramref name="condition"/>: marks it for the provider's exact form. A null term is refused,
+        /// as C# throws <see cref="ArgumentNullException"/> for it (the parser would otherwise have made it <c>IS NULL</c>).
+        /// </summary>
+        private static void WithComparison(Condition condition, StringComparison comparison, string method)
+        {
+            if (condition.Type is not (ConditionType.Like or ConditionType.StartsWith or ConditionType.EndsWith))
+                throw new NotSupportedException(
+                    $"Cannot translate String.{method} with a null value to SQL: C# throws ArgumentNullException for it.");
+            condition.Comparison = comparison;
+        }
+
+        /// <summary>
+        /// TASK-869 — <c>string.Equals(row, value, comparison)</c> (the shape <see cref="RewriteTranslatableCalls"/> leaves for
+        /// every string <c>Equals</c> with a comparison) as a <see cref="ConditionType.TextEqual"/> condition, rendered by the
+        /// provider's exact form. As in C#, a NULL column is not equal to a value (so a negation includes the NULL rows,
+        /// TASK-859) and a null value is the column's <c>IS NULL</c>. The row's side must be a column or a case fold of one.
+        /// </summary>
+        private static Condition ParseStringEquals(MethodCallExpression call, Condition condition, Type? exprType)
+        {
+            var comparison = TranslatableComparison(call)
+                ?? throw new InvalidOperationException("string.Equals(a, b, comparison) carries a comparison.");
+            var column = call.Arguments[0];
+            var inner = column is MethodCallExpression fold && IsCaseFold(fold) ? fold.Object! : column;
+            if (UnwrapConvert(inner) is not MemberExpression member || !TryResolveParameterColumn(member, exprType, out _))
+                throw new NotSupportedException(
+                    "Cannot translate String.Equals with a StringComparison to SQL unless it compares a column (or its ToLower / "
+                    + "ToUpper) with a value. Compare in memory.");
+
+            condition.Type = ConditionType.TextEqual;
+            condition.Comparison = comparison;
+            ParseConditionExpression(call.Arguments[1], condition, exprType);
+            ParseConditionExpression(column, condition, exprType);
+            if (condition.Type != ConditionType.TextEqual)
+            {
+                condition.Comparison = null;
+                return condition;
+            }
+            if (!string.IsNullOrEmpty(condition.Name) && OperandCanBeNull(inner, exprType))
+            {
+                condition.NullableOperands = new[] { new NullableOperand(condition.Name) };
+                condition.NullOperandMatches = false;
+            }
+            return condition;
+        }
+
         /// <summary><c>ToLower()</c>, <c>ToUpper()</c> and their invariant forms on a string: <c>LOWER</c> / <c>UPPER</c>.</summary>
         private static bool IsCaseFold(MethodCallExpression call)
             => call.Object != null && call.Method.DeclaringType == typeof(string) && call.Arguments.Count == 0
                 && call.Method.Name is "ToLower" or "ToLowerInvariant" or "ToUpper" or "ToUpperInvariant";
 
+        /// <summary><c>string.Equals(string, string, StringComparison)</c>, the shape TASK-869's rewrite leaves.</summary>
+        private static readonly MethodInfo StaticStringEqualsWithComparison =
+            typeof(string).GetMethod(nameof(string.Equals), new[] { typeof(string), typeof(string), typeof(StringComparison) })!;
+
+        /// <summary><c>string.Equals(a, b, comparison)</c> or <c>a.Equals(b, comparison)</c>.</summary>
+        private static bool IsStringComparisonEquals(MethodInfo method)
+        {
+            if (method.Name != nameof(string.Equals) || method.DeclaringType != typeof(string)) return false;
+            var parameters = method.GetParameters();
+            return method.IsStatic
+                ? parameters.Length == 3 && parameters[0].ParameterType == typeof(string) && parameters[1].ParameterType == typeof(string)
+                    && parameters[2].ParameterType == typeof(StringComparison)
+                : parameters.Length == 2 && parameters[0].ParameterType == typeof(string) && parameters[1].ParameterType == typeof(StringComparison);
+        }
+
+        /// <summary>
+        /// TASK-869 — the <see cref="StringComparison"/> a string call over the row compares with: null for an overload
+        /// without one (the collation-following LIKE / <c>=</c>), <see cref="StringComparison.Ordinal"/> or
+        /// <see cref="StringComparison.OrdinalIgnoreCase"/>, which translate exactly. Anything else is refused by name before
+        /// the statement runs: a culture comparison (<c>CurrentCulture*</c>, <c>InvariantCulture*</c>) uses .NET's culture
+        /// data, which no SQL collation reproduces, and so does the <c>(string, bool ignoreCase, CultureInfo)</c> overload.
+        /// Before, the argument was ignored and the column's collation decided.
+        /// </summary>
+        internal static StringComparison? TranslatableComparison(MethodCallExpression call)
+        {
+            StringComparison? comparison = null;
+            var parameters = call.Method.GetParameters();
+            for (var i = 0; i < parameters.Length; i++)
+            {
+                var type = parameters[i].ParameterType;
+                if (type == typeof(bool) || type == typeof(System.Globalization.CultureInfo))
+                    throw new NotSupportedException(
+                        $"Cannot translate String.{call.Method.Name} with an ignoreCase flag and a CultureInfo to SQL: a culture "
+                        + "comparison has no SQL form that matches .NET's culture data. Use StringComparison.Ordinal or "
+                        + "StringComparison.OrdinalIgnoreCase.");
+                if (type != typeof(StringComparison)) continue;
+                var argument = call.Arguments[i];
+                if (ContainsParameter(argument))
+                    throw new NotSupportedException(
+                        $"Cannot translate String.{call.Method.Name} to SQL when its StringComparison is read from the row.");
+                var value = argument is ConstantExpression constant
+                    ? constant.Value
+                    : Expression.Lambda(argument).Compile().DynamicInvoke();
+                comparison = value is StringComparison known ? known : throw new NotSupportedException(
+                    $"Cannot translate String.{call.Method.Name} to SQL: its StringComparison is null.");
+            }
+            if (comparison is null or StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase) return comparison;
+            throw new NotSupportedException(
+                $"Cannot translate String.{call.Method.Name} with StringComparison.{comparison} to SQL: only Ordinal and "
+                + "OrdinalIgnoreCase are translated, exactly, on every provider. A culture comparison uses .NET's culture data, "
+                + "which no SQL collation reproduces. Before this was refused the comparison was ignored and the column's "
+                + "collation decided. Use StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase, or the overload "
+                + "without a comparison, which follows the column's collation.");
+        }
+
         private static NotSupportedException RefuseCall(MethodCallExpression call)
             => new($"Cannot translate {call.Method.DeclaringType?.Name}.{call.Method.Name} over the row to SQL: it is not one of "
                 + "the calls the SQL filter parser translates exactly (StartsWith, EndsWith, Contains, string.IsNullOrEmpty, "
-                + "ToLower/ToUpper without a culture, Equals(T), GetValueOrDefault, and TASK-857's Math calls). Before this was "
+                + "ToLower/ToUpper without a culture, Equals(T), Equals with StringComparison.Ordinal / OrdinalIgnoreCase, "
+                + "GetValueOrDefault, and TASK-857's Math calls). Before this was "
                 + "refused the call was dropped and its argument compared instead. Compute the value in memory, or compare "
                 + "the column itself.");
 

@@ -150,6 +150,12 @@ namespace Birko.Data.SQL.Connectors
         public override string ComputedRound(string value, int digits, MidpointRounding mode)
             => base.ComputedRound("CAST(" + value + " AS DECIMAL(32,12))", digits, mode);
 
+        /// <summary>TASK-869 — the portable fragment with this rounding, and an exact ordinal string comparison.</summary>
+        protected override Conditions.SqlValueFragmentDialect FragmentDialect
+            => _msSqlFragmentDialect ??= new MSSqlValueFragmentDialect(ComputedRound);
+
+        private MSSqlValueFragmentDialect? _msSqlFragmentDialect;
+
         /// <summary>TASK-826 — SQL Server has no <c>TRUNC</c>; <c>ROUND(v, 0, 1)</c> truncates.</summary>
         public override string ComputedTruncate(string value) => "ROUND(" + value + ", 0, 1)";
 

@@ -661,8 +661,54 @@ why the canonical batch-query pattern never exposed it. Same defect family as th
 `Title.Contains(query, StringComparison…)` bug.
 
 `DataBase.IsNonOperandArgument` now skips comparer / `StringComparison` / `CultureInfo` arguments. A **non-null**
-comparer is skipped too: its semantics delegate to the column collation, exactly as the `StringComparison`
-overloads already do.
+comparer is skipped too: its semantics delegate to the column collation. (A string call's `StringComparison` is no
+longer ignored — see the next section.)
+
+#### String matching: the collation without a comparison, C# with one (TASK-869)
+
+The user's decision (option A): the no-argument `Contains` / `StartsWith` / `EndsWith` keep rendering
+`col LIKE @p ESCAPE '!'` and **follow the column's collation**; an explicit comparison is translated exactly or refused.
+
+Measured 2026-11-08, live, 41 texts × 28 terms × 4 kinds (`Contains`, `StartsWith`, `EndsWith`, `Equals`), against
+`Compile()` (C#'s no-argument `StartsWith` / `EndsWith` are culture-sensitive, `Contains` is ordinal):
+
+| Form | SQLite | PostgreSQL 16 | MySQL 8.4 | SQL Server 2022 |
+|---|---|---|---|---|
+| no comparison (`LIKE`, the collation) | 49 / 240 off: ASCII case folded only | 5 off: ordinal, where C# `StartsWith` is culture-aware | 113 off: case- **and accent**-insensitive (`ai_ci`) | 104 off: case-insensitive, accent-sensitive |
+| `ToLower().Contains(t.ToLower())` | 72 off (`LOWER` folds ASCII only) | 13 off | 59 off | 45 off |
+| **`Ordinal`** (new form) | 0 — `birko_string_match` (C#) | 0 — `col COLLATE "C" LIKE` | 0 — `col COLLATE utf8mb4_bin LIKE` | 0 — `col COLLATE Latin1_General_100_BIN2 LIKE` |
+| `OrdinalIgnoreCase` via `UPPER(col) LIKE UPPER(t)` (rejected) | 54 off | 32 off | 24 off | 33 off |
+| **`OrdinalIgnoreCase`** (new form) | 0 — `birko_string_match` (C#) | 0 — `col COLLATE "C" ~ '[Cc][Aa]…'` | 0 — `REGEXP_LIKE(col, '\A[Cc]…', 'c')` | 0 — `col COLLATE …_BIN2 LIKE '[Cc][Aa]…%'` (8 off → refused: a cased letter outside the BMP) |
+
+Why not `UPPER`: over every character of planes 0 and 1, each server's `UPPER` puts characters in a different case
+class than C#'s `OrdinalIgnoreCase` — PostgreSQL 16, MySQL 181, SQL Server 625 (`Latin1_General_100`) to 1101 (the
+default). `ı` and `ſ` are the common ones: SQL folds them into `I` / `S`, C# keeps each apart. So
+`SqlStringMatch` (one producer) expands each cased term character into **C#'s own case class** (`[iI]`), computed
+once from `string.Equals(…, OrdinalIgnoreCase)` itself, and the row is compared ordinally against that. SQLite has no
+binary-collation `LIKE` worth trusting (`PRAGMA case_sensitive_like` is connection-wide) and folds ASCII only, so it
+calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Register` (rule 64).
+
+- **Where:** `DataBase_CallTranslation.TranslatableComparison` validates the argument (refusal by name, before
+  anything runs, for `CurrentCulture*`, `InvariantCulture*`, the `(string, bool, CultureInfo)` overload, a null term,
+  a comparison read from the row); the parser stores it on `Condition.Comparison`; `LikeConditionStrategy` hands it to
+  the provider's `SqlValueFragmentDialect.StringMatch` (PostgreSQL and SQL Server got their own dialect classes for it).
+  The base dialect refuses, so a provider without an exact form fails loudly.
+- **Equality:** `x.Col.Equals(v, comparison)` and `string.Equals(x.Col, v, comparison)` (either argument order) are
+  rewritten to one static shape and become `ConditionType.TextEqual`, rendered by the same `StringMatch` (a `LIKE`
+  without wildcards, so trailing spaces count as in C#). As in C#, a NULL column is not equal, so the negation includes
+  NULL rows (TASK-859's leg); a null value is `IS NULL`. Column-vs-column is refused. Plain `==` is unchanged (collation).
+- **Limits:** SQL Server's LIKE takes at most 4000 pattern characters (measured: 4001 is Msg 8152, also bound as
+  `nvarchar(max)`), so `MSSqlValueFragmentDialect` refuses a longer pattern by name before anything runs — an
+  `OrdinalIgnoreCase` term of ~1000 cased letters. MySQL's `COLLATE utf8mb4_bin` requires a `utf8mb4` column (every
+  framework-created table is); a `utf8mb3` / `latin1` column fails the statement with ERROR 1253.
+- **Group collapse:** a group that folds onto its one non-constant child (`!(x.Text.Contains("a", Ordinal) && T)`) takes
+  the child's predicate through `Condition.BecomePredicateOf`, which shares its property list with `Condition.Copy`. The
+  hand-written copy it replaced dropped `Comparison`: the filter fell back to the collation's LIKE (SQLite and
+  PostgreSQL deleted rows C# keeps) and the Equals form threw.
+- Reads, counts, `Update(filter, …)`, `Delete(filter)` and `SqlViewStore` (on-the-fly and persistent) all go through
+  this. Tests: `tests/Shared/StoreContract/StringComparisonFilterContract.cs` (259 cases per SQL provider; 104–131
+  exact-match and 10 refusal cases red before), `Birko.Data.SQL.Views.Tests/Task869ViewStringComparisonTests`,
+  `Birko.Data.SQL.Tests/SqlStringMatchTests` (the case classes against C# over planes 0 and 1).
 
 #### Enum parameter values bind as their underlying integer
 

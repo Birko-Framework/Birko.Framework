@@ -17,6 +17,13 @@ namespace Birko.Data.SQL.Conditions
         StartsWith,
         EndsWith,
         In,
+
+        /// <summary>
+        /// TASK-869: <c>string.Equals(column, value, comparison)</c> with <see cref="Condition.Comparison"/> set to
+        /// <see cref="StringComparison.Ordinal"/> or <see cref="StringComparison.OrdinalIgnoreCase"/>. Rendered by the
+        /// provider's <see cref="SqlValueFragmentDialect.StringMatch"/>, never as <c>=</c>, which follows the collation.
+        /// </summary>
+        TextEqual,
     }
 
     /// <summary>TASK-859: a comparison operand that can be NULL, as its <c>IS NULL</c> test renders it.</summary>
@@ -71,15 +78,53 @@ namespace Birko.Data.SQL.Conditions
         /// </summary>
         public bool NullOperandMatches { get; set; }
 
+        /// <summary>
+        /// TASK-869: the C# comparison of a <see cref="ConditionType.Like"/> / <see cref="ConditionType.StartsWith"/> /
+        /// <see cref="ConditionType.EndsWith"/> / <see cref="ConditionType.TextEqual"/> condition — only
+        /// <see cref="StringComparison.Ordinal"/> or <see cref="StringComparison.OrdinalIgnoreCase"/>, which every SQL provider
+        /// renders exactly through its <see cref="SqlValueFragmentDialect.StringMatch"/>. Null for the no-argument
+        /// <c>Contains</c> / <c>StartsWith</c> / <c>EndsWith</c>, which render <c>LIKE</c> and follow the column's collation.
+        /// </summary>
+        public StringComparison? Comparison { get; set; }
+
         /// <summary>A copy carrying every property but <paramref name="values"/> and <paramref name="subConditions"/>.</summary>
         public Condition Copy(IEnumerable? values, IEnumerable<Condition>? subConditions)
-            => new(Name, values, Type, IsField, IsNot, IsOr, subConditions)
-            {
-                NameFragment = NameFragment,
-                FieldFragment = FieldFragment,
-                NullableOperands = NullableOperands,
-                NullOperandMatches = NullOperandMatches,
-            };
+        {
+            var copy = new Condition(null, values, isNot: IsNot, isOr: IsOr, subConditions: subConditions);
+            CopyPredicateTo(copy);
+            return copy;
+        }
+
+        /// <summary>
+        /// Makes this condition the predicate <paramref name="surviving"/> is — its operand, kind, values and sub-conditions —
+        /// keeping only this condition's own place in the tree (<see cref="IsOr"/>, <see cref="IsNot"/>), which the caller
+        /// sets. Used where a group collapses onto its one surviving child.
+        /// </summary>
+        /// <remarks>
+        /// TASK-869: shares <see cref="CopyPredicateTo"/> with <see cref="Copy"/>, so a new property is carried by both or by
+        /// neither. The collapse used to assign each property by hand and dropped <see cref="Comparison"/>: <c>!(x.Text.Contains("caf",
+        /// StringComparison.Ordinal) &amp;&amp; T)</c> fell back to the collation's LIKE (measured on SQLite and PostgreSQL).
+        /// </remarks>
+        public void BecomePredicateOf(Condition surviving)
+        {
+            if (surviving == null) throw new ArgumentNullException(nameof(surviving));
+            surviving.CopyPredicateTo(this);
+            Values = surviving.Values;
+            SubConditions = surviving.SubConditions;
+        }
+
+        /// <summary>Every property that says what the predicate is, except its values, sub-conditions and tree position.</summary>
+        private void CopyPredicateTo(Condition target)
+        {
+            target.Name = Name;
+            target.Type = Type;
+            target.IsField = IsField;
+            target.NameFragment = NameFragment;
+            target.FieldFragment = FieldFragment;
+            target.NullableOperands = NullableOperands;
+            target.NullOperandMatches = NullOperandMatches;
+            target.Comparison = Comparison;
+        }
 
         public Condition(string? name, IEnumerable? values, ConditionType type = ConditionType.Equal, bool isField = false, bool isNot = false, bool isOr = false, IEnumerable<Condition>? subConditions = null)
         {

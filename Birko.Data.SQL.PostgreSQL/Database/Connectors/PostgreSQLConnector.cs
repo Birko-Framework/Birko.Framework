@@ -56,6 +56,12 @@ namespace Birko.Data.SQL.Connectors
         public override string ComputedDivide(string left, string right)
             => "(CAST(" + left + " AS NUMERIC(60,28)) / " + right + ")";
 
+        /// <summary>TASK-869 — the portable fragment with this rounding, and an exact ordinal string comparison.</summary>
+        protected override Conditions.SqlValueFragmentDialect FragmentDialect
+            => _postgreSqlFragmentDialect ??= new PostgreSqlValueFragmentDialect(ComputedRound);
+
+        private PostgreSqlValueFragmentDialect? _postgreSqlFragmentDialect;
+
         /// <inheritdoc />
         public override bool SupportsSchemas => true;
 

@@ -93,6 +93,10 @@ namespace Birko.Data.SQL.Connectors
         public override string Negate(string operand, Type type)
             => IsDecimal(type) ? $"{SqLiteDecimal.SubtractFunction}({Literal(0m)}, {operand})" : base.Negate(operand, type);
 
+        /// <summary>TASK-869 — C#'s own comparison, through <see cref="SqLiteStringMatch.Function"/>.</summary>
+        public override string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)
+            => SqLiteStringMatch.Call(kind, operand, term, comparison, bind);
+
         /// <inheritdoc />
         public override string Compared(string operand, Type comparedType)
             => IsDecimal(comparedType) ? $"{operand} COLLATE {SqLiteDecimal.Collation}" : operand;

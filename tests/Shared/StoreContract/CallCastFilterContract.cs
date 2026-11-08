@@ -189,8 +189,6 @@ public abstract class CallCastFilterContract
             ["string.CompareOrdinal(Code, \"b\") > 0"] = (x => string.CompareOrdinal(x.Code, "b") > 0, "CompareOrdinal"),
             ["Code.CompareTo(\"b\") > 0"] = (x => x.Code.CompareTo("b") > 0, "CompareTo"),
             ["Hits.CompareTo(3) > 0"] = (x => x.Hits.CompareTo(3) > 0, "CompareTo"),
-            ["Code.Equals(\"abc\", OrdinalIgnoreCase)"] = (x => x.Code.Equals("abc", StringComparison.OrdinalIgnoreCase), "Equals"),
-            ["string.Equals(Code, \"abc\", OrdinalIgnoreCase)"] = (x => string.Equals(x.Code, "abc", StringComparison.OrdinalIgnoreCase), "Equals"),
             ["Hits.Equals((object)3)"] = (x => x.Hits.Equals((object)3), "Equals"),
             ["object.Equals(Code, \"xyz\")"] = (x => object.Equals(x.Code, "xyz"), "Equals"),
             // ToString and Convert.
