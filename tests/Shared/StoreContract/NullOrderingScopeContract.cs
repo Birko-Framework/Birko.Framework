@@ -91,6 +91,28 @@ public abstract class NullOrderingScopeContract<T> where T : AbstractModel, new(
         "Delete", "Update(PropertyUpdate)", "Update(Action)",
     };
 
+    /// <summary>Filters only a read takes as written (TASK-867): a bare ordering against null matches nothing in C#.</summary>
+    public static readonly IReadOnlyDictionary<string, Expression<Func<NullOrderingShape, bool>>> ReadOnly =
+        new Dictionary<string, Expression<Func<NullOrderingShape, bool>>>
+        {
+            ["Score > nul"] = x => x.Score > Nul,
+            ["nul >= Score"] = x => Nul >= x.Score,
+            ["Score < nul && A > 0"] = x => x.Score < Nul && x.A > 0,
+            ["Score > nul || Score == nul"] = x => x.Score > Nul || x.Score == Nul,
+            ["!(Score > nul) && Score != nul"] = x => !(x.Score > Nul) && x.Score != Nul,
+        };
+
+    public static readonly string[] ReadOperations = { "ReadAsync", "CountAsync", "Read", "Count" };
+
+    /// <summary>Every shape in this contract, each read four ways (TASK-867).</summary>
+    public static IEnumerable<object[]> ReadCases
+        => from shape in EveryRow.Keys.Concat(Constraining.Keys).Concat(ReadOnly.Keys)
+           from op in ReadOperations
+           select new object[] { shape, op };
+
+    private static Expression<Func<NullOrderingShape, bool>> AnyShape(string shape)
+        => EveryRow.TryGetValue(shape, out var a) ? a : Constraining.TryGetValue(shape, out var b) ? b : ReadOnly[shape];
+
     public static IEnumerable<object[]> EveryRowCases
         => from shape in EveryRow.Keys from op in Operations select new object[] { shape, op };
 
@@ -208,6 +230,55 @@ public abstract class NullOrderingScopeContract<T> where T : AbstractModel, new(
             var rows = store.Read(HasCode, null, null, null).ToList();
             return (thrown, Codes(rows), Codes(rows.Where(x => AmountOf(x) == 100)));
         }
+    }
+
+    /// <summary>
+    /// TASK-867 — a READ with an ordering against null returns what C# matches: the ordering is false, under any NOT,
+    /// AND or OR. Before (measured): RavenDB matched the non-null Scores, Cosmos DB's NOT of it matched nothing, and
+    /// Elasticsearch refused it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ReadCases))]
+    public async Task Contract_A_read_with_a_null_ordering_returns_what_CSharp_matches(string shape, string operation)
+    {
+        if (!Ready()) return;
+        var source = AnyShape(shape);
+        var expected = SeedShapes().Where(source.Compile()).Select(x => x.Code).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        var filter = Retarget(source);
+
+        Exception? thrown = null;
+        List<string?> read = new();
+        long count = -1;
+        if (operation.EndsWith("Async"))
+        {
+            var store = NewAsyncStore();
+            foreach (var seed in SeedShapes()) await store.CreateAsync(ToRow(seed));
+            Settle();
+            try
+            {
+                if (operation == "ReadAsync") read = Codes(await store.ReadAsync(filter, null, null, null));
+                else count = await store.CountAsync(filter);
+            }
+            catch (Exception ex) { thrown = ex; }
+        }
+        else
+        {
+            var store = NewSyncStore();
+            foreach (var seed in SeedShapes()) store.Create(ToRow(seed));
+            Settle();
+            try
+            {
+                if (operation == "Read") read = Codes(store.Read(filter, null, null, null));
+                else count = store.Count(filter);
+            }
+            catch (Exception ex) { thrown = ex; }
+        }
+
+        var because = $"{operation} with '{shape}' (C# matches {string.Join(",", expected)}; "
+                    + $"read {string.Join(",", read)}, count {count}, thrown {thrown?.GetType().Name}: {thrown?.Message})";
+        thrown.Should().BeNull(because);
+        if (operation.StartsWith("Read")) read.Should().Equal(expected, because);
+        else count.Should().Be(expected.Count, because);
     }
 
     [Theory]

@@ -83,6 +83,8 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         int? limit)
     {
         var pipeline = new List<BsonDocument>();
+        // TASK-867: an ordering against null is false in C#; MongoDB's `$gte: null` matches the null rows (measured).
+        filter = Birko.Data.Expressions.NullOrderingFold.Rewrite(filter);
 
         // Add $match for filter (operates on view fields — valid both against the persistent view and
         // after the base $project on the on-the-fly path)

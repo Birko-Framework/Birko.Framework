@@ -23,15 +23,6 @@ public sealed class ElasticNullOrderingScopeContractTests : NullOrderingScopeCon
     protected override bool Ready() => _live.Ready();
     protected override void Settle() => ElasticLive.Refresh();
 
-    /// <summary>Measured 2026-11-08 (TASK-865): the Elasticsearch translator refuses an ordering against null with
-    /// <c>NotSupportedException</c>, before any request — safe (rule 41), but these constraining filters cannot run.</summary>
-    protected override string? KnownTranslationGap(string shape) => shape switch
-    {
-        "Score > nul || A > 4" or "!(Score > nul || A > 3)" or "!(Score > nul) && A > 4"
-            => "the translator refuses an ordering against null",
-        _ => null,
-    };
-
     protected override IAsyncBulkStore<NullOrderingDoc> NewAsyncStore()
     {
         var store = new AsyncElasticSearchStore<NullOrderingDoc>();

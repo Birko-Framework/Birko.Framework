@@ -64,6 +64,11 @@ public static class RavenFilterRewriter
     {
         if (filter == null) return null;
 
+        // TASK-867: RQL ranks null below every value, so `Score > null` matched every non-null Score where C# matches
+        // none (measured). Folded to `false` first; a filter that folds to `false` entirely is answered by
+        // MatchesNothing, because RavenDB refuses a constant predicate.
+        filter = NullOrderingFold.Rewrite(filter)!;
+
         // `x => true` is this framework's documented read-all / *All synonym (CLAUDE.md § Conventions),
         // and RavenDB refuses it outright: "Constants expressions such as Where(x => true) are not
         // allowed in the RavenDB queries". Same root cause as the Contains refusal — a portable spelling
@@ -92,6 +97,12 @@ public static class RavenFilterRewriter
             ? filter
             : Expression.Lambda<Func<T, bool>>(body, filter.Parameters);
     }
+
+    /// <summary>
+    /// True when a filter <see cref="Rewrite{T}"/> produced matches no document (it folded to <c>false</c>). RavenDB refuses
+    /// a constant predicate, so the store answers empty without a query (TASK-867).
+    /// </summary>
+    public static bool MatchesNothing(LambdaExpression? filter) => NullOrderingFold.MatchesNothing(filter);
 
     private sealed class Rewriter : ExpressionVisitor
     {

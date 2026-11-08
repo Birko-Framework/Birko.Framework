@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### An ordering against null matches nothing on every document store (2026-11-08)
+[[TASK-867]]. In C#, `x.Score > nul` with `nul == null` is false. RavenDB matched every non-null Score, Cosmos DB missed
+rows under NOT, MongoDB's `$gte: null` matched the null rows, and Elasticsearch refused, on reads, views and the writes
+the guard allows (measured live). One fold, `NullOrderingFold` (Birko.Data.Core), now replaces such an ordering with
+`false` before each translator renders. A filter that folds to false is answered without a query on RavenDB, and
+rendered as match_none on Elasticsearch. Index and aggregation helpers: [[TASK-868]].
 ### A SQL filter comparing a boolean with `false` is no longer inverted (2026-11-08)
 [[TASK-863]]. 34 of 75 boolean shapes returned wrong rows on all four SQL providers (measured): `x.N.HasValue == false`
 rendered `IS NOT NULL`, `(x.A == x.B) == false` rendered the equality, `StartsWith(..) == true` bound `true` as the LIKE
@@ -384,12 +390,6 @@ never matched NULL.
 [[TASK-835]] (FIELD-051). Elasticsearch refuses a terms query past `index.max_terms_count`; measured, 65,537 ids gave
 HTTP 400. A longer list is now a bool `should` of terms queries, each within `ElasticSearch.MaxTermsCount` (default
 65,536), in the same request, so it stays correct under `||` and `!`.
-### A SQL read with a long IN list is linear again (2026-11-07)
-[[TASK-832]], reported by Symbio (FIELD-051). Every SQL read builds `DataBase.GetGeneratedQuery`, the diagnostic SQL
-with values filled in, and it ran one `StringBuilder.Replace` per parameter. For `ids.Contains(x.Guid)` on SQLite that
-was 6.5 s of a 6.8 s read at 2,000 ids, and 87 s at 4,000 (measured, Release). It is one pass now: 130 ms and 289 ms. A
-value containing a parameter name is no longer rewritten. Chunking a list past a provider's parameter limit is
-[[TASK-833]].
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

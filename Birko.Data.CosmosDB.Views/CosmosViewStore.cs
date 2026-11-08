@@ -457,6 +457,10 @@ internal static class CosmosFilterTranslator
         // "a strategy asked to render the unrenderable throws; an empty string is silently joined
         // between its neighbours' separators". Kept deliberately narrow: a single ConstantExpression
         // node, never a whitelist of shapes that happen to reduce to true.
+        // TASK-867: an ordering against null is false in C#, but `c.Score > null` is undefined in Cosmos DB and so is its
+        // NOT, so `!(v.Score > nul) && v.A > 4` missed rows (measured). Folded before the constant check below, so a
+        // filter that folds to true is the empty clause too.
+        filter = Birko.Data.Expressions.NullOrderingFold.Rewrite(filter)!;
         if (filter.Body is ConstantExpression { Value: true })
         {
             return string.Empty;

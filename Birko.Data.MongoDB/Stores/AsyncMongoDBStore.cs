@@ -142,6 +142,7 @@ namespace Birko.Data.MongoDB.Stores
             // hand-off below sees one shape. Measured: only MongoDB needs this; SQL and
             // ElasticSearch evaluate the operand themselves and were already correct.
             filter = Data.Expressions.SpanContains.Rewrite(filter);
+            filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867: `$gte: null` matches the null rows
             if (Collection == null)
             {
                 return null;
@@ -173,6 +174,7 @@ namespace Birko.Data.MongoDB.Stores
         protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
+            filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867: `$gte: null` matches the null rows
             if (Collection == null)
             {
                 return 0;
@@ -346,6 +348,7 @@ namespace Birko.Data.MongoDB.Stores
                 return await Task.FromResult(Enumerable.Empty<T>());
             }
             filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
+            filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867: `$gte: null` matches the null rows
 
             var query = FindIn(Collection, filter ?? FilterDefinition<T>.Empty);
 
@@ -483,6 +486,7 @@ namespace Birko.Data.MongoDB.Stores
             // matches every document while looking like an ordinary predicate, so no guard on the
             // emitted query can see it. Checked here, on the expression, where the intent is plain.
             RequireBoundedFilter(filter, "delete");
+            filter = Data.Expressions.NullOrderingFold.Rewrite(filter)!;   // TASK-867, after the guard
             if (Collection == null) return;
 
             if (Session != null)
@@ -502,6 +506,7 @@ namespace Birko.Data.MongoDB.Stores
             // matches every document while looking like an ordinary predicate, so no guard on the
             // emitted query can see it. Checked here, on the expression, where the intent is plain.
             RequireBoundedFilter(filter, "update");
+            filter = Data.Expressions.NullOrderingFold.Rewrite(filter)!;   // TASK-867, after the guard
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var combined = MongoPropertyUpdateTranslator.Build(updates);

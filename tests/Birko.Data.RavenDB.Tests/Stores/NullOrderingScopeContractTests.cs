@@ -22,14 +22,6 @@ public sealed class RavenNullOrderingScopeContractTests : NullOrderingScopeContr
     public RavenNullOrderingScopeContractTests(ITestOutputHelper output) => _live = new RavenLive(output);
     protected override bool Ready() => _live.Ready();
 
-    /// <summary>Measured 2026-11-08 (TASK-865): RQL's <c>Score &gt; null</c> matches every non-null Score, where C# matches
-    /// nothing, so these filters read and write other rows than C#, silently. Not fixed here (a read translation).</summary>
-    protected override string? KnownTranslationGap(string shape) => shape switch
-    {
-        "Score > nul || A > 4" or "!(Score > nul || A > 3)" or "!(Score > nul) && A > 4"
-            => "RQL ranks null below every value, so an ordering against null matches the non-null rows",
-        _ => null,
-    };
     protected override IAsyncBulkStore<NullOrderingDoc> NewAsyncStore() => _live.Track((url, db) => new AsyncRavenDBStore<NullOrderingDoc>(url, db));
     protected override IBulkStore<NullOrderingDoc> NewSyncStore() => _live.Track((url, db) => new RavenDBStore<NullOrderingDoc>(url, db));
     public void Dispose() => _live.Dispose();

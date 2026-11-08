@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\DateTruncation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\PredicateScope.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\NullOrderingFold.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\SpanContains.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\BoundedFilterGuard.cs" />
     <!-- Filters -->

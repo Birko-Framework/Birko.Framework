@@ -277,6 +277,7 @@ public class RavenDBStore<T>
         // opposite direction, already translates, and is left alone.
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);
         if (_documentStore == null) return null;
+        if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return null;   // TASK-867
 
         if (Session != null)
         {
@@ -352,6 +353,7 @@ public class RavenDBStore<T>
     {
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return 0;
+        if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return 0;   // TASK-867
 
         if (Session != null)
         {
@@ -381,6 +383,7 @@ public class RavenDBStore<T>
     {
         filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return Enumerable.Empty<T>();
+        if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return Enumerable.Empty<T>();   // TASK-867
 
         var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try

@@ -186,32 +186,10 @@ namespace Birko.Data.Expressions
         }
 
         /// <summary>
-        /// True when <paramref name="ordering"/> is a LIFTED <c>&lt;</c>, <c>&lt;=</c>, <c>&gt;</c> or <c>&gt;=</c> one of whose
-        /// operands is the null constant — which, once <see cref="ExpressionNormalizer"/> has folded captured values,
-        /// covers <c>x.Score &gt; nul</c>, <c>nul &lt; x.Score</c> and <c>x.Score &lt;= (int?)null</c>. C# defines a lifted
-        /// ordering with a null operand as <c>false</c>, so the comparison matches no entity.
+        /// A lifted ordering against null is false in C# (TASK-865). Asked of <see cref="NullOrderingFold"/>, the one
+        /// producer, so this guard and the translators that fold the ordering (TASK-867) agree on which comparison it is.
         /// </summary>
-        /// <remarks>
-        /// <c>==</c> / <c>!=</c> are not here: <c>x.Score == nul</c> is true of the null rows, an ordinary filter. Neither is
-        /// an ordering that is not lifted — a user-defined operator declared on nullable operands decides for itself what
-        /// null means, and claiming it false could refuse a filter that constrains.
-        /// </remarks>
-        private static bool IsNullOrdering(BinaryExpression ordering)
-        {
-            if (ordering.NodeType is not (ExpressionType.LessThan or ExpressionType.LessThanOrEqual
-                    or ExpressionType.GreaterThan or ExpressionType.GreaterThanOrEqual))
-            {
-                return false;
-            }
-            if (!ordering.IsLifted || ordering.IsLiftedToNull)
-            {
-                return false;
-            }
-            return IsNullConstant(ordering.Left) || IsNullConstant(ordering.Right);
-        }
-
-        private static bool IsNullConstant(Expression operand)
-            => Unwrap(operand) is ConstantExpression { Value: null };
+        private static bool IsNullOrdering(BinaryExpression ordering) => NullOrderingFold.IsNullOrdering(ordering);
 
         private static bool ReferencesParameter(Expression expr)
             => new ParameterFinder().Found(expr);

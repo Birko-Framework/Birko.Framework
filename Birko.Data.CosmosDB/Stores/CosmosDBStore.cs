@@ -230,6 +230,7 @@ public class CosmosDBStore<T>
         // same fix as MongoDB (TASK-218); measured separately rather than assumed.
         filter = Data.Expressions.SpanContains.Rewrite(filter);
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
+        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
         if (_container == null) return null;
 
         // TASK-834: with no order, "the first match" is any match, so the chunks are asked in turn.
@@ -275,6 +276,7 @@ public class CosmosDBStore<T>
         if (_container == null) return null;
         filter = Data.Expressions.SpanContains.Rewrite(filter)!;
         filter = Data.Expressions.DateTruncation.Rewrite(filter)!;
+        filter = Data.Expressions.NullOrderingFold.Rewrite(filter)!;   // TASK-867
         return PlanInList(filter, operation, sortedOrPaged: false);
     }
 
@@ -374,6 +376,7 @@ public class CosmosDBStore<T>
     {
         filter = Data.Expressions.SpanContains.Rewrite(filter);
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
+        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
         if (_container == null) return 0;
 
         // TASK-834: the chunks' values are distinct, so their counts are disjoint and add up.
@@ -403,6 +406,7 @@ public class CosmosDBStore<T>
     {
         filter = Data.Expressions.SpanContains.Rewrite(filter);
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
+        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
         if (_container == null) return Enumerable.Empty<T>();
 
         // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,

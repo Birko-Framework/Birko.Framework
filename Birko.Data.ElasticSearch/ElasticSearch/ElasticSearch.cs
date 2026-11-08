@@ -236,6 +236,9 @@ namespace Birko.Data.ElasticSearch
             // funcletize parameter-free subtrees and desugar boolean ternary (c ? t : f) and boolean
             // null-coalescing (a ?? b) into AND/OR/NOT, which the query builder below already handles.
             var body = Birko.Data.Expressions.ExpressionNormalizer.Normalize(lambda.Body) ?? lambda.Body;
+            // TASK-867: an ordering against null is false in C#; it was refused here. Folded to that constant, which
+            // ParsePredicate renders as match_none / match_all.
+            body = Birko.Data.Expressions.NullOrderingFold.Fold(body)!;
             return ParsePredicate(body, type, fieldPrefix, termsLimit);
         }
 

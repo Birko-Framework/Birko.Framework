@@ -44,8 +44,13 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         int? offset = null,
         CancellationToken ct = default)
     {
+        // TASK-867: the store's translator pre-pass, so a null ordering is folded to false as C# has it (RQL matched the
+        // non-null rows); a filter that folds to false entirely matches nothing, and RavenDB refuses a constant predicate.
+        filter = Birko.Data.RavenDB.Expressions.RavenFilterRewriter.Rewrite(filter);
+
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return Enumerable.Empty<TView>();   // after the mode and index checks
 
         if (filter != null)
         {
@@ -83,8 +88,13 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
+        // TASK-867: the store's translator pre-pass, so a null ordering is folded to false as C# has it (RQL matched the
+        // non-null rows); a filter that folds to false entirely matches nothing, and RavenDB refuses a constant predicate.
+        filter = Birko.Data.RavenDB.Expressions.RavenFilterRewriter.Rewrite(filter);
+
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return null;   // after the mode and index checks
 
         if (filter != null)
         {
@@ -99,8 +109,13 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
+        // TASK-867: the store's translator pre-pass, so a null ordering is folded to false as C# has it (RQL matched the
+        // non-null rows); a filter that folds to false entirely matches nothing, and RavenDB refuses a constant predicate.
+        filter = Birko.Data.RavenDB.Expressions.RavenFilterRewriter.Rewrite(filter);
+
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return 0;   // after the mode and index checks
 
         if (filter != null)
         {
