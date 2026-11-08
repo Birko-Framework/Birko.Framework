@@ -18,6 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\PostgreSQLConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\PostgreSQLConnector_ColumnNames.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\PostgreSQLRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncPostgreSQLStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncPostgreSQLRepository.cs" />

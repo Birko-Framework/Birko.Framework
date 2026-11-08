@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL column named like a reserved word is refused by name (2026-11-08)
+[[TASK-862]] (the user's decision: refuse, keep column names unquoted per rule 17). `Order`, `Group` or `Select` broke
+CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Server. On SQLite a column named
+`CURRENT_DATE` was created, and a filtered delete on it then matched no rows, silently (measured). Each provider now
+holds the list its server rejects, measured live, and the table build refuses such a column with
+`NotSupportedException` naming it, before any SQL is sent. Map it with `[NamedField]` or `HasColumnName`.
 ### SQL view filters with computed values run again; persistent views refuse them by name (2026-11-08)
 [[TASK-858]]. Since TASK-857, every on-the-fly `SqlViewStore` filter with arithmetic, COALESCE, CASE, Round or a
 column-vs-column comparison threw "Cannot translate operand", on all four providers (reproduced). Its re-render looked
@@ -375,13 +381,6 @@ never matched NULL.
   - **Still split:** the parameter counts toward the 524,288-character limit (13,795 Guids pass, measured), so past
     it a plain AND list is split through TASK-834's planner. Negated, `||` and grouped forms refuse.
   - **Refused by name:** other collection shapes.
-### Rendering SQL parameters is linear (2026-11-07)
-[[TASK-836]]. `AddParameter` looked every name up in the command's parameter collection, which is a linear scan, so a
-4000-value IN list took 341 ms to render; it now takes 23–28 ms.
-- A name the builder just generated is unique by construction, so it skips the lookup (`AddUniqueParameter`).
-- A re-added name still overwrites its value, which the multi-row insert relies on.
-- **Breaking for subclasses:** `AddParameter` is non-virtual (rule 12). Providers override
-  `ConvertParameterValue` / `CreateParameter`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

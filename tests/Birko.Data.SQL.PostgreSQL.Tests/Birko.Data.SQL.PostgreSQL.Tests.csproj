@@ -50,6 +50,7 @@
     <Compile Include="..\Shared\StoreContract\UnconfiguredContract.cs" Link="Shared\UnconfiguredContract.cs" />
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
+    <Compile Include="..\Shared\StoreContract\RejectedColumnNameContract.cs" Link="Shared\RejectedColumnNameContract.cs" />
   </ItemGroup>
 
 </Project>

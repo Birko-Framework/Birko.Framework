@@ -152,6 +152,8 @@ namespace Birko.Data.Migrations.SQL.Context
             // Execute() runs on _connection directly, so it needs no boundary; the scope is here because
             // QuoteIdentifier goes through the connector and a future connector-delegating rename would.
             using var boundary = EnterAmbientBoundary();
+            // TASK-862: a new name the provider rejects is refused by name, before the statement is sent.
+            _connector.RequireUsableColumnName(collectionName, newName);
             // TASK-272: the connector's statement, so the table is named in its schema (and SQL Server's sp_rename, which
             // has no RENAME COLUMN, is used there instead of an inline ALTER it rejects).
             // TASK-637: the columns bare (rule 17), as CREATE TABLE made them, so PostgreSQL finds the folded column; the old
@@ -305,9 +307,13 @@ namespace Birko.Data.Migrations.SQL.Context
                 //     the same thing on both paths. An ignored descriptor used to get a column anyway.
                 //   * SchemaField.For, not `new SchemaField(...)`, so a declared maxLength / precision /
                 //     scale reaches the connector at all. See the remarks on SchemaField.
-                var fieldDefinitions = _fields
+                var fields = _fields
                     .Where(f => !f.IsIgnored)
-                    .Select(f => _connector.FieldDefinition(SchemaField.For(f)));
+                    .Select(SchemaField.For)
+                    .ToList();
+                // TASK-862: the rendered overload below takes column definitions as text, so the check is here.
+                _connector.RequireUsableColumnNames(_name, fields);
+                var fieldDefinitions = fields.Select(f => _connector.FieldDefinition(f));
                 _connector.CreateTable(_name, fieldDefinitions);
             }
 

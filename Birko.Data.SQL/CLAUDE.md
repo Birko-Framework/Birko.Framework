@@ -90,6 +90,29 @@ Standard DataAnnotations attributes are recognized alongside Birko attributes. B
 
 No DataAnnotations equivalent exists for `[UniqueField]`, `[PrecisionField]`, or `[ScaleField]`.
 
+#### A column named like a reserved word is refused by name (TASK-862)
+Column identifiers are emitted bare (rule 17), so a property named `Order`, `Group` or `Select` produced a DDL syntax
+error on every provider. Since TASK-862 such a column is refused with `NotSupportedException` naming the column,
+entity, table and provider, **before any SQL is sent**. The caller maps the property to another column with
+`[NamedField("SortOrder")]` (or `[Column]`) or `map.Property(x => x.Order).HasColumnName("SortOrder")`.
+
+- **The list is per provider, and it is the names the server rejects, measured live:** not the full keyword list.
+  Each connector holds one `RejectedColumnNames` (`*Connector_ColumnNames.cs`, rule 20); TimescaleDB inherits
+  PostgreSQL's. MySQL 8.4: the 262 `RESERVED` words (`Rank` refused, `Value`/`User` fine). PostgreSQL 16: catcode
+  R and T plus the six system columns (`User` refused, `Rank`/`Key`/`Index` fine). SQL Server 2022: 179 of the 185
+  documented reserved words (`Key`/`User` refused, `Rank` fine). SQLite 3.53: 63, including `CURRENT_DATE`/`_TIME`/
+  `_TIMESTAMP`, which pass the DDL but are read as the current date in a write's WHERE (a filtered delete matched no
+  rows, silently).
+- **Where the check sits:** `AbstractConnectorBase.RequireUsableColumnNames` (not virtual), called by
+  `CreateTable(IDictionary)` for every table of the batch before the first is created, and by `AlterTableAdd` /
+  `AlterTableAddAsync`. Every store's lazy init runs `CreateTable` before its first operation, also against a table
+  that already exists, so a store read on such a table refuses by name too. `PlanRepair` skips such a column, and
+  the migrations `SqlSchemaBuilder` checks `CreateCollection(..).Build()` and `RenameField`.
+- **Not covered:** a direct connector call (`connector.Select/Insert/Update/Delete(type, …)`) on a table Birko did
+  not build skips store init, so it is not checked.
+- `Every_refused_name_is_rejected_by_the_server` (shared `RejectedColumnNameContract`) re-measures each list live.
+  Re-run it when a supported server version moves.
+
 #### Models
 - `ColumnModel` - Represents a table column
 - `TableModel` - Represents a database table

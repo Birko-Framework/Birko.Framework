@@ -18,6 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connector\MSSqlConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connector\MSSqlConnector_ColumnNames.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlModelRepository.cs" />

@@ -28,6 +28,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (!string.IsNullOrEmpty(tableName) && fields != null && fields.Any())
             {
+                RequireUsableColumnNames(tableName, fields); // TASK-862, before any ALTER is sent
                 foreach (var field in fields.Where(x => x != null))
                 {
                     await DoDdlCommandAsync(async (command) =>

@@ -61,7 +61,10 @@ public class CustomerStore : DataBaseStore<SqlConnection, Customer>, IStore<Cust
 ### Attributes (`Birko.Data.SQL.Attributes`)
 
 - **Table(string name)** - Maps entity class to a database table
-- **NamedField(string? name)** - Maps property to a column with a custom name
+- **NamedField(string? name)** - Maps property to a column with a custom name. Column names are emitted unquoted, so a
+  property whose name the provider reserves (`Order`, `Group`, `Select`; `Rank` and `Key` on MySQL; `User` on
+  PostgreSQL and SQL Server) is refused with `NotSupportedException` when its table is built. Map it to another
+  column name with this attribute or a fluent `HasColumnName` (TASK-862).
 - **PrimaryField** - Marks primary key column
 - **UniqueField** - Marks column as unique
 - **IncrementField** - Marks column as auto-increment

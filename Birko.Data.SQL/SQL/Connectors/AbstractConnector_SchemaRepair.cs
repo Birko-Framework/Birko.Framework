@@ -69,6 +69,13 @@ namespace Birko.Data.SQL.Connectors
                             skipped.Add(new SchemaRepairSkip(drift.ToString(), refusal + "; add it with a migration that supplies the value"));
                             break;
                         }
+                        if (RejectsColumnName(field.Name))
+                        {
+                            // TASK-862: the statement would be a syntax error; the model has to map another column name.
+                            skipped.Add(new SchemaRepairSkip(drift.ToString(),
+                                "its name is a reserved word on this provider; map the property to another column name"));
+                            break;
+                        }
                         statements.Add(AddColumnSql(table.Name, field));
                         break;
 

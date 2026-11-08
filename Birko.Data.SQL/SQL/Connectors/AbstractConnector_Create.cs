@@ -75,6 +75,12 @@ namespace Birko.Data.SQL.Connectors
         {
             if (tables != null && tables.Any() && tables.Any(x => x.Value != null && x.Value.Count() > 0))
             {
+                // TASK-862: every table is checked before the first is created, so a refusal sends no SQL at all.
+                foreach (var kvp in tables.Where(x => x.Value != null))
+                {
+                    RequireUsableColumnNames(kvp.Key, kvp.Value);
+                }
+
                 foreach (var kvp in tables.Where(x => x.Value != null && x.Value.Any()))
                 {
                     CreateTable(kvp.Key, WithCompositePrimaryKey(kvp.Key, kvp.Value));
