@@ -1003,6 +1003,8 @@ namespace Birko.Data.SQL
                                 return new[] { condition };
                             }
                     }
+                    // TASK-858: the set-Contains operand's resolution, shared with its IS NULL leg below.
+                    FragmentResolution? fragmentResolution = null;
                     if (methodExpression.Arguments.Any())
                     {
                         // For the string pattern methods (Contains/StartsWith/EndsWith on
@@ -1066,8 +1068,9 @@ namespace Birko.Data.SQL
                                     && ContainsParameter(arg)
                                     && !IsPlainColumnOperand(arg, exprType))
                                 {
-                                    condition.Name = RenderValueFragment(arg, exprType);
-                                    condition.NameFragment = ComparedFragment(arg, arg.Type, exprType);
+                                    fragmentResolution = new FragmentResolution();
+                                    condition.Name = RenderValueFragment(arg, exprType, fragmentResolution);
+                                    condition.NameFragment = ComparedFragment(arg, arg.Type, exprType, fragmentResolution);
                                     continue;
                                 }
                                 ParseConditionExpression(arg, condition, exprType);
@@ -1091,7 +1094,7 @@ namespace Birko.Data.SQL
                             var operand = methodExpression.Arguments.Concat(new[] { methodExpression.Object })
                                 .FirstOrDefault(e => e != null && !IsNonOperandArgument(e) && ContainsParameter(e));
                             if (operand != null)
-                                MarkNullableIn(condition, operand, exprType);
+                                MarkNullableIn(condition, operand, exprType, fragmentResolution ?? new FragmentResolution());
                         }
                     }
                     return new[] { condition };
@@ -1742,6 +1745,53 @@ namespace Birko.Data.SQL
         };
 
         /// <summary>
+        /// TASK-858 — what the parse resolved while it rendered one value fragment: each column a member reads, each
+        /// constant, and whether an operand can be NULL. A provider re-renders the fragment in its own dialect when the
+        /// statement is built (TASK-856, and on every provider since TASK-857), and it reads all three from here.
+        /// </summary>
+        /// <remarks>
+        /// Measured before: the re-render resolved the columns again, after the parse had returned. A view store resolves
+        /// its view's properties in a scope that lives only for the parse (<c>ScopeFieldResolver</c>), so every OnTheFly
+        /// view filter with arithmetic, <c>COALESCE</c>, <c>CASE</c>, <c>Math.Round</c> or column against column threw
+        /// "Cannot translate operand 'v.Amount'" on SQLite, PostgreSQL, MySQL and SQL Server. Before TASK-857 PostgreSQL ran
+        /// the same filters. Constants were already evaluated once, because the normalizer folds every parameter-free
+        /// subtree first; a subtree it could not fold, which the parser then evaluates itself, is kept here too.
+        /// </remarks>
+        private sealed class FragmentResolution
+        {
+            private readonly Dictionary<Expression, string?> _columns = new(ReferenceEqualityComparer.Instance);
+            private readonly Dictionary<Expression, object?> _constants = new(ReferenceEqualityComparer.Instance);
+            private readonly Dictionary<Expression, bool> _nullable = new(ReferenceEqualityComparer.Instance);
+            private readonly object _gate = new();
+
+            /// <summary>The column <paramref name="member"/> reads on the row, or null when it reads none.</summary>
+            public string? Column(MemberExpression member, Type? exprType)
+                => Resolve(_columns, member, () => TryResolveParameterColumn(member, exprType, out var column) ? column : null);
+
+            /// <summary>The value of the parameter-free <paramref name="expr"/>, by <paramref name="evaluate"/> or as the parser evaluates it.</summary>
+            public object? Constant(Expression expr, Func<object?>? evaluate = null)
+                => Resolve(_constants, expr, evaluate ?? (() => EvaluateExpression(expr)));
+
+            /// <summary><see cref="OperandCanBeNull"/> of <paramref name="operand"/>.</summary>
+            public bool CanBeNull(Expression operand, Type? exprType)
+                => Resolve(_nullable, operand, () => OperandCanBeNull(operand, exprType));
+
+            private T Resolve<T>(Dictionary<Expression, T> resolved, Expression key, Func<T> resolve)
+            {
+                lock (_gate)
+                {
+                    if (resolved.TryGetValue(key, out var known)) return known;
+                }
+                var value = resolve();
+                lock (_gate)
+                {
+                    resolved.TryAdd(key, value);
+                    return resolved[key];
+                }
+            }
+        }
+
+        /// <summary>
         /// Renders a value-expression subtree — column references, Add/Subtract/Multiply/Divide/Modulo
         /// arithmetic, <c>COALESCE</c>, a value-position ternary (<c>CASE WHEN … END</c>), nullable
         /// <c>.Value</c> unwrap, and constants — into a raw SQL fragment such as <c>(Table.A + Table.B)</c>
@@ -1750,8 +1800,10 @@ namespace Birko.Data.SQL
         /// fragment cannot be parameterised and are instead inlined as portable SQL literals
         /// (see <see cref="InlineConstant"/>). Throws <see cref="NotSupportedException"/> for anything it
         /// cannot faithfully translate rather than silently dropping it.
+        /// <para>TASK-858: every column and constant is read through <paramref name="resolved"/>, which the parse fills, so a
+        /// provider's re-render at statement time reuses what the parse resolved.</para>
         /// </summary>
-        private static string RenderValueFragment(Expression expr, Type? exprType, SqlValueFragmentDialect? dialect = null)
+        private static string RenderValueFragment(Expression expr, Type? exprType, FragmentResolution resolved, SqlValueFragmentDialect? dialect = null)
         {
             dialect ??= SqlValueFragmentDialect.Portable;
             switch (expr)
@@ -1763,15 +1815,15 @@ namespace Birko.Data.SQL
                     else if (SqlConversion.Classify(u.Operand.Type, u.Type) == SqlConversionKind.Lossy)
                     {
                         // A constant's conversion is C#'s to compute, exactly.
-                        var converted = Expression.Lambda(u).Compile().DynamicInvoke();
+                        var converted = resolved.Constant(u, () => Expression.Lambda(u).Compile().DynamicInvoke());
                         return (converted == null ? null : dialect.Literal(converted)) ?? InlineConstant(converted);
                     }
-                    return dialect.Conversion(RenderValueFragment(u.Operand, exprType, dialect), u.Operand.Type, u.Type);
+                    return dialect.Conversion(RenderValueFragment(u.Operand, exprType, resolved, dialect), u.Operand.Type, u.Type);
                 case UnaryExpression u when u.NodeType is ExpressionType.Negate or ExpressionType.NegateChecked
                         && ContainsParameter(u):
-                    return dialect.Negate(RenderValueFragment(u.Operand, exprType, dialect), u.Type);
+                    return dialect.Negate(RenderValueFragment(u.Operand, exprType, resolved, dialect), u.Type);
                 case UnaryExpression u when u.NodeType == ExpressionType.UnaryPlus && ContainsParameter(u):
-                    return RenderValueFragment(u.Operand, exprType, dialect);
+                    return RenderValueFragment(u.Operand, exprType, resolved, dialect);
                 case UnaryExpression u when ContainsParameter(u) && (u.NodeType != ExpressionType.Not || IsNumericType(u.Type)):
                     // An integer `~` is a Not node in an expression tree, which the predicate parser read as a negation of
                     // the comparison (TASK-857, measured): `~x.Hits == -3` became NOT (Hits = -3).
@@ -1780,15 +1832,15 @@ namespace Birko.Data.SQL
                         + "operator over the row to SQL: no provider computes it as C# does. "
                         + "Compute the value in memory, or compare the column itself.");
                 case MethodCallExpression call when IsMathCall(call) && ContainsParameter(call):
-                    return RenderMathCall(call, exprType, dialect);
+                    return RenderMathCall(call, exprType, resolved, dialect);
                 case ConditionalExpression cond:
-                    return $"CASE WHEN {RenderBoolFragment(cond.Test, exprType, dialect)} "
-                        + $"THEN {RenderValueFragment(cond.IfTrue, exprType, dialect)} "
-                        + $"ELSE {RenderValueFragment(cond.IfFalse, exprType, dialect)} END";
+                    return $"CASE WHEN {RenderBoolFragment(cond.Test, exprType, resolved, dialect)} "
+                        + $"THEN {RenderValueFragment(cond.IfTrue, exprType, resolved, dialect)} "
+                        + $"ELSE {RenderValueFragment(cond.IfFalse, exprType, resolved, dialect)} END";
                 case BinaryExpression b when IsArithmeticNode(b.NodeType):
                 {
-                    var l = RenderValueFragment(b.Left, exprType, dialect);
-                    var r = RenderValueFragment(b.Right, exprType, dialect);
+                    var l = RenderValueFragment(b.Left, exprType, resolved, dialect);
+                    var r = RenderValueFragment(b.Right, exprType, resolved, dialect);
                     var op = b.NodeType switch
                     {
                         ExpressionType.Add or ExpressionType.AddChecked => "+",
@@ -1801,18 +1853,18 @@ namespace Birko.Data.SQL
                     return dialect.Arithmetic(b.NodeType, op, l, r, b.Type);
                 }
                 case BinaryExpression b when b.NodeType == ExpressionType.Coalesce:
-                    return $"COALESCE({RenderValueFragment(b.Left, exprType, dialect)}, {RenderValueFragment(b.Right, exprType, dialect)})";
-                case MemberExpression m when TryResolveParameterColumn(m, exprType, out var column):
+                    return $"COALESCE({RenderValueFragment(b.Left, exprType, resolved, dialect)}, {RenderValueFragment(b.Right, exprType, resolved, dialect)})";
+                case MemberExpression m when resolved.Column(m, exprType) is { } column:
                     return column;
                 case MemberExpression valueMember when valueMember.Member.Name == "Value"
                     && valueMember.Member.ReflectedType != null
                     && Nullable.GetUnderlyingType(valueMember.Member.ReflectedType) != null
                     && valueMember.Expression is MemberExpression innerNullable:
-                    return RenderValueFragment(innerNullable, exprType, dialect);
+                    return RenderValueFragment(innerNullable, exprType, resolved, dialect);
                 default:
                     if (!ContainsParameter(expr))
                     {
-                        var constant = EvaluateExpression(expr);
+                        var constant = resolved.Constant(expr);
                         return (constant == null ? null : dialect.Literal(constant)) ?? InlineConstant(constant);
                     }
                     throw new NotSupportedException(
@@ -1827,7 +1879,7 @@ namespace Birko.Data.SQL
         /// computes a <c>Floor</c>, <c>Max</c> or <c>Pow</c> exactly as C# does on every type, and a <c>Round</c> without a mode
         /// rounds half to even in C# and half away from zero in SQL.
         /// </summary>
-        private static string RenderMathCall(MethodCallExpression call, Type? exprType, SqlValueFragmentDialect dialect)
+        private static string RenderMathCall(MethodCallExpression call, Type? exprType, FragmentResolution resolved, SqlValueFragmentDialect dialect)
         {
             var name = $"{call.Method.DeclaringType?.Name}.{call.Method.Name}";
             switch (call.Method.Name)
@@ -1837,16 +1889,16 @@ namespace Birko.Data.SQL
                     var refusal = Birko.Data.Stores.ComputedValue.ReadRound(call, ContainsParameter, out var digits, out var mode);
                     if (refusal != null)
                         throw new NotSupportedException($"Cannot translate {name} to SQL: {refusal}");
-                    return dialect.Round(RenderValueFragment(call.Arguments[0], exprType, dialect), digits, mode, call.Type);
+                    return dialect.Round(RenderValueFragment(call.Arguments[0], exprType, resolved, dialect), digits, mode, call.Type);
                 }
                 case nameof(Math.Round):
                     throw new NotSupportedException(
                         $"Cannot translate {name} over a {call.Method.ReturnType.Name} to SQL: a binary floating-point value rounds "
                         + "differently in SQL than in C#. Round a decimal, with an explicit MidpointRounding.");
                 case nameof(Math.Abs) when call.Arguments.Count == 1:
-                    return dialect.Abs(RenderValueFragment(call.Arguments[0], exprType, dialect), call.Type);
+                    return dialect.Abs(RenderValueFragment(call.Arguments[0], exprType, resolved, dialect), call.Type);
                 case nameof(decimal.Negate) when call.Arguments.Count == 1 && call.Method.DeclaringType == typeof(decimal):
-                    return dialect.Negate(RenderValueFragment(call.Arguments[0], exprType, dialect), call.Type);
+                    return dialect.Negate(RenderValueFragment(call.Arguments[0], exprType, resolved, dialect), call.Type);
                 default:
                     throw new NotSupportedException(
                         $"Cannot translate {name} over the row to SQL: only Math.Round (decimal, explicit MidpointRounding), "
@@ -1862,31 +1914,31 @@ namespace Birko.Data.SQL
         /// <see cref="NotSupportedException"/> for constructs it cannot inline (e.g. string LIKE methods),
         /// rather than silently dropping them.
         /// </summary>
-        private static string RenderBoolFragment(Expression expr, Type? exprType, SqlValueFragmentDialect? dialect = null)
+        private static string RenderBoolFragment(Expression expr, Type? exprType, FragmentResolution resolved, SqlValueFragmentDialect? dialect = null)
         {
             dialect ??= SqlValueFragmentDialect.Portable;
             expr = UnwrapConvert(expr);
             switch (expr)
             {
                 case UnaryExpression u when u.NodeType == ExpressionType.Not:
-                    return $"(NOT {RenderBoolFragment(u.Operand, exprType, dialect)})";
+                    return $"(NOT {RenderBoolFragment(u.Operand, exprType, resolved, dialect)})";
                 case BinaryExpression b when b.NodeType is ExpressionType.AndAlso or ExpressionType.And:
-                    return $"({RenderBoolFragment(b.Left, exprType, dialect)} AND {RenderBoolFragment(b.Right, exprType, dialect)})";
+                    return $"({RenderBoolFragment(b.Left, exprType, resolved, dialect)} AND {RenderBoolFragment(b.Right, exprType, resolved, dialect)})";
                 case BinaryExpression b when b.NodeType is ExpressionType.OrElse or ExpressionType.Or:
-                    return $"({RenderBoolFragment(b.Left, exprType, dialect)} OR {RenderBoolFragment(b.Right, exprType, dialect)})";
+                    return $"({RenderBoolFragment(b.Left, exprType, resolved, dialect)} OR {RenderBoolFragment(b.Right, exprType, resolved, dialect)})";
                 case BinaryExpression b when b.NodeType is ExpressionType.Equal or ExpressionType.NotEqual
                         && (IsNullConstant(b.Left) || IsNullConstant(b.Right)):
                 {
                     var operand = IsNullConstant(b.Right) ? b.Left : b.Right;
-                    var frag = RenderValueFragment(operand, exprType, dialect);
+                    var frag = RenderValueFragment(operand, exprType, resolved, dialect);
                     return b.NodeType == ExpressionType.Equal ? $"({frag} IS NULL)" : $"({frag} IS NOT NULL)";
                 }
                 case BinaryExpression b when ComparisonSqlOperator(b.NodeType) is string op:
                 {
-                    var left = RenderValueFragment(b.Left, exprType, dialect);
-                    var right = RenderValueFragment(b.Right, exprType, dialect);
-                    var leftNull = ContainsParameter(b.Left) && OperandCanBeNull(b.Left, exprType);
-                    var rightNull = ContainsParameter(b.Right) && OperandCanBeNull(b.Right, exprType);
+                    var left = RenderValueFragment(b.Left, exprType, resolved, dialect);
+                    var right = RenderValueFragment(b.Right, exprType, resolved, dialect);
+                    var leftNull = ContainsParameter(b.Left) && resolved.CanBeNull(b.Left, exprType);
+                    var rightNull = ContainsParameter(b.Right) && resolved.CanBeNull(b.Right, exprType);
                     string Compare(string sqlOperator)
                         => $"({dialect.Compared(left, b.Left.Type)} {sqlOperator} {dialect.Compared(right, b.Right.Type)})";
                     if (!leftNull && !rightNull)
@@ -1904,11 +1956,10 @@ namespace Birko.Data.SQL
                         : Defined("=");
                     return b.NodeType == ExpressionType.Equal ? equal : $"(NOT {equal})";
                 }
-                case MemberExpression m when TryResolveParameterColumn(m, exprType, out var column)
-                        && UnwrapNullable(m.Type) == typeof(bool):
+                case MemberExpression m when UnwrapNullable(m.Type) == typeof(bool) && resolved.Column(m, exprType) is { } column:
                     return BoolColumnTest(column);
                 default:
-                    if (!ContainsParameter(expr) && EvaluateExpression(expr) is bool constBool)
+                    if (!ContainsParameter(expr) && resolved.Constant(expr) is bool constBool)
                         return constBool ? "(1=1)" : "(1=0)";
                     throw new NotSupportedException(
                         $"Cannot translate boolean sub-expression '{expr}' inside a CASE/WHERE predicate to SQL.");
@@ -1986,27 +2037,28 @@ namespace Birko.Data.SQL
         {
             var leftHasParam = ContainsParameter(left);
             var rightHasParam = ContainsParameter(right);
+            var resolved = new FragmentResolution();
 
             if (leftHasParam && !rightHasParam)
             {
                 return MarkNullableFragment(
-                    WithFragments(MakeValueCondition(RenderValueFragment(left, exprType), EvaluateExpression(right), type, isNot, isOR),
-                        ComparedFragment(left, comparedType, exprType)),
-                    left, exprType);
+                    WithFragments(MakeValueCondition(RenderValueFragment(left, exprType, resolved), EvaluateExpression(right), type, isNot, isOR),
+                        ComparedFragment(left, comparedType, exprType, resolved)),
+                    left, exprType, resolved);
             }
             if (!leftHasParam && rightHasParam)
             {
                 // Value on the left, column expression on the right — flip the operator to keep the column on the left.
                 return MarkNullableFragment(
-                    WithFragments(MakeValueCondition(RenderValueFragment(right, exprType), EvaluateExpression(left), FlipComparison(type), isNot, isOR),
-                        ComparedFragment(right, comparedType, exprType)),
-                    right, exprType);
+                    WithFragments(MakeValueCondition(RenderValueFragment(right, exprType, resolved), EvaluateExpression(left), FlipComparison(type), isNot, isOR),
+                        ComparedFragment(right, comparedType, exprType, resolved)),
+                    right, exprType, resolved);
             }
             // Both sides reference the parameter → column expression compared to column expression.
-            var leftFragment = RenderValueFragment(left, exprType);
-            var rightFragment = RenderValueFragment(right, exprType);
+            var leftFragment = RenderValueFragment(left, exprType, resolved);
+            var rightFragment = RenderValueFragment(right, exprType, resolved);
             return WithFragments(new Condition(leftFragment, new object[] { rightFragment }, type, isField: true, isNot: isNot, isOr: isOR),
-                ComparedFragment(left, comparedType, exprType), ComparedFragment(right, comparedType, exprType));
+                ComparedFragment(left, comparedType, exprType, resolved), ComparedFragment(right, comparedType, exprType, resolved));
         }
 
         /// <summary>
@@ -2014,9 +2066,10 @@ namespace Birko.Data.SQL
         /// type the comparison is performed in, as an operand of that comparison. The portable dialect renders exactly
         /// what <see cref="RenderValueFragment"/> wrote into the condition's Name.
         /// </summary>
-        private static Func<SqlValueFragmentDialect, string> ComparedFragment(Expression operand, Type comparedType, Type? exprType)
+        private static Func<SqlValueFragmentDialect, string> ComparedFragment(Expression operand, Type comparedType, Type? exprType,
+            FragmentResolution resolved)
             => dialect => dialect.Compared(
-                dialect.Conversion(RenderValueFragment(operand, exprType, dialect), operand.Type, comparedType), comparedType);
+                dialect.Conversion(RenderValueFragment(operand, exprType, resolved, dialect), operand.Type, comparedType), comparedType);
 
         private static Condition WithFragments(Condition condition, Func<SqlValueFragmentDialect, string> name,
             Func<SqlValueFragmentDialect, string>? field = null)
@@ -2042,10 +2095,11 @@ namespace Birko.Data.SQL
                     $"Cannot translate '{left} {nodeType} {right}' to SQL: comparing the .Date of a column with another "
                     + "column has no portable SQL form. Compare the raw columns, or compare one column's .Date with a value.");
 
-            var leftFragment = RenderValueFragment(left, exprType);
-            var rightFragment = RenderValueFragment(right, exprType);
+            var resolved = new FragmentResolution();
+            var leftFragment = RenderValueFragment(left, exprType, resolved);
+            var rightFragment = RenderValueFragment(right, exprType, resolved);
             var compared = WithFragments(new Condition(leftFragment, new object[] { rightFragment }, type, isField: true, isNot: isNot, isOr: isOR),
-                ComparedFragment(left, comparedType, exprType), ComparedFragment(right, comparedType, exprType));
+                ComparedFragment(left, comparedType, exprType, resolved), ComparedFragment(right, comparedType, exprType, resolved));
 
             var nullable = CanBeNull(left.Type) || CanBeNull(right.Type);
             var nullSafe = nullable && nodeType is (ExpressionType.Equal or ExpressionType.NotEqual);
@@ -2056,7 +2110,7 @@ namespace Birko.Data.SQL
             // equality it negates answers true".
             var nullableSides = new[] { (Operand: left, Sql: leftFragment), (Operand: right, Sql: rightFragment) }
                 .Where(side => OperandCanBeNull(side.Operand, exprType))
-                .Select(side => FragmentOperand(side.Sql, side.Operand, exprType))
+                .Select(side => FragmentOperand(side.Sql, side.Operand, exprType, resolved))
                 .ToArray();
             if (nullableSides.Length > 0 && IsComparison(type))
             {
@@ -2071,7 +2125,7 @@ namespace Birko.Data.SQL
             // Round is no server's SQL.
             Condition Null(Expression operand, string fragment, bool not)
                 => WithFragments(new Condition(fragment, null, ConditionType.IsNull, isNot: not),
-                    dialect => RenderValueFragment(operand, exprType, dialect));
+                    dialect => RenderValueFragment(operand, exprType, resolved, dialect));
             Condition All(params Condition[] subs) => new Condition(null, null) { IsOr = false, SubConditions = subs.ToList() };
 
             if (nodeType == ExpressionType.Equal)
@@ -2165,11 +2219,11 @@ namespace Birko.Data.SQL
         }
 
         /// <summary>TASK-859 — the same for a value fragment (<c>x.Optional + 1m != 8m</c>), which is NULL when its CLR type allows.</summary>
-        private static Condition MarkNullableFragment(Condition condition, Expression operand, Type? exprType)
+        private static Condition MarkNullableFragment(Condition condition, Expression operand, Type? exprType, FragmentResolution resolved)
         {
             if (!IsComparison(condition.Type) || !CanBeNull(operand.Type) || string.IsNullOrEmpty(condition.Name))
                 return condition;
-            condition.NullableOperands = new[] { FragmentOperand(condition.Name, operand, exprType) };
+            condition.NullableOperands = new[] { FragmentOperand(condition.Name, operand, exprType, resolved) };
             condition.NullOperandMatches = false;
             return condition;
         }
@@ -2179,7 +2233,7 @@ namespace Birko.Data.SQL
         /// <c>NOT IN</c> match no row) and recorded as "a NULL operand matches". A list that held only <c>null</c> is the
         /// operand's <c>IS [NOT] NULL</c>; over a column that cannot be NULL, the null simply goes.
         /// </summary>
-        private static void MarkNullableIn(Condition condition, Expression operand, Type? exprType)
+        private static void MarkNullableIn(Condition condition, Expression operand, Type? exprType, FragmentResolution resolved)
         {
             var values = condition.Values?.Cast<object?>().ToList();
             var hadNull = values?.Any(v => v == null) == true;
@@ -2191,7 +2245,7 @@ namespace Birko.Data.SQL
 
             var nullable = IsPlainColumnOperand(operand, exprType)
                 ? new NullableOperand(condition.Name)
-                : FragmentOperand(condition.Name, operand, exprType);
+                : FragmentOperand(condition.Name, operand, exprType, resolved);
             if (hadNull && values!.All(v => v == null))
             {
                 condition.Type = ConditionType.IsNull;
@@ -2203,8 +2257,8 @@ namespace Birko.Data.SQL
             condition.NullOperandMatches = hadNull;
         }
 
-        private static NullableOperand FragmentOperand(string portable, Expression operand, Type? exprType)
-            => new(portable, dialect => RenderValueFragment(operand, exprType, dialect));
+        private static NullableOperand FragmentOperand(string portable, Expression operand, Type? exprType, FragmentResolution resolved)
+            => new(portable, dialect => RenderValueFragment(operand, exprType, resolved, dialect));
 
         private static bool IsComparison(ConditionType type)
             => type is ConditionType.Equal or ConditionType.Less or ConditionType.Greather

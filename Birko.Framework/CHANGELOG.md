@@ -4,6 +4,17 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — A SQL IN list past the provider's parameter limit is split
+[[TASK-833]] (FIELD-051, Symbio).
+- **Split:** `ids.Contains(x.Col)` past 1000 values becomes several statements: reads streamed, counts summed,
+  deletes and updates each guarded and all in one transaction.
+- **Limits:** SQLite 32766, SQL Server 2098 (2099 fails, measured live), PostgreSQL and MySQL 65535, all parameters
+  counted.
+- **Refused past the limit** (`NotSupportedException` before anything runs, the user's decisions): NOT IN, OR, string
+  lists, sort and paging, and an update that writes the filtered column. The review caught that last case incrementing
+  twice. Below the limit nothing changes.
+- **Breaking for subclasses:** `SelectCount(Async)` and `Update(Async)` are wrappers over `…Core` (rule 12).
+
 ## 2026-11-07 — Cosmos DB splits a Contains list past its query-text limit
 [[TASK-834]] (FIELD-051).
 - **The limit, measured:** the SDK writes `ids.Contains(x.Col)` into the query text, and past 13,105 Guids (524,288

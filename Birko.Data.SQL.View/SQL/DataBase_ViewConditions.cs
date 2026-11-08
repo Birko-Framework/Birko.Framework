@@ -28,8 +28,18 @@ namespace Birko.Data.SQL
         /// different columns is refused, since picking one would filter on the wrong column. The caller's conditions are
         /// not modified.
         /// </para>
+        /// <para>
+        /// TASK-858: a resolved condition is a <see cref="Conditions.Condition.Copy"/>, so it carries every property of the
+        /// one it replaces, except the value-fragment re-renders. Those render the SOURCE columns, which is right only on the
+        /// OnTheFly path. A fragment over a plain column is that column, and is renamed like one. A fragment that computes
+        /// (arithmetic, <c>COALESCE</c>, <c>CASE</c>, <c>Math.Round</c>) is refused by name before anything runs: its columns
+        /// cannot be renamed. Measured before, it ran its portable form against the view, and every provider failed with an
+        /// error that named something else ("no such column: T858Orders.Amount", 42P01 "missing FROM-clause entry", and on SQL
+        /// Server "'BIRKO_ROUND_TOEVEN' is not a recognized built-in function name").
+        /// </para>
         /// </remarks>
         /// <exception cref="ArgumentException">A condition names an unqualified source column two view fields share.</exception>
+        /// <exception cref="NotSupportedException">A condition computes a value over the view's source columns.</exception>
         public static IEnumerable<Conditions.Condition>? ResolveViewConditions(Tables.View? view, IEnumerable<Conditions.Condition>? conditions, bool persistent)
         {
             if (!persistent || view == null || conditions == null)
@@ -54,28 +64,47 @@ namespace Birko.Data.SQL
                 }
             }
 
-            return conditions.Select(c => ResolveViewCondition(view, c, map)).ToList();
+            return conditions.Select(c => ResolveViewCondition(view, c, map, columns)).ToList();
         }
 
         private static string PersistentViewColumn(AbstractField field)
             => field.Property != null ? field.Property.Name : field.Name;
 
-        private static Conditions.Condition ResolveViewCondition(Tables.View view, Conditions.Condition condition, IReadOnlyDictionary<string, string?> map)
+        private static Conditions.Condition ResolveViewCondition(Tables.View view, Conditions.Condition condition,
+            IReadOnlyDictionary<string, string?> map, ISet<string> columns)
         {
             var values = condition.Values;
             if (condition.IsField && values != null)
             {
+                if (condition.FieldFragment != null)
+                {
+                    foreach (var other in values.OfType<string>())
+                        RequireViewColumn(view, other, map, columns);
+                }
                 values = values.Cast<object?>().Select(v => v is string other ? ResolveViewColumn(view, other, map) : v).ToList();
             }
+            if (condition.NameFragment != null && condition.Name != null)
+            {
+                RequireViewColumn(view, condition.Name, map, columns);
+            }
 
-            return new Conditions.Condition(
-                condition.Name == null ? null : ResolveViewColumn(view, condition.Name, map),
-                values,
-                condition.Type,
-                condition.IsField,
-                condition.IsNot,
-                condition.IsOr,
-                condition.SubConditions?.Select(c => ResolveViewCondition(view, c, map)).ToList());
+            var resolved = condition.Copy(values, condition.SubConditions?.Select(c => ResolveViewCondition(view, c, map, columns)).ToList());
+            resolved.Name = condition.Name == null ? null : ResolveViewColumn(view, condition.Name, map);
+            resolved.NameFragment = null;
+            resolved.FieldFragment = null;
+            return resolved;
+        }
+
+        /// <summary>TASK-858 — refuses a value fragment that is not a plain column of the view or of its source.</summary>
+        private static void RequireViewColumn(Tables.View view, string name, IReadOnlyDictionary<string, string?> map, ISet<string> columns)
+        {
+            if (map.ContainsKey(name) || columns.Contains(name))
+            {
+                return;
+            }
+            throw new NotSupportedException(
+                $"View '{view.Name}': the filter computes '{name}' over the view's source columns, which a persistent view does not "
+                + "have. Compare a view property with a value or with another property, or query the view OnTheFly.");
         }
 
         private static string ResolveViewColumn(Tables.View view, string name, IReadOnlyDictionary<string, string?> map)

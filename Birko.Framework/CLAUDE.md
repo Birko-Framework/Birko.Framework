@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL view filters with computed values run again; persistent views refuse them by name (2026-11-08)
+[[TASK-858]]. Since TASK-857, every on-the-fly `SqlViewStore` filter with arithmetic, COALESCE, CASE, Round or a
+column-vs-column comparison threw "Cannot translate operand", on all four providers (reproduced). Its re-render looked
+the view's columns up again after their scope had closed. The parse now records them once (`FragmentResolution`). A
+persistent view used to fail with an error naming something else. It now refuses a computed filter by name, before
+anything runs.
 ### A SQL filter refuses a call or cast it cannot translate — BREAKING (2026-11-08)
 [[TASK-860]]. The SQL parser used to drop a call or conversion it did not know and compare its operand: wrong rows on
 all four providers, no error (measured: 80–83 of 125 contract cases).
@@ -376,16 +382,6 @@ never matched NULL.
 - A re-added name still overwrites its value, which the multi-row insert relies on.
 - **Breaking for subclasses:** `AddParameter` is non-virtual (rule 12). Providers override
   `ConvertParameterValue` / `CreateParameter`.
-### A SQL IN list past the provider's parameter limit is split (2026-11-07)
-[[TASK-833]] (FIELD-051, Symbio).
-- **Split:** `ids.Contains(x.Col)` past 1000 values becomes several statements: reads streamed, counts summed,
-  deletes and updates each guarded and all in one transaction.
-- **Limits:** SQLite 32766, SQL Server 2098 (2099 fails, measured live), PostgreSQL and MySQL 65535, all parameters
-  counted.
-- **Refused past the limit** (`NotSupportedException` before anything runs, the user's decisions): NOT IN, OR, string
-  lists, sort and paging, and an update that writes the filtered column. The review caught that last case incrementing
-  twice. Below the limit nothing changes.
-- **Breaking for subclasses:** `SelectCount(Async)` and `Update(Async)` are wrappers over `…Core` (rule 12).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

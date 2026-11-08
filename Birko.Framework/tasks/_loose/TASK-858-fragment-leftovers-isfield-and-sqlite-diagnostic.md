@@ -3,7 +3,7 @@ id: TASK-858
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -41,16 +41,44 @@ Found by TASK-856 (2026-11-07). Grouped, because both come from the same thread 
 
 ## Acceptance criteria
 
-- [ ] `ReturnSingleSubCondition` carries every field of the condition it collapses, preferably through
+- [x] `ReturnSingleSubCondition` carries every field of the condition it collapses, preferably through
       `Condition.Copy` (one producer). A test collapses a column-vs-column condition and asserts it still renders as
       columns. If no path can collapse such a condition, say so and pin it.
-- [ ] The diagnostic text equals the command text actually executed on SQLite, with the values substituted. Test:
+      → Re-measured 2026-11-08: not reachable. The parser nests every column comparison under the condition it is
+        filling, so the node that survives a collapse is always a group, and its IsField leaf moves with it. 6
+        collapse shapes matched C# on SQLite. Pinned in `Task858FragmentLeftoverTests`. The code is unchanged:
+        switching to `Copy` would change nothing today (rule 53).
+- [x] The diagnostic text equals the command text actually executed on SQLite, with the values substituted. Test:
       the diagnostic of a decimal-fragment filter on SQLite contains the dialect's rendering.
-- [ ] Fragment constants are evaluated once, at parse time, and the rendering reuses that value: a test with a
+      → Already correct: `GetGeneratedQuery` reads the command text that runs. Measured, it contains
+        `birko_decimal_add(...) COLLATE BIRKO_DECIMAL = 10.10`. Pinned.
+- [x] Fragment constants are evaluated once, at parse time, and the rendering reuses that value: a test with a
       side-effecting captured call shows one evaluation across chunks.
-- [ ] Persistent SQLite views carry the fragments through `ResolveViewCondition`, or refuse a decimal fragment by
+      → Gone: `ExpressionNormalizer` folds the constant parts of a filter before parsing, so a side-effecting
+        captured call ran once, chunked or not. Pinned.
+      → **The re-render at render time caused a regression, found and fixed here.** It resolved the view's columns
+        again after `SqlViewStore`'s lookup scope had closed. So every on-the-fly view filter using arithmetic,
+        COALESCE, CASE, Round or a column-vs-column comparison threw "Cannot translate operand 'v.Amount'", on all
+        four providers at HEAD. TASK-857 introduced it: PostgreSQL ran these filters at cf6bee27.
+      → Fix: a new `FragmentResolution` in `DataBase.cs`. The parse records columns, constants and nullability once,
+        and each provider's re-render reads them.
+- [x] Persistent SQLite views carry the fragments through `ResolveViewCondition`, or refuse a decimal fragment by
       name. Test on a persistent view.
-- [ ] The byte-identity test for the other providers covers CASE, COALESCE, a Convert, and column vs column.
+      → Reproduced: all four providers failed loudly, but with an error naming something else ("no such column",
+        42P01, "BIRKO_ROUND_TOEVEN not recognized").
+      → `ResolveViewCondition` (`DataBase_ViewConditions.cs`) now copies conditions through `Condition.Copy`. A
+        computed fragment on a persistent view is refused by name with `NotSupportedException` before anything runs.
+        Plain and column-vs-column filters run as before.
+- [x] The byte-identity test for the other providers covers CASE, COALESCE, a Convert, and column vs column.
+      → `Task858FragmentByteIdentityTests`: 10 shapes on PostgreSQL, MySQL and SQL Server, all green.
+      → Red proof:
+        - With both production files reverted, 92 of 100 view tests fail: 40 on-the-fly computed, 40 persistent
+          refusal, 12 column-vs-column on-the-fly. With only the view resolver reverted, 40 fail.
+        - The pins for items 1–3 and 5 pass either way.
+      → 35 SQL importer suites live. All green, except TimescaleDB and Migrations.TimescaleDB, which have no container.
+        The known failures also showed: PostgreSQL `With_retry_off`, and the TASK295 flake on MySQL and SQL Server,
+        which passed on rerun.
+      → **Found, filed:** TASK-871. Reader paths pass `OnExecute` the raw command text, without the values substituted.
 
 ## Out of scope
 
