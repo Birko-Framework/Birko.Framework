@@ -22,6 +22,9 @@ namespace Birko.Data.SQL.Tests;
 /// </summary>
 public class DestructiveFilterGuardTests
 {
+    // TASK-860: mapped, so `x.Count` is a column. Unmapped, it is no column the parser can translate, and the parser now
+    // refuses it even beside a constant `true` instead of building a condition that the OR then discards.
+    [Birko.Data.SQL.Attributes.Table("T860DestructiveWidgets")]
     private class Widget : AbstractModel
     {
         public string? Name { get; set; }

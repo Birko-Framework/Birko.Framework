@@ -18,6 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\MySQLConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\MySqlValueFragmentDialect.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMySQLStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLRepository.cs" />

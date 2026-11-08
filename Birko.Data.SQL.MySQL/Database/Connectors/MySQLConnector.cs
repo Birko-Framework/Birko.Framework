@@ -200,6 +200,12 @@ namespace Birko.Data.SQL.Connectors
         public override string ComputedDivide(string left, string right)
             => "(CAST(" + left + " AS DECIMAL(65,26)) / " + right + ")";
 
+        /// <summary>TASK-860 — an integer division is <c>DIV</c> and a <c>double</c> cast <c>DOUBLE</c> here.</summary>
+        protected override Conditions.SqlValueFragmentDialect FragmentDialect
+            => _mySqlFragmentDialect ??= new MySqlValueFragmentDialect(ComputedRound);
+
+        private MySqlValueFragmentDialect? _mySqlFragmentDialect;
+
         /// <summary>TASK-826 — MySQL has no <c>TRUNC</c>.</summary>
         public override string ComputedTruncate(string value) => "TRUNCATE(" + value + ", 0)";
 

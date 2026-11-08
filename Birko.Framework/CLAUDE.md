@@ -296,6 +296,15 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL filter refuses a call or cast it cannot translate — BREAKING (2026-11-08)
+[[TASK-860]]. The SQL parser used to drop a call or conversion it did not know and compare its operand: wrong rows on
+all four providers, no error (measured: 80–83 of 125 contract cases).
+- **Refused by name** (`NotSupportedException`, before anything runs): string calls other than the LIKE family and
+  `ToLower`/`ToUpper` (`Substring`, `Trim`, `Length`, `string.Compare`, `ToString`…), `Convert.*`, narrowing or lossy
+  casts, `DateTime` members and methods, bitwise operators; in an update's SET value also `~`, `!` and bitwise ones.
+- **Translated:** `GetValueOrDefault` (as `??`), `Equals` (as `==`), a `bool` XOR, a char pattern, a unary minus in SET.
+  An integer cast to a fraction is an explicit SQL cast, and MySQL's integer division is `DIV`. A narrowing SET
+  (`(short)(x.Sh + 1)`) runs where overflow fails loudly; SQLite stores it silently and refuses it.
 ### An ordering against null matches nothing on every document store (2026-11-08)
 [[TASK-867]]. In C#, `x.Score > nul` with `nul == null` is false. RavenDB matched every non-null Score, Cosmos DB missed
 rows under NOT, MongoDB's `$gte: null` matched the null rows, and Elasticsearch refused, on reads, views and the writes
@@ -377,19 +386,6 @@ never matched NULL.
   lists, sort and paging, and an update that writes the filtered column. The review caught that last case incrementing
   twice. Below the limit nothing changes.
 - **Breaking for subclasses:** `SelectCount(Async)` and `Update(Async)` are wrappers over `…Core` (rule 12).
-### Cosmos DB splits a Contains list past its query-text limit (2026-11-07)
-[[TASK-834]] (FIELD-051).
-- **The limit, measured:** the SDK writes `ids.Contains(x.Col)` into the query text, and past 13,105 Guids (524,288
-  characters) Cosmos DB answers 400 SC3020.
-- **Split, in chunks of 1000:** reads, counts, and filtered updates and deletes, when the list is a plain AND conjunct
-  of non-string values with no sort or paging (the user's decision).
-- **Refused:** any other shape past the limit gets `NotSupportedException` before any request.
-- **Writes are not atomic across chunks:** a later chunk's failure throws `CosmosChunkedWriteException` naming the
-  chunks applied.
-### Elasticsearch takes a Contains list past 65,536 terms (2026-11-07)
-[[TASK-835]] (FIELD-051). Elasticsearch refuses a terms query past `index.max_terms_count`; measured, 65,537 ids gave
-HTTP 400. A longer list is now a bool `should` of terms queries, each within `ElasticSearch.MaxTermsCount` (default
-65,536), in the same request, so it stays correct under `||` and `!`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

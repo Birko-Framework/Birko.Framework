@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\IDataBaseRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\Condition.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\Join.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlConversion.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlValueFragmentDialect.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\RuleConditionConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector.cs" />
@@ -57,6 +58,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\Strategies\NullConditionStrategy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_BooleanPredicate.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_CallTranslation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_Field.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_OrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_RuleField.cs" />

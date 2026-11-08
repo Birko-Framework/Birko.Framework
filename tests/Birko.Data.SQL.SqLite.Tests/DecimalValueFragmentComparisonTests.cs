@@ -118,8 +118,10 @@ public sealed class DecimalValueFragmentComparisonTests : IDisposable
 
         var act = () => store.ReadAsync(x => (int)(x.Amount * 2m) == 20);
 
+        // TASK-860: refused at parse time on every provider now (a narrowing cast is no SQL anywhere), so the message is the
+        // parser's, not SQLite's dialect's.
         (await act.Should().ThrowAsync<NotSupportedException>())
-            .WithMessage("*decimal value fragment*Int32*SQLite*");
+            .WithMessage("*conversion from Decimal to Int32*");
     }
 
     [Fact]

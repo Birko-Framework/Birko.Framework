@@ -44,6 +44,7 @@
     <Compile Include="..\Shared\StoreContract\ComputedSetContract.cs" Link="Shared\ComputedSetContract.cs" />
     <Compile Include="..\Shared\StoreContract\MathFilterContract.cs" Link="Shared\MathFilterContract.cs" />
     <Compile Include="..\Shared\StoreContract\NullFilterContract.cs" Link="Shared\NullFilterContract.cs" />
+    <Compile Include="..\Shared\StoreContract\CallCastFilterContract.cs" Link="Shared\CallCastFilterContract.cs" />
     <Compile Include="..\Shared\StoreContract\AlwaysFalseGroupContract.cs" Link="Shared\AlwaysFalseGroupContract.cs" />
     <Compile Include="..\Shared\StoreContract\BoolComparisonContract.cs" Link="Shared\BoolComparisonContract.cs" />
     <Compile Include="..\Shared\StoreContract\UnconfiguredContract.cs" Link="Shared\UnconfiguredContract.cs" />

@@ -86,7 +86,7 @@ namespace Birko.Data.SQL.Connectors
             foreach (var kvp in expresions)
             {
                 var field = DataBase.GetField(kvp.Key);
-                var fieldExpr = DataBase.ParseExpression(kvp.Value, values);
+                var fieldExpr = DataBase.ParseExpression(kvp.Value, values, false, null, FragmentDialect);
                 fields.Add(i, field.Name, fieldExpr ?? string.Empty);
                 i++;
             }

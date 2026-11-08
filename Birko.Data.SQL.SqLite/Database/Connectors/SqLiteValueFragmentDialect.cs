@@ -61,14 +61,29 @@ namespace Birko.Data.SQL.Connectors
         {
             var fromDecimal = IsDecimal(from);
             var toDecimal = IsDecimal(to);
-            if (fromDecimal == toDecimal) return operand;
+            // TASK-860: between two non-decimal types the portable rules apply, so an integer becoming a double is an
+            // explicit cast here too; without it SQLite divided two integers (measured: x.Hits / 4.0 == 0.75 matched nothing).
+            if (!fromDecimal && !toDecimal) return base.Conversion(operand, from, to);
+            if (fromDecimal && toDecimal) return operand;
             if (fromDecimal)
                 throw new NotSupportedException(
                     $"Cannot convert a decimal value fragment ({operand}) to {(Nullable.GetUnderlyingType(to) ?? to).Name} "
                     + "in a SQLite filter: the conversion has no SQL form there. Compare it as a decimal.");
-            // A number becoming a decimal: through C#'s own conversion, to the decimal TEXT form.
+            // An integer becoming a decimal: through C#'s own conversion, to the decimal TEXT form. Nothing else is exact.
+            if (SqlConversion.Classify(from, to) == SqlConversionKind.Lossy)
+                return base.Conversion(operand, from, to);
             return $"{SqLiteDecimal.AddFunction}({operand}, '0.0')";
         }
+
+        /// <inheritdoc />
+        protected override string FloatingTypeName(Type type) => "REAL";
+
+        /// <summary>
+        /// TASK-860 — measured: <c>SET Sh = (short)(Sh + 1)</c> on a <c>short</c> column holding 32767 stored 32768 with no
+        /// error (an INTEGER is 64-bit here, whatever the column declares); the row then failed every read with
+        /// <see cref="OverflowException"/>, and a filter saw the out-of-range value. C# writes -32768.
+        /// </summary>
+        public override bool StoresIntegerOverflowLoudly => false;
 
         /// <inheritdoc />
         public override string Abs(string operand, Type type)

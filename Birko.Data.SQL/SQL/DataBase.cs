@@ -250,236 +250,271 @@ namespace Birko.Data.SQL
         }
 
         public static string? ParseExpression(Expression expr, IDictionary<string, object> parameters, bool withTableName = false, Type? exprType = null)
+            => ParseExpression(expr, parameters, withTableName, exprType, null);
+
+        /// <summary>
+        /// Renders an update's SET value (<paramref name="expr"/>) to SQL, binding its constants into <paramref name="parameters"/>.
+        /// </summary>
+        /// <param name="dialect">
+        /// TASK-860 — the connector's fragment dialect, for the steps a provider spells its own way: an integer division
+        /// (MySQL's <c>/</c> divides fractions), an exact widening cast, a unary minus (SQLite's decimals). Null is the
+        /// portable form.
+        /// </param>
+        /// <remarks>
+        /// TASK-860: anything the method cannot translate exactly is refused by name with <see cref="NotSupportedException"/>
+        /// before the statement runs. Before (measured), a unary minus, a <c>~</c> or a <c>!</c> rendered nothing
+        /// (<c>SET Hits = WHERE …</c>, a syntax error), a bitwise <c>&amp;</c> / <c>|</c> rendered <c>AND</c> / <c>OR</c> (SQLite
+        /// stored 1 for <c>Hits | 1</c>), a <c>^</c> or <c>&lt;&lt;</c> rendered no operator, a narrowing cast was dropped (MySQL
+        /// stored 11 for <c>(int)10.5m</c>, which C# truncates to 10) and MySQL divided integers as fractions.
+        /// </remarks>
+        public static string? ParseExpression(Expression expr, IDictionary<string, object> parameters, bool withTableName, Type? exprType, SqlValueFragmentDialect? dialect)
         {
-            if (expr != null)
+            if (expr == null) return null;
+            dialect ??= SqlValueFragmentDialect.Portable;
+            if (expr is LambdaExpression lambdaExpression)
             {
-                if (expr is LambdaExpression lambdaExpression)
+                var type = lambdaExpression.Parameters?.FirstOrDefault()?.Type;
+                // TASK-860: GetValueOrDefault becomes ??, a typed Equals ==, before the normalizer runs.
+                var rewritten = RewriteTranslatableCalls(lambdaExpression.Body);
+                var normalizedBody = Birko.Data.Expressions.ExpressionNormalizer.Normalize(rewritten) ?? rewritten;
+                // An integer narrowed to the column's own type (`SET Sh = (short)(Sh + 1)`): stored as SQL computed it, which
+                // is C#'s value until it overflows, and an overflow is the server's error on a provider that is loud.
+                if (normalizedBody is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } narrowed
+                    && narrowed.Type == lambdaExpression.ReturnType && ContainsParameter(narrowed)
+                    && SqlConversion.IsIntegralNarrowing(narrowed.Operand.Type, narrowed.Type))
                 {
-                    var type = lambdaExpression.Parameters?.FirstOrDefault()?.Type;
-                    var normalizedBody = Birko.Data.Expressions.ExpressionNormalizer.Normalize(lambdaExpression.Body) ?? lambdaExpression.Body;
-                    return ParseExpression(normalizedBody, parameters, withTableName, type);
+                    if (!dialect.StoresIntegerOverflowLoudly)
+                        throw new NotSupportedException(
+                            $"Cannot translate the conversion from {Describe(narrowed.Operand.Type)} to {Describe(narrowed.Type)} in an "
+                            + "update's SET value on this provider: C# wraps a value that overflows, and this provider stores it "
+                            + "unchanged, out of the column's range, with no error. Compute the value in memory and set it.");
+                    return ParseExpression(narrowed.Operand, parameters, withTableName, type, dialect);
                 }
-                else if (expr is ConditionalExpression conditionalExpression)
+                return ParseExpression(normalizedBody, parameters, withTableName, type, dialect);
+            }
+            if (expr is ConditionalExpression conditionalExpression)
+            {
+                // Value-position ternary (e.g. an Update SET right-hand side): render as CASE WHEN.
+                // SH-M136 (TASK-153): a bare bool column is not a predicate on SQL Server (BIT, error 4145), so
+                // it is rendered as the same test the WHERE-side renderer uses.
+                // The column is resolved by this method, so it is qualified only when the caller asked
+                // (an UPDATE's SET is not: PostgreSQL rejects `"T".col` there against `UPDATE "T"`).
+                var testExpr = UnwrapConvert(conditionalExpression.Test);
+                var test = testExpr is MemberExpression boolMember
+                        && UnwrapNullable(boolMember.Type) == typeof(bool)
+                        && TryResolveParameterColumn(boolMember, exprType, out _)
+                    ? BoolColumnTest(ParseExpression(boolMember, parameters, withTableName, exprType, dialect)!)
+                    : ParseExpression(conditionalExpression.Test, parameters, withTableName, exprType, dialect);
+                var ifTrue = ParseExpression(conditionalExpression.IfTrue, parameters, withTableName, exprType, dialect);
+                var ifFalse = ParseExpression(conditionalExpression.IfFalse, parameters, withTableName, exprType, dialect);
+                return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
+            }
+            if (expr is BinaryExpression binaryExpression)
+            {
+                if (binaryExpression.NodeType == ExpressionType.Coalesce)
                 {
-                    // Value-position ternary (e.g. an Update SET right-hand side): render as CASE WHEN.
-                    // SH-M136 (TASK-153): a bare bool column is not a predicate on SQL Server (BIT, error 4145), so
-                    // it is rendered as the same test the WHERE-side renderer uses.
-                    // The column is resolved by this method, so it is qualified only when the caller asked
-                    // (an UPDATE's SET is not: PostgreSQL rejects `"T".col` there against `UPDATE "T"`).
-                    var testExpr = UnwrapConvert(conditionalExpression.Test);
-                    var test = testExpr is MemberExpression boolMember
-                            && UnwrapNullable(boolMember.Type) == typeof(bool)
-                            && TryResolveParameterColumn(boolMember, exprType, out _)
-                        ? BoolColumnTest(ParseExpression(boolMember, parameters, withTableName, exprType)!)
-                        : ParseExpression(conditionalExpression.Test, parameters, withTableName, exprType);
-                    var ifTrue = ParseExpression(conditionalExpression.IfTrue, parameters, withTableName, exprType);
-                    var ifFalse = ParseExpression(conditionalExpression.IfFalse, parameters, withTableName, exprType);
-                    return $"CASE WHEN {test} THEN {ifTrue} ELSE {ifFalse} END";
+                    // Value-position null-coalescing (a ?? b) → COALESCE(a, b).
+                    var coalesceLeft = ParseExpression(binaryExpression.Left, parameters, withTableName, exprType, dialect);
+                    var coalesceRight = ParseExpression(binaryExpression.Right, parameters, withTableName, exprType, dialect);
+                    return $"COALESCE({coalesceLeft}, {coalesceRight})";
                 }
-                else if (expr is BinaryExpression binaryExpression)
+                if (binaryExpression.NodeType is ExpressionType.Equal or ExpressionType.NotEqual
+                    && TryGetNullComparisonOperand(binaryExpression, out var nonNullOperand))
                 {
-                    if (binaryExpression.NodeType == ExpressionType.Coalesce)
-                    {
-                        // Value-position null-coalescing (a ?? b) → COALESCE(a, b).
-                        var coalesceLeft = ParseExpression(binaryExpression.Left, parameters, withTableName, exprType);
-                        var coalesceRight = ParseExpression(binaryExpression.Right, parameters, withTableName, exprType);
-                        return $"COALESCE({coalesceLeft}, {coalesceRight})";
-                    }
-                    if (binaryExpression.NodeType is ExpressionType.Equal or ExpressionType.NotEqual
-                        && TryGetNullComparisonOperand(binaryExpression, out var nonNullOperand))
-                    {
-                        // `x IS NULL` / `x IS NOT NULL` — a null constant compared with `=`/`<>` is always
-                        // UNKNOWN in SQL, so it must become IS [NOT] NULL (matters for CASE WHEN tests above).
-                        var operand = ParseExpression(nonNullOperand!, parameters, withTableName, exprType);
-                        return binaryExpression.NodeType == ExpressionType.Equal
-                            ? $"({operand} IS NULL)"
-                            : $"({operand} IS NOT NULL)";
-                    }
-                    var left = ParseExpression(binaryExpression.Left, parameters, withTableName, exprType);
-                    var right = ParseExpression(binaryExpression.Right, parameters, withTableName, exprType);
+                    // `x IS NULL` / `x IS NOT NULL` — a null constant compared with `=`/`<>` is always
+                    // UNKNOWN in SQL, so it must become IS [NOT] NULL (matters for CASE WHEN tests above).
+                    var operand = ParseExpression(nonNullOperand!, parameters, withTableName, exprType, dialect);
+                    return binaryExpression.NodeType == ExpressionType.Equal
+                        ? $"({operand} IS NULL)"
+                        : $"({operand} IS NOT NULL)";
+                }
+                var sqlOperator = SetValueOperator(binaryExpression);
+                if (sqlOperator == null)
+                    throw RefuseNode(binaryExpression);
+                if (binaryExpression.NodeType is ExpressionType.Divide or ExpressionType.Modulo
+                    && UnwrapNullable(binaryExpression.Type) == typeof(decimal)
+                    && (IsWideningOverRow(binaryExpression.Left) || IsWideningOverRow(binaryExpression.Right)))
+                {
+                    // `(decimal)x.Hits / x.Other`: the integer is cast to DECIMAL(10,0), and each provider picks the scale of
+                    // that quotient itself (SQL Server keeps as few as six decimals); SQLite's native `/` divides it as a
+                    // double. A double quotient (`x.Hits / 2.0`) is IEEE division everywhere and is translated.
+                    throw new NotSupportedException(
+                        $"Cannot translate the {binaryExpression.NodeType} of an integer converted to decimal in an update's SET "
+                        + "value to SQL: the scale of the quotient is each provider's own (SQL Server keeps as few as six "
+                        + "decimals), and SQLite divides it as a double. Compute the value in memory and set it.");
+                }
+                var left = ParseExpression(binaryExpression.Left, parameters, withTableName, exprType, dialect);
+                var right = ParseExpression(binaryExpression.Right, parameters, withTableName, exprType, dialect);
+                if (binaryExpression.NodeType == ExpressionType.Divide && SqlConversion.IsIntegral(binaryExpression.Type))
+                    return dialect.IntegralDivide(left!, right!);
+                return $"({left} {sqlOperator} {right})";
+            }
+            if (expr is MethodCallExpression callExpression)
+            {
+                if (callExpression.Method.Name == "Replace" && callExpression.Method.DeclaringType == typeof(string)
+                    && callExpression.Arguments.Count == 2 && callExpression.Object != null)
+                {
                     StringBuilder result = new StringBuilder();
-                    result.Append("(");
-                    result.Append(left);
-                    switch (binaryExpression.NodeType)
+                    //maybe platform specific implementation
+                    result.AppendFormat("REPLACE({0}", ParseExpression(callExpression.Object, parameters, withTableName, exprType, dialect));
+                    foreach (var argument in callExpression.Arguments)
                     {
-                        case ExpressionType.Add:
-                        case ExpressionType.AddChecked:
-                            result.Append(" + ");
-                            break;
-                        case ExpressionType.Subtract:
-                        case ExpressionType.SubtractChecked:
-                            result.Append(" - ");
-                            break;
-                        case ExpressionType.Multiply:
-                        case ExpressionType.MultiplyChecked:
-                            result.Append(" * ");
-                            break;
-                        case ExpressionType.Divide:
-                            result.Append(" / ");
-                            break;
-                        case ExpressionType.Modulo:
-                            result.Append(" % ");
-                            break;
-                        case ExpressionType.GreaterThan:
-                            result.Append(" > ");
-                            break;
-                        case ExpressionType.GreaterThanOrEqual:
-                            result.Append(" >= ");
-                            break;
-                        case ExpressionType.LessThan:
-                            result.Append(" < ");
-                            break;
-                        case ExpressionType.LessThanOrEqual:
-                            result.Append(" <= ");
-                            break;
-                        case ExpressionType.Equal:
-                            result.Append(" = ");
-                            break;
-                        case ExpressionType.NotEqual:
-                            result.Append(" <> ");
-                            break;
-                        case ExpressionType.And:
-                        case ExpressionType.AndAlso:
-                            result.Append(" AND ");
-                            break;
-                        case ExpressionType.Or:
-                        case ExpressionType.OrElse:
-                            result.Append(" OR ");
-                            break;
+                        result.AppendFormat(", {0}", ParseExpression(argument, parameters, withTableName, exprType, dialect));
                     }
-                    result.Append(right);
                     result.Append(")");
                     return result.ToString();
                 }
-                else if (expr is MethodCallExpression callExpression)
+                if (IsCaseFold(callExpression))
                 {
-                    if (callExpression.Method.Name == "Replace")
-                    {
-                        StringBuilder result = new StringBuilder();
-                        //maybe platform specific implementation
-                        result.AppendFormat("REPLACE({0}", ParseExpression(callExpression.Object!, parameters, withTableName, exprType));
-                        foreach (var argument in callExpression.Arguments)
-                        {
-                            result.AppendFormat(", {0}", ParseExpression(argument, parameters, withTableName, exprType));
-                        }
-                        result.Append(")");
-                        return result.ToString();
-                    }
-                    else if (callExpression.Method.Name is "ToLower" or "ToLowerInvariant")
-                    {
-                        var inner = ParseExpression(callExpression.Object!, parameters, withTableName, exprType);
-                        return $"LOWER({inner})";
-                    }
-                    else if (callExpression.Method.Name is "ToUpper" or "ToUpperInvariant")
-                    {
-                        var inner = ParseExpression(callExpression.Object!, parameters, withTableName, exprType);
-                        return $"UPPER({inner})";
-                    }
-                    else
-                    {
-                        // SH-H024 / TASK-308: only a parameter-FREE call can be folded to a constant. The
-                        // normalizer has already folded every such call, so a parameter-bound one arriving
-                        // here cannot be expressed as a SET value at all — and it must not be *invoked*.
-                        // Measured on SQLite before this guard: `SET Name = string.Concat(r.Name, "-",
-                        // r.Name)` reflectively invoked Concat with the parameter arguments evaluated to
-                        // null and stored the result, "-", with no exception and no log entry.
-                        if (ContainsParameter(callExpression))
-                        {
-                            throw new NotSupportedException(
-                                $"The value expression cannot be translated to SQL: "
-                                + $"{callExpression.Method.DeclaringType?.Name}.{callExpression.Method.Name} "
-                                + "is not one of the translated calls (Replace, ToLower, ToUpper) and it "
-                                + "references the entity, so it cannot be evaluated to a constant either. "
-                                + "Before this was refused it was invoked reflectively with the entity's "
-                                + "arguments evaluated to null and the result written to the column. "
-                                + "Compute the value in memory and pass it, or use a translated call.");
-                        }
+                    var inner = ParseExpression(callExpression.Object!, parameters, withTableName, exprType, dialect);
+                    return callExpression.Method.Name is "ToLower" or "ToLowerInvariant" ? $"LOWER({inner})" : $"UPPER({inner})";
+                }
+                // SH-H024 / TASK-308: only a parameter-FREE call can be folded to a constant. The
+                // normalizer has already folded every such call, so a parameter-bound one arriving
+                // here cannot be expressed as a SET value at all — and it must not be *invoked*.
+                // Measured on SQLite before this guard: `SET Name = string.Concat(r.Name, "-",
+                // r.Name)` reflectively invoked Concat with the parameter arguments evaluated to
+                // null and stored the result, "-", with no exception and no log entry.
+                if (ContainsParameter(callExpression))
+                {
+                    throw new NotSupportedException(
+                        $"The value expression cannot be translated to SQL: "
+                        + $"{callExpression.Method.DeclaringType?.Name}.{callExpression.Method.Name} "
+                        + "is not one of the translated calls (Replace, ToLower, ToUpper without a culture, GetValueOrDefault) "
+                        + "and it references the entity, so it cannot be evaluated to a constant either. "
+                        + "Before this was refused it was invoked reflectively with the entity's "
+                        + "arguments evaluated to null and the result written to the column. "
+                        + "Compute the value in memory and pass it, or use a translated call.");
+                }
 
-                        var key = "@Const" + parameters.Count;
-                        var value = EvaluateExpression(callExpression);
-                        parameters.Add(key, value!);
-                        return key;
-                    }
-                }
-                else if (expr is UnaryExpression unaryExpression)
+                var key = "@Const" + parameters.Count;
+                var value = EvaluateExpression(callExpression);
+                parameters.Add(key, value!);
+                return key;
+            }
+            if (expr is UnaryExpression unaryExpression && ContainsParameter(unaryExpression))
+            {
+                switch (unaryExpression.NodeType)
                 {
-                    if (unaryExpression.NodeType == ExpressionType.Convert)
-                    {
-                        return ParseExpression(unaryExpression.Operand, parameters, withTableName, exprType);
-                    }
-                }
-                else if (expr is MemberExpression memberExpression)
-                {
-                    // Handle DateTime property accessors like x.OpenedAt.Date → DATE(column)
-                    if (memberExpression.Member.Name == "Date"
-                        && memberExpression.Member.DeclaringType == typeof(DateTime)
-                        && memberExpression.Expression is MemberExpression innerDateMember)
-                    {
-                        var columnExpr = ParseExpression(innerDateMember, parameters, withTableName, exprType);
-                        if (!string.IsNullOrEmpty(columnExpr) && !columnExpr.StartsWith("@"))
-                        {
-                            return $"DATE({columnExpr})";
-                        }
-                        // If inner resolved to a parameter, evaluate the whole .Date as constant
-                        var key = "@Const" + parameters.Count;
-                        var value = EvaluateExpression(memberExpression);
-                        parameters.Add(key, value!);
-                        return key;
-                    }
-
-                    string name = string.Empty;
-                    var isParamAccess = memberExpression.Expression?.NodeType == ExpressionType.Parameter
-                        || memberExpression.Expression?.NodeType == ExpressionType.TypeAs
-                        || (memberExpression.Expression is UnaryExpression convExpr
-                            && convExpr.NodeType == ExpressionType.Convert
-                            && convExpr.Operand.NodeType == ExpressionType.Parameter);
-                    if (
-                        exprType != null
-                        && memberExpression.Member.ReflectedType?.IsAssignableFrom(exprType) == true
-                        && isParamAccess
-                    )
-                    {
-                        name = ResolveColumnName(exprType, memberExpression.Member.Name, withTableName) ?? string.Empty;
-                    }
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        if (memberExpression.Expression is ConstantExpression
-                            || memberExpression.Expression == null)
-                        {
-                            var key = "@Const" + parameters.Count;
-                            var value = EvaluateExpression(memberExpression);
-                            parameters.Add(key, value!);
-                            return key;
-                        }
-                        else if (!ContainsParameter(memberExpression))
-                        {
-                            // A closure chain (`filter.Range.From`): a value, bound like any other constant.
-                            var key = "@Const" + parameters.Count;
-                            parameters.Add(key, EvaluateExpression(memberExpression)!);
-                            return key;
-                        }
-                        else
-                        {
-                            // SH-M149 (TASK-153): `x.Sub.Prop` is no column. Recursing (without the type) produced a
-                            // null fragment and SQL such as `( = @Const0)`, a syntax error far from its cause.
-                            throw new NotSupportedException(
-                                $"Cannot translate '{memberExpression}' to SQL: it is not a mapped column of the entity.");
-                        }
-                    }
-                    else
-                    {
-                        return name;
-                    }
-                }
-                else if (expr is ConstantExpression constantExpression)
-                {
-                    var key = "@Const" + parameters.Count;
-                    parameters.Add(key, constantExpression.Value!);
-                    return key;
+                    case ExpressionType.Convert:
+                    case ExpressionType.ConvertChecked:
+                        // TASK-860: a lossy conversion is refused, a widening to a fraction cast explicitly.
+                        RequireTranslatableConversion(unaryExpression.Operand.Type, unaryExpression.Type);
+                        return dialect.Conversion(
+                            ParseExpression(unaryExpression.Operand, parameters, withTableName, exprType, dialect)!,
+                            unaryExpression.Operand.Type, unaryExpression.Type);
+                    case ExpressionType.Negate:
+                    case ExpressionType.NegateChecked:
+                        return dialect.Negate(
+                            ParseExpression(unaryExpression.Operand, parameters, withTableName, exprType, dialect)!, unaryExpression.Type);
+                    case ExpressionType.UnaryPlus:
+                        return ParseExpression(unaryExpression.Operand, parameters, withTableName, exprType, dialect);
+                    default:
+                        throw RefuseNode(unaryExpression);
                 }
             }
-            return null;
+            if (expr is MemberExpression memberExpression)
+            {
+                // Handle DateTime property accessors like x.OpenedAt.Date → DATE(column)
+                if (memberExpression.Member.Name == "Date"
+                    && memberExpression.Member.DeclaringType == typeof(DateTime)
+                    && memberExpression.Expression is MemberExpression innerDateMember)
+                {
+                    var columnExpr = ParseExpression(innerDateMember, parameters, withTableName, exprType, dialect);
+                    if (!string.IsNullOrEmpty(columnExpr) && !columnExpr.StartsWith("@"))
+                    {
+                        return $"DATE({columnExpr})";
+                    }
+                    // If inner resolved to a parameter, evaluate the whole .Date as constant
+                    var key = "@Const" + parameters.Count;
+                    var value = EvaluateExpression(memberExpression);
+                    parameters.Add(key, value!);
+                    return key;
+                }
+
+                string name = string.Empty;
+                var isParamAccess = memberExpression.Expression?.NodeType == ExpressionType.Parameter
+                    || memberExpression.Expression?.NodeType == ExpressionType.TypeAs
+                    || (memberExpression.Expression is UnaryExpression convExpr
+                        && convExpr.NodeType == ExpressionType.Convert
+                        && convExpr.Operand.NodeType == ExpressionType.Parameter);
+                if (
+                    exprType != null
+                    && memberExpression.Member.ReflectedType?.IsAssignableFrom(exprType) == true
+                    && isParamAccess
+                )
+                {
+                    name = ResolveColumnName(exprType, memberExpression.Member.Name, withTableName) ?? string.Empty;
+                }
+                if (!string.IsNullOrEmpty(name))
+                    return name;
+                if (memberExpression.Expression is ConstantExpression
+                    || memberExpression.Expression == null)
+                {
+                    var key = "@Const" + parameters.Count;
+                    var value = EvaluateExpression(memberExpression);
+                    parameters.Add(key, value!);
+                    return key;
+                }
+                if (!ContainsParameter(memberExpression))
+                {
+                    // A closure chain (`filter.Range.From`): a value, bound like any other constant.
+                    var key = "@Const" + parameters.Count;
+                    parameters.Add(key, EvaluateExpression(memberExpression)!);
+                    return key;
+                }
+                // SH-M149 (TASK-153): `x.Sub.Prop` is no column. Recursing (without the type) produced a
+                // null fragment and SQL such as `( = @Const0)`, a syntax error far from its cause.
+                throw new NotSupportedException(
+                    $"Cannot translate '{memberExpression}' to SQL: it is not a mapped column of the entity.");
+            }
+            if (expr is ConstantExpression constantExpression)
+            {
+                var key = "@Const" + parameters.Count;
+                parameters.Add(key, constantExpression.Value!);
+                return key;
+            }
+            // TASK-860: no other node kind has a SET translation; a parameter-free one is a constant.
+            if (ContainsParameter(expr))
+                throw RefuseNode(expr);
+            var constantKey = "@Const" + parameters.Count;
+            parameters.Add(constantKey, EvaluateExpression(expr)!);
+            return constantKey;
         }
+
+        /// <summary>
+        /// TASK-860 — the SQL operator of a binary node in an update's SET value, or null when it has none there. A
+        /// bitwise <c>&amp;</c> / <c>|</c> on integers is not <c>AND</c> / <c>OR</c>, and <c>^</c>, the shifts and array indexing
+        /// have no portable form, so they answer null and are refused.
+        /// </summary>
+        private static string? SetValueOperator(BinaryExpression binary)
+        {
+            var logical = UnwrapNullable(binary.Type) == typeof(bool);
+            var numeric = IsNumericType(binary.Type);
+            return binary.NodeType switch
+            {
+                ExpressionType.Add or ExpressionType.AddChecked when numeric => "+",
+                ExpressionType.Subtract or ExpressionType.SubtractChecked when numeric => "-",
+                ExpressionType.Multiply or ExpressionType.MultiplyChecked when numeric => "*",
+                ExpressionType.Divide when numeric => "/",
+                ExpressionType.Modulo when numeric => "%",
+                ExpressionType.GreaterThan => ">",
+                ExpressionType.GreaterThanOrEqual => ">=",
+                ExpressionType.LessThan => "<",
+                ExpressionType.LessThanOrEqual => "<=",
+                ExpressionType.Equal => "=",
+                ExpressionType.NotEqual => "<>",
+                ExpressionType.And or ExpressionType.AndAlso when logical => "AND",
+                ExpressionType.Or or ExpressionType.OrElse when logical => "OR",
+                _ => null,
+            };
+        }
+
+        /// <summary>An integer over the row converted to a fraction (<see cref="SqlConversionKind.Widening"/>).</summary>
+        private static bool IsWideningOverRow(Expression operand)
+            => operand is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } conversion
+                && ContainsParameter(conversion)
+                && SqlConversion.Classify(conversion.Operand.Type, conversion.Type) == SqlConversionKind.Widening;
 
         /// <summary>
         /// TASK-596. The values a column is compared with are bound in the column's <b>stored</b> form, or the comparison
@@ -575,7 +610,10 @@ namespace Birko.Data.SQL
                     var type = lambdaExpression.Parameters?.FirstOrDefault()?.Type;
                     // Canonicalise the predicate once, at the lambda boundary: funcletize parameter-free
                     // subtrees and desugar ternary / ?? into boolean algebra the parser below understands.
-                    var body = Birko.Data.Expressions.ExpressionNormalizer.Normalize(lambdaExpression.Body) ?? lambdaExpression.Body;
+                    // TASK-860: GetValueOrDefault becomes ??, a typed Equals ==, a bool XOR != — before the normalizer, so the
+                    // ?? it makes of a bool? is desugared with the rest.
+                    var rewritten = RewriteTranslatableCalls(lambdaExpression.Body);
+                    var body = Birko.Data.Expressions.ExpressionNormalizer.Normalize(rewritten) ?? rewritten;
                     // TASK-863: a boolean compared with a boolean is rewritten into shapes the branches below have.
                     body = RewriteBooleanComparisons(body);
                     // Handle constant boolean body: _ => true means "no filter" (return empty),
@@ -598,8 +636,12 @@ namespace Birko.Data.SQL
                 }
                 else if (expr is UnaryExpression unaryExpression)
                 {
-                    if (unaryExpression.NodeType == ExpressionType.Convert || unaryExpression.NodeType == ExpressionType.TypeAs)
+                    if (unaryExpression.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.TypeAs)
                     {
+                        // TASK-860: a nullable lift, an enum's integer, a widening is transparent here (the value is
+                        // compared, numerically, as it is); a narrowing or lossy conversion is refused. It used to be
+                        // dropped: `(int)x.Amount == 10` compared the decimal, and ConvertChecked reached no branch at all.
+                        RequireTranslatableConversion(unaryExpression.Operand.Type, unaryExpression.Type);
                         return ParseConditionExpression(unaryExpression.Operand, parent, exprType);
                     }
                     if (unaryExpression.NodeType == ExpressionType.Not)
@@ -615,6 +657,10 @@ namespace Birko.Data.SQL
                         notCondition.IsNot = !notCondition.IsNot; // toggle
                         return ParseConditionExpression(unaryExpression.Operand, notCondition, exprType);
                     }
+                    // TASK-860: any other unary node (an array's Length, a unary minus as a predicate) used to hand back the
+                    // untouched parent condition.
+                    if (ContainsParameter(unaryExpression))
+                        throw RefuseNode(unaryExpression);
                     if (parent != null)
                     {
                         return new[] { parent };
@@ -658,7 +704,15 @@ namespace Birko.Data.SQL
                         case ExpressionType.GreaterThanOrEqual:
                             conditionType = ConditionType.GreatherAndEqual;
                             break;
+                        default:
+                            // TASK-860: an XOR of a bool? (C#'s lifted ^), an array index, a shift: it used to be parsed as
+                            // an `==` of its operands.
+                            if (ContainsParameter(binaryExpression))
+                                throw RefuseNode(binaryExpression);
+                            break;
                     }
+                    if ((isAnd || isOR) && UnwrapNullable(binaryExpression.Left.Type) != typeof(bool) && ContainsParameter(binaryExpression))
+                        throw RefuseNode(binaryExpression);
 
                     if (isAnd || isOR)
                     {
@@ -752,6 +806,12 @@ namespace Birko.Data.SQL
                             }
                             catch { /* fall through to normal handling */ }
                         }
+
+                        // TASK-860: each operand that reads the row is one the parser translates, or the comparison is
+                        // refused by name before anything is built. Before, an unknown call, member or conversion was
+                        // recursed into and its column kept: `x.Code.Substring(1) == "bc"` compared Code with 'bc'.
+                        RequireTranslatableComparand(binaryExpression.Left, exprType);
+                        RequireTranslatableComparand(binaryExpression.Right, exprType);
 
                         // Value-expression operand — column arithmetic (x.A + x.B > 5, x.Price * 2 >= 10),
                         // null-coalescing ((x.Score ?? 0) > 5) or a value-position ternary
@@ -895,6 +955,10 @@ namespace Birko.Data.SQL
                             $"Cannot translate '{methodExpression}' to SQL: the pattern is a column, and building a LIKE "
                             + "pattern from a column has no portable SQL form. Compare against a value instead.");
                     }
+
+                    // TASK-860: the parser's default for a call that reads the row is refusal, not pass-through.
+                    if (ContainsParameter(methodExpression))
+                        RequireTranslatableCall(methodExpression);
 
                     switch (methodExpression.Method.Name)
                     {
@@ -1056,6 +1120,10 @@ namespace Birko.Data.SQL
                     condition.Values = new object[] { true };
                     return new[] { condition };
                 }
+                // TASK-860: a bool member over the row that is no column (`x => x.Sub.Flag`) produced no condition, which
+                // reads as every row.
+                if (parent == null && expr is MemberExpression unclaimedMember && ContainsParameter(unclaimedMember))
+                    throw RefuseMember(unclaimedMember);
 
                 if (parent != null)
                 {
@@ -1147,6 +1215,8 @@ namespace Birko.Data.SQL
                                     parent.Name = $"DATE({inner.Name})";
                                     return new[] { parent };
                                 }
+                                // TASK-860: a .Date of something that is no column was evaluated as a constant from the row.
+                                throw RefuseMember(memberExpression);
                             }
                             // Right-hand side: evaluate as constant
                             var dateValue = EvaluateExpression(memberExpression);
@@ -1193,6 +1263,12 @@ namespace Birko.Data.SQL
                                 parent.Values = (value != null && value is not string && value is IEnumerable enumerable)
                                     ? (enumerable as object[] ?? enumerable.Cast<object>().ToArray())
                                     : new[] { value };
+                            }
+                            else if (ContainsParameter(memberExpression))
+                            {
+                                // TASK-860: a member over the row that is no column (`x.Code.Length`, `x.At.Year`) was
+                                // evaluated with the row as null and became IS NULL, or a condition with no name.
+                                throw RefuseMember(memberExpression);
                             }
                             else
                             {
@@ -1681,6 +1757,15 @@ namespace Birko.Data.SQL
             switch (expr)
             {
                 case UnaryExpression u when u.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked:
+                    if (ContainsParameter(u))
+                        // TASK-860: refused here whatever the dialect, so the portable render refuses at parse time too.
+                        RequireTranslatableConversion(u.Operand.Type, u.Type);
+                    else if (SqlConversion.Classify(u.Operand.Type, u.Type) == SqlConversionKind.Lossy)
+                    {
+                        // A constant's conversion is C#'s to compute, exactly.
+                        var converted = Expression.Lambda(u).Compile().DynamicInvoke();
+                        return (converted == null ? null : dialect.Literal(converted)) ?? InlineConstant(converted);
+                    }
                     return dialect.Conversion(RenderValueFragment(u.Operand, exprType, dialect), u.Operand.Type, u.Type);
                 case UnaryExpression u when u.NodeType is ExpressionType.Negate or ExpressionType.NegateChecked
                         && ContainsParameter(u):

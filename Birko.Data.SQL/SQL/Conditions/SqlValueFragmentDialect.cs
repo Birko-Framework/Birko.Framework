@@ -41,13 +41,53 @@ namespace Birko.Data.SQL.Conditions
 
         /// <summary><c>left op right</c> computed in <paramref name="type"/> (the node's CLR type, maybe nullable).</summary>
         public virtual string Arithmetic(ExpressionType op, string sqlOperator, string left, string right, Type type)
-            => $"({left} {sqlOperator} {right})";
+            => op == ExpressionType.Divide && SqlConversion.IsIntegral(type)
+                ? IntegralDivide(left, right)
+                : $"({left} {sqlOperator} {right})";
+
+        /// <summary>
+        /// TASK-860 — C#'s integer division, truncating toward zero. <c>/</c> is that on SQLite, PostgreSQL and SQL Server;
+        /// MySQL's <c>/</c> always divides fractions (measured: <c>x.Hits / 4 == 0</c> missed 4 of 5 rows) and overrides this.
+        /// </summary>
+        public virtual string IntegralDivide(string left, string right) => $"({left} / {right})";
 
         /// <summary>A constant's literal, or null for the portable one.</summary>
         public virtual string? Literal(object value) => null;
 
-        /// <summary>A C# conversion of <paramref name="operand"/>; the portable form drops it.</summary>
-        public virtual string Conversion(string operand, Type from, Type to) => operand;
+        /// <summary>
+        /// A C# conversion of <paramref name="operand"/>. TASK-860: a transparent one (nullable lift, enum to integer,
+        /// widening integer) renders nothing; an integer becoming a <c>decimal</c> or <c>double</c> is an explicit
+        /// <see cref="Cast"/>, because without it <c>(decimal)x.Hits / 4m</c> divided two integers on PostgreSQL and SQL
+        /// Server (measured); any other conversion is refused. It used to drop every conversion.
+        /// </summary>
+        public virtual string Conversion(string operand, Type from, Type to) => SqlConversion.Classify(from, to) switch
+        {
+            SqlConversionKind.Transparent => operand,
+            SqlConversionKind.Widening => Cast(operand, from, Nullable.GetUnderlyingType(to) ?? to),
+            _ => throw new NotSupportedException(
+                $"Cannot translate the conversion from {(Nullable.GetUnderlyingType(from) ?? from).Name} to "
+                + $"{(Nullable.GetUnderlyingType(to) ?? to).Name} over the row to SQL: it is not exact on every provider."),
+        };
+
+        /// <summary>
+        /// TASK-860 — an exact widening of the integer <paramref name="operand"/> (of <paramref name="from"/>) to
+        /// <paramref name="to"/>, <c>decimal</c>, <c>double</c> or <c>float</c>.
+        /// </summary>
+        protected virtual string Cast(string operand, Type from, Type to)
+            => to == typeof(decimal)
+                ? $"CAST({operand} AS DECIMAL({SqlConversion.DecimalDigits(from).ToString(System.Globalization.CultureInfo.InvariantCulture)},0))"
+                : $"CAST({operand} AS {FloatingTypeName(to)})";
+
+        /// <summary>
+        /// TASK-860 — true when storing an integer that does not fit its column is an error on this provider, so an update
+        /// SET may narrow an integer as C# does (<c>(short)(x.Sh + 1)</c>): exact until it overflows, and an overflow fails
+        /// instead of storing a value C# would have wrapped. Measured (CallCastFilterContract's overflow case): PostgreSQL,
+        /// SQL Server and MySQL (under the STRICT_TRANS_TABLES its 8.x default carries) fail the statement and store nothing.
+        /// </summary>
+        public virtual bool StoresIntegerOverflowLoudly => true;
+
+        /// <summary>The SQL type a <c>double</c> (or <c>float</c>) cast names; <c>DOUBLE PRECISION</c> is the standard's.</summary>
+        protected virtual string FloatingTypeName(Type type) => type == typeof(float) ? "REAL" : "DOUBLE PRECISION";
 
         /// <summary>An operand of a comparison performed in <paramref name="comparedType"/>.</summary>
         public virtual string Compared(string operand, Type comparedType) => operand;
