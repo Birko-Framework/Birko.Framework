@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL filter's group next to a constant `bool` keeps its AND/OR (2026-11-09)
+[[TASK-866]]. When `&&` / `||` had a constant operand beside a group, the parser's collapse overwrote the group's own
+separator, so an OR group rendered as AND and the reverse, silently, on all four providers since 2026-03 (measured: 7 of
+9 shapes). `!((x.A == 10 || x.A == 20) && flag)` rendered `NOT (A = 10 AND A = 20)`, and its Delete removed every row
+without the whole-table guard firing. The surviving group now keeps its separator (rule 43).
 ### SQL Server refuses a LIKE term past its 4000-character limit (2026-11-09)
 [[TASK-874]]. A plain `Contains` / `StartsWith` / `EndsWith` whose pattern passed 4000 characters failed count, update
 and delete with Msg 8152, and the read returned no rows, silently (measured). It is now refused by name before anything

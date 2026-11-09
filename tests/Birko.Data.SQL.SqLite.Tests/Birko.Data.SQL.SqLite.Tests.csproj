@@ -52,6 +52,7 @@
     <Compile Include="..\Shared\StoreContract\IdentityContract.cs" Link="Shared\IdentityContract.cs" />
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
     <Compile Include="..\Shared\StoreContract\RejectedColumnNameContract.cs" Link="Shared\RejectedColumnNameContract.cs" />
+    <Compile Include="..\Shared\StoreContract\CollapsedGroupContract.cs" Link="Shared\CollapsedGroupContract.cs" />
     <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
   </ItemGroup>
 

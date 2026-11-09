@@ -751,17 +751,17 @@ namespace Birko.Data.SQL
                         }
                         if (leftIsConst)
                         {
-                            if (isAnd && leftVal) return ReturnSingleSubCondition(parent, rightCond!, isOR);
+                            if (isAnd && leftVal) return ReturnSingleSubCondition(parent, rightCond!);
                             if (isAnd && !leftVal) return new[] { MakeFalseCondition(parent) };
                             if (isOR && leftVal) return Array.Empty<Conditions.Condition>();
-                            if (isOR && !leftVal) return ReturnSingleSubCondition(parent, rightCond!, isOR);
+                            if (isOR && !leftVal) return ReturnSingleSubCondition(parent, rightCond!);
                         }
                         if (rightIsConst)
                         {
-                            if (isAnd && rightVal) return ReturnSingleSubCondition(parent, leftCond!, isOR);
+                            if (isAnd && rightVal) return ReturnSingleSubCondition(parent, leftCond!);
                             if (isAnd && !rightVal) return new[] { MakeFalseCondition(parent) };
                             if (isOR && rightVal) return Array.Empty<Conditions.Condition>();
-                            if (isOR && !rightVal) return ReturnSingleSubCondition(parent, leftCond!, isOR);
+                            if (isOR && !rightVal) return ReturnSingleSubCondition(parent, leftCond!);
                         }
 
                         if (parent != null)
@@ -864,8 +864,8 @@ namespace Birko.Data.SQL
                             if (parent != null)
                             {
                                 // Nest it rather than merging into the parent: the `!=` arm carries its
-                                // own IsOr=true, and ReturnSingleSubCondition would overwrite that with
-                                // the enclosing node's flag — turning `col < d OR col >= d+1` into an
+                                // own IsOr=true, and ReturnSingleSubCondition overwrote that with the
+                                // enclosing node's flag until TASK-866 — turning `col < d OR col >= d+1` into an
                                 // unsatisfiable AND that matches zero rows. Same shape as the
                                 // value-comparison branch above.
                                 var dateSubs = parent.SubConditions as List<Condition>
@@ -1520,14 +1520,22 @@ namespace Birko.Data.SQL
         /// <c>.Date</c> range branch, which nests rather than merging precisely because this method would
         /// overwrite a nested <c>IsOr</c>. The <c>IsNot</c> half went unnoticed beside it, which is why the
         /// fix is stated here rather than at the call sites.</para>
+        /// <para><b>TASK-866 — the <c>IsOr</c> half: the survivor keeps its own separator.</b> On a group
+        /// <c>IsOr</c> says how its children combine, and the children are now the survivor's. The collapsed
+        /// operator's separator joined two operands, one of which is gone, so it combines nothing; and the parent
+        /// brings no separator of its own (it is a fresh operand or a <c>Not</c> wrapper, neither of which sets
+        /// one). So the combine of the two is the survivor's flag. This method used to assign the collapsed
+        /// operator's: <c>!((x.A == 10 || x.A == 20) &amp;&amp; t)</c> rendered <c>NOT (A = 10 AND A = 20)</c>, and a
+        /// Delete removed every row with no exception (measured on SQLite, PostgreSQL, MySQL and SQL Server). The
+        /// <c>IsNot</c> XOR is unaffected: both negations still wrap the same set of children.</para>
         /// </remarks>
-        private static IEnumerable<Conditions.Condition> ReturnSingleSubCondition(Conditions.Condition? parent, Conditions.Condition surviving, bool isOr)
+        private static IEnumerable<Conditions.Condition> ReturnSingleSubCondition(Conditions.Condition? parent, Conditions.Condition surviving)
         {
             if (parent != null)
             {
                 // TASK-869: one producer for "every property that says what the predicate is" (Condition.Copy shares it).
                 parent.BecomePredicateOf(surviving);
-                parent.IsOr = isOr;
+                parent.IsOr = surviving.IsOr;
                 parent.IsNot = parent.IsNot ^ surviving.IsNot;
                 return new[] { parent };
             }
