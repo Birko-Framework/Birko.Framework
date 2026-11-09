@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq.Expressions;
 
 namespace Birko.Data.SQL.Conditions
@@ -192,5 +193,69 @@ namespace Birko.Data.SQL.Conditions
         /// <summary>TASK-869 — <c>operand COLLATE binary LIKE pattern ESCAPE '!'</c>, the ordinal LIKE every server but SQLite uses.</summary>
         protected static string CollatedLike(string operand, string collation, string pattern)
             => $"{operand} COLLATE {collation} LIKE {pattern} ESCAPE '{Connectors.SqlBuilderContext.LikeEscapeCharacter}'";
+
+        /// <summary>
+        /// TASK-873 — the one producer of C#'s ordinal string equality: <c>left == right</c> (one right-hand side) or
+        /// <c>rights.Contains(left)</c> (several), negated with <paramref name="isNot"/>. <paramref name="values"/> holds the
+        /// value bound to each of <paramref name="rights"/> (parameter names); it is null when the right-hand side is read from
+        /// the row (a column, a fragment). Rendered from <see cref="OrdinalText"/> and <see cref="OrdinalValue"/>; a dialect
+        /// without them (the base) renders the plain comparison, which follows the column's collation.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why the plain comparison stays in front.</b> An operand under another collation (or inside an expression) is no
+        /// longer the indexed column, so <c>Code COLLATE Latin1_General_100_BIN2 = @p</c> scanned the whole index on SQL Server
+        /// and <c>Code COLLATE utf8mb4_0900_bin = 'abc'</c> on MySQL, and <c>Code COLLATE "C" = $1</c> was a sequential scan on
+        /// PostgreSQL (measured, 100,000 rows). So the test is <c>(col = @p AND exact(col) = exact(@p))</c> (an <c>IN</c> the same
+        /// way): the first term is answered by the index (a seek on all four providers, measured), the second filters the few
+        /// rows it found. It never removes a row the exact term keeps, because two identical strings are equal under every
+        /// collation; and the exact term only has to tell apart rows the collation already calls equal.
+        /// </para>
+        /// <para>
+        /// A negation is <c>NOT (that test)</c>, so it holds wherever the plain term already fails. NULL behaves as the plain
+        /// comparison did: the test is UNKNOWN on a NULL operand, as <c>col = @p</c> was.
+        /// </para>
+        /// </remarks>
+        public string OrdinalTextEquality(string left, IReadOnlyList<string> rights, IReadOnlyList<object?>? values, bool isNot)
+        {
+            if (rights == null || rights.Count == 0) throw new ArgumentException("An equality compares with at least one value.", nameof(rights));
+            if (values != null && values.Count != rights.Count)
+                throw new ArgumentException("Each right-hand side has exactly one bound value.", nameof(values));
+            var rowRead = values == null;
+            var exactLeft = OrdinalText(left, rowRead);
+            if (exactLeft == null) return Equality(left, rights, isNot);
+            var exactRights = new List<string>(rights.Count);
+            for (var i = 0; i < rights.Count; i++)
+            {
+                if (rowRead) exactRights.Add(OrdinalText(rights[i], rowRead) ?? rights[i]);
+                else exactRights.AddRange(OrdinalValue(rights[i], values![i]));
+            }
+            var test = $"({Equality(left, rights, isNot: false)} AND {Equality(exactLeft, exactRights, isNot: false)})";
+            return isNot ? "NOT " + test : test;
+        }
+
+        private static string Equality(string left, IReadOnlyList<string> rights, bool isNot)
+            => rights.Count == 1
+                ? $"{left} {(isNot ? "<>" : "=")} {rights[0]}"
+                : $"{left} {(isNot ? "NOT IN" : "IN")} ({string.Join(", ", rights)})";
+
+        /// <summary>
+        /// TASK-873 — the row's <paramref name="operand"/> (a column, a fragment) as text whose plain <c>=</c> / <c>IN</c> compares
+        /// UTF-16 code units exactly, as C#'s ordinal comparison does: no case or accent folding, no expansion (<c>ß</c> /
+        /// <c>ss</c>), no padding of trailing spaces. <paramref name="bothFromRow"/> is true when the other side is read from the
+        /// row too (<c>x.A == x.B</c>). The base returns <see langword="null"/>: it knows no provider's spelling, and
+        /// <see cref="OrdinalTextEquality"/> then renders the plain comparison.
+        /// </summary>
+        protected virtual string? OrdinalText(string operand, bool bothFromRow) => null;
+
+        /// <summary>
+        /// TASK-873 — the exact form(s) of the bound <paramref name="parameter"/>, whose value is <paramref name="value"/>, that
+        /// <see cref="OrdinalText"/>'s operand is compared with; the row matches when it equals any of them. The base leaves the
+        /// parameter as it is: an explicit collation on the row's side already decides the comparison.
+        /// </summary>
+        protected virtual IEnumerable<string> OrdinalValue(string parameter, object? value)
+        {
+            yield return parameter;
+        }
     }
 }

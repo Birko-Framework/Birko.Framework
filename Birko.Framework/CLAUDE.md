@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL string `==` and IN are exact on every provider — BREAKING (2026-11-09)
+[[TASK-873]] (the user's decision: the default is exact). MySQL and SQL Server compared strings by collation: 97 and 113
+of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ignoring trailing spaces; measured).
+`==` / IN now render `(col = @p AND <exact>)`, so the index still seeks, and `!=` / NOT IN negate that; SQLite and
+PostgreSQL return the same rows as before. On MySQL and SQL Server, lookups like `UserName == login` become
+case-sensitive. Rules and hand-built conditions are unchanged ([[TASK-895]]).
 ### A throwing `OnExecute` subscriber no longer fails the statement; bulk writes are announced (2026-11-09)
 [[TASK-875]]. A logging subscriber that threw failed 21 operations on all four SQL providers and stopped later
 subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.
@@ -375,12 +381,6 @@ counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`;
 `@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four
 providers). Every statement now goes through one producer, `AnnounceCommand`. **Breaking for subclasses:**
 `InvokeOnExecute(string)` is gone.
-### A SQL `Contains` / `StartsWith` / `EndsWith` / `Equals` honours an explicit `StringComparison` (2026-11-08)
-[[TASK-869]] (the user's decision: option A). The comparison argument used to be ignored, so the column collation
-decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-insensitive on MySQL (measured: 49–113 of
-240 cases off). `Ordinal` and `OrdinalIgnoreCase` now give C#'s answer on all four providers; `UPPER` and `ILIKE` could
-not, because each server groups case differently from .NET. Other comparisons are refused by name. Without a
-comparison nothing changes: the collation decides, now documented per provider.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

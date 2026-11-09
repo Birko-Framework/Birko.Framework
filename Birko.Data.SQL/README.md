@@ -287,6 +287,33 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   - `string.Equals(x.Col, v, comparison)` and `x.Col.Equals(v, comparison)` translate the same way.
   - Any other comparison (`CurrentCulture*`, `InvariantCulture*`) and the `(string, bool, CultureInfo)` overloads
     throw `NotSupportedException` before anything runs. Before TASK-869 the comparison was silently ignored.
+- **String equality is exact (TASK-873) — BREAKING on MySQL and SQL Server.** `==` / `!=` on a string, a list's
+  `Contains` (`IN` / `NOT IN`), `Equals` without a comparison, two string columns compared, a case fold or a `??` compared
+  with a value, and `string.IsNullOrEmpty` give C#'s ordinal answer on every provider, in reads, counts, updates, deletes
+  and view filters. Before, `=` followed the column's collation (measured over 134 shapes: 97 off on MySQL, 113 on SQL
+  Server, none on SQLite or PostgreSQL):
+
+  | Provider (default collation) | `x.Code == "abc"` used to match | also |
+  |---|---|---|
+  | SQLite (`BINARY`) | `abc` only (as C#) | a column declared `NOCASE` / `RTRIM` elsewhere matched `ABC` / `abc ` |
+  | PostgreSQL (deterministic) | `abc` only (as C#) | a column with a nondeterministic ICU collation matched `ABC` (`citext` compared with Npgsql's `text` parameter was already exact) |
+  | MySQL 8 (`utf8mb4_0900_ai_ci`) | `abc`, `ABC`, `Abc` | `café` = `cafe`, `ß` = `ss`, `K` (Kelvin) = `K`, `a b` (no-break space) = `a b` |
+  | SQL Server (`SQL_Latin1_General_CP1_CI_AS`) | `abc`, `ABC`, `Abc`, `abc ` | `ß` = `ss`  The rendering keeps the plain comparison in front, so an index on the column still answers it, and adds the exact
+  one: `(Code = @p AND exact(Code) = exact(@p))`, and `IN` the same way; a negation (`!=`, `NOT IN`) is `NOT (…)` of
+  that. `exact` is `CONVERT(x USING utf8mb4) COLLATE utf8mb4_0900_bin` on MySQL (NO PAD; any column character set,
+  MySQL 8.0+), `(x + N'|') COLLATE Latin1_General_100_BIN2` on SQL Server on both sides (the terminator defeats the
+  padding; a value of 4000 characters or more is also offered as `CAST(@p AS NVARCHAR(MAX)) + N'|'`, since SQL Server
+  cuts a non-`MAX` concatenation at 4000; two columns compared are both cast to `NVARCHAR(MAX)`), `(x)::text COLLATE "C"`
+  on PostgreSQL and `(x) COLLATE BINARY` on SQLite. Measured on 100,000 rows: `Code COLLATE … = @p` alone scanned the
+  whole index on SQL Server and MySQL and was a sequential scan on PostgreSQL; the two-term form seeks (SQL Server), looks
+  up / range-scans (MySQL) and index-scans (PostgreSQL), as `Code = @p` did (`Task873IndexPlanTests`). Casting the
+  column to `NVARCHAR(MAX)` for every list made SQL Server's `IN` a per-row LOB scan (1000 values over 20,000 rows: 18 s,
+  was 37 ms); without it 67 ms, `NOT IN` 931 ms against 883 ms (`Contract_A_long_list_…_stays_fast`). A `Condition` built
+  by hand keeps `=` and the collation. For a case-insensitive match, say so: `string.Equals(x.Code, v,
+  StringComparison.OrdinalIgnoreCase)`. Orderings of strings (`string.Compare`, `CompareTo`, `CompareOrdinal`) stay
+  refused. A string list past the provider's parameter limit is still refused rather than split (TASK-833's decision).
+rameter limit is
+  still refused rather than split (TASK-833's decision).
 - **Two columns compare** (`x.A == x.B`, `x.Opened < x.Closed`); `==` / `!=` on nullable columns treat two nulls
   as equal, as C# does. `x.Opened.Date == x.Closed.Date` throws `NotSupportedException` (no portable SQL form).
 - **Decimal division (TASK-870), in filters and update SET values alike.** A division by a constant whose reciprocal

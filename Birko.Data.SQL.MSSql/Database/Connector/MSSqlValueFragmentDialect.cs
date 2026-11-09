@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Birko.Data.SQL.Conditions;
 
 namespace Birko.Data.SQL.Connectors
@@ -40,6 +41,46 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public override string Replace(string operand, string oldValue, string newValue)
             => base.Replace($"{operand} COLLATE {BinaryCollation}", oldValue, newValue);
+
+        /// <summary>
+        /// TASK-873 — <c>(operand + N'|') COLLATE Latin1_General_100_BIN2</c>, and the same on the value's side
+        /// (<see cref="OrdinalValue"/>). <see cref="BinaryCollation"/> compares UTF-16 code units, but SQL Server's <c>=</c> pads
+        /// the shorter operand with spaces under every collation, BIN2 included (measured: <c>N'abc ' COLLATE …_BIN2 = N'abc'</c>
+        /// is true, and so is <c>N'' = N' '</c>), so a terminator is appended to both: the trailing spaces are no longer trailing.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// No <c>CAST(… AS NVARCHAR(MAX))</c> on a column compared with values: it made every row's operand and every list item
+        /// a LOB and the <c>IN</c> a linear scan per row. Measured on 20,000 rows with an indexed <c>NVARCHAR(64)</c>: 1000 values
+        /// took 18.3 s (36 ms before TASK-873), 2000 timed out, a 500-value <c>NOT IN</c> 35.6 s; without the cast 92 ms and
+        /// 29 ms (independent review). The concatenation of two non-<c>MAX</c> strings is cut at 4000 characters, so the
+        /// terminator is lost only on a 4000-character operand; the plain term in front (<c>col = @p</c>) already rules out every
+        /// row whose text differs before that, so the cut can only make two 4000-character texts that are equal compare as
+        /// equal, or keep a <c>MAX</c> row equal to a 4000-character value from matching it. <see cref="OrdinalValue"/> closes
+        /// that: such a value is offered both cut and uncut.
+        /// </para>
+        /// <para>
+        /// Two operands read from the row (<c>x.A == x.B</c>, <paramref name="bothFromRow"/>) are cast to <c>NVARCHAR(MAX)</c>:
+        /// their columns may be cut differently, and no index answers that comparison anyway.
+        /// </para>
+        /// </remarks>
+        protected override string? OrdinalText(string operand, bool bothFromRow)
+            => bothFromRow
+                ? $"(CAST({operand} AS NVARCHAR(MAX)) + N'|') COLLATE {BinaryCollation}"
+                : $"({operand} + N'|') COLLATE {BinaryCollation}";
+
+        /// <summary>
+        /// TASK-873 — <c>(@p + N'|') COLLATE Latin1_General_100_BIN2</c>. A value of 4000 characters or more is offered a second
+        /// time, cast to <c>NVARCHAR(MAX)</c>: SqlClient declares it <c>nvarchar(4000)</c>, so its terminator is cut, which a
+        /// column of at most 4000 characters (cut the same way) matches, while an <c>NVARCHAR(MAX)</c> column keeps its terminator
+        /// and matches the uncut form.
+        /// </summary>
+        protected override IEnumerable<string> OrdinalValue(string parameter, object? value)
+        {
+            yield return $"({parameter} + N'|') COLLATE {BinaryCollation}";
+            if (value is string text && text.Length >= 4000)
+                yield return $"(CAST({parameter} AS NVARCHAR(MAX)) + N'|') COLLATE {BinaryCollation}";
+        }
 
         /// <inheritdoc />
         public override string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)

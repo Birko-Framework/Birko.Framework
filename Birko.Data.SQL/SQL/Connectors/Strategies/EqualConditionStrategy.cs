@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Linq;
 
 namespace Birko.Data.SQL.Connectors.Strategies
 {
@@ -22,6 +23,11 @@ namespace Birko.Data.SQL.Connectors.Strategies
 
             var op = condition.IsNot ? " <> " : " = ";
             var valueExpression = BuildValueExpression(condition, command, context);
+
+            // TASK-873: a string comparison the parser marked compares as C# does, not by the column's collation.
+            if (condition.Comparison == System.StringComparison.Ordinal && valueExpression != "NULL")
+                return context.Dialect.OrdinalTextEquality(condition.Name!, new[] { valueExpression },
+                    condition.IsField ? null : condition.Values!.Cast<object?>().Take(1).ToArray(), condition.IsNot);
 
             return $"{condition.Name}{op}{valueExpression}";
         }

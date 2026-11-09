@@ -128,5 +128,14 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override string Compared(string operand, Type comparedType)
             => IsDecimal(comparedType) ? $"{operand} COLLATE {SqLiteDecimal.Collation}" : operand;
+
+        /// <summary>
+        /// TASK-873 — <c>(operand) COLLATE BINARY</c>, which compares the stored bytes. A column the framework creates is
+        /// already <c>BINARY</c> (measured: <c>==</c> matched what C# matches for all 134 shapes), so this guards a column
+        /// declared <c>NOCASE</c> or <c>RTRIM</c> elsewhere (measured: <c>Nc = 'abc'</c> matched <c>ABC</c> on a <c>NOCASE</c>
+        /// column, the two-term form only <c>abc</c>, still searching its index). An explicit collation on one operand decides
+        /// the comparison, so a bound value is left as it is.
+        /// </summary>
+        protected override string? OrdinalText(string operand, bool bothFromRow) => $"({operand}) COLLATE BINARY";
     }
 }

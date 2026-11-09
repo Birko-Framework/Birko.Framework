@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — A SQL `Contains` / `StartsWith` / `EndsWith` / `Equals` honours an explicit `StringComparison`
+[[TASK-869]] (the user's decision: option A). The comparison argument used to be ignored, so the column collation
+decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-insensitive on MySQL (measured: 49–113 of
+240 cases off). `Ordinal` and `OrdinalIgnoreCase` now give C#'s answer on all four providers; `UPPER` and `ILIKE` could
+not, because each server groups case differently from .NET. Other comparisons are refused by name. Without a
+comparison nothing changes: the collation decides, now documented per provider.
+
 ## 2026-11-08 — A SQL column named like a reserved word is refused by name
 [[TASK-862]] (the user's decision: refuse, keep column names unquoted per rule 17). `Order`, `Group` or `Select` broke
 CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Server. On SQLite a column named

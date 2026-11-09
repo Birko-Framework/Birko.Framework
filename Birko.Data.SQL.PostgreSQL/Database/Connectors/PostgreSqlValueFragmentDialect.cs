@@ -31,5 +31,16 @@ namespace Birko.Data.SQL.Connectors
                 StringComparison.OrdinalIgnoreCase => $"{operand} COLLATE \"C\" ~ {bind(SqlStringMatch.RegexCaseClassPattern(kind, term, "^", "$"))}",
                 _ => base.StringMatch(kind, operand, term, comparison, bind),
             };
+
+        /// <summary>
+        /// TASK-873 — <c>(operand)::text COLLATE "C"</c>, byte-wise. A deterministic collation (every database default, and so
+        /// every column the framework creates) already compares equal strings only when they are identical (measured: 0 of 134
+        /// shapes off), so this guards a column declared with a nondeterministic ICU collation (measured: <c>Ci = $1</c> with a
+        /// <c>text</c> parameter <c>'abc'</c> matched <c>ABC</c>). A <c>citext</c> column compared with the <c>text</c> parameter
+        /// Npgsql binds was already exact (<c>citext = text</c> resolves to <c>text = text</c>, measured); the cast to <c>text</c>
+        /// keeps it so whatever the parameter's type. An explicit collation on one operand decides the comparison, so a bound
+        /// value is left as it is.
+        /// </summary>
+        protected override string? OrdinalText(string operand, bool bothFromRow) => $"({operand})::text COLLATE \"C\"";
     }
 }

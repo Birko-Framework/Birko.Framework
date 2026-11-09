@@ -54,5 +54,16 @@ namespace Birko.Data.SQL.Connectors
                 StringComparison.OrdinalIgnoreCase => $"REGEXP_LIKE({operand}, {bind(SqlStringMatch.RegexCaseClassPattern(kind, term, "\\A", "\\z"))}, 'c')",
                 _ => base.StringMatch(kind, operand, term, comparison, bind),
             };
+
+        /// <summary>
+        /// TASK-873 — <c>CONVERT(operand USING utf8mb4) COLLATE utf8mb4_0900_bin</c>: code-point order and NO PAD, so neither
+        /// case, accents, <c>ß</c> / <c>ss</c>, <c>K</c> (Kelvin) / <c>K</c> nor a no-break space are folded, and trailing spaces
+        /// count. Not <c>utf8mb4_bin</c>, the collation TASK-869's LIKE uses: it is PAD SPACE, so <c>'abc ' = 'abc'</c> under it
+        /// (measured), which LIKE does not do. The <c>CONVERT</c> makes it valid on a column of another character set (measured:
+        /// a bare <c>COLLATE utf8mb4_0900_bin</c> on a <c>utf8mb3</c> column fails with error 1253); MySQL 8.0 or later. An
+        /// explicit collation on one operand decides the comparison, so a bound value is left as it is.
+        /// </summary>
+        protected override string? OrdinalText(string operand, bool bothFromRow)
+            => $"CONVERT({operand} USING utf8mb4) COLLATE utf8mb4_0900_bin";
     }
 }

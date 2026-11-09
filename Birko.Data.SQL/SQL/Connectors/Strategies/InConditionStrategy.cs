@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Linq;
 using System.Text;
 
 namespace Birko.Data.SQL.Connectors.Strategies
@@ -56,9 +57,14 @@ namespace Birko.Data.SQL.Connectors.Strategies
             }
 
             var op = condition.IsNot ? " NOT IN " : " IN ";
-            var inClause = BuildInClause(condition, command, context);
+            var items = BuildInItems(condition, command, context);
 
-            return $"{condition.Name}{op}{inClause}";
+            // TASK-873: a string list the parser marked compares as C# does, not by the column's collation.
+            if (condition.Comparison == System.StringComparison.Ordinal)
+                return context.Dialect.OrdinalTextEquality(condition.Name!, items,
+                    condition.IsField ? null : condition.Values!.Cast<object?>().ToArray(), condition.IsNot);
+
+            return $"{condition.Name}{op}({string.Join(", ", items)})";
         }
 
         /// <summary>
@@ -72,37 +78,29 @@ namespace Birko.Data.SQL.Connectors.Strategies
             return false;
         }
 
-        private string BuildInClause(Conditions.Condition condition, DbCommand command, SqlBuilderContext context)
+        /// <summary>Each value of the list: its bound parameter's name, or for an <c>IsField</c> condition the SQL itself.</summary>
+        private static List<string> BuildInItems(Conditions.Condition condition, DbCommand command, SqlBuilderContext context)
         {
-            var sb = new StringBuilder("(");
+            var items = new List<string>();
+            if (condition.Values == null) return items;
 
-            if (condition.Values != null)
+            int i = 0;
+            foreach (var item in condition.Values)
             {
-                int i = 0;
-                foreach (var item in condition.Values)
+                if (!condition.IsField)
                 {
-                    if (i > 0)
-                    {
-                        sb.Append(", ");
-                    }
-
-                    if (!condition.IsField)
-                    {
-                        var paramName = context.GenerateParameterName(condition.Name!, i, command);
-                        context.AddParameter(command, paramName, item);
-                        sb.Append(paramName);
-                    }
-                    else
-                    {
-                        sb.Append(item?.ToString() ?? "NULL");
-                    }
-
-                    i++;
+                    var paramName = context.GenerateParameterName(condition.Name!, i, command);
+                    context.AddParameter(command, paramName, item);
+                    items.Add(paramName);
                 }
-            }
+                else
+                {
+                    items.Add(item?.ToString() ?? "NULL");
+                }
 
-            sb.Append(")");
-            return sb.ToString();
+                i++;
+            }
+            return items;
         }
     }
 }

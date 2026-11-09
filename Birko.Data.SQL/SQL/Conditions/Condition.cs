@@ -84,6 +84,12 @@ namespace Birko.Data.SQL.Conditions
         /// <see cref="StringComparison.Ordinal"/> or <see cref="StringComparison.OrdinalIgnoreCase"/>, which every SQL provider
         /// renders exactly through its <see cref="SqlValueFragmentDialect.StringMatch"/>. Null for the no-argument
         /// <c>Contains</c> / <c>StartsWith</c> / <c>EndsWith</c>, which render <c>LIKE</c> and follow the column's collation.
+        /// <para>
+        /// TASK-873: on an <see cref="ConditionType.Equal"/> or <see cref="ConditionType.In"/> condition,
+        /// <see cref="StringComparison.Ordinal"/> marks a string comparison, which the expression parser always marks (C#'s
+        /// <c>==</c> is ordinal): it renders through <see cref="SqlValueFragmentDialect.OrdinalTextEquality"/>. Null there for
+        /// a condition built by hand, which keeps <c>=</c> and the column's collation.
+        /// </para>
         /// </summary>
         public StringComparison? Comparison { get; set; }
 

@@ -47,6 +47,7 @@
     <Compile Include="..\Shared\StoreContract\CallCastFilterContract.cs" Link="Shared\CallCastFilterContract.cs" />
     <Compile Include="..\Shared\StoreContract\TranslationLeftoversContract.cs" Link="Shared\TranslationLeftoversContract.cs" />
     <Compile Include="..\Shared\StoreContract\StringComparisonFilterContract.cs" Link="Shared\StringComparisonFilterContract.cs" />
+    <Compile Include="..\Shared\StoreContract\StringEqualityContract.cs" Link="Shared\StringEqualityContract.cs" />
     <Compile Include="..\Shared\StoreContract\AlwaysFalseGroupContract.cs" Link="Shared\AlwaysFalseGroupContract.cs" />
     <Compile Include="..\Shared\StoreContract\BoolComparisonContract.cs" Link="Shared\BoolComparisonContract.cs" />
     <Compile Include="..\Shared\StoreContract\UnconfiguredContract.cs" Link="Shared\UnconfiguredContract.cs" />

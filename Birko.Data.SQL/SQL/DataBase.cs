@@ -845,6 +845,7 @@ namespace Birko.Data.SQL
                         if (IsValueExpressionOperand(valLeft) || IsValueExpressionOperand(valRight))
                         {
                             var valueCondition = BuildValueComparison(valLeft, valRight, conditionType, isNot, isOR, exprType, binaryExpression.Left.Type);
+                            MarkOrdinalText(valueCondition, binaryExpression.Left.Type);
                             if (parent != null)
                             {
                                 var valueSubs = parent.SubConditions as List<Condition> ?? new List<Condition>(parent.SubConditions ?? []);
@@ -901,6 +902,7 @@ namespace Birko.Data.SQL
                         StoreComparedValues(basecondition, binaryExpression, exprType);
                         if (basecondition.SubConditions?.Any() != true && IsPlainColumnOperand(comparedLeft, exprType))
                             MarkNullableComparison(basecondition, comparedLeft, exprType);
+                        MarkOrdinalText(basecondition, comparedLeft.Type);
                         if (parent != null)
                         {
                             var subs = parent.SubConditions as List<Condition> ?? new List<Condition>(parent.SubConditions ?? []);
@@ -939,7 +941,11 @@ namespace Birko.Data.SQL
                             SubConditions = new List<Condition>
                             {
                                 new Conditions.Condition(probe.Name, null, ConditionType.IsNull),
-                                new Conditions.Condition(probe.Name, new object[] { string.Empty }, ConditionType.Equal),
+                                // TASK-873: exact, as C# is: SQL Server pads, so `Col = ''` matched a blank ' '.
+                                new Conditions.Condition(probe.Name, new object[] { string.Empty }, ConditionType.Equal)
+                                {
+                                    Comparison = StringComparison.Ordinal,
+                                },
                             },
                         });
                         condition.SubConditions = subs;
@@ -1092,7 +1098,10 @@ namespace Birko.Data.SQL
                             var operand = methodExpression.Arguments.Concat(new[] { methodExpression.Object })
                                 .FirstOrDefault(e => e != null && !IsNonOperandArgument(e) && ContainsParameter(e));
                             if (operand != null)
+                            {
                                 MarkNullableIn(condition, operand, exprType, fragmentResolution ?? new FragmentResolution());
+                                MarkOrdinalText(condition, operand.Type);
+                            }
                         }
                     }
                     return new[] { condition };
@@ -2100,6 +2109,7 @@ namespace Birko.Data.SQL
             var rightFragment = RenderValueFragment(right, exprType, resolved);
             var compared = WithFragments(new Condition(leftFragment, new object[] { rightFragment }, type, isField: true, isNot: isNot, isOr: isOR),
                 ComparedFragment(left, comparedType, exprType, resolved), ComparedFragment(right, comparedType, exprType, resolved));
+            MarkOrdinalText(compared, comparedType);
 
             var nullable = CanBeNull(left.Type) || CanBeNull(right.Type);
             var nullSafe = nullable && nodeType is (ExpressionType.Equal or ExpressionType.NotEqual);
@@ -2219,6 +2229,25 @@ namespace Birko.Data.SQL
                 return;
             condition.NullableOperands = new[] { new NullableOperand(condition.Name) };
             condition.NullOperandMatches = false;
+        }
+
+        /// <summary>
+        /// TASK-873 (the user's decision, 2026-11-09: the default is exact) — marks an <c>==</c> / <c>!=</c> or an <c>IN</c> whose
+        /// operands are strings as <see cref="StringComparison.Ordinal"/>, so the strategies render it through the provider's
+        /// <see cref="SqlValueFragmentDialect.OrdinalTextEquality"/> and it answers what C#'s <c>==</c> answers. <b>The one
+        /// producer</b> of that verdict for the expression parser: a column, a case fold or a value fragment compared with a value,
+        /// two columns compared, a <c>Contains</c> on a list of strings, and <c>Equals</c> without a comparison (rewritten to
+        /// <c>==</c>, TASK-860). Before (measured), <c>=</c> followed the collation: on SQL Server <c>x.Code == "abc"</c> matched
+        /// <c>ABC</c>, <c>abc </c> and, for <c>"ss"</c>, <c>ß</c>; on MySQL also <c>cafe</c> for <c>café</c> and <c>K</c> for the Kelvin
+        /// sign. A condition built by hand keeps <c>=</c>, which follows the collation.
+        /// </summary>
+        private static void MarkOrdinalText(Condition condition, Type comparedType)
+        {
+            if (condition.Type is not (ConditionType.Equal or ConditionType.In) || condition.SubConditions?.Any() == true)
+                return;
+            if (condition.Comparison != null || UnwrapNullable(comparedType) != typeof(string))
+                return;
+            condition.Comparison = StringComparison.Ordinal;
         }
 
         /// <summary>TASK-859 — the same for a value fragment (<c>x.Optional + 1m != 8m</c>), which is NULL when its CLR type allows.</summary>
