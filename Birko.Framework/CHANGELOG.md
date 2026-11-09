@@ -4,6 +4,16 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — A SQL filter refuses a call or cast it cannot translate — BREAKING
+[[TASK-860]]. The SQL parser used to drop a call or conversion it did not know and compare its operand: wrong rows on
+all four providers, no error (measured: 80–83 of 125 contract cases).
+- **Refused by name** (`NotSupportedException`, before anything runs): string calls other than the LIKE family and
+  `ToLower`/`ToUpper` (`Substring`, `Trim`, `Length`, `string.Compare`, `ToString`…), `Convert.*`, narrowing or lossy
+  casts, `DateTime` members and methods, bitwise operators; in an update's SET value also `~`, `!` and bitwise ones.
+- **Translated:** `GetValueOrDefault` (as `??`), `Equals` (as `==`), a `bool` XOR, a char pattern, a unary minus in SET.
+  An integer cast to a fraction is an explicit SQL cast, and MySQL's integer division is `DIV`. A narrowing SET
+  (`(short)(x.Sh + 1)`) runs where overflow fails loudly; SQLite stores it silently and refuses it.
+
 ## 2026-11-08 — An ordering against null matches nothing on every document store
 [[TASK-867]]. In C#, `x.Score > nul` with `nul == null` is false. RavenDB matched every non-null Score, Cosmos DB missed
 rows under NOT, MongoDB's `$gte: null` matched the null rows, and Elasticsearch refused, on reads, views and the writes

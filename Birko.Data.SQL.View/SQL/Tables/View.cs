@@ -182,32 +182,31 @@ namespace Birko.Data.SQL.Tables
         /// <see cref="Birko.Data.SQL.Tables.Table.GetSelectFields"/>.
         /// </param>
         public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true, Func<string, string>? quoteTable = null)
+            => Number(Columns(notAggregate).Select(c => Table.SelectExpression(c, true, aggregateAlias, quoteTable)));
+
+        /// <summary>
+        /// The fields in SELECT order; a row reader reads field <c>i</c> at ordinal <c>i</c>. It enumerates the same
+        /// <see cref="Columns"/> as <see cref="GetSelectFields"/> and <see cref="GetPersistentViewSelectFields"/>.
+        /// </summary>
+        internal IEnumerable<AbstractField> GetTableFields(bool notAggregate = false)
+            => Columns(notAggregate).Select(c => c.Value).ToList();
+
+        /// <summary>
+        /// The view's columns in projection order: each table's, in table order. TASK-887: the SELECT list, the
+        /// persistent column list and the row reader each walked the tables on their own; they agreed only because each
+        /// walk happened to be the same. They now share this one.
+        /// </summary>
+        private IEnumerable<KeyValuePair<string, AbstractField>> Columns(bool notAggregate = false)
+            => (Tables ?? Enumerable.Empty<Table>()).Where(t => t != null).SelectMany(t => t.Columns(notAggregate));
+
+        private static IDictionary<int, string> Number(IEnumerable<string> columns)
         {
             var result = new Dictionary<int, string>();
-            int i = 0;
-            foreach (var table in Tables)
+            foreach (var column in columns)
             {
-                var fields = table?.GetSelectFields(true, notAggregate, aggregateAlias, quoteTable);
-                if (fields != null && fields.Any())
-                {
-                    foreach (var field in fields)
-                    {
-                        result.Add(i, field.Value);
-                        i++;
-                    }
-                }
+                result.Add(result.Count, column);
             }
             return result;
-        }
-
-        internal IEnumerable<AbstractField> GetTableFields(bool notAggregate = false)
-        {
-            List<AbstractField> tableFields = new List<AbstractField>();
-            foreach (var table in Tables.Where(x => x != null))
-            {
-                tableFields.AddRange(table.GetTableFields(notAggregate));
-            }
-            return tableFields;
         }
 
         public bool HasAggregateFields()
@@ -222,30 +221,13 @@ namespace Birko.Data.SQL.Tables
         /// function name would collide across two aggregates of the same function (CR-L195).
         /// </summary>
         public IDictionary<int, string> GetPersistentViewSelectFields()
-        {
-            var result = new Dictionary<int, string>();
-            int i = 0;
-            foreach (var table in Tables)
-            {
-                if (table?.Fields == null)
-                {
-                    continue;
-                }
-
-                foreach (var field in table.Fields.Values)
-                {
-                    // TASK-209: the VIEW PROPERTY for every column, not just aggregates. Non-aggregates used
-                    // to read back under their SOURCE column name, which broke two ways at once — the DDL
-                    // creates the column under the view property (so the name was simply wrong), and two view
-                    // properties over one source column produced the SAME name twice, so the persistent read
-                    // (which selects by name) bound both to the first column. TASK-207 measured that as
-                    // `SELECT … , VkOrders.Total, SUM(VkOrders.Amount) AS "Total"` returning 70 for an
-                    // aggregate whose answer was 5.
-                    result.Add(i, field.Property != null ? field.Property.Name : field.Name);
-                    i++;
-                }
-            }
-            return result;
-        }
+            // TASK-209: the VIEW PROPERTY for every column, not just aggregates. Non-aggregates used
+            // to read back under their SOURCE column name, which broke two ways at once — the DDL
+            // creates the column under the view property (so the name was simply wrong), and two view
+            // properties over one source column produced the SAME name twice, so the persistent read
+            // (which selects by name) bound both to the first column. TASK-207 measured that as
+            // `SELECT … , VkOrders.Total, SUM(VkOrders.Amount) AS "Total"` returning 70 for an
+            // aggregate whose answer was 5.
+            => Number(Columns().Select(c => c.Value.Property != null ? c.Value.Property.Name : c.Value.Name));
     }
 }

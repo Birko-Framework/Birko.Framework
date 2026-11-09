@@ -63,11 +63,19 @@ SQL view generation framework for creating database views from entity attributes
   an unqualified source name two fields share is refused (TASK-639)
 
 ### Fields
-- `FunctionField.cs` — Base aggregate function field
-- `BooleanFunction.cs`, `CharFunction.cs`, `DateTimeFunction.cs`, `DecimalFunction.cs`, `GuidFunction.cs`, `IntegerFunction.cs`, `StringFunction.cs` — Type-specific function fields
+- `FunctionField.cs` — Base aggregate function field. Its sealed `Read` is the one rule for reading an aggregate
+  (TASK-887): a numeric view property gets the server's value converted exactly to its type (a fraction in an integral
+  property or NULL in a non-nullable one is `InvalidCastException`, out of range `OverflowException`), because what a
+  server answers is not the source column's type (SUM over BIGINT is NUMERIC on PostgreSQL and DECIMAL on MySQL); a
+  non-numeric MIN / MAX is read by the source column's own reader (`AbstractField.ReadingInto`). `CreateFunctionField`
+  refuses COUNT / SUM / AVG into a non-numeric property and SUM / AVG over a non-numeric column, and renders an AVG over
+  an integral column as `AVG(col * 1.0E0)`, since SQL Server averages integers as integers.
+- `BooleanFunction.cs`, `CharFunction.cs`, `DateTimeFunction.cs`, `DecimalFunction.cs`, `GuidFunction.cs`, `IntegerFunction.cs`, `StringFunction.cs` — Type-specific function fields (DbType and nullability only; none reads)
 
 ### Tables
-- `View.cs` — View metadata model (tables, joins, fields, aggregate detection)
+- `View.cs` — View metadata model (tables, joins, fields, aggregate detection). `GetSelectFields`,
+  `GetPersistentViewSelectFields` and `GetTableFields` (the row reader's ordinals) all enumerate one `Columns` sequence,
+  so a reader's ordinal is the SELECT's position by construction (TASK-887)
 
 ## Creating a View
 

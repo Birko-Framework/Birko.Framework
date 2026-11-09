@@ -77,12 +77,29 @@ namespace Birko.Data.SQL.Tables
                 var field = Fields[keys[i]];
                 if (!notAggregate || !field.IsAggregate)
                 {
-                    fields.Add(i, field.GetSelectName(withName, quoteTable)
-                        + (field.IsAggregate && aggregateAlias ? " as " + AggregateAlias(field, keys[i]) : ""));
+                    fields.Add(i, SelectExpression(new KeyValuePair<string, AbstractField>(keys[i], field), withName, aggregateAlias, quoteTable));
                 }
             }
             return fields;
         }
+
+        /// <summary>
+        /// The projection of one column: its select name, and for an aggregate its alias. One producer for a table's
+        /// SELECT list and a view's (TASK-887).
+        /// </summary>
+        internal static string SelectExpression(KeyValuePair<string, AbstractField> column, bool withName, bool aggregateAlias, Func<string, string>? quoteTable)
+            => column.Value.GetSelectName(withName, quoteTable)
+               + (column.Value.IsAggregate && aggregateAlias ? " as " + AggregateAlias(column.Value, column.Key) : "");
+
+        /// <summary>
+        /// The columns in the order they are projected, keyed as <see cref="Fields"/> keys them. A view's SELECT list, its
+        /// persistent column list and its row reader all enumerate this, so the reader's ordinal is the SELECT's position
+        /// by construction (TASK-887).
+        /// </summary>
+        internal IEnumerable<KeyValuePair<string, AbstractField>> Columns(bool notAggregate)
+            => Fields == null
+                ? Enumerable.Empty<KeyValuePair<string, AbstractField>>()
+                : Fields.Where(x => x.Value != null && (!notAggregate || !x.Value.IsAggregate));
 
         /// <summary>
         /// The single name an aggregate column is exposed under. TASK-129: an aggregate has exactly one
@@ -102,17 +119,7 @@ namespace Birko.Data.SQL.Tables
             => field.Property != null ? field.Property.Name : fieldsKey;
 
         internal IEnumerable<AbstractField> GetTableFields(bool notAggregate)
-        {
-            List<AbstractField> tableFields = new List<Fields.AbstractField>();
-            foreach (var field in Fields.Where(x => x.Value != null))
-            {
-                if (!notAggregate || !field.Value.IsAggregate)
-                {
-                    tableFields.Add(field.Value);
-                }
-            }
-            return tableFields;
-        }
+            => Columns(notAggregate).Select(x => x.Value).ToList();
 
         public bool HasAggregateFields()
         {

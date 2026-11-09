@@ -15,10 +15,5 @@ namespace Birko.Data.SQL.Fields
         {
             Lenght = lenght;
         }
-
-        public override void Read(object value, DbDataReader reader, int index)
-        {
-            Property.SetValue(value, reader.GetString(index), null);
-        }
     }
 }

@@ -294,8 +294,9 @@ public abstract class Task880ReadErrorTestsBase : IAsyncLifetime
             _ => throw new ArgumentOutOfRangeException(nameof(path), path, null),
         });
         Record("SUM overflow", $"{mode} view {path}", outcome, count);
-        // The group exists, so 0 rows is the swallowed error. QueryAsync of this grouped view also throws an
-        // InvalidCastException on every provider without any overflow (filed separately), so only "not empty" is asserted.
+        // The group exists, so 0 rows is the swallowed error. Where the server does not overflow (PostgreSQL and MySQL sum a
+        // BIGINT as NUMERIC / DECIMAL), the read refuses the value for the long property (TASK-887), so only "not empty" is
+        // asserted.
         if (outcome.Thrown == null)
         {
             outcome.Rows.Should().Be(1, $"{mode} view {path}: the group exists, so an answer without an error must hold it");

@@ -130,12 +130,16 @@ public static class SqlViewTranslator
 
             if (agg.SourceProperty == null)
             {
-                // COUNT(*) — use first field from the table as base
-                var firstField = table.Fields?.Values.FirstOrDefault();
+                // COUNT(*): the rows of the source, so a column that is never NULL. TASK-887: this counted the table's first
+                // column, which is whatever property the model declares first, so a group whose rows held NULL there
+                // counted 0 (measured on all four providers: a NULL group key counted 0 rows, not 1).
+                var firstField = table.Fields?.Values.FirstOrDefault(f => f.IsPrimary)
+                    ?? table.Fields?.Values.FirstOrDefault(f => f.IsNotNull);
                 if (firstField == null)
                 {
                     throw new InvalidOperationException(
-                        $"View aggregate '{agg.ViewProperty}' cannot resolve a base column: table '{table.Name}' has no fields.");
+                        $"View aggregate '{agg.ViewProperty}' counts the rows of '{table.Name}', which has no primary key or NOT NULL "
+                        + "column to count them by. (TASK-887)");
                 }
 
                 var countField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, firstField);

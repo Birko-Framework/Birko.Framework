@@ -230,6 +230,18 @@ namespace Birko.Data.SQL.Fields
             Property.SetValue(value, reader.GetValue(index), null);
         }
 
+        /// <summary>
+        /// A copy of this column's reader that writes into <paramref name="property"/> instead. TASK-887: a view's
+        /// MIN / MAX over a non-numeric column answers that column's own type, so it is read the way the column is read
+        /// (SQLite's text dates and Guids, a TimeOnly's text, a UTC column's kind).
+        /// </summary>
+        internal AbstractField ReadingInto(System.Reflection.PropertyInfo property)
+        {
+            var copy = (AbstractField)MemberwiseClone();
+            copy.Property = property;
+            return copy;
+        }
+
         private static bool IsNullable(Type type)
         {
             if (!type.IsValueType) return true; // ref-type

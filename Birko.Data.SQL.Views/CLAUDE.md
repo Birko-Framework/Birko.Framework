@@ -8,7 +8,7 @@ SQL platform implementation for Birko.Data.Views. Translates ViewDefinition into
 
 ## Components
 
-- **SqlViewTranslator** — Refuses a nested source (`r.Sub.X`, `NotSupportedException` naming it, TASK-843): a table has a column only per top-level property, and it used to read the top-level column of the last name. Converts ViewDefinition → Tables.View by loading source tables via DataBase.LoadTable, mapping fields, creating FunctionFields for aggregates (via `FunctionField.CreateFunctionField()` and `AbstractConnectorBase.GetSqlFunctionName()`), and building Join conditions
+- **SqlViewTranslator** — Refuses a nested source (`r.Sub.X`, `NotSupportedException` naming it, TASK-843): a table has a column only per top-level property, and it used to read the top-level column of the last name. Converts ViewDefinition → Tables.View by loading source tables via DataBase.LoadTable, mapping fields, creating FunctionFields for aggregates (via `FunctionField.CreateFunctionField()` and `AbstractConnectorBase.GetSqlFunctionName()`), and building Join conditions. A `Count<TSource>()` without a source counts the primary key (else the first NOT NULL column): it counted the first declared column, so a group holding NULL there counted 0 (TASK-887)
 - **SqlViewStore\<TView\>** — Implements IViewStore\<TView\> using existing connector SelectView/Select infrastructure
 - **SqlViewManager** — Implements IViewManager using connector CreateView/DropView/ViewExists
 

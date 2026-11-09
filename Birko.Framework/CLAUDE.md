@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Grouped SQL views read every aggregate type (2026-11-09)
+[[TASK-887]]. A grouped view's SUM/MAX of a `long`, `short` or `double` column, and an AVG into a `double` or integer,
+threw a cast error on all four providers: the reader was chosen from the function name and a closed list of source
+types, not from what the server returns. COUNT of a group with a NULL key answered 0, silently. One reading rule now
+converts the server's value exactly to the view property's type, an integer AVG renders as a fraction (SQL Server
+truncated it), and COUNT counts the key column. The SELECT and the reader share one column sequence.
 ### Direct connector calls and persistent views refuse reserved column names too (2026-11-09)
 [[TASK-872]]. TASK-862's check ran only through store init. A direct `connector.Delete(type, x => x.User == …)` on a table
 Birko did not build compared the database's current user, not the column, and deleted every row, on all four providers
@@ -372,15 +378,6 @@ column-vs-column comparison threw "Cannot translate operand", on all four provid
 the view's columns up again after their scope had closed. The parse now records them once (`FragmentResolution`). A
 persistent view used to fail with an error naming something else. It now refuses a computed filter by name, before
 anything runs.
-### A SQL filter refuses a call or cast it cannot translate — BREAKING (2026-11-08)
-[[TASK-860]]. The SQL parser used to drop a call or conversion it did not know and compare its operand: wrong rows on
-all four providers, no error (measured: 80–83 of 125 contract cases).
-- **Refused by name** (`NotSupportedException`, before anything runs): string calls other than the LIKE family and
-  `ToLower`/`ToUpper` (`Substring`, `Trim`, `Length`, `string.Compare`, `ToString`…), `Convert.*`, narrowing or lossy
-  casts, `DateTime` members and methods, bitwise operators; in an update's SET value also `~`, `!` and bitwise ones.
-- **Translated:** `GetValueOrDefault` (as `??`), `Equals` (as `==`), a `bool` XOR, a char pattern, a unary minus in SET.
-  An integer cast to a fraction is an explicit SQL cast, and MySQL's integer division is `DIV`. A narrowing SET
-  (`(short)(x.Sh + 1)`) runs where overflow fails loudly; SQLite stores it silently and refuses it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

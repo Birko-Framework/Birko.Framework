@@ -131,13 +131,14 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
         return DataBase.ParseConditionExpression(filter).ToList();
     }
 
-    private Func<IDictionary<int, string>, DbDataReader, object> CreateTransformFunction()
+    private Func<IDictionary<int, string>, DbDataReader, object> CreateTransformFunction() => RowReader(_sqlView);
+
+    internal static Func<IDictionary<int, string>, DbDataReader, object> RowReader(Tables.View sqlView)
     {
         return (fields, reader) =>
         {
             var instance = new TView();
-            var viewType = typeof(TView);
-            var tableFields = _sqlView.GetTableFields().ToArray();
+            var tableFields = sqlView.GetTableFields().ToArray();
 
             for (int i = 0; i < tableFields.Length && i < reader.FieldCount; i++)
             {
