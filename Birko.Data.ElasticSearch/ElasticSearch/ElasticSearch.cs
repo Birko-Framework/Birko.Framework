@@ -1046,7 +1046,7 @@ namespace Birko.Data.ElasticSearch
             var sorts = new List<ISort>(orderBy.Fields.Count);
             foreach (var field in orderBy.Fields)
             {
-                var member = SortMember(typeof(T), field.PropertyName);
+                var member = ResolveMember(typeof(T), field.PropertyName, "Sort key");
                 sorts.Add(new FieldSort
                 {
                     Field = ExactFieldName(member, member.PropertyType, null),
@@ -1056,7 +1056,12 @@ namespace Birko.Data.ElasticSearch
             return sorts;
         }
 
-        private static PropertyInfo SortMember(Type type, string key)
+        /// <summary>
+        /// The property of <paramref name="type"/> a caller's name means: the property name, else its stored field name,
+        /// else the one property whose name matches ignoring case. Sorts and store aggregates (TASK-878) resolve through it.
+        /// </summary>
+        /// <exception cref="ArgumentException">The name resolves to no property; <paramref name="role"/> opens the message.</exception>
+        internal static PropertyInfo ResolveMember(Type type, string key, string role)
         {
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             var match = properties.FirstOrDefault(p => p.Name == key)
@@ -1068,7 +1073,7 @@ namespace Birko.Data.ElasticSearch
                     match = folded[0];
             }
             return match ?? throw new ArgumentException(
-                $"Sort key '{key}' does not resolve to a property of {type.Name}. Sort by a property name or its stored field name.",
+                $"{role} '{key}' does not resolve to a property of {type.Name}. Name a property or its stored field name.",
                 nameof(key));
         }
 

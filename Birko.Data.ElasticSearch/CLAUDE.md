@@ -313,7 +313,25 @@ Client.Indices.Create(Settings.IndexName, c => c
 - Highlighting
 - Auto-suggest
 
-### Aggregations
+### Store aggregate (`Aggregate` / `AggregateAsync`, TASK-878)
+`AggregateQuery<T>` names are **property names**, as on SQL and in memory; the stored field name is accepted too (the
+`ElasticSearch.ResolveMember` lookup sorts use). `Aggregation/StoreAggregatePlan.cs` is the one producer for both stores.
+The answer is the LINQ aggregation's (`AggregateHelper`) over the same rows, measured live in `Task878AggregateLiveTests`:
+- A group key goes to its exact field (`name.keyword` for a dynamically mapped string, through `ExactFieldName`); groups and
+  time buckets are one composite aggregation with `missing_bucket` (a null key is a group), read page by page
+  (`AggregateGroupPageSize`, 1000).
+- `Count` is the row count (bucket `doc_count`, `hits.total` without grouping); its source is ignored, as `COUNT(*)`.
+- A sum of no values is null; keys and metrics come back as the member's type (int sum, DateTime min, enum key…); a query
+  over no rows answers no rows.
+- **Refused by name:** an unknown or nested name (`ArgumentException`, as LINQ); a group on a `[Text]` or object member; a
+  metric over a string or Guid (or Sum/Avg over a non-number); a time column that is not a `DateTime`; an interval that does
+  not divide 0001-01-01..1970-01-01 (a week: ES aligns at the epoch, LINQ at year 1); a time bucket without its column or
+  interval, or an interval that does not parse. A group whose `.keyword` skipped a value past `ignore_above` throws
+  rather than count it as null.
+- ⚠ Sub-aggregations survive only when the bucket aggregation is added as itself (`{ "group_by", composite }`); a hand-built
+  `new AggregationContainer { Composite = … }` drops them silently — why every grouped metric used to read 0/null.
+
+### Aggregations (raw NEST)
 ```csharp
 var response = Client.Search<Product>(s => s
     .Size(0)

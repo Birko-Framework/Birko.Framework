@@ -1008,80 +1008,39 @@ namespace Birko.Data.ElasticSearch.Stores
 
         #region Aggregation
 
+        /// <summary>The groups one aggregate request reads; the rest are read page by page after it.</summary>
+        internal int AggregateGroupPageSize { get; init; } = 1000;
+
         /// <summary>
-        /// Executes an aggregation query using native Elasticsearch aggregation API.
-        /// Uses Terms/Composite aggregation for GROUP BY and metric aggregations for Sum/Avg/Min/Max/Count.
+        /// Executes an aggregation query with Elasticsearch's own aggregations: a composite aggregation for GROUP BY and
+        /// time buckets, read page by page, and metric aggregations for Sum/Avg/Min/Max (Count is the row count).
         /// </summary>
+        /// <remarks>
+        /// Names are property names (or stored field names), resolved through the document mapping or refused, and the
+        /// answer is the LINQ aggregation's (TASK-878, <see cref="StoreAggregatePlan"/>).
+        /// </remarks>
         public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
             AggregateQuery<T> query,
             CancellationToken ct = default)
         {
             RequireConnector();
 
+            var plan = StoreAggregatePlan.For(query, AggregateGroupPageSize);
             var indexName = GetIndexName();
+            var filterQuery = query.Filter != null
+                ? Data.ElasticSearch.ElasticSearch.ParseFilterQuery(query.Filter, IndexMaxTermsCount)
+                : null;
 
-            // Build filter query
-            QueryContainer? filterQuery = null;
-            if (query.Filter != null)
+            var results = new List<AggregateResult>();
+            CompositeKey? after = null;
+            do
             {
-                filterQuery = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(query.Filter, IndexMaxTermsCount);
+                var response = await Connector!.SearchAsync<T>(plan.Request(indexName, filterQuery, after), ct).ConfigureAwait(false);
+                after = plan.ReadPage(response, indexName, results);
             }
+            while (after != null);
 
-            // Build metric aggregations
-            var metricAggregations = StoreAggregationHelper.BuildMetricAggregations(query.Aggregates);
-
-            AggregationDictionary topLevelAggregations;
-            bool hasGroupBy = query.GroupByFields.Count > 0;
-            bool hasTimeBucket = !string.IsNullOrEmpty(query.TimeBucketInterval) && !string.IsNullOrEmpty(query.TimeColumn);
-
-            if (hasTimeBucket)
-            {
-                var dateHistAgg = new DateHistogramAggregation("time_bucket")
-                {
-                    Field = query.TimeColumn,
-                    FixedInterval = StoreAggregationHelper.ParseToTime(query.TimeBucketInterval!),
-                    Aggregations = hasGroupBy
-                        ? new AggregationDictionary { { "group_by", StoreAggregationHelper.BuildGroupByAggregation(query, metricAggregations) } }
-                        : metricAggregations
-                };
-
-                topLevelAggregations = new AggregationDictionary
-                {
-                    { "time_bucket", new AggregationContainer { DateHistogram = dateHistAgg } }
-                };
-            }
-            else if (hasGroupBy)
-            {
-                topLevelAggregations = new AggregationDictionary
-                {
-                    { "group_by", StoreAggregationHelper.BuildGroupByAggregation(query, metricAggregations) }
-                };
-            }
-            else
-            {
-                topLevelAggregations = metricAggregations;
-            }
-
-            var searchRequest = new SearchRequest(indexName)
-            {
-                Size = 0,
-                Query = filterQuery,
-                Aggregations = topLevelAggregations
-            };
-
-            var response = await Connector.SearchAsync<T>(searchRequest, ct);
-
-            if (!response.IsValid || response.OriginalException != null)
-            {
-                throw new InvalidOperationException(
-                    $"ElasticSearch aggregation query failed. Index: {indexName}. DebugInfo: {response.DebugInformation}",
-                    response.OriginalException);
-            }
-
-            var results = StoreAggregationHelper.ParseAggregateResponse(response, query, hasGroupBy, hasTimeBucket);
-            results = AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit);
-
-            return results.AsReadOnly();
+            return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
         }
 
         #endregion

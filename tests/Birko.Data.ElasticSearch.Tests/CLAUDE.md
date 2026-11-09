@@ -16,6 +16,7 @@ Unit tests for the Birko.Data.ElasticSearch project - expression parsing and que
 - Microsoft.NET.Test.Sdk 18.0.1
 
 ## Test Structure
+- `Task878AggregateLiveTests.cs` - live (`BIRKO_ES_URL`): store `Aggregate`/`AggregateAsync` against the LINQ aggregation over the same seeded rows — every function, group by property/field name and by string/keyword/number/bool/enum/Guid/date (with nulls), two groups, time buckets, filters, paging; refusals by name
 - `ExpressionTests.cs` - Elasticsearch expression parsing tests (TermQuery, RangeQuery, nested Any)
 - `IndexInfoTests.cs` - IndexInfo DTO construction and property tests
 - `ReindexResultTests.cs` - ReindexResult DTO construction, success/failure states, failures list

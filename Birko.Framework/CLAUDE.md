@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Elasticsearch store aggregates answer what LINQ answers (2026-11-09)
+[[TASK-878]]. 93 of 99 measured aggregate shapes were wrong, mostly silently: property names were sent verbatim and ES
+answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
+container form), and Count counted a field's values, not rows. Names now resolve through the sort lookup, one composite
+aggregation pages through every group, and unsupported shapes are refused by name. No consumer used it.
 ### Cosmos DB `Aggregate` applies its filter (2026-11-09)
 [[TASK-876]]. `Aggregate` / `AggregateAsync` ignored the filter and aggregated the whole container, silently (measured:
 22 of 22 filtered cases wrong; `A > 3` counted 6 rows, not 3). The filter now goes through the reads' own translator,
@@ -376,12 +381,6 @@ XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos D
 silently (measured). `PredicateScope` now treats a lifted ordering against null as always false, so the whole-table
 guard refuses it with `WholeTableWriteException`; `==` / `!=` null are unchanged. RavenDB and Cosmos DB still translate
 such orderings differently from C# ([[TASK-867]]).
-### A SQL write whose filter can only be true is refused (2026-11-08)
-[[TASK-861]]. A negated group holding an always-false term made the filter always true: `!(empty.Contains(x.A) &&
-x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` deleted or updated every row, silently
-(measured on all four SQL providers). The guard and the renderer now share one three-valued reduction
-(`ConstantTruth`), so such a Delete or Update throws `WholeTableWriteException`; `Update(filter, Action)` checks the same
-tree. Reads are unchanged. The non-SQL guard has the same gap for null orderings ([[TASK-865]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

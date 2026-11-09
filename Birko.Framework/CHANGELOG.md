@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — A SQL write whose filter can only be true is refused
+[[TASK-861]]. A negated group holding an always-false term made the filter always true: `!(empty.Contains(x.A) &&
+x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` deleted or updated every row, silently
+(measured on all four SQL providers). The guard and the renderer now share one three-valued reduction
+(`ConstantTruth`), so such a Delete or Update throws `WholeTableWriteException`; `Update(filter, Action)` checks the same
+tree. Reads are unchanged. The non-SQL guard has the same gap for null orderings ([[TASK-865]]).
+
 ## 2026-11-07 — SQL filters treat NULL the way C# does — BREAKING
 [[TASK-859]] (the user's decision: always, no flag). Measured on all four SQL providers: 34 of 61 nullable shapes
 returned different rows than the C# expression. `x.Score != 5` missed the NULL rows, and `{null, 10}.Contains(x.Score)`

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Birko.Data.ElasticSearch.Aggregation;
 using Birko.Data.Stores;
 using Birko.Data.Views;
 using FluentAssertions;
@@ -176,13 +175,5 @@ public sealed class Task151EsViewLiveTests : IAsyncLifetime
             .Build();
 
         FluentActions.Invoking(() => new ElasticSearchViewStore<StatusView>(new ElasticClient(), definition)).Should().Throw<NotSupportedException>();
-    }
-
-    [Fact]
-    public void Truncated_groups_are_reported_not_returned_as_complete()
-    {
-        StoreAggregationHelper.TruncationError(sumOtherDocCount: 5, bucketCount: 10, size: 10000).Should().NotBeNull();
-        StoreAggregationHelper.TruncationError(sumOtherDocCount: null, bucketCount: 10000, size: 10000).Should().NotBeNull();
-        StoreAggregationHelper.TruncationError(sumOtherDocCount: 0, bucketCount: 12, size: 10000).Should().BeNull();
     }
 }
