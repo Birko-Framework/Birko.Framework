@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB `Aggregate` applies its filter (2026-11-09)
+[[TASK-876]]. `Aggregate` / `AggregateAsync` ignored the filter and aggregated the whole container, silently (measured:
+22 of 22 filtered cases wrong; `A > 3` counted 6 rows, not 3). The filter now goes through the reads' own translator,
+null-ordering fold included; a shape it cannot place is refused by name. **Breaking:** the public
+`CosmosAggregationHelper.BuildAggregateSql<T>` is gone. Nullable SUM/MIN are still wrong ([[TASK-885]]).
 ### RavenDB job queue stamps a claim when it writes it (2026-11-09)
 [[TASK-879]]. `RavenDBJobQueue` stamped a claim with the time its dequeue started, before the candidate query. Under
 load the query outran a short claim timeout, so a fresh claim looked abandoned and was reclaimed at once (measured: the

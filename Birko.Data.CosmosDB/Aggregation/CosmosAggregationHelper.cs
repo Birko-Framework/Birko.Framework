@@ -1,4 +1,5 @@
 using Birko.Data.Stores;
+using Microsoft.Azure.Cosmos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -41,25 +42,35 @@ namespace Birko.Data.CosmosDB.Aggregation
         public static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates)
+            => BuildAggregateSqlParts(groupByFields, aggregates, "c");
+
+        /// <summary>
+        /// The SELECT and GROUP BY parts over the container named <paramref name="source"/>: <c>FROM source</c>, and every
+        /// accessor <c>source["Field"]</c>.
+        /// </summary>
+        private static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
+            IEnumerable<(string FieldName, string Alias)> groupByFields,
+            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates,
+            string source)
         {
             var selectParts = new List<string>();
             var groupByFieldList = groupByFields.ToList();
 
             foreach (var (fieldName, alias) in groupByFieldList)
             {
-                selectParts.Add($"{FieldRef(fieldName)} AS {Alias(alias)}");
+                selectParts.Add($"{FieldRef(fieldName, source)} AS {Alias(alias)}");
             }
 
             foreach (var (function, sourceProperty, alias) in aggregates)
             {
-                var fieldExpr = function == AggregateFunction.Count ? null : FieldRef(sourceProperty);
+                var fieldExpr = function == AggregateFunction.Count ? null : FieldRef(sourceProperty, source);
                 selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {Alias(alias)}");
             }
 
-            var selectFromSql = $"SELECT {string.Join(", ", selectParts)} FROM c";
+            var selectFromSql = $"SELECT {string.Join(", ", selectParts)} FROM {source}";
 
             string? groupBySql = groupByFieldList.Count > 0
-                ? $" GROUP BY {string.Join(", ", groupByFieldList.Select(g => FieldRef(g.FieldName)))}"
+                ? $" GROUP BY {string.Join(", ", groupByFieldList.Select(g => FieldRef(g.FieldName, source)))}"
                 : null;
 
             return (selectFromSql, groupBySql);
@@ -71,15 +82,17 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// injectable as a dotted identifier (whitespace, reserved words, embedded quotes), and keeps
         /// SELECT/GROUP BY identifiers consistent (CR-M084). A null/empty field falls back to <c>c</c>.
         /// </summary>
-        internal static string FieldRef(string? fieldName)
+        internal static string FieldRef(string? fieldName) => FieldRef(fieldName, "c");
+
+        private static string FieldRef(string? fieldName, string source)
         {
             if (string.IsNullOrEmpty(fieldName))
             {
-                return "c";
+                return source;
             }
             // Cosmos string accessors follow JSON string escaping (backslash), same as string literals.
             var escaped = fieldName.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            return $"c[\"{escaped}\"]";
+            return $"{source}[\"{escaped}\"]";
         }
 
         /// <summary>
@@ -109,18 +122,65 @@ namespace Birko.Data.CosmosDB.Aggregation
             return sb.ToString();
         }
 
+        /// <summary>The alias the Cosmos DB LINQ provider gives the container in the text it renders.</summary>
+        private const string LinqRoot = "root";
+
+        /// <summary>What the LINQ provider renders for an unfiltered <c>GetItemLinqQueryable&lt;T&gt;()</c>.</summary>
+        private const string LinqSelectAll = "SELECT VALUE root FROM root";
+
+        /// <summary>What it renders in front of the predicate of <c>GetItemLinqQueryable&lt;T&gt;().Where(filter)</c>.</summary>
+        private const string LinqWherePrefix = LinqSelectAll + " WHERE ";
+
         /// <summary>
-        /// Builds a complete Cosmos DB SQL aggregation query (SELECT ... FROM c GROUP BY ...).
-        /// For queries that don't need WHERE/ORDER BY between SELECT and GROUP BY.
+        /// TASK-876: the store-level aggregation query, <c>SELECT … FROM root [WHERE …] [GROUP BY …]</c>, whose WHERE is
+        /// the one the store's reads send.
         /// </summary>
-        public static string BuildAggregateSql<T>(AggregateQuery<T> query)
+        /// <remarks>
+        /// <para>The method this replaces, <c>BuildAggregateSql</c>, took no filter and emitted no WHERE, so
+        /// <c>Aggregate</c> / <c>AggregateAsync</c> aggregated the whole container whatever <c>query.Filter</c> said.
+        /// Measured on the emulator (vnext-preview, 2026-11-09): <c>A &gt; 3</c> counted 6 rows of 6, and every filtered
+        /// shape answered the unfiltered aggregate.</para>
+        /// <para><b>One producer.</b> The predicate is not translated here. <paramref name="filtered"/> is what the store's
+        /// own reads send, <c>GetItemLinqQueryable&lt;T&gt;().Where(filter).ToQueryDefinition()</c> after the same rewrites
+        /// (<c>SpanContains</c>, <c>DateTruncation</c>, <c>NullOrderingFold</c>). Its text is
+        /// <c>SELECT VALUE root FROM root WHERE &lt;predicate&gt;</c>; the predicate is taken from it with every parameter it
+        /// carries, and the aggregate is written over the provider's own alias, <c>root</c>. A rendering of any other
+        /// shape is refused by name, never guessed at: a filter is never dropped.</para>
+        /// </remarks>
+        /// <param name="query">The aggregation. Its filter is not read here; <paramref name="filtered"/> carries it.</param>
+        /// <param name="filtered">The store's rendering of the rewritten filter, or <c>null</c> for no filter.</param>
+        /// <exception cref="NotSupportedException">The rendering is not a plain WHERE over the container.</exception>
+        internal static QueryDefinition BuildAggregateQuery<T>(AggregateQuery<T> query, QueryDefinition? filtered)
             where T : Data.Models.AbstractModel
         {
             var (selectFromSql, groupBySql) = BuildAggregateSqlParts(
                 query.GroupByFields.Select(f => (f, f)),
-                query.Aggregates.Select(a => (a.Function, (string?)a.SourcePropertyName, a.ResolvedAlias)));
+                query.Aggregates.Select(a => (a.Function, (string?)a.SourcePropertyName, a.ResolvedAlias)),
+                LinqRoot);
 
-            return selectFromSql + (groupBySql ?? "");
+            var where = filtered == null ? null : WhereOf<T>(filtered.QueryText);
+            var definition = new QueryDefinition(selectFromSql + (where == null ? "" : " WHERE " + where) + (groupBySql ?? ""));
+            if (filtered == null) return definition;
+
+            foreach (var (name, value) in filtered.GetQueryParameters())
+            {
+                definition = definition.WithParameter(name, value);
+            }
+            return definition;
+        }
+
+        /// <summary>The predicate of a rendered <c>Where</c>, or <c>null</c> when the provider rendered none.</summary>
+        private static string? WhereOf<T>(string linqText)
+        {
+            if (string.Equals(linqText, LinqSelectAll, StringComparison.Ordinal)) return null;
+            if (linqText.Length > LinqWherePrefix.Length && linqText.StartsWith(LinqWherePrefix, StringComparison.Ordinal))
+            {
+                return linqText.Substring(LinqWherePrefix.Length);
+            }
+            throw new NotSupportedException(
+                $"Cosmos DB aggregate of {typeof(T).Name} refused: its filter did not render as a plain WHERE over the "
+                + "container, so it cannot be placed in front of the aggregation, and a filter is never dropped. "
+                + "Aggregate the rows of a read instead. (TASK-876)");
         }
 
         /// <summary>

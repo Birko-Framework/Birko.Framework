@@ -85,6 +85,21 @@ Settings mapping from `RemoteSettings`:
 - Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 
+## Aggregation (TASK-876)
+- `Aggregate` / `AggregateAsync` run one native query: `SELECT … FROM root [WHERE …] [GROUP BY …]`.
+- **The WHERE is the reads' rendering.** The filter gets the reads' rewrites (`SpanContains`, `DateTruncation`,
+  `NullOrderingFold`), then goes through `BuildQuery(...).ToQueryDefinition()`. `CosmosAggregationHelper.BuildAggregateQuery`
+  takes the predicate from that text with its parameters, so the aggregate is written over the LINQ alias `root`.
+  A rendering that is not `SELECT VALUE root FROM root WHERE …` is refused by name, never dropped.
+- **Before:** `BuildAggregateSql` (removed) emitted no WHERE, so every filter was ignored, silently. Measured on the
+  emulator: `A > 3` counted 6 of 6, and all 22 filtered cases (11 shapes, grouped and not) were wrong.
+- **IN lists:** groups cannot be merged across chunks, so an aggregate is one query. Past the ceiling it is refused
+  before any request, as a sorted read is.
+- **Lazy init:** an aggregate initialises the store. On a fresh store it used to answer nothing.
+- **Known gaps (not fixed here):** SUM and MIN over a nullable field answer null when any value in the group is null
+  (measured; Cosmos DB's SUM is undefined over a null, and null sorts below numbers). `TimeBucketInterval` /
+  `TimeColumn` are ignored.
+
 ## Conditional update (TASK-661)
 - `AsyncCosmosDBStore.UpdateIfAsync(guid, condition, update)` is a compare-and-set on one item: read with its ETag, apply
   only where `condition` holds, replace with `IfMatchEtag`; a 412 re-reads and asks again, up to

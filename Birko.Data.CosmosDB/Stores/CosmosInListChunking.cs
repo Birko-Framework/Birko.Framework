@@ -63,6 +63,8 @@ internal static class CosmosInListChunking
     /// over the budget is halved until it fits. A single value whose query is still over the limit is refused by name.
     /// </remarks>
     /// <param name="queryTextLength">The length of the query text the store would send for a filter; local, no request.</param>
+    /// <param name="unsplittableReason">Why the operation cannot run in chunks when <paramref name="sortedOrPaged"/> is
+    /// set; the refusal names it. Defaults to the sort, limit or offset of a read.</param>
     /// <exception cref="NotSupportedException">The list is past the ceiling and the filter cannot be split.</exception>
     public static IReadOnlyList<Expression<Func<T, bool>>>? Plan<T>(
         Expression<Func<T, bool>>? filter,
@@ -70,7 +72,8 @@ internal static class CosmosInListChunking
         int chunkSize,
         int maxQueryTextLength,
         bool sortedOrPaged,
-        Func<Expression<Func<T, bool>>, int> queryTextLength)
+        Func<Expression<Func<T, bool>>, int> queryTextLength,
+        string? unsplittableReason = null)
     {
         if (filter == null) return null;
         if (chunkSize < 1)
@@ -96,7 +99,7 @@ internal static class CosmosInListChunking
         var blocker = big.Where(l => l.Reason != null).OrderByDescending(l => l.Values.Count).FirstOrDefault();
         if (blocker != null || sortedOrPaged)
         {
-            var reason = blocker?.Reason ?? "the read has a sort, limit or offset, which chunks cannot reproduce";
+            var reason = blocker?.Reason ?? unsplittableReason ?? "the read has a sort, limit or offset, which chunks cannot reproduce";
             var count = (blocker ?? big.OrderByDescending(l => l.Values.Count).First()).Values.Count;
             var length = whole ?? queryTextLength(filter);
             if (length <= maxQueryTextLength) return null;
