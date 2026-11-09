@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
             [EnumeratorCancellation] CancellationToken ct = default)
             where T : Models.AbstractModel
         {
-            var table = DataBase.LoadTable(type);
+            var table = LoadUsableTable(type);
             if (table == null) yield break;
 
             var (fields, groupFields, conditions, orderFields) = BuildAggregateQueryParts(type, query);

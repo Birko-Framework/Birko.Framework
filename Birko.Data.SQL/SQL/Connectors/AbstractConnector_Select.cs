@@ -65,7 +65,7 @@ namespace Birko.Data.SQL.Connectors
             var factories = typeArray.Select(DataBase.GetOrCreateInstanceFactory).ToArray();
             var fieldSets = typeArray.Select(DataBase.LoadFields).ToArray();
 
-            foreach (var set in Select(typeArray.Select(x => DataBase.LoadTable(x)), (_, reader) =>
+            foreach (var set in Select(typeArray.Select(LoadUsableTable).ToArray(), (_, reader) =>
             {
                 var index = 0;
                 List<object> objects = new();

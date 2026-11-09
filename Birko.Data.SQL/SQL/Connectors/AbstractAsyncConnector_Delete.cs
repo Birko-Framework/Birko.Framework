@@ -17,7 +17,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task DeleteAsync(Type type, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            return DeleteAsync(DataBase.LoadTable(type), conditions, ct);
+            return DeleteAsync(LoadUsableTable(type), conditions, ct);
         }
 
         public Task DeleteAsync(Tables.Table table, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
@@ -29,7 +29,7 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc cref="AbstractConnector.DeleteAll(Type)"/>
         public Task DeleteAllAsync(Type type, CancellationToken ct = default)
         {
-            return DeleteAsyncAsync(DataBase.LoadTable(type).Name, conditions: null, ct, allowAllRows: true);
+            return DeleteAsyncAsync(LoadUsableTable(type).Name, conditions: null, ct, allowAllRows: true);
         }
 
         private async Task DeleteAsyncAsync(string tableName, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default, bool allowAllRows = false)

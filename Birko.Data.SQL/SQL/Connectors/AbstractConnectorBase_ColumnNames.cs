@@ -49,6 +49,28 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// The table <paramref name="type"/> maps to, refused if any of its columns is a name this provider rejects
+        /// (TASK-872). The one place the typed connector methods (<c>Select</c>, <c>SelectCount</c>, <c>Insert</c>,
+        /// <c>Update</c>, <c>Delete</c>, <c>DeleteAll</c>, <c>SelectAggregate</c>, sync and async, taking a
+        /// <see cref="Type"/>) resolve a type.
+        /// </summary>
+        /// <remarks>
+        /// A store refuses such a type in its initialisation, but a direct connector call on a table Birko did not build
+        /// never runs that. Measured live on all four providers: a write's WHERE emits the column bare, so
+        /// <c>WHERE User = 'postgres'</c> compared <c>current_user</c> (PostgreSQL; <c>USER</c> on SQL Server,
+        /// <c>CURRENT_USER</c> on MySQL, <c>CURRENT_DATE</c> on SQLite) and a filtered delete or update hit 2 of 2 rows
+        /// that matched nothing in C#. Not virtual (rule 12). The overloads that take a <see cref="Tables.Table"/> or a
+        /// table name trust the caller's resolution and are not checked.
+        /// </remarks>
+        /// <exception cref="NotSupportedException">A column name is one this provider rejects.</exception>
+        protected Tables.Table LoadUsableTable(Type type)
+        {
+            var table = DataBase.LoadTable(type);
+            RequireUsableColumnNames(table.Name, table.Fields.Values);
+            return table;
+        }
+
+        /// <summary>
         /// Refuses a single column name this provider rejects, where no entity field exists (a migration's own column).
         /// </summary>
         /// <exception cref="NotSupportedException">The name is one this provider rejects.</exception>

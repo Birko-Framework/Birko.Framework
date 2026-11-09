@@ -23,13 +23,13 @@ namespace Birko.Data.SQL.Connectors
 
         public Task UpdateAsync(Type type, object model, LambdaExpression expr, CancellationToken ct = default)
         {
-            return UpdateAsync(DataBase.LoadTable(type), model, DataBase.ParseConditionExpression(expr), ct);
+            return UpdateAsync(LoadUsableTable(type), model, DataBase.ParseConditionExpression(expr), ct);
         }
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
         public Task<int> UpdateAsync(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            return UpdateAsync(DataBase.LoadTable(type), model, conditions, ct);
+            return UpdateAsync(LoadUsableTable(type), model, conditions, ct);
         }
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
@@ -54,13 +54,13 @@ namespace Birko.Data.SQL.Connectors
 
         public Task UpdateAsync<T, P>(Type type, IDictionary<Expression<Func<T, P>>, object> expresions, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            var table = DataBase.LoadTable(type);
+            var table = LoadUsableTable(type);
             return UpdateAsync(table, expresions, conditions, ct);
         }
 
         public Task UpdateAsync<T, P>(Type type, IDictionary<Expression<Func<T, P>>, Expression<Func<T, P>>> expresions, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            var table = DataBase.LoadTable(type);
+            var table = LoadUsableTable(type);
             return UpdateAsync(table, expresions, conditions, ct);
         }
 

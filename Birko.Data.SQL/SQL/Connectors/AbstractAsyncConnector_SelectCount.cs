@@ -28,7 +28,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task<long> SelectCountAsync(IEnumerable<Type> types, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
-            return (types != null) ? SelectCountAsync(types.Select(x => DataBase.LoadTable(x)), conditions, ct) : Task.FromResult(0L);
+            return (types != null) ? SelectCountAsync(types.Select(LoadUsableTable).ToArray(), conditions, ct) : Task.FromResult(0L);
         }
 
         public Task<long> SelectCountAsync(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)

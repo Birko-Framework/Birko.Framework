@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Direct connector calls and persistent views refuse reserved column names too (2026-11-09)
+[[TASK-872]]. TASK-862's check ran only through store init. A direct `connector.Delete(type, x => x.User == …)` on a table
+Birko did not build compared the database's current user, not the column, and deleted every row, on all four providers
+(measured). A persistent view's own column named `User` read the function the same way. Every typed connector entry point
+now resolves the table through one checking funnel, and persistent view DDL and reads check their columns.
 ### SQL translation leftovers: SQLite folds and overflow, exact decimal division, `.Date` and `Replace` in SET (2026-11-09)
 [[TASK-870]]. Measured against C# on all four providers, and fixed:
 - **SQLite:** `ToLower` / `ToUpper` folded ASCII only; they now run C#'s fold. `SET Hits = Hits + 1` past `int.MaxValue`

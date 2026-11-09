@@ -26,7 +26,7 @@ namespace Birko.Data.SQL.Connectors
 
         public long SelectCount(IEnumerable<Type> types, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            return (types != null) ? SelectCount(types.Select(x => DataBase.LoadTable(x)), conditions) : 0;
+            return (types != null) ? SelectCount(types.Select(LoadUsableTable).ToArray(), conditions) : 0;
         }
 
         public long SelectCount(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null)

@@ -20,7 +20,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task InsertAsync(Type type, object model, CancellationToken ct = default)
         {
-            return InsertAsync(DataBase.LoadTable(type), model, ct);
+            return InsertAsync(LoadUsableTable(type), model, ct);
         }
 
         public Task InsertAsync(Tables.Table table, object model, CancellationToken ct = default)

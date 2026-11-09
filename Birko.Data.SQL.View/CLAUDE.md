@@ -36,6 +36,16 @@ SQL view generation framework for creating database views from entity attributes
 
 ### Connectors — DDL (persistent CREATE/DROP VIEW)
 - `AbstractConnectorBase_View.cs` — `BuildViewSelectSql`, `BuildCreateViewSql` (virtual), `BuildViewJoinConditionSql`
+- **A persistent view column named like a reserved word is refused by name (TASK-872).** A persistent view's columns
+  are its view properties, emitted bare (`AS User`, `SELECT User, …`, `WHERE User = …`). Measured live: PostgreSQL and
+  SQLite created such a view and every read returned the value function (the session user, the current date) in place
+  of the column; MySQL and SQL Server refused the DDL, and a view made outside Birko read the function on all four.
+  `RequireUsableViewColumnNames` (not virtual) checks the view's columns against the provider's TASK-862 list in
+  `BuildViewSelectSql` (every `CreateView`, sync and async, and PostgreSQL's materialized views) and wherever a read
+  decides to use the persistent view (`ShouldUsePersistentView(Async)`, select and count). An on-the-fly read names
+  source columns qualified and is not checked; the source tables are checked where Birko builds them. Not covered:
+  the migrations `ViewSqlGenerator` (no connector) and SQL Server's indexed-view builder, which call
+  `ViewSelectSqlBuilder` directly; SQL Server rejects such a DDL anyway.
 - `AbstractConnector_CreateView.cs` — Sync: `CreateView`, `DropView`, `RecreateView`, `ViewExists`, `CreateViewIfNotExists`, `CreateViews`, `DropViews`
 - `AbstractAsyncConnector_CreateView.cs` — Async equivalents: `CreateViewAsync`, `DropViewAsync`, `RecreateViewAsync`, `ViewExistsAsync`, `CreateViewIfNotExistsAsync`, `CreateViewsAsync`, `DropViewsAsync`
 

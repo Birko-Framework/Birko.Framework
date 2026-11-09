@@ -17,6 +17,7 @@ public sealed class MySQLRejectedColumnNameContractTests : RejectedColumnNameCon
     protected override bool Ready() => _live.Ready();
     protected override string ProviderName => "MySQL";
     protected override RejectedColumnNames Refusals => MySQLConnector.RejectedColumns;
+    protected override string ValueFunctionColumn => "CURRENT_USER";
     protected override bool RejectsRank => true;
 
     protected override IAsyncBulkStore<T> NewStore<T>()

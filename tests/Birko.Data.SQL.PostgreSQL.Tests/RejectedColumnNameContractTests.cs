@@ -16,6 +16,7 @@ public sealed class PostgreSQLRejectedColumnNameContractTests : RejectedColumnNa
     protected override bool Ready() => _live.Ready();
     protected override string ProviderName => "PostgreSQL";
     protected override RejectedColumnNames Refusals => PostgreSQLConnector.RejectedColumns;
+    protected override string ValueFunctionColumn => "User";
     protected override bool RejectsRank => false;
 
     protected override IAsyncBulkStore<T> NewStore<T>()

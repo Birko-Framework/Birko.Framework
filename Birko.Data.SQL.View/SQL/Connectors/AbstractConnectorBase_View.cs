@@ -25,7 +25,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (PersistentViewDecided(view) is { } decided)
             {
-                return decided;
+                return UsableIfPersistent(view, decided);
             }
 
             var viewName = view.Name!;
@@ -37,7 +37,7 @@ namespace Birko.Data.SQL.Connectors
             // probe. A false is therefore re-checked on the next query; only a true is memoized.
             if (_viewExistsCache.TryGetValue(viewName!, out var cached))
             {
-                return cached;
+                return UsableIfPersistent(view, cached);
             }
 
             var exists = checkViewExists(viewName!);
@@ -45,7 +45,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 _viewExistsCache[viewName!] = true;
             }
-            return exists;
+            return UsableIfPersistent(view, exists);
         }
 
         /// <summary>
@@ -57,13 +57,13 @@ namespace Birko.Data.SQL.Connectors
         {
             if (PersistentViewDecided(view) is { } decided)
             {
-                return decided;
+                return UsableIfPersistent(view, decided);
             }
 
             var viewName = view.Name!;
             if (_viewExistsCache.TryGetValue(viewName, out var cached))
             {
-                return cached;
+                return UsableIfPersistent(view, cached);
             }
 
             var exists = await checkViewExists(viewName).ConfigureAwait(false);
@@ -71,7 +71,54 @@ namespace Birko.Data.SQL.Connectors
             {
                 _viewExistsCache[viewName] = true;
             }
-            return exists;
+            return UsableIfPersistent(view, exists);
+        }
+
+        /// <summary>
+        /// Passes <paramref name="persistent"/> through, refusing first a persistent read of a view whose own columns
+        /// include a name this provider rejects (TASK-872). Every persistent read, select or count, sync or async, decides
+        /// its path here.
+        /// </summary>
+        private bool UsableIfPersistent(Tables.View view, bool persistent)
+        {
+            if (persistent)
+            {
+                RequireUsableViewColumnNames(view);
+            }
+            return persistent;
+        }
+
+        /// <summary>
+        /// Refuses, before any SQL is sent, a view whose own columns (its view properties, as the persistent view is
+        /// created and read: <see cref="Tables.View.GetPersistentViewSelectFields"/>) include a name this provider
+        /// rejects (TASK-872).
+        /// </summary>
+        /// <remarks>
+        /// A persistent view's columns are emitted bare: <c>AS User</c> in its DDL, <c>SELECT User, …</c> and
+        /// <c>WHERE User = …</c> when it is read. Measured live: on PostgreSQL and SQLite the view was created and every
+        /// read returned the session user or the current date in place of the column (a filter on it matched 2 of 2
+        /// rows that C# matched none of, and a filter on a stored value matched nothing); MySQL and SQL Server
+        /// rejected the DDL. The source tables are not checked here: they are checked where Birko builds them, and an
+        /// on-the-fly read names their columns qualified. Not virtual (rule 12).
+        /// </remarks>
+        /// <exception cref="NotSupportedException">A view column name is one this provider rejects.</exception>
+        public void RequireUsableViewColumnNames(Tables.View view)
+        {
+            var refusals = ColumnNameRefusals;
+            if (refusals == null || view?.Tables == null)
+            {
+                return;
+            }
+
+            var rejected = view.GetPersistentViewSelectFields().Values.Where(refusals.Contains).Distinct().ToList();
+            if (rejected.Count == 0)
+            {
+                return;
+            }
+
+            throw new NotSupportedException(string.Join(" ", rejected.Select(name =>
+                $"Column \"{name}\" of view \"{view.Name}\" is a reserved word on {refusals.Provider}, which rejects it as a "
+                + "column name, because Birko emits view column names unquoted. Rename the view property.")));
         }
 
         /// <summary>What the query mode decides without asking the database; null when an Auto view must be looked up.</summary>
@@ -205,6 +252,7 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected string BuildViewSelectSql(Tables.View view)
         {
+            RequireUsableViewColumnNames(view);
             return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation, ViewBoolLiteral);
         }
 

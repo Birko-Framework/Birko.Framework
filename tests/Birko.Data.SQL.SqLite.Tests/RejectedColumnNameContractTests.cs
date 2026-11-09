@@ -24,6 +24,7 @@ public sealed class SQLiteRejectedColumnNameContractTests : RejectedColumnNameCo
 
     protected override string ProviderName => "SQLite";
     protected override RejectedColumnNames Refusals => SqLiteConnector.RejectedColumns;
+    protected override string ValueFunctionColumn => "CURRENT_DATE";
     protected override bool RejectsRank => false;
 
     protected override IReadOnlyCollection<string> RejectedOnlyInWrites { get; } =

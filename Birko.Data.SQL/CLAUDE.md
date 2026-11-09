@@ -108,8 +108,16 @@ entity, table and provider, **before any SQL is sent**. The caller maps the prop
   `AlterTableAddAsync`. Every store's lazy init runs `CreateTable` before its first operation, also against a table
   that already exists, so a store read on such a table refuses by name too. `PlanRepair` skips such a column, and
   the migrations `SqlSchemaBuilder` checks `CreateCollection(..).Build()` and `RenameField`.
-- **Not covered:** a direct connector call (`connector.Select/Insert/Update/Delete(type, …)`) on a table Birko did
-  not build skips store init, so it is not checked.
+- **Direct connector calls (TASK-872):** a typed connector method (`Select`, `SelectCount`, `Insert`, `Update`,
+  `Delete`, `DeleteAll`, `SelectAggregate`, sync and async, taking the entity `Type`) resolves the type through one
+  non-virtual funnel, `AbstractConnectorBase.LoadUsableTable`, which runs the same check before any SQL is sent. A
+  direct call skips store init, and measured live on all four providers a write's WHERE named the column bare:
+  `User` (PostgreSQL, SQL Server), `CURRENT_USER` (MySQL) or `CURRENT_DATE` (SQLite) was read as the function, and a
+  filtered `Delete` or `Update` wrote 2 of 2 rows that matched nothing in C#, silently.
+- **Not covered:** the overloads that take a resolved `Tables.Table` or a table name (`Delete(Table, …)`,
+  `Insert(string, values)`, …) trust the caller's resolution. Schema operations (`DropTable`, `AlterTableDrop`,
+  `EnsureColumns`, drift and repair) are not refused either: they name no column in a WHERE.
+- **Persistent SQL views:** see `Birko.Data.SQL.View/CLAUDE.md` (`RequireUsableViewColumnNames`, TASK-872).
 - `Every_refused_name_is_rejected_by_the_server` (shared `RejectedColumnNameContract`) re-measures each list live.
   Re-run it when a supported server version moves.
 

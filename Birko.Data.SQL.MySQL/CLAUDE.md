@@ -214,6 +214,13 @@ re-wraps every command failure as `new Exception(commandText, ex)`.
     restate it, which risks silently altering a column a rename should leave alone. Decided not to fix at
     TASK-252 #1: **0** callers in the framework, its tests, or any of the 16 consumer repos. If one appears
     on 5.7, the fix is a connector-level rename behind a capability flag.
+- ⚠ **The reserved column-name list is MySQL 8.4's (TASK-862), so on 5.7 it over-refuses.** `RejectedColumns` is
+  the 262 words 8.4.11 marks `RESERVED` in `information_schema.KEYWORDS`. Some became reserved only in 8.0, `RANK`
+  among them (8.0.2), so a column 5.7 would accept is refused by name. That is the safe direction: the remedy
+  (`[NamedField]` / `HasColumnName`) works on both. Decided at TASK-872 not to version the list: no 5.7 server was
+  available to measure (5.7 has no `information_schema.KEYWORDS` to measure from either), no consumer runs 5.7, it is
+  past end of life, and the check runs before any connection is opened, so the server version is not known there.
+  The reverse (a word reserved on 5.7 but not on 8.4) is unmeasured; it would fail at `CREATE TABLE` on 5.7.
 - JSON type requires MySQL 5.7.8+
 - Some features may vary by MySQL edition
 - **An indexed `string` is silently capped at 255 characters** unless `[MaxLengthField(n)]` says otherwise

@@ -16,6 +16,7 @@ public sealed class SQLServerRejectedColumnNameContractTests : RejectedColumnNam
     protected override bool Ready() => _live.Ready();
     protected override string ProviderName => "SQL Server";
     protected override RejectedColumnNames Refusals => MSSqlConnector.RejectedColumns;
+    protected override string ValueFunctionColumn => "User";
     protected override bool RejectsRank => false;
 
     protected override IAsyncBulkStore<T> NewStore<T>()

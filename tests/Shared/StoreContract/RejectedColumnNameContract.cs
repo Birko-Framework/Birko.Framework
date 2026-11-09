@@ -81,6 +81,26 @@ public class RejectedExistingRow : AbstractModel
     public int Order { get; set; }
 }
 
+/// <summary>TASK-872: builds a table with harmless column names, which the test then renames to reserved ones.</summary>
+[Table("T872DirectRows")]
+public class T872DirectSibling : AbstractModel
+{
+    [NamedField("Zq872u")] public string? User { get; set; }
+    [NamedField("Zq872d")] public string? CURRENT_DATE { get; set; }
+    [NamedField("Zq872c")] public string? CURRENT_USER { get; set; }
+    public int Amount { get; set; }
+}
+
+/// <summary>TASK-872: the entity a direct connector call reads that renamed table with, its columns unmapped.</summary>
+[Table("T872DirectRows")]
+public class T872DirectRow : AbstractModel
+{
+    public string? User { get; set; }
+    public string? CURRENT_DATE { get; set; }
+    public string? CURRENT_USER { get; set; }
+    public int Amount { get; set; }
+}
+
 /// <summary>
 /// TASK-862 — a column the provider rejects as an identifier (a reserved word, measured live) is refused with
 /// <see cref="NotSupportedException"/> naming the column, entity and provider, before any SQL is sent; a column the
@@ -351,5 +371,90 @@ public abstract class RejectedColumnNameContract
             Refusals.Contains(name).Should().BeFalse();
         }
         Drop();
+    }
+
+    /// <summary>
+    /// The provider's value-function name used as a column (TASK-872): <c>User</c> on PostgreSQL and SQL Server,
+    /// <c>CURRENT_USER</c> on MySQL, <c>CURRENT_DATE</c> on SQLite. Bare in a WHERE, each reads as the function.
+    /// </summary>
+    protected abstract string ValueFunctionColumn { get; }
+
+    private void RebuildDirectTable()
+    {
+        var sibling = NewStore<T872DirectSibling>();
+        sibling.DestroyAsync().GetAwaiter().GetResult();
+        sibling.CreateAsync(new T872DirectSibling { User = "a", CURRENT_DATE = "a", CURRENT_USER = "a", Amount = 1 }).GetAwaiter().GetResult();
+        sibling.CreateAsync(new T872DirectSibling { User = "b", CURRENT_DATE = "b", CURRENT_USER = "b", Amount = 2 }).GetAwaiter().GetResult();
+        var connector = ConnectorOf(sibling);
+        foreach (var (from, to) in new[] { ("Zq872u", "User"), ("Zq872d", "CURRENT_DATE"), ("Zq872c", "CURRENT_USER") })
+            connector.DoCommand(c => c.CommandText = RenameToRejectedSql(connector, "T872DirectRows", from, to), c => c.ExecuteNonQuery());
+    }
+
+    /// <summary>
+    /// TASK-872 — a direct connector call (<c>store.Connector</c>, a repository's <c>Connector</c>) on a table Birko did
+    /// not build refuses an entity whose column the provider rejects, by name, before any SQL is sent, and writes nothing.
+    /// <para>
+    /// Before, measured live: the filter compared the value function with itself, which C# matches on no row.
+    /// <c>Delete</c> removed 2 of 2 rows and the expression-keyed <c>Update</c> rewrote 2 of 2, silently, on all four
+    /// providers. Reads named the column qualified, so they returned 0 rows on SQLite and MySQL (right) and failed on
+    /// PostgreSQL and SQL Server; <c>Insert</c> and the model <c>Update</c> failed on the server (SQLite's insert ran).
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_direct_connector_call_on_a_table_Birko_did_not_build_refuses_by_name_and_writes_nothing()
+    {
+        if (!Ready()) return;
+        RebuildDirectTable();
+        var connector = ConnectorOf(NewStore<RejectedValueRow>());
+        var async = (AbstractAsyncConnector)connector;
+        object? value = null;
+        connector.DoCommand(c => c.CommandText = "SELECT " + ValueFunctionColumn, c => value = c.ExecuteScalar());
+        var x = System.Linq.Expressions.Expression.Parameter(typeof(T872DirectRow), "x");
+        var filter = System.Linq.Expressions.Expression.Lambda<Func<T872DirectRow, bool>>(
+            System.Linq.Expressions.Expression.Equal(System.Linq.Expressions.Expression.Property(x, ValueFunctionColumn),
+                System.Linq.Expressions.Expression.Constant(Convert.ToString(value), typeof(string))), x);
+        var type = typeof(T872DirectRow);
+        var model = new T872DirectRow { Guid = Guid.NewGuid(), User = "z", CURRENT_DATE = "z", CURRENT_USER = "z", Amount = 5 };
+        var set = new Dictionary<System.Linq.Expressions.Expression<Func<T872DirectRow, int>>, object> { { r => r.Amount, 9 } };
+
+        var calls = new (string Name, Func<Task> Call)[]
+        {
+            ("Select", () => { _ = connector.Select(type, filter).ToList(); return Task.CompletedTask; }),
+            ("SelectCount", () => { connector.SelectCount(type, filter); return Task.CompletedTask; }),
+            ("Insert", () => { connector.Insert(type, model); return Task.CompletedTask; }),
+            ("Update(model)", () => { connector.Update(type, model, filter); return Task.CompletedTask; }),
+            ("Update(values)", () => { connector.Update(type, set, filter); return Task.CompletedTask; }),
+            ("Delete", () => { connector.Delete(type, filter); return Task.CompletedTask; }),
+            ("SelectAsync", async () => { await foreach (var _ in async.SelectAsync(type, filter)) { } }),
+            ("SelectCountAsync", () => async.SelectCountAsync(type, filter)),
+            ("InsertAsync", () => async.InsertAsync(type, model)),
+            ("UpdateAsync(values)", () => async.UpdateAsync(type, set, filter)),
+            ("DeleteAsync", () => async.DeleteAsync(type, filter)),
+        };
+
+        try
+        {
+            foreach (var (name, call) in calls)
+            {
+                NotSupportedException? refusal = null;
+                var sent = await CommandsNaming(connector, "T872DirectRows", async () =>
+                {
+                    refusal = (await FluentActions.Awaiting(call).Should().ThrowAsync<NotSupportedException>(name)).Which;
+                });
+
+                refusal!.Message.Should().Contain($"\"{ValueFunctionColumn}\"").And.Contain(type.FullName!).And.Contain(ProviderName);
+                sent.Should().BeEmpty($"{name} is refused before any SQL naming the table is sent");
+            }
+        }
+        finally
+        {
+            long rows = -1, untouched = -1;
+            var table = connector.TableIdentifier("T872DirectRows");
+            connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + table, c => rows = Convert.ToInt64(c.ExecuteScalar()));
+            connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + table + " WHERE Amount IN (1, 2)", c => untouched = Convert.ToInt64(c.ExecuteScalar()));
+            NewStore<T872DirectSibling>().DestroyAsync().GetAwaiter().GetResult();
+            rows.Should().Be(2, "nothing was deleted or inserted");
+            untouched.Should().Be(2, "nothing was updated");
+        }
     }
 }

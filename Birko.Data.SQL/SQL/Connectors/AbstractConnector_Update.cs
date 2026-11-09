@@ -21,13 +21,13 @@ namespace Birko.Data.SQL.Connectors
 
         public void Update(Type type, object model, LambdaExpression expr)
         {
-            Update(DataBase.LoadTable(type), model, DataBase.ParseConditionExpression(expr));
+            Update(LoadUsableTable(type), model, DataBase.ParseConditionExpression(expr));
         }
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
         public int Update(Type type, object model, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            return Update(DataBase.LoadTable(type), model, conditions);
+            return Update(LoadUsableTable(type), model, conditions);
         }
 
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
@@ -52,13 +52,13 @@ namespace Birko.Data.SQL.Connectors
 
         public void Update<T,P>(Type type, IDictionary<Expression<Func<T, P>>, object> expresions, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            var table = DataBase.LoadTable(type);
+            var table = LoadUsableTable(type);
             Update(table, expresions, conditions);
         }
 
         public void Update<T, P>(Type type, IDictionary<Expression<Func<T, P>>, Expression<Func<T, P>>> expresions, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            var table = DataBase.LoadTable(type);
+            var table = LoadUsableTable(type);
             Update(table, expresions, conditions);
         }
 

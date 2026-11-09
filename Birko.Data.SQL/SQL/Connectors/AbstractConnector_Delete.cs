@@ -15,7 +15,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Delete(Type type, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            Delete(DataBase.LoadTable(type), conditions);
+            Delete(LoadUsableTable(type), conditions);
         }
 
         public void Delete(Tables.Table table, IEnumerable<Conditions.Condition>? conditions = null)
@@ -35,7 +35,7 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public void DeleteAll(Type type)
         {
-            Delete(DataBase.LoadTable(type).Name, conditions: null, allowAllRows: true);
+            Delete(LoadUsableTable(type).Name, conditions: null, allowAllRows: true);
         }
 
         private void Delete(string tableName, IEnumerable<Conditions.Condition>? conditions = null, bool allowAllRows = false)

@@ -17,7 +17,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Insert(Type type, object model)
         {
-            Insert(DataBase.LoadTable(type), model);
+            Insert(LoadUsableTable(type), model);
         }
 
         public void Insert(Tables.Table table, object model)
