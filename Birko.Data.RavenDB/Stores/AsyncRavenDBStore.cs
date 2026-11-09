@@ -840,6 +840,10 @@ public class AsyncRavenDBStore<T>
     {
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
+        // TASK-868: the stores' translator pre-pass — see RavenDBStore.Aggregate.
+        var filter = Expressions.RavenFilterRewriter.Rewrite(query.Filter);
+        if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return await AggregateHelper.LinqAggregateAsync(Array.Empty<T>(), query, ct);
+
         var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
@@ -849,13 +853,13 @@ public class AsyncRavenDBStore<T>
 
             if (canUseNative)
             {
-                return await NativeFacetAggregateAsync(session, query, ct);
+                return await NativeFacetAggregateAsync(session, query, filter, ct);
             }
 
             // Fallback to LINQ for multi-field GROUP BY, time bucketing, or no GROUP BY
             IQueryable<T> q = session.Query<T>();
-            if (query.Filter != null)
-                q = q.Where(query.Filter);
+            if (filter != null)
+                q = q.Where(filter);
 
             var data = await q.ToListAsync(ct);
             return await AggregateHelper.LinqAggregateAsync(data, query, ct);
@@ -870,11 +874,12 @@ public class AsyncRavenDBStore<T>
     private async Task<IReadOnlyList<AggregateResult>> NativeFacetAggregateAsync(
         Raven.Client.Documents.Session.IAsyncDocumentSession session,
         AggregateQuery<T> query,
+        Expression<Func<T, bool>>? filter,
         CancellationToken ct)
     {
         IQueryable<T> q = session.Query<T>();
-        if (query.Filter != null)
-            q = q.Where(query.Filter);
+        if (filter != null)
+            q = q.Where(filter);
 
         var aggregation = q.AggregateBy(FacetAggregationHelper.BuildFacetBuilder(query));
         var facetResults = await aggregation.ExecuteAsync(ct);

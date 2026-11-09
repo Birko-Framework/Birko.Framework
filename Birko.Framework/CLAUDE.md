@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB index helpers and aggregates, and MongoDB aggregates, fold null orderings too (2026-11-09)
+[[TASK-868]]. TASK-867's fold missed these paths (measured live): RavenDB's map-reduce helpers and store aggregates
+counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`; MongoDB's `Aggregate` and the public
+`Aggregate().Match(...)` matched null rows. They now take the stores' own pre-pass. Found on the way: Cosmos DB's
+`Aggregate` ignores the filter entirely ([[TASK-876]], P1).
 ### `OnExecute` gets the values on reads too (2026-11-09)
 [[TASK-871]]. A SQL connector's `OnExecute` received the text with values for writes and counts, but the raw text with
 `@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four
@@ -376,11 +381,6 @@ never matched NULL.
   group and aggregate keys.
 - **Breaking:** `c => c.Guid!.Value` is recorded as `Guid`, not `Value`.
 - The fluent SQL mapping had the same flaw and now refuses a nested member by name ([[TASK-845]]): `map.Property(x => x.Sub.Code)` had renamed and indexed the top-level `Code` (reproduced).
-### Cosmos DB: nested view paths read the right field; string lists split (2026-11-07)
-- [[TASK-840]]: a view filter on `v.Child.X` rendered `c.X` and read the wrong field, silently (reproduced). It renders
-  the full path now. The projection side is [[TASK-843]].
-- [[TASK-841]]: Cosmos DB compares strings exactly (measured: case, trailing space, Unicode composition), so a string
-  list past the limit is split too, in the base store and in views. SQL keeps its refusal.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

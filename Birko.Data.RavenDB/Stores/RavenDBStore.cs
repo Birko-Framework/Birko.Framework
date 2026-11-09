@@ -658,6 +658,13 @@ public class RavenDBStore<T>
     {
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
+        // TASK-868: the stores' translator pre-pass, as every read takes it. Measured live before: a lifted ordering against
+        // null missed rows under a NOT on the LINQ fallback (its in-memory re-check can only narrow), and `ids.Contains(x.Code)`
+        // and `x => true` threw "Could not understand expression". A filter that folds to `false` aggregates no rows, without
+        // a query: RavenDB refuses a constant predicate.
+        var filter = Expressions.RavenFilterRewriter.Rewrite(query.Filter);
+        if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return AggregateHelper.LinqAggregate(Array.Empty<T>(), query);
+
         var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
@@ -666,12 +673,12 @@ public class RavenDBStore<T>
 
             if (canUseNative)
             {
-                return NativeFacetAggregate(session, query);
+                return NativeFacetAggregate(session, query, filter);
             }
 
             IQueryable<T> q = session.Query<T>();
-            if (query.Filter != null)
-                q = q.Where(query.Filter);
+            if (filter != null)
+                q = q.Where(filter);
 
             var data = q.ToList();
             return AggregateHelper.LinqAggregate(data, query);
@@ -685,11 +692,12 @@ public class RavenDBStore<T>
 
     private IReadOnlyList<AggregateResult> NativeFacetAggregate(
         Raven.Client.Documents.Session.IDocumentSession session,
-        AggregateQuery<T> query)
+        AggregateQuery<T> query,
+        Expression<Func<T, bool>>? filter)
     {
         IQueryable<T> q = session.Query<T>();
-        if (query.Filter != null)
-            q = q.Where(query.Filter);
+        if (filter != null)
+            q = q.Where(filter);
 
         var aggregation = q.AggregateBy(FacetAggregationHelper.BuildFacetBuilder(query));
         var facetResults = aggregation.Execute();

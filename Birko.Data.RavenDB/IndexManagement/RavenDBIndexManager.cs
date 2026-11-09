@@ -328,6 +328,12 @@ namespace Birko.Data.RavenDB.IndexManagement
 
         #region Map/Reduce Query Helpers
 
+        // TASK-868: every filter below goes through RavenFilterRewriter, the stores' translator pre-pass, before the driver
+        // sees it. Measured live before: a lifted ordering against null (`x.Score > nul`) matched every non-null Score where
+        // C# matches none, a negated one (`!(x.Score > nul) && x.A > 4`) missed the non-null rows, and `ids.Contains(x.Code)`
+        // and `x => true` threw "Could not understand expression". A filter that folds to `false` is answered without a
+        // query, because RavenDB refuses a constant predicate.
+
         /// <summary>
         /// Queries a Map/Reduce index and returns typed results with optional filtering, ordering, and paging.
         /// </summary>
@@ -349,6 +355,8 @@ namespace Birko.Data.RavenDB.IndexManagement
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+            filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-868 — see the region remarks
+            if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return Array.Empty<TResult>();
 
             using var session = _documentStore.OpenAsyncSession();
             var query = session.Query<TResult>(indexName);
@@ -389,6 +397,8 @@ namespace Birko.Data.RavenDB.IndexManagement
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+            filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-868 — see the region remarks
+            if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return default;
 
             using var session = _documentStore.OpenAsyncSession();
             var query = session.Query<TResult>(indexName);
@@ -410,6 +420,8 @@ namespace Birko.Data.RavenDB.IndexManagement
             CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+            filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-868 — see the region remarks
+            if (Expressions.RavenFilterRewriter.MatchesNothing(filter)) return 0;
 
             using var session = _documentStore.OpenAsyncSession();
             var query = session.Query<TResult>(indexName);

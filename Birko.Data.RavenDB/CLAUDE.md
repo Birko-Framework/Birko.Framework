@@ -190,6 +190,13 @@ using (var session = Store.OpenSession())
 - `QueryMapReduceFirstAsync<TResult>(indexName, filter?)` — First-or-default from index
 - `CountMapReduceAsync<TResult>(indexName, filter?)` — Count results in index
 
+Every filter these helpers take goes through `RavenFilterRewriter` first, as the stores' reads do (TASK-868): a lifted
+ordering against null (`x.Score > nul`) is false, as in C#; `ids.Contains(x.Code)` becomes `In`; `x => true` drops the
+predicate. A filter that folds to `false` is answered without a query (empty, `default`, `0`). Before, measured live, 21 of
+27 shape × method checks were wrong or refused. The stores' `Aggregate` / `AggregateAsync` do the same.
+**Known gap (measured 2026-11-09, not fixed):** the native facet path (one GROUP BY field, no time bucket) queries the
+collection, and RavenDB refuses it ("Facet query must be executed against static index") for any filter.
+
 ## Indexes
 
 RavenDB uses indexes for queries:

@@ -63,7 +63,10 @@ namespace Birko.Data.MongoDB.Aggregation
                 return this;
             }
 
-            var filter = Builders<T>.Filter.Where(predicate);
+            // TASK-868: an ordering against null is false in C#; MongoDB's `$gte: null` matches the null rows (measured live on
+            // the stores' Aggregate and on this builder, 5 of 9 shapes wrong). The one hand-off from a predicate to the driver
+            // here, so both are folded at it, as the stores' reads are (TASK-867).
+            var filter = Builders<T>.Filter.Where(Data.Expressions.NullOrderingFold.Rewrite(predicate)!);
             return Match(filter);
         }
 

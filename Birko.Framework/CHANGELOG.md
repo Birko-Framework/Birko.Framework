@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — Cosmos DB: nested view paths read the right field; string lists split
+- [[TASK-840]]: a view filter on `v.Child.X` rendered `c.X` and read the wrong field, silently (reproduced). It renders
+  the full path now. The projection side is [[TASK-843]].
+- [[TASK-841]]: Cosmos DB compares strings exactly (measured: case, trailing space, Unicode composition), so a string
+  list past the limit is split too, in the base store and in views. SQL keeps its refusal.
+
 ## 2026-11-07 — View stores handle a long IN list; Cosmos DB views support Contains
 - **SQL views** ([[TASK-837]]): they ran no planner, and a view read with 33,000 ids threw "too many SQL variables"
   (measured). They now split and refuse through TASK-833's planner. An on-the-fly aggregate view refuses past the

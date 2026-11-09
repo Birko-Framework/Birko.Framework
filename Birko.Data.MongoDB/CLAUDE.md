@@ -62,6 +62,9 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - Supports `Match`, `Group`, `Sort`, `Limit`, `Project`, `Unwind`, `Lookup` stages
 - Type-safe projections and grouping expressions
 - Executes server-side for efficient data processing
+- `Match(Expression)` folds a lifted ordering against null to `false` before the driver renders it (TASK-868): MongoDB's
+  `$gte: null` matches the null rows, where C# matches none. The store's `Aggregate(AggregateQuery)` uses it, so both agree
+  with the stores' reads (TASK-867).
 
 ## Connection
 
