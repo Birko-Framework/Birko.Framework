@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — A SQL column named like a reserved word is refused by name
+[[TASK-862]] (the user's decision: refuse, keep column names unquoted per rule 17). `Order`, `Group` or `Select` broke
+CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Server. On SQLite a column named
+`CURRENT_DATE` was created, and a filtered delete on it then matched no rows, silently (measured). Each provider now
+holds the list its server rejects, measured live, and the table build refuses such a column with
+`NotSupportedException` naming it, before any SQL is sent. Map it with `[NamedField]` or `HasColumnName`.
+
 ## 2026-11-08 — SQL view filters with computed values run again; persistent views refuse them by name
 [[TASK-858]]. Since TASK-857, every on-the-fly `SqlViewStore` filter with arithmetic, COALESCE, CASE, Round or a
 column-vs-column comparison threw "Cannot translate operand", on all four providers (reproduced). Its re-render looked

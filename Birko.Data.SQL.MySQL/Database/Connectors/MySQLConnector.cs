@@ -705,6 +705,7 @@ namespace Birko.Data.SQL.Connectors
 
                         command.CommandText = sb.ToString();
                         commandText = command.CommandText;
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -787,6 +788,7 @@ namespace Birko.Data.SQL.Connectors
 
                         command.CommandText = sb.ToString();
                         commandText = command.CommandText;
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 
@@ -868,6 +870,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
 
@@ -946,6 +949,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
 
@@ -1009,6 +1013,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -1067,6 +1072,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 

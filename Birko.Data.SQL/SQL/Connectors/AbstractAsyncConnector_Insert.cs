@@ -96,12 +96,14 @@ namespace Birko.Data.SQL.Connectors
                 await Task.CompletedTask;
             }, async (command) =>
             {
-                foreach (var item in rows)
+                for (var i = 0; i < rows.Count; i++)
                 {
-                    foreach (var kvp in item)
+                    foreach (var kvp in rows[i])
                     {
                         AddParameter(command, "@" + kvp.Key.Replace(".", string.Empty), kvp.Value);
                     }
+                    // TASK-875: the runner announced the first row; every further row is a statement sent too.
+                    if (i > 0) AnnounceCommand(command);
                     await command.ExecuteNonQueryAsync(ct);
                 }
             }, true, ct);   // TASK-724: the token reaches the write gate and the open; a waiting insert could not be cancelled

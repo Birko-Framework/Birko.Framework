@@ -700,6 +700,11 @@ namespace Birko.Data.SQL.Connectors
 
         #region Native Bulk Operations
 
+        /// <summary>What <c>OnExecute</c> receives for a <see cref="SqlBulkCopy"/> (TASK-875): the <c>INSERT BULK</c> statement
+        /// SqlClient sends, naming the table and the columns. The rows travel as data after it.</summary>
+        private static string BulkCopyStatement(string destination, DataTable dataTable)
+            => "INSERT BULK " + destination + " (" + string.Join(", ", dataTable.Columns.Cast<DataColumn>().Select(c => c.ColumnName)) + ")";
+
         public void BulkInsert(Type type, IEnumerable<object> models)
         {
             if (models == null || !models.Any())
@@ -741,6 +746,8 @@ namespace Birko.Data.SQL.Connectors
                     {
                         bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
                     }
+                    // TASK-875: SqlBulkCopy sends INSERT BULK and then the rows as data, so the text has no values.
+                    AnnounceStatement(BulkCopyStatement(bulkCopy.DestinationTableName, dataTable));
                     bulkCopy.WriteToServer(dataTable);
                 }
                 catch (Exception ex)
@@ -776,6 +783,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
                     }
+                    AnnounceStatement(BulkCopyStatement(bulkCopy.DestinationTableName, dataTable));
                     await bulkCopy.WriteToServerAsync(dataTable, ct).ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -856,6 +864,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
+                        AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
 
@@ -932,6 +941,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
+                        AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
 
@@ -997,6 +1007,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -1057,6 +1068,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 

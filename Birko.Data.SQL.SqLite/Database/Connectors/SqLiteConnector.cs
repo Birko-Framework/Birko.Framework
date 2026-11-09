@@ -585,6 +585,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = ConvertFieldValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -649,6 +650,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = ConvertFieldValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 
@@ -731,6 +733,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
 
@@ -810,6 +813,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
 
@@ -874,6 +878,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -933,6 +938,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 

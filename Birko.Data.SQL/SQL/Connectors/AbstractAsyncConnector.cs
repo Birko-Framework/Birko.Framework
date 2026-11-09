@@ -379,6 +379,12 @@ namespace Birko.Data.SQL.Connectors
                 {
                     yield break;
                 }
+                catch (Exception ex)
+                {
+                    // TASK-875: the path a ReadAsync() error takes; see the sync twin, RunReaderCommandOn.
+                    InitException(ex, commandText);
+                    yield break;
+                }
                 await using var _ = reader;
                 // TASK-880 — no HasRows short-circuit; see the sync twin, RunReaderCommandOn. An error SQL Server
                 // raises while it produces rows arrives after the result's metadata, so only ReadAsync() raises it.

@@ -332,8 +332,15 @@ ORDER BY index_name, seq_in_index";
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var command = connection.CreateCommand();
             command.CommandText = sql;
+            Announce(command);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// TASK-875: these statements run on a connection of this manager's own, outside the connector's runners, and
+        /// reached <c>OnExecute</c> on no provider (measured). A connector without the event has nothing to announce to.
+        /// </summary>
+        private void Announce(DbCommand command) => (_connector as AbstractConnector)?.AnnounceCommand(command);
 
         protected async Task ExecuteReaderAsync(string sql, Action<DbDataReader> readAction, CancellationToken ct)
         {
@@ -341,6 +348,7 @@ ORDER BY index_name, seq_in_index";
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var command = connection.CreateCommand();
             command.CommandText = sql;
+            Announce(command);
             using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
             readAction(reader);
         }

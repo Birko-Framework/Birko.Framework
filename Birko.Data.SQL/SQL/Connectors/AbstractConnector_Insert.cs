@@ -90,12 +90,14 @@ namespace Birko.Data.SQL.Connectors
                 }
             }, (command) =>
             {
-                foreach (var item in rows)
+                for (var i = 0; i < rows.Count; i++)
                 {
-                    foreach (var kvp in item)
+                    foreach (var kvp in rows[i])
                     {
                         AddParameter(command, "@" + kvp.Key.Replace(".", string.Empty), kvp.Value);
                     }
+                    // TASK-875: the runner announced the first row; every further row is a statement sent too.
+                    if (i > 0) AnnounceCommand(command);
                     command.ExecuteNonQuery();
                 }
             }, true);

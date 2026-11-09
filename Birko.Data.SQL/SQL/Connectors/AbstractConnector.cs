@@ -378,16 +378,21 @@ namespace Birko.Data.SQL.Connectors
         /// method existed. It has a test.
         /// </para>
         /// <para>
-        /// <b>Not yet used by <c>OnIndexCreationFailed</c></b>, deliberately. That channel is consumed in
-        /// production by Symbio, so changing whether a handler's exception propagates is a behaviour change
-        /// on consumed surface and needs its own measurement first — [[TASK-283]] owns it, and this method
-        /// is the candidate answer for it to adopt rather than a second policy to live beside it.
+        /// <b>Used by every diagnostic channel:</b> <c>OnSchemaEscapeDetected</c>, <c>OnIndexCreationFailed</c>
+        /// (adopted by [[TASK-283]]) and, through the same loop, <c>OnExecute</c> (TASK-875).
         /// </para>
         /// </remarks>
         /// <param name="handler">The event's backing delegate, possibly null.</param>
         /// <param name="payload">What each subscriber receives.</param>
         /// <param name="channel">The event's name, recorded against any failure.</param>
         protected void RaiseDiagnostic<T>(Action<T>? handler, T payload, string channel)
+            => RaiseEach(handler, subscriber => ((Action<T>)subscriber)(payload), channel);
+
+        /// <summary>
+        /// The one loop behind <see cref="RaiseDiagnostic{T}"/> and <c>OnExecute</c> (TASK-875): each subscriber in its own
+        /// <c>try</c>, and a failure recorded on <see cref="SubscriberFailures"/> under <paramref name="channel"/>.
+        /// </summary>
+        private void RaiseEach(Delegate? handler, Action<Delegate> invoke, string channel)
         {
             if (handler == null)
             {
@@ -398,7 +403,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 try
                 {
-                    ((Action<T>)subscriber)(payload);
+                    invoke(subscriber);
                 }
                 catch (Exception ex)
                 {
@@ -483,13 +488,51 @@ namespace Birko.Data.SQL.Connectors
         /// The text is <see cref="DataBase.GetGeneratedQuery"/>, values written in place of parameter names. Before,
         /// the reader paths passed <c>command.CommandText</c> instead, so a subscriber saw placeholders on every read
         /// and values on every write (measured on all four providers). <paramref name="commandText"/> is assigned
-        /// before the subscriber runs, so a subscriber that throws still leaves the caller the text for
-        /// <c>InitException</c>.
+        /// before the subscriber runs.
+        /// <para>
+        /// TASK-875 (rule 25): <c>OnExecute</c> is a diagnostic channel, so a subscriber's exception never reaches the
+        /// statement. Before, it was raised inside the runner's <c>try</c>, before the statement, and the provider's
+        /// <c>OnException</c> handler rethrew it: measured on all four providers, sync and async, every read, count,
+        /// write, filter write and schema ensure failed with the subscriber's exception and wrote nothing. Now each
+        /// subscriber runs in its own <c>try</c> (<see cref="RaiseEach"/>, the loop <see cref="RaiseDiagnostic{T}"/> uses),
+        /// and a failure is recorded on <see cref="SubscriberFailures"/> under channel <c>OnExecute</c>.
+        /// </para>
         /// </remarks>
         protected void AnnounceCommand(DbCommand command, out string commandText)
         {
             commandText = DataBase.GetGeneratedQuery(command);
-            OnExecute?.Invoke(commandText);
+            AnnounceStatement(commandText);
+        }
+
+        /// <summary>
+        /// Announces a statement whose failure text the caller already has: a bulk write re-executes one command per row
+        /// or per batch, and each execution is a statement sent (TASK-875). The text is rendered only when someone is
+        /// subscribed, so a bulk write without a subscriber pays nothing per row.
+        /// </summary>
+        /// <remarks>Internal as well as protected: <c>SqlIndexManager</c> runs its statements on a connection of its own.</remarks>
+        protected internal void AnnounceCommand(DbCommand command)
+        {
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            if (OnExecute == null)
+            {
+                return;
+            }
+            AnnounceStatement(DataBase.GetGeneratedQuery(command));
+        }
+
+        /// <summary>
+        /// Passes <paramref name="commandText"/> to <c>OnExecute</c>, each subscriber isolated (rule 25). For a statement that
+        /// is not a <see cref="DbCommand"/>: PostgreSQL's binary <c>COPY</c> and SQL Server's <c>SqlBulkCopy</c>, whose rows
+        /// travel as data after the statement, so the text carries no values.
+        /// </summary>
+        protected void AnnounceStatement(string commandText)
+        {
+            var handler = OnExecute;
+            if (handler == null)
+            {
+                return;
+            }
+            RaiseEach(handler, subscriber => ((OnExecute)subscriber)(commandText), nameof(OnExecute));
         }
 
         public virtual void InitException(Exception ex, string? commandText)
@@ -1244,6 +1287,9 @@ namespace Birko.Data.SQL.Connectors
                 DbDataReader reader;
                 try { reader = command.ExecuteReader(); }
                 catch (Exception ex) when (IsMissingTableException(ex)) { yield break; }
+                // TASK-875: any other ExecuteReader error takes the path a Read() error takes, so it is reported as itself
+                // with the statement on Exception.Data (measured: it reached the caller without it, on all four providers).
+                catch (Exception ex) { InitException(ex, commandText); yield break; }
                 using var _r = reader;
                 // TASK-880 — no HasRows short-circuit: SQL Server reports an error raised while it produces rows
                 // (divide by zero, overflow) after the result's metadata, so HasRows is false and only Read() raises

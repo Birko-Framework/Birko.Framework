@@ -646,6 +646,8 @@ namespace Birko.Data.SQL.Connectors
                 var connection = (NpgsqlConnection)dbConnection;
                 try
                 {
+                    // TASK-875: the COPY is the statement sent; its rows follow as binary data, so the text has no values.
+                    AnnounceStatement(copyCommand);
                     using var writer = connection.BeginBinaryImport(copyCommand);
                     foreach (var model in models)
                     {
@@ -701,6 +703,7 @@ namespace Birko.Data.SQL.Connectors
                 var connection = (NpgsqlConnection)dbConnection;
                 try
                 {
+                    AnnounceStatement(copyCommand);
                     await using var writer = await connection.BeginBinaryImportAsync(copyCommand, ct).ConfigureAwait(false);
                     foreach (var model in models)
                     {
@@ -800,6 +803,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
                     }
 
@@ -878,6 +882,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
                     }
 
@@ -941,6 +946,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         command.ExecuteNonQuery();
                     }
 
@@ -999,6 +1005,7 @@ namespace Birko.Data.SQL.Connectors
                         {
                             command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
                         }
+                        AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 

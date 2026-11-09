@@ -178,6 +178,24 @@ parameters. Reads, counts, inserts, updates, deletes and view reads, sync and as
 it never raises `OnExecute` itself. Before TASK-871 the reader paths passed the raw text with `@name` placeholders
 (measured on all four providers). `InvokeOnExecute(string)` was removed.
 
+### `OnExecute` cannot fail a statement, and every statement reaches it (TASK-875)
+
+- **A subscriber that throws is contained** (rule 25). Each subscriber runs in its own `try`, the loop
+  `RaiseDiagnostic` uses, and the failure is recorded on `SubscriberFailures` under channel `OnExecute`. Before,
+  every read, count, write, filter write and schema ensure failed with the subscriber's exception and wrote nothing
+  (measured on all four providers, sync and async).
+- **Bulk paths announce too.** A bulk write re-executes one command per row or per batch and calls
+  `AnnounceCommand(command)` before each execution; that overload renders the text only when someone is subscribed.
+  PostgreSQL's binary `COPY` and SQL Server's `SqlBulkCopy` announce their statement through `AnnounceStatement`
+  (`COPY … FROM STDIN (FORMAT BINARY)`, `INSERT BULK [table] (columns)`), with no values: the rows travel as data. The
+  base multi-row insert announces every row, and `SqlIndexManager` its own-connection statements. Before, none of them
+  reached `OnExecute` except the multi-row insert's first row.
+- **Not announced, by design or not yet:** `BEGIN` / `COMMIT` / `ROLLBACK` (driver transaction calls, not commands);
+  SQLite's journal-mode PRAGMA (connection setup, once per connector on its own connection; announcing it attributed it
+  to whichever operation first opened a connection); statements that run on a connection outside the connector, in
+  `Birko.Data.Migrations.SQL`, `Birko.Data.Migrations.TimescaleDB`, `Birko.Data.SQL.View.Migrations` and
+  `Birko.BackgroundJobs.SQL`.
+
 ### A server error during a read reaches the caller (TASK-880)
 
 Every read (by id, by filter, paged, view reads, aggregates, the SELECT before `Update(filter, Action)`) runs one reader
@@ -186,7 +204,9 @@ loop: `RunReaderCommandOn` (sync; the owned-connection path calls it too) and `R
 rows (divide by zero, overflow) after the result's metadata, so `HasRows` is false and only `Read()` raises it. Before
 TASK-880 such a read returned 0 rows while the count threw (measured on SQL Server 2022; SQLite, PostgreSQL and MySQL
 already threw). The loop swallows exactly one thing, a missing table at `ExecuteReader` (rule 26). Do not add a
-`HasRows` short-circuit back.
+`HasRows` short-circuit back. Any other `ExecuteReader` error goes through `InitException` like a `Read()` error, so it
+reaches the caller as itself with the statement on `Exception.Data[CommandTextDataKey]` (TASK-875; before, it arrived
+without it on all four providers).
 
 ## Implementation Example
 

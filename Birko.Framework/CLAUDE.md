@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A throwing `OnExecute` subscriber no longer fails the statement; bulk writes are announced (2026-11-09)
+[[TASK-875]]. A logging subscriber that threw failed 21 operations on all four SQL providers and stopped later
+subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.
+Each subscriber now runs contained, failures are recorded on `SubscriberFailures`, every connector statement is
+announced, and an `ExecuteReader` error carries its statement like any other.
 ### A division by zero in a SQL filter or SET fails on every provider (2026-11-09)
 [[TASK-888]] (the user's decision: every provider throws). SQLite answered NULL on every path, so a Delete or Update with
 such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now
@@ -376,12 +381,6 @@ decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-i
 240 cases off). `Ordinal` and `OrdinalIgnoreCase` now give C#'s answer on all four providers; `UPPER` and `ILIKE` could
 not, because each server groups case differently from .NET. Other comparisons are refused by name. Without a
 comparison nothing changes: the collation decides, now documented per provider.
-### A SQL column named like a reserved word is refused by name (2026-11-08)
-[[TASK-862]] (the user's decision: refuse, keep column names unquoted per rule 17). `Order`, `Group` or `Select` broke
-CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Server. On SQLite a column named
-`CURRENT_DATE` was created, and a filtered delete on it then matched no rows, silently (measured). Each provider now
-holds the list its server rejects, measured live, and the table build refuses such a column with
-`NotSupportedException` naming it, before any SQL is sent. Map it with `[NamedField]` or `HasColumnName`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
