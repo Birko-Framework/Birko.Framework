@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL Server read reports a server error instead of returning no rows (2026-11-09)
+[[TASK-880]]. A read whose filter failed on the server (divide by zero, overflow, a SUM overflow in a grouped view)
+returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on
+`HasRows == false` and never read the error. They now read until the end, so the error reaches the caller (rule 26).
+PostgreSQL, MySQL and SQLite already threw. Found on the way: grouped views over one table fail ([[TASK-887]], P1).
 ### Elasticsearch store aggregates answer what LINQ answers (2026-11-09)
 [[TASK-878]]. 93 of 99 measured aggregate shapes were wrong, mostly silently: property names were sent verbatim and ES
 answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
@@ -375,12 +380,6 @@ rendered `IS NOT NULL`, `(x.A == x.B) == false` rendered the equality, `StartsWi
 value, and `x.Opt.HasValue && x.Opt.Value` rendered `Opt = NULL`. On a delete, that removed the rows meant to be kept.
 One rewrite (`RewriteBooleanComparisons`) now turns `e == false` into `!e` and `.Value` on a `bool?` into
 `Opt == true` before parsing, so every shape matches C#. Plain column comparisons render unchanged.
-### Every store refuses a write whose filter negates a null ordering (2026-11-08)
-[[TASK-865]]. In C#, `x.Score > null` is always false, so `!(x.Score > nul)` matches every row. On InMemory, JSON and
-XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos DB wrote part of the table, all
-silently (measured). `PredicateScope` now treats a lifted ordering against null as always false, so the whole-table
-guard refuses it with `WholeTableWriteException`; `==` / `!=` null are unchanged. RavenDB and Cosmos DB still translate
-such orderings differently from C# ([[TASK-867]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

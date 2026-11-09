@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — Every store refuses a write whose filter negates a null ordering
+[[TASK-865]]. In C#, `x.Score > null` is always false, so `!(x.Score > nul)` matches every row. On InMemory, JSON and
+XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos DB wrote part of the table, all
+silently (measured). `PredicateScope` now treats a lifted ordering against null as always false, so the whole-table
+guard refuses it with `WholeTableWriteException`; `==` / `!=` null are unchanged. RavenDB and Cosmos DB still translate
+such orderings differently from C# ([[TASK-867]]).
+
 ## 2026-11-08 — A SQL write whose filter can only be true is refused
 [[TASK-861]]. A negated group holding an always-false term made the filter always true: `!(empty.Contains(x.A) &&
 x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` deleted or updated every row, silently

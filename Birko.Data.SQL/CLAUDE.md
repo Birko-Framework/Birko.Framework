@@ -170,6 +170,16 @@ parameters. Reads, counts, inserts, updates, deletes and view reads, sync and as
 it never raises `OnExecute` itself. Before TASK-871 the reader paths passed the raw text with `@name` placeholders
 (measured on all four providers). `InvokeOnExecute(string)` was removed.
 
+### A server error during a read reaches the caller (TASK-880)
+
+Every read (by id, by filter, paged, view reads, aggregates, the SELECT before `Update(filter, Action)`) runs one reader
+loop: `RunReaderCommandOn` (sync; the owned-connection path calls it too) and `ReadOnAsync` (async). The loop calls
+`Read()` until it returns false and never checks `HasRows` first. SQL Server reports an error raised while it produces
+rows (divide by zero, overflow) after the result's metadata, so `HasRows` is false and only `Read()` raises it. Before
+TASK-880 such a read returned 0 rows while the count threw (measured on SQL Server 2022; SQLite, PostgreSQL and MySQL
+already threw). The loop swallows exactly one thing, a missing table at `ExecuteReader` (rule 26). Do not add a
+`HasRows` short-circuit back.
+
 ## Implementation Example
 
 ```csharp

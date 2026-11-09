@@ -380,22 +380,25 @@ namespace Birko.Data.SQL.Connectors
                     yield break;
                 }
                 await using var _ = reader;
-                if (!(reader?.HasRows ?? false))
+                // TASK-880 — no HasRows short-circuit; see the sync twin, RunReaderCommandOn. An error SQL Server
+                // raises while it produces rows arrives after the result's metadata, so only ReadAsync() raises it.
+                // The missing-table filter above is the one thing this loop swallows.
+                while (true)
                 {
-                    yield break;
-                }
-                bool isNext = false;
-                try
-                {
-                    isNext = await reader.ReadAsync(ct);
-                }
-                catch (Exception ex)
-                {
-                    InitException(ex, commandText);
-                    yield break;
-                }
-                while (isNext)
-                {
+                    bool isNext;
+                    try
+                    {
+                        isNext = await reader.ReadAsync(ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        InitException(ex, commandText);
+                        yield break;
+                    }
+                    if (!isNext)
+                    {
+                        break;
+                    }
                     IEnumerable<object>? row = null;
                     try
                     {
@@ -410,15 +413,6 @@ namespace Birko.Data.SQL.Connectors
                         yield break;
                     }
                     yield return row;
-                    try
-                    {
-                        isNext = await reader.ReadAsync(ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        InitException(ex, commandText);
-                        isNext = false;
-                    }
                 }
             }
         }

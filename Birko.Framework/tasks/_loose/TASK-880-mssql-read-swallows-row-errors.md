@@ -3,7 +3,7 @@ id: TASK-880
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P1
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -30,10 +30,29 @@ list.
 
 ## Acceptance criteria
 
-- [ ] Reproduce (rule 54) per provider, sync and async, reads, paged reads, view reads, the SELECT before
+- [x] Reproduce (rule 54) per provider, sync and async, reads, paged reads, view reads, the SELECT before
       `Update(filter, Action)`: divide by zero, conversion and overflow errors. Record which return empty.
-- [ ] Every reader path drains the result so a server error reaches the caller (one producer for the read loop).
-- [ ] Tests, red before the fix.
+      → Measured 2026-11-09 live, sync and async, on reads, paged reads, `Update(filter, Action)`'s SELECT, on-the-fly
+        view reads and a grouped SUM view (on-the-fly and persistent), with the count as baseline. **Only SQL Server
+        swallowed:** divide by zero and an overflow before any row returned 0 rows on all 8 read paths while the count
+        threw; an overflow after a row returned 0 rows or threw by scan order; a SUM overflow in a grouped view returned
+        0 rows while the count answered 1. PostgreSQL and MySQL throw (MySQL and SQLite give NULL for divide by zero,
+        no error: TASK-888). Conversion errors are not reachable from a filter since TASK-860.
+- [x] Every reader path drains the result so a server error reaches the caller (one producer for the read loop).
+      → Cause: the reader loops stopped when `HasRows` was false, and SQL Server sends the error after the metadata. The
+        loop is now `Read()` until false, with no `HasRows` check: one loop per sync/async (`RunReaderCommand`'s owned-
+        connection copy now calls `RunReaderCommandOn`). Error handling is unchanged; the only thing swallowed is still
+        a missing table at `ExecuteReader` (rule 26). A `NextResult()` drain was tried and removed: every read is one
+        statement and `Read()` raises the error, so it was unreachable (rule 53).
+- [x] Tests, red before the fix.
+      → `tests/Birko.Data.SQL.Views.Tests/Task880ReadErrorTests.cs`: 36 cases per provider, 144 in all; a read answers
+        what the count answers (count throws → read throws, update writes nothing). Red with the connector hunks
+        reverse-applied: 24 of 144, all SQL Server. Green 144/144.
+      → Live, one run at a time: 31 of 35 importer suites green; the four provider suites green apart from TASK-870's
+        in-progress contract (not this change).
+      → **Found, filed:** TASK-887 (P1: a grouped `SqlViewStore` read throws a cast exception on all four providers);
+        TASK-888 (divide by zero in a filter is NULL on SQLite and MySQL, C# throws; decision needed); a non-missing-
+        table error from `ExecuteReader` skips `InitException` / `OnException`, added to TASK-875.
 
 ## Out of scope
 

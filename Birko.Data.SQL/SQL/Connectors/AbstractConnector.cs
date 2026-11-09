@@ -1227,7 +1227,7 @@ namespace Birko.Data.SQL.Connectors
             Owned(new RetryAttempt());
         }
 
-        private IEnumerable<IEnumerable<object>> RunReaderCommandOn(DbConnection connection, DbTransaction transaction, Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction)
+        private IEnumerable<IEnumerable<object>> RunReaderCommandOn(DbConnection connection, DbTransaction? transaction, Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction)
         {
             string? commandText = null;
             using (var command = connection.CreateCommand())
@@ -1245,19 +1245,21 @@ namespace Birko.Data.SQL.Connectors
                 try { reader = command.ExecuteReader(); }
                 catch (Exception ex) when (IsMissingTableException(ex)) { yield break; }
                 using var _r = reader;
-                if (!(reader?.HasRows ?? false)) yield break;
-                bool isNext = false;
-                try { isNext = reader.Read(); }
-                catch (Exception ex) { InitException(ex, commandText); yield break; }
-                while (isNext)
+                // TASK-880 — no HasRows short-circuit: SQL Server reports an error raised while it produces rows
+                // (divide by zero, overflow) after the result's metadata, so HasRows is false and only Read() raises
+                // it. The missing-table filter above is the one thing this loop swallows (rule 26). No NextResult()
+                // drain: every read is one statement, and Read() alone raised every measured case.
+                while (true)
                 {
+                    bool isNext;
+                    try { isNext = reader.Read(); }
+                    catch (Exception ex) { InitException(ex, commandText); yield break; }
+                    if (!isNext) break;
                     IEnumerable<object>? row = null;
                     try { row = transformFunction.Invoke(reader); }
                     catch (Exception ex) { InitException(ex, commandText); }
                     if (row == null) yield break;
                     yield return row;
-                    try { isNext = reader.Read(); }
-                    catch (Exception ex) { InitException(ex, commandText); isNext = false; }
                 }
             }
         }
@@ -1368,74 +1370,12 @@ namespace Birko.Data.SQL.Connectors
                 yield break;
             }
 
+            // TASK-880 — the owned connection runs the same loop as the ambient one. There used to be a second copy
+            // here, so a fix to one loop could miss the other.
             using var db = CreateConnection(_settings);
             db.Open();
-            string? commandText = null;
-            using (var command = db.CreateCommand())
-            {
-                bool faulted = false;
-                try
-                {
-                    createCommand?.Invoke(command);
-                    AnnounceCommand(command, out commandText);
-                }
-                catch (Exception ex)
-                {
-                    // CR-M134: when an OnException handler is registered InitException returns instead of
-                    // rethrowing — do NOT fall through to ExecuteReader on a command that failed to build,
-                    // which would raise a second, more confusing error (or run a malformed command).
-                    InitException(ex, commandText);
-                    faulted = true;
-                }
-                if (faulted)
-                {
-                    yield break;
-                }
-                DbDataReader reader2;
-                try { reader2 = command.ExecuteReader(); }
-                catch (Exception ex) when (IsMissingTableException(ex)) { yield break; }
-                using var _r2 = reader2;
-                if (!(reader2?.HasRows ?? false))
-                {
-                    yield break;
-                }
-                bool isNext = false;
-                try
-                {
-                    isNext = reader2.Read();
-                }
-                catch (Exception ex)
-                {
-                    InitException(ex, commandText);
-                    yield break;
-                }
-                while (isNext)
-                {
-                    IEnumerable<object>? row = null;
-                    try
-                    {
-                        row = transformFunction.Invoke(reader2);
-                    }
-                    catch (Exception ex)
-                    {
-                        InitException(ex, commandText);
-                    }
-                    if (row == null)
-                    {
-                        yield break;
-                    }
-                    yield return row;
-                    try
-                    {
-                        isNext = reader2.Read();
-                    }
-                    catch (Exception ex)
-                    {
-                        InitException(ex, commandText);
-                        isNext = false;
-                    }
-                }
-            }
+            foreach (var item in RunReaderCommandOn(db, null, createCommand, transformFunction))
+                yield return item;
         }
     }
 }

@@ -27,6 +27,8 @@ Found by TASK-871 (2026-11-09), by reading the code; not reproduced.
   diagnostic channel must survive its own subscriber.
 - **Bulk paths:** PostgreSQL binary COPY, MySQL bulk insert and other paths that bypass the command runners may not
   raise `OnExecute` at all.
+- **`ExecuteReader` errors** (TASK-880): an error other than a missing table, thrown by `ExecuteReader`, goes straight
+  to the caller without `InitException` / `OnException`, while errors from `Read()` pass through them.
 
 ## Acceptance criteria
 
