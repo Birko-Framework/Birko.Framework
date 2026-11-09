@@ -355,11 +355,21 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// TASK-513 — a decimal column adds through <see cref="SqLiteDecimal.AddFunction"/>: SQLite's own
         /// <c>+</c> converts both sides to a double.
+        /// <para>
+        /// TASK-870 — an integer column's sum is range-checked by <see cref="SqLiteExactFunctions.CheckedIntegerFunction"/>.
+        /// Measured: <c>Increment(x =&gt; x.Hits, 1)</c> at <see cref="int.MaxValue"/> stored 2147483648 with no error, and every
+        /// later read of the row threw. Now the statement fails and writes nothing, as on the servers and as the
+        /// read-modify-save fallback throws <see cref="OverflowException"/>.
+        /// </para>
         /// </summary>
         public override string IncrementExpression(Fields.AbstractField field, string column, string parameter)
-            => IsDecimal(field)
-                ? string.Format("{0}({1}, {2})", SqLiteDecimal.AddFunction, column, parameter)
-                : base.IncrementExpression(field, column, parameter);
+        {
+            if (IsDecimal(field))
+                return string.Format("{0}({1}, {2})", SqLiteDecimal.AddFunction, column, parameter);
+            var sum = base.IncrementExpression(field, column, parameter);
+            var type = field.Property?.PropertyType;
+            return type != null && Conditions.SqlConversion.IsIntegral(type) ? SqLiteExactFunctions.CheckedIntegerCall(sum, type) : sum;
+        }
 
         /// <summary>TASK-856 — a decimal value fragment in a filter is computed and compared as the column is.</summary>
         protected override Conditions.SqlValueFragmentDialect FragmentDialect => SqLiteValueFragmentDialect.Instance;

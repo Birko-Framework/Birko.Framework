@@ -32,6 +32,15 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public const int MaxLikePatternLength = 4000;
 
+        /// <summary>
+        /// TASK-870 — <c>REPLACE</c> over the operand in <see cref="BinaryCollation"/>, so it matches ordinally, as C# does.
+        /// Measured under the default collation, 8 of 11 shapes stored another string than C#: <c>Replace("b", "X")</c>
+        /// changed <c>ABC</c>, <c>Replace("ss", "_")</c> changed <c>Straße</c>, <c>Replace("ß", "_")</c> changed
+        /// <c>STRASSE</c>, and <c>Replace("e", "_")</c> left <c>e</c> followed by a combining accent alone.
+        /// </summary>
+        public override string Replace(string operand, string oldValue, string newValue)
+            => base.Replace($"{operand} COLLATE {BinaryCollation}", oldValue, newValue);
+
         /// <inheritdoc />
         public override string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)
         {

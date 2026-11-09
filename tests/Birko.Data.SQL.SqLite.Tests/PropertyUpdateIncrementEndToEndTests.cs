@@ -105,7 +105,8 @@ public class PropertyUpdateIncrementEndToEndTests : IDisposable
         var updates = statements.Where(s => s.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)).ToList();
         updates.Should().ContainSingle("a Set and an Increment in one PropertyUpdate are one statement");
         // OnExecute logs the statement with its parameter values rendered inline, hence no '@SET…' here.
-        updates[0].Should().Contain("Hits = Hits + ").And.Contain("Name = ");
+        // TASK-870: an integer increment is range-checked on SQLite, so it reads birko_checked_int(Hits + …).
+        updates[0].Should().Contain("Hits = birko_checked_int(Hits + ").And.Contain("Name = ");
 
         var after = await ReadAsync(store, target.Guid!.Value);
         after.Name.Should().Be("renamed");

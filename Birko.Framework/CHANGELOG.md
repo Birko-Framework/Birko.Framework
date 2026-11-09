@@ -4,6 +4,20 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — An ordering against null matches nothing on every document store
+[[TASK-867]]. In C#, `x.Score > nul` with `nul == null` is false. RavenDB matched every non-null Score, Cosmos DB missed
+rows under NOT, MongoDB's `$gte: null` matched the null rows, and Elasticsearch refused, on reads, views and the writes
+the guard allows (measured live). One fold, `NullOrderingFold` (Birko.Data.Core), now replaces such an ordering with
+`false` before each translator renders. A filter that folds to false is answered without a query on RavenDB, and
+rendered as match_none on Elasticsearch. Index and aggregation helpers: [[TASK-868]].
+
+## 2026-11-08 — A SQL filter comparing a boolean with `false` is no longer inverted
+[[TASK-863]]. 34 of 75 boolean shapes returned wrong rows on all four SQL providers (measured): `x.N.HasValue == false`
+rendered `IS NOT NULL`, `(x.A == x.B) == false` rendered the equality, `StartsWith(..) == true` bound `true` as the LIKE
+value, and `x.Opt.HasValue && x.Opt.Value` rendered `Opt = NULL`. On a delete, that removed the rows meant to be kept.
+One rewrite (`RewriteBooleanComparisons`) now turns `e == false` into `!e` and `.Value` on a `bool?` into
+`Opt == true` before parsing, so every shape matches C#. Plain column comparisons render unchanged.
+
 ## 2026-11-08 — Every store refuses a write whose filter negates a null ordering
 [[TASK-865]]. In C#, `x.Score > null` is always false, so `!(x.Score > nul)` matches every row. On InMemory, JSON and
 XML such a Delete or Update wrote 6 of 6 rows, and MongoDB, RavenDB and Cosmos DB wrote part of the table, all

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq.Expressions;
 using Birko.Data.SQL.Conditions;
 
@@ -39,6 +40,8 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override string Arithmetic(ExpressionType op, string sqlOperator, string left, string right, Type type)
         {
+            if (SqlConversion.IsIntegral(type))
+                return SqLiteExactFunctions.CheckedIntegerCall(base.Arithmetic(op, sqlOperator, left, right, type), type);
             if (!IsDecimal(type)) return base.Arithmetic(op, sqlOperator, left, right, type);
             var function = op switch
             {
@@ -91,7 +94,25 @@ namespace Birko.Data.SQL.Connectors
 
         /// <inheritdoc />
         public override string Negate(string operand, Type type)
-            => IsDecimal(type) ? $"{SqLiteDecimal.SubtractFunction}({Literal(0m)}, {operand})" : base.Negate(operand, type);
+            => IsDecimal(type)
+                ? $"{SqLiteDecimal.SubtractFunction}({Literal(0m)}, {operand})"
+                : SqlConversion.IsIntegral(type)
+                    ? SqLiteExactFunctions.CheckedIntegerCall(base.Negate(operand, type), type)
+                    : base.Negate(operand, type);
+
+        /// <summary>
+        /// TASK-870 — C#'s own fold through <see cref="SqLiteExactFunctions.CaseFoldFunction"/>: SQLite's <c>LOWER</c> / <c>UPPER</c>
+        /// fold ASCII only. <c>ToLower()</c> folds in the current culture, read here, when the statement is rendered.
+        /// </summary>
+        public override string CaseFold(string operand, bool upper, bool invariant)
+            => SqLiteExactFunctions.CaseFoldCall(operand, upper, invariant ? CultureInfo.InvariantCulture : CultureInfo.CurrentCulture);
+
+        /// <summary>
+        /// TASK-870 — midnight as the text a DateTime parameter binds as (<c>yyyy-MM-dd HH:mm:ss</c>). Measured: <c>DATE(…)</c>
+        /// stored <c>2026-03-09</c>, which read back as the right DateTime, but compared as text with the bound
+        /// <c>2026-03-09 00:00:00</c>, so <c>x.At == day</c> matched none of the updated rows.
+        /// </summary>
+        public override string DateOf(string operand) => $"(DATE({operand}) || ' 00:00:00')";
 
         /// <summary>TASK-869 — C#'s own comparison, through <see cref="SqLiteStringMatch.Function"/>.</summary>
         public override string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)

@@ -113,6 +113,16 @@ and `SqLiteDecimal` (`Database/Connectors/SqLiteDecimal.cs`) registers on **ever
   (`10.0` equals `10.00`; an unparseable text sorts after every number)
 - `birko_decimal_add` — what `PropertyUpdate.Increment` emits for a decimal column; refuses overflow
 - `birko_decimal_sum` / `birko_decimal_avg` — exact aggregates (views do not emit them yet: TASK-514)
+- `birko_string_match` — `Contains` / `StartsWith` / `EndsWith` / `Equals` with `Ordinal` / `OrdinalIgnoreCase` (TASK-869)
+- `birko_case_fold(text, upper, culture)` — `ToLower()` / `ToUpper()` and their invariant forms, in filters and SET
+  values, as C# folds (SQLite's `LOWER` / `UPPER` fold ASCII only); `ToLower()` renders the caller's current culture
+  name into the statement (`SqLiteExactFunctions`, TASK-870). So, as in C#, the result depends on the host: on a
+  `tr-TR` / `az` host `"I".ToLower()` is `ı` and `"i".ToUpper()` is `İ`, and a filter written for an English host can
+  match other rows there. Use `ToLowerInvariant()` / `ToUpperInvariant()` (or `StringComparison.OrdinalIgnoreCase`) where
+  the answer must not depend on the host culture. The servers' `LOWER` / `UPPER` ignore the host culture.
+- `birko_checked_int(value, min, max)` — integer arithmetic in a filter or SET, and `PropertyUpdate.Increment` of an
+  integer column: fails the statement when the value leaves its C# type's range (an INTEGER is 64-bit here, so
+  `Hits + 1` at `int.MaxValue` used to be stored, and every later read of the row threw) (TASK-870)
 
 ⚠ **A connection that did not register them** — a consumer's own `SqliteConnection`, the `sqlite3` CLI, DB
 Browser — can `SELECT` a decimal column but fails on `ORDER BY` of it, and on any write to a table with an index on

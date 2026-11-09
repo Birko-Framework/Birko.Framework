@@ -296,6 +296,14 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL translation leftovers: SQLite folds and overflow, exact decimal division, `.Date` and `Replace` in SET (2026-11-09)
+[[TASK-870]]. Measured against C# on all four providers, and fixed:
+- **SQLite:** `ToLower` / `ToUpper` folded ASCII only; they now run C#'s fold. `SET Hits = Hits + 1` past `int.MaxValue`
+  stored silently and broke every later read of the row; integer arithmetic now fails on overflow.
+- **Decimal `/`:** a constant divisor like `2m`, `4m`, `2.5m` becomes an exact product everywhere; any other decimal
+  division (`/ 3m`, a column) is refused by name on the servers, in filters and SET. **Breaking.**
+- **SET:** `.Date` works on SQLite (was silently wrong) and SQL Server (failed). `Replace` follows C#: a null new value
+  removes, an empty old value throws, SQL Server compares case-sensitively.
 ### A SQL Server read reports a server error instead of returning no rows (2026-11-09)
 [[TASK-880]]. A read whose filter failed on the server (divide by zero, overflow, a SUM overflow in a grouped view)
 returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on
@@ -368,18 +376,6 @@ all four providers, no error (measured: 80–83 of 125 contract cases).
 - **Translated:** `GetValueOrDefault` (as `??`), `Equals` (as `==`), a `bool` XOR, a char pattern, a unary minus in SET.
   An integer cast to a fraction is an explicit SQL cast, and MySQL's integer division is `DIV`. A narrowing SET
   (`(short)(x.Sh + 1)`) runs where overflow fails loudly; SQLite stores it silently and refuses it.
-### An ordering against null matches nothing on every document store (2026-11-08)
-[[TASK-867]]. In C#, `x.Score > nul` with `nul == null` is false. RavenDB matched every non-null Score, Cosmos DB missed
-rows under NOT, MongoDB's `$gte: null` matched the null rows, and Elasticsearch refused, on reads, views and the writes
-the guard allows (measured live). One fold, `NullOrderingFold` (Birko.Data.Core), now replaces such an ordering with
-`false` before each translator renders. A filter that folds to false is answered without a query on RavenDB, and
-rendered as match_none on Elasticsearch. Index and aggregation helpers: [[TASK-868]].
-### A SQL filter comparing a boolean with `false` is no longer inverted (2026-11-08)
-[[TASK-863]]. 34 of 75 boolean shapes returned wrong rows on all four SQL providers (measured): `x.N.HasValue == false`
-rendered `IS NOT NULL`, `(x.A == x.B) == false` rendered the equality, `StartsWith(..) == true` bound `true` as the LIKE
-value, and `x.Opt.HasValue && x.Opt.Value` rendered `Opt = NULL`. On a delete, that removed the rows meant to be kept.
-One rewrite (`RewriteBooleanComparisons`) now turns `e == false` into `!e` and `.Value` on a `bool?` into
-`Opt == true` before parsing, so every shape matches C#. Plain column comparisons render unchanged.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

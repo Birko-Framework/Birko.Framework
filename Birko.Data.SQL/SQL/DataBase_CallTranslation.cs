@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -112,8 +113,64 @@ namespace Birko.Data.SQL
                     && xor.Type == typeof(bool) && xor.Left.Type == typeof(bool) && xor.Right.Type == typeof(bool)
                     && ContainsParameter(node))
                     return Expression.NotEqual(xor.Left, xor.Right);
+                if (visited is BinaryExpression { NodeType: ExpressionType.Divide } quotient && ContainsParameter(node)
+                    && TryExactDecimalReciprocal(quotient, out var reciprocal))
+                    return Expression.Multiply(quotient.Left, reciprocal);
                 return visited;
             }
+        }
+
+        /// <summary>The most significant digits a reciprocal may have and still be multiplied exactly on SQL Server (38 in all).</summary>
+        private const int MaxReciprocalDigits = 10;
+
+        /// <summary>
+        /// TASK-870 — the one decision whether a <c>decimal</c> division over the row is exact in SQL, for filters and update
+        /// SET values alike (both parsers run this rewrite). A division by a constant whose reciprocal terminates
+        /// (<c>c = ±2^i·5^j·10^k</c>: <c>/ 4m</c>, <c>/ 2.5m</c>, <c>/ 100m</c>) has a quotient that terminates a few decimals past
+        /// the dividend, so C# computes it exactly, and SQL computes the same value as the product with the exact reciprocal
+        /// (<c>x.Amount * 0.25</c>): a decimal product keeps every digit on every provider. Every other decimal division (by
+        /// <c>3m</c>, by a column) stays a division, which each server computes at its own scale (measured, TASK-870): the
+        /// server dialects refuse it, and SQLite computes it in C#'s decimal.
+        /// </summary>
+        private static bool TryExactDecimalReciprocal(BinaryExpression quotient, out Expression reciprocal)
+        {
+            reciprocal = quotient.Right;
+            if (UnwrapNullable(quotient.Type) != typeof(decimal) || !ContainsParameter(quotient.Left) || ContainsParameter(quotient.Right))
+                return false;
+            if (Expression.Lambda(quotient.Right).Compile().DynamicInvoke() is not decimal divisor)
+                return false;
+            if (!TerminatingReciprocal(divisor, out var exact))
+                return false;
+            reciprocal = Expression.Constant(exact, quotient.Right.Type);
+            return true;
+        }
+
+        /// <summary>
+        /// <c>1 / divisor</c> when it is a terminating decimal of at most <see cref="MaxReciprocalDigits"/> significant digits:
+        /// the divisor's integer mantissa has no prime factor but 2 and 5.
+        /// </summary>
+        internal static bool TerminatingReciprocal(decimal divisor, out decimal reciprocal)
+        {
+            reciprocal = 0m;
+            var mantissa = Mantissa(divisor);
+            if (mantissa.IsZero) return false;
+            while (mantissa % 2 == 0) mantissa /= 2;
+            while (mantissa % 5 == 0) mantissa /= 5;
+            if (!mantissa.IsOne) return false;
+            var candidate = 1m / divisor;
+            if (candidate * divisor != 1m) return false;
+            if (Mantissa(candidate).ToString().TrimStart('-').TrimEnd('0').Length > MaxReciprocalDigits) return false;
+            reciprocal = candidate;
+            return true;
+        }
+
+        private static System.Numerics.BigInteger Mantissa(decimal value)
+        {
+            var bits = decimal.GetBits(value);
+            var bytes = new byte[13];
+            for (var i = 0; i < 3; i++)
+                BitConverter.GetBytes(bits[i]).CopyTo(bytes, i * 4);
+            return new System.Numerics.BigInteger(bytes);
         }
 
         /// <summary>
@@ -278,6 +335,69 @@ namespace Birko.Data.SQL
         private static bool IsCaseFold(MethodCallExpression call)
             => call.Object != null && call.Method.DeclaringType == typeof(string) && call.Arguments.Count == 0
                 && call.Method.Name is "ToLower" or "ToLowerInvariant" or "ToUpper" or "ToUpperInvariant";
+
+        private static bool IsUpperFold(MethodCallExpression call) => call.Method.Name is "ToUpper" or "ToUpperInvariant";
+
+        private static bool IsInvariantFold(MethodCallExpression call) => call.Method.Name is "ToLowerInvariant" or "ToUpperInvariant";
+
+        /// <summary>
+        /// TASK-870 — names <paramref name="condition"/> after the case fold <paramref name="fold"/> of the already parsed
+        /// <paramref name="inner"/>: <c>LOWER(…)</c> / <c>UPPER(…)</c> in the portable form, and a re-render through the provider's
+        /// <see cref="SqlValueFragmentDialect.CaseFold"/>, which on SQLite is C#'s own fold.
+        /// </summary>
+        private static void FoldConditionName(Condition condition, Condition inner, MethodCallExpression fold)
+        {
+            var upper = IsUpperFold(fold);
+            var invariant = IsInvariantFold(fold);
+            var innerName = inner.Name!;
+            var innerFragment = inner.NameFragment;
+            condition.Name = SqlValueFragmentDialect.Portable.CaseFold(innerName, upper, invariant);
+            condition.NameFragment = dialect => dialect.CaseFold(innerFragment?.Invoke(dialect) ?? innerName, upper, invariant);
+        }
+
+        /// <summary>
+        /// TASK-870 — <c>string.Replace(oldValue, newValue)</c> in an update's SET value, matched ordinally as C# does
+        /// (<see cref="SqlValueFragmentDialect.Replace"/>). C# throws for a null or empty <c>oldValue</c>, so one is refused by
+        /// name, as is one read from the row, which could be empty on some row; a null <c>newValue</c> removes, as in C#.
+        /// Before (measured on all four providers): an empty <c>oldValue</c> stored the text unchanged, and
+        /// <c>Replace("A", null)</c> stored NULL where C# removes the <c>A</c>.
+        /// </summary>
+        private static string ParseReplace(MethodCallExpression call, IDictionary<string, object> parameters, bool withTableName,
+            Type? exprType, SqlValueFragmentDialect dialect)
+        {
+            var oldArgument = call.Arguments[0];
+            var newArgument = call.Arguments[1];
+            if (ContainsParameter(oldArgument))
+                throw new NotSupportedException(
+                    "Cannot translate String.Replace to SQL when the value to replace is read from the row: C# throws for an "
+                    + "empty one, which SQL cannot. Replace a value, or compute the new text in memory.");
+            var oldValue = Expression.Lambda(oldArgument).Compile().DynamicInvoke()?.ToString();
+            if (string.IsNullOrEmpty(oldValue))
+                throw new NotSupportedException(
+                    "Cannot translate String.Replace to SQL with a null or empty value to replace: C# throws for it "
+                    + "(ArgumentNullException / ArgumentException). Before this was refused SQL stored the text unchanged.");
+
+            var operand = ParseExpression(call.Object!, parameters, withTableName, exprType, dialect)!;
+            var oldKey = Bind(parameters, oldValue);
+            string newSql;
+            if (ContainsParameter(newArgument))
+            {
+                // A NULL replacement removes in C#; SQL's REPLACE would answer NULL.
+                newSql = $"COALESCE({ParseExpression(newArgument, parameters, withTableName, exprType, dialect)}, {Bind(parameters, string.Empty)})";
+            }
+            else
+            {
+                newSql = Bind(parameters, Expression.Lambda(newArgument).Compile().DynamicInvoke()?.ToString() ?? string.Empty);
+            }
+            return dialect.Replace(operand, oldKey, newSql);
+        }
+
+        private static string Bind(IDictionary<string, object> parameters, object value)
+        {
+            var key = "@Const" + parameters.Count;
+            parameters.Add(key, value);
+            return key;
+        }
 
         /// <summary><c>string.Equals(string, string, StringComparison)</c>, the shape TASK-869's rewrite leaves.</summary>
         private static readonly MethodInfo StaticStringEqualsWithComparison =

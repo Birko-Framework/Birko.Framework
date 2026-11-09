@@ -345,29 +345,28 @@ namespace Birko.Data.SQL
                 }
                 var left = ParseExpression(binaryExpression.Left, parameters, withTableName, exprType, dialect);
                 var right = ParseExpression(binaryExpression.Right, parameters, withTableName, exprType, dialect);
-                if (binaryExpression.NodeType == ExpressionType.Divide && SqlConversion.IsIntegral(binaryExpression.Type))
-                    return dialect.IntegralDivide(left!, right!);
+                // TASK-870: integer arithmetic through the dialect, which divides as C# does and, on SQLite, fails a value that
+                // leaves the type's range instead of storing it (measured: SET Hits = Hits + 1 at int.MaxValue stored 2147483648).
+                if (IsArithmeticNode(binaryExpression.NodeType) && SqlConversion.IsIntegral(binaryExpression.Type))
+                    return dialect.Arithmetic(binaryExpression.NodeType, sqlOperator, left!, right!, binaryExpression.Type);
+                // TASK-870: decimal arithmetic through the dialect, as in a filter. SQLite computes it in C#'s decimal: its native
+                // operators go through a double (measured: SET Amount = Amount * 0.4 stored -2.8000000000000003 for -7, and
+                // 7500000000000.0 for 30000000000000.0001 / 4). A division the rewrite could not make an exact product (by 3m, by
+                // a column) the servers refuse, since each keeps its own scale of the quotient. The servers' + - * % render as before.
+                if (IsArithmeticNode(binaryExpression.NodeType) && UnwrapNullable(binaryExpression.Type) == typeof(decimal))
+                    return dialect.Arithmetic(binaryExpression.NodeType, sqlOperator, left!, right!, binaryExpression.Type);
                 return $"({left} {sqlOperator} {right})";
             }
             if (expr is MethodCallExpression callExpression)
             {
                 if (callExpression.Method.Name == "Replace" && callExpression.Method.DeclaringType == typeof(string)
                     && callExpression.Arguments.Count == 2 && callExpression.Object != null)
-                {
-                    StringBuilder result = new StringBuilder();
-                    //maybe platform specific implementation
-                    result.AppendFormat("REPLACE({0}", ParseExpression(callExpression.Object, parameters, withTableName, exprType, dialect));
-                    foreach (var argument in callExpression.Arguments)
-                    {
-                        result.AppendFormat(", {0}", ParseExpression(argument, parameters, withTableName, exprType, dialect));
-                    }
-                    result.Append(")");
-                    return result.ToString();
-                }
+                    return ParseReplace(callExpression, parameters, withTableName, exprType, dialect);
                 if (IsCaseFold(callExpression))
                 {
+                    // TASK-870: through the dialect, so SQLite folds as C# does (its LOWER / UPPER fold ASCII only).
                     var inner = ParseExpression(callExpression.Object!, parameters, withTableName, exprType, dialect);
-                    return callExpression.Method.Name is "ToLower" or "ToLowerInvariant" ? $"LOWER({inner})" : $"UPPER({inner})";
+                    return dialect.CaseFold(inner!, IsUpperFold(callExpression), IsInvariantFold(callExpression));
                 }
                 // SH-H024 / TASK-308: only a parameter-FREE call can be folded to a constant. The
                 // normalizer has already folded every such call, so a parameter-bound one arriving
@@ -423,7 +422,8 @@ namespace Birko.Data.SQL
                     var columnExpr = ParseExpression(innerDateMember, parameters, withTableName, exprType, dialect);
                     if (!string.IsNullOrEmpty(columnExpr) && !columnExpr.StartsWith("@"))
                     {
-                        return $"DATE({columnExpr})";
+                        // TASK-870: DATE() is no T-SQL function, and on SQLite it stored a text no DateTime parameter equals.
+                        return dialect.DateOf(columnExpr);
                     }
                     // If inner resolved to a parameter, evaluate the whole .Date as constant
                     var key = "@Const" + parameters.Count;
@@ -980,30 +980,16 @@ namespace Birko.Data.SQL
                             break;
                         case "ToLower":
                         case "ToLowerInvariant":
-                            {
-                                // Unwrap ToLower: recurse into the Object, then wrap column name with LOWER()
-                                if (methodExpression.Object != null)
-                                {
-                                    var inner = new Conditions.Condition(null, null);
-                                    ParseConditionExpression(methodExpression.Object, inner, exprType);
-                                    if (!string.IsNullOrEmpty(inner.Name))
-                                    {
-                                        condition.Name = $"LOWER({inner.Name})";
-                                    }
-                                }
-                                return new[] { condition };
-                            }
                         case "ToUpper":
                         case "ToUpperInvariant":
                             {
-                                if (methodExpression.Object != null)
+                                // Unwrap the fold: recurse into the Object, then fold the column in the provider's dialect.
+                                if (methodExpression.Object != null && IsCaseFold(methodExpression))
                                 {
                                     var inner = new Conditions.Condition(null, null);
                                     ParseConditionExpression(methodExpression.Object, inner, exprType);
                                     if (!string.IsNullOrEmpty(inner.Name))
-                                    {
-                                        condition.Name = $"UPPER({inner.Name})";
-                                    }
+                                        FoldConditionName(condition, inner, methodExpression);
                                 }
                                 return new[] { condition };
                             }

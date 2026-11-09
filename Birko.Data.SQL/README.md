@@ -269,8 +269,12 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   | MySQL 8 (`utf8mb4_0900_ai_ci`) | insensitive | **insensitive** | `café`, `CAFE`, `Café`… and `Contains("cafe")` matches `café` |
   | SQL Server (`SQL_Latin1_General_CP1_CI_AS`) | insensitive | sensitive | `café`, `CAFÉ`, `Café` |
 
-  `x.Title.ToLower().Contains(q.ToLower())` follows the collation too (SQL's `LOWER` is not .NET's: SQLite folds
-  ASCII only). For C#'s answer on every provider, pass the comparison:
+  `x.Title.ToLower().Contains(q.ToLower())` follows the collation too. The fold itself (TASK-870): on SQLite
+  `ToLower()` / `ToUpper()` and their invariant forms are C#'s own (a registered function, `birko_case_fold`; SQLite's
+  `LOWER` folds ASCII only, so `Čučoriedka` stayed uppercase). On the servers they are `LOWER` / `UPPER`, which fold by
+  the server's case tables: measured over 34 texts, PostgreSQL differs from .NET on 1 (the Turkish `İ` / `ı` under the
+  invariant forms), MySQL on up to 2, SQL Server on 7 to 8 (`K` Kelvin, `ſ`, `İ`, `ı`, …). `č`, `ä` and `é` fold as
+  in C# on all four (TASK-870's view tests). For C#'s answer on every provider, pass the comparison:
   - `StringComparison.Ordinal` — exact, case- and accent-sensitive.
   - `StringComparison.OrdinalIgnoreCase` — C#'s own case classes (`ı` and `ſ` stay apart from `I` / `S`, as in C#),
     accent-sensitive. On SQL Server a term holding a cased letter outside the BMP (e.g. Deseret) is refused, and so is
@@ -285,6 +289,20 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
     throw `NotSupportedException` before anything runs. Before TASK-869 the comparison was silently ignored.
 - **Two columns compare** (`x.A == x.B`, `x.Opened < x.Closed`); `==` / `!=` on nullable columns treat two nulls
   as equal, as C# does. `x.Opened.Date == x.Closed.Date` throws `NotSupportedException` (no portable SQL form).
+- **Decimal division (TASK-870), in filters and update SET values alike.** A division by a constant whose reciprocal
+  terminates (`/ 2m`, `/ 4m`, `/ 2.5m`, `/ 100m`: ±2^i·5^j·10^k, reciprocal of at most 10 digits) is rendered as the
+  product with that reciprocal (`x.Amount * 0.25`), which is exact on every provider. Any other decimal division (by `3m`,
+  by a column) keeps C#'s 28 to 29 significant digits only on SQLite, which divides in C#'s decimal; each server keeps its
+  own scale of the quotient (SQL Server as few as six decimals, MySQL four more than the dividend, PostgreSQL about
+  sixteen significant digits), so it throws `NotSupportedException` there before anything runs. A decimal `%`
+  translates everywhere.
+- **Update SET values (TASK-870).** `x.At.Date` renders `CAST(… AS DATE)` (SQL Server has no `DATE()`), and on SQLite
+  midnight in the text a DateTime parameter binds as. `Replace(a, b)` matches ordinally, as C#: under SQL Server's
+  default collation it matched case-insensitively and by linguistic rules (`ß` = `ss`), so the column is compared in
+  `Latin1_General_100_BIN2`; a null `b` removes, as in C#; an empty, null or row-read `a` throws
+  `NotSupportedException`, since C# throws for an empty one. On SQLite an integer SET (`Hits = Hits + 1`,
+  `Increment`) that leaves its C# type's range fails the statement (`birko_checked_int`) instead of storing a value
+  every later read of the row throws on; the servers already failed it.
 - Predicates also accept ternaries, `??`, and column arithmetic — see
   [CLAUDE.md § Filter translation](CLAUDE.md) for the full supported surface.
 
