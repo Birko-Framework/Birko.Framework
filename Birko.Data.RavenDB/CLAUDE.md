@@ -194,8 +194,16 @@ Every filter these helpers take goes through `RavenFilterRewriter` first, as the
 ordering against null (`x.Score > nul`) is false, as in C#; `ids.Contains(x.Code)` becomes `In`; `x => true` drops the
 predicate. A filter that folds to `false` is answered without a query (empty, `default`, `0`). Before, measured live, 21 of
 27 shape × method checks were wrong or refused. The stores' `Aggregate` / `AggregateAsync` do the same.
-**Known gap (measured 2026-11-09, not fixed):** the native facet path (one GROUP BY field, no time bucket) queries the
-collection, and RavenDB refuses it ("Facet query must be executed against static index") for any filter.
+
+### Aggregation (`Aggregate` / `AggregateAsync`)
+Every GROUP BY shape is aggregated client-side: the filtered documents are read in one query and passed to
+`AggregateHelper.LinqAggregate` (Birko.Data.Stores), so results match the InMemory store's. TASK-877 (the user's
+decision, 2026-11-09): one GROUP BY field used to send a facet query against the collection, which RavenDB refuses for
+every filter ("Facet query must be executed against static index", measured: 72 of 88 cases, the other 16 folded to
+`false` and sent no query). A static index for facets or map-reduce was considered and not chosen.
+- The whole matching set is loaded (no `Take`, no streaming) and tracked by the session; measured with 2,600 documents,
+  nothing is cut short. Narrow the filter for large collections.
+- A null group key is its own group (key `null`), as in LINQ.
 
 ## Indexes
 

@@ -1,12 +1,10 @@
 using Birko.Data.Models;
-using Birko.Data.RavenDB.Aggregation;
 using Birko.Data.Stores;
 using ISettings = Birko.Configuration.ISettings;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Operations.Indexes;
-using Raven.Client.Documents.Queries.Facets;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using System;
@@ -651,8 +649,8 @@ public class RavenDBStore<T>
     #region Aggregation
 
     /// <summary>
-    /// Executes a synchronous aggregation query using native RavenDB faceted aggregation for single GROUP BY,
-    /// with LINQ fallback for multi-field GROUP BY or time bucketing.
+    /// Executes a synchronous aggregation query: the filtered documents are read in one query and aggregated
+    /// client-side by <see cref="AggregateHelper.LinqAggregate{T}"/>, for every GROUP BY shape.
     /// </summary>
     public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
     {
@@ -668,14 +666,10 @@ public class RavenDBStore<T>
         var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenSession());
         try
         {
-            bool canUseNative = query.GroupByFields.Count == 1
-                && string.IsNullOrEmpty(query.TimeBucketInterval);
-
-            if (canUseNative)
-            {
-                return NativeFacetAggregate(session, query, filter);
-            }
-
+            // TASK-877: one GROUP BY field used to send a facet query against the collection, and RavenDB refuses every
+            // such query ("Facet query must be executed against static index", measured live for every filter). By the
+            // user's decision it takes this LINQ path, as several GROUP BY fields already did. The whole matching set is
+            // loaded (no paging, no streaming) and aggregated in memory.
             IQueryable<T> q = session.Query<T>();
             if (filter != null)
                 q = q.Where(filter);
@@ -688,22 +682,6 @@ public class RavenDBStore<T>
             if (Session == null)
                 session.Dispose();
         }
-    }
-
-    private IReadOnlyList<AggregateResult> NativeFacetAggregate(
-        Raven.Client.Documents.Session.IDocumentSession session,
-        AggregateQuery<T> query,
-        Expression<Func<T, bool>>? filter)
-    {
-        IQueryable<T> q = session.Query<T>();
-        if (filter != null)
-            q = q.Where(filter);
-
-        var aggregation = q.AggregateBy(FacetAggregationHelper.BuildFacetBuilder(query));
-        var facetResults = aggregation.Execute();
-
-        var results = FacetAggregationHelper.MapFacetResults(facetResults, query);
-        return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
     }
 
     #endregion

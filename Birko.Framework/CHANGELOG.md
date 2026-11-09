@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-08 — SQL view filters with computed values run again; persistent views refuse them by name
+[[TASK-858]]. Since TASK-857, every on-the-fly `SqlViewStore` filter with arithmetic, COALESCE, CASE, Round or a
+column-vs-column comparison threw "Cannot translate operand", on all four providers (reproduced). Its re-render looked
+the view's columns up again after their scope had closed. The parse now records them once (`FragmentResolution`). A
+persistent view used to fail with an error naming something else. It now refuses a computed filter by name, before
+anything runs.
+
 ## 2026-11-08 — A SQL filter refuses a call or cast it cannot translate — BREAKING
 [[TASK-860]]. The SQL parser used to drop a call or conversion it did not know and compare its operand: wrong rows on
 all four providers, no error (measured: 80–83 of 125 contract cases).

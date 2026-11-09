@@ -1,12 +1,10 @@
 using Birko.Data.Models;
-using Birko.Data.RavenDB.Aggregation;
 using Birko.Data.Stores;
 using ISettings = Birko.Configuration.ISettings;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Operations.Indexes;
-using Raven.Client.Documents.Queries.Facets;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using System;
@@ -831,8 +829,8 @@ public class AsyncRavenDBStore<T>
     #region Aggregation
 
     /// <summary>
-    /// Executes an aggregation query using native RavenDB faceted aggregation for single GROUP BY,
-    /// with LINQ fallback for multi-field GROUP BY or time bucketing.
+    /// Executes an aggregation query: the filtered documents are read in one query and aggregated client-side by
+    /// <see cref="AggregateHelper.LinqAggregateAsync{T}"/>, for every GROUP BY shape.
     /// </summary>
     public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
         AggregateQuery<T> query,
@@ -847,16 +845,7 @@ public class AsyncRavenDBStore<T>
         var session = Session ?? RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         try
         {
-            // Native faceted aggregation: single GROUP BY, no time bucketing
-            bool canUseNative = query.GroupByFields.Count == 1
-                && string.IsNullOrEmpty(query.TimeBucketInterval);
-
-            if (canUseNative)
-            {
-                return await NativeFacetAggregateAsync(session, query, filter, ct);
-            }
-
-            // Fallback to LINQ for multi-field GROUP BY, time bucketing, or no GROUP BY
+            // TASK-877: every GROUP BY shape aggregates client-side — see RavenDBStore.Aggregate.
             IQueryable<T> q = session.Query<T>();
             if (filter != null)
                 q = q.Where(filter);
@@ -869,23 +858,6 @@ public class AsyncRavenDBStore<T>
             if (Session == null)
                 session.Dispose();
         }
-    }
-
-    private async Task<IReadOnlyList<AggregateResult>> NativeFacetAggregateAsync(
-        Raven.Client.Documents.Session.IAsyncDocumentSession session,
-        AggregateQuery<T> query,
-        Expression<Func<T, bool>>? filter,
-        CancellationToken ct)
-    {
-        IQueryable<T> q = session.Query<T>();
-        if (filter != null)
-            q = q.Where(filter);
-
-        var aggregation = q.AggregateBy(FacetAggregationHelper.BuildFacetBuilder(query));
-        var facetResults = await aggregation.ExecuteAsync(ct);
-
-        var results = FacetAggregationHelper.MapFacetResults(facetResults, query);
-        return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
     }
 
     #endregion

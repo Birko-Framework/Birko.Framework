@@ -36,7 +36,7 @@ public class T868RowsIndex : AbstractIndexCreationTask<T868Row>
 
 /// <summary>
 /// TASK-868, live RavenDB: the filter-taking paths TASK-867 did not wire — the stores' <c>Aggregate</c> /
-/// <c>AggregateAsync</c> (native facet and LINQ fallback) and <see cref="RavenDBIndexManager"/>'s
+/// <c>AggregateAsync</c> (one and two GROUP BY fields) and <see cref="RavenDBIndexManager"/>'s
 /// <c>QueryMapReduceAsync</c>, <c>QueryMapReduceFirstAsync</c> and <c>CountMapReduceAsync</c> — answer what the compiled
 /// C# filter matches. RQL ranks null below every value, so <c>Score &gt; null</c> matched every non-null Score; and those
 /// paths also skipped <c>RavenFilterRewriter</c>'s <c>Contains</c> → <c>In</c> and <c>x =&gt; true</c> handling.
@@ -78,21 +78,21 @@ public sealed class Task868NullOrderingHelperLiveTests : IDisposable
         .Select((s, i) => new T868Row { Code = "r" + (i + 1), A = i + 1, Grp = i % 2 == 0 ? "g1" : "g2", Score = s })
         .ToList();
 
-    private static AggregateQuery<T868Row> Native(Expression<Func<T868Row, bool>> filter) => new()
+    private static AggregateQuery<T868Row> SingleField(Expression<Func<T868Row, bool>> filter) => new()
     {
         Filter = filter,
         GroupByFields = new[] { "Grp" },
         Aggregates = new[] { new AggregateField(AggregateFunction.Count, "A", "n") },
     };
 
-    private static AggregateQuery<T868Row> Fallback(Expression<Func<T868Row, bool>> filter) => new()
+    private static AggregateQuery<T868Row> TwoFields(Expression<Func<T868Row, bool>> filter) => new()
     {
         Filter = filter,
         GroupByFields = new[] { "Grp", "Code" },
         Aggregates = new[] { new AggregateField(AggregateFunction.Count, "A", "n") },
     };
 
-    /// <summary>A result set as a sorted list of "Grp=…|n=…" (Code ignored for the native facet), comparable across paths.</summary>
+    /// <summary>A result set as a sorted list of "Grp=…|n=…" (Code ignored for a single GROUP BY field), comparable across paths.</summary>
     private static string Render(IEnumerable<AggregateResult> results, bool withCode)
         => string.Join(" ; ", results
             .Select(r => $"{Convert.ToString(r.Values["Grp"], CultureInfo.InvariantCulture)?.ToLowerInvariant()}"
@@ -120,28 +120,28 @@ public sealed class Task868NullOrderingHelperLiveTests : IDisposable
         foreach (var (shape, filter) in Shapes)
         {
             var match = filter.Compile();
-            foreach (var native in new[] { true, false })
+            foreach (var single in new[] { true, false })
             {
-                var query = native ? Native(filter) : Fallback(filter);
-                var expected = Expected(oracle, match, withCode: !native);
-                var path = native ? "native" : "fallback";
+                var query = single ? SingleField(filter) : TwoFields(filter);
+                var expected = Expected(oracle, match, withCode: !single);
+                var path = single ? "one field" : "two fields";
                 try
                 {
-                    var got = Render(await asyncStore.AggregateAsync(query), withCode: !native);
+                    var got = Render(await asyncStore.AggregateAsync(query), withCode: !single);
                     if (got != expected) failures.Add($"AggregateAsync {path} {shape}: C# [{expected}], got [{got}]");
                 }
                 catch (Exception ex)
                 {
-                    if (!(native && IsNativeFacetGap(ex))) failures.Add($"AggregateAsync {path} {shape}: threw {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
+                    failures.Add($"AggregateAsync {path} {shape}: threw {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
                 }
                 try
                 {
-                    var got = Render(syncStore.Aggregate(query), withCode: !native);
+                    var got = Render(syncStore.Aggregate(query), withCode: !single);
                     if (got != expected) failures.Add($"Aggregate {path} {shape}: C# [{expected}], got [{got}]");
                 }
                 catch (Exception ex)
                 {
-                    if (!(native && IsNativeFacetGap(ex))) failures.Add($"Aggregate {path} {shape}: threw {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
+                    failures.Add($"Aggregate {path} {shape}: threw {ex.GetType().Name}: {ex.Message.Split('\n')[0]}");
                 }
             }
         }
@@ -150,27 +150,21 @@ public sealed class Task868NullOrderingHelperLiveTests : IDisposable
     }
 
     /// <summary>
-    /// Measured 2026-11-09, unfixed and outside this task: the native facet path (one GROUP BY field, no time bucket) is a
-    /// dynamic-collection facet query, which RavenDB refuses for every filter, a plain one included. A filter that folds to
-    /// <c>false</c> is still answered (no query is sent). The constraining assertion above skips this refusal; the test
-    /// below is inverted, so it fails the day the native path works and the skip must go (rule 56).
+    /// Inverted by TASK-877 (rule 56). Measured 2026-11-09: one GROUP BY field with no time bucket sent a facet query
+    /// against the collection, which RavenDB refused for every filter ("Facet query must be executed against static
+    /// index"). It now aggregates client-side, as two GROUP BY fields did; Task877SingleFieldAggregateLiveTests covers
+    /// the aggregate functions, ordering, paging and size.
     /// </summary>
-    private static bool IsNativeFacetGap(Exception ex)
-        => ex.GetType().Name == "InvalidQueryException" && ex.Message.Contains("Facet query must be executed against static index");
-
     [Fact]
-    public async Task Known_gap_the_native_facet_aggregate_is_refused_by_RavenDB_for_any_filter()
+    public async Task A_single_field_aggregate_with_a_plain_filter_answers_what_CSharp_matches()
     {
         if (!_live.Ready()) return;
         var store = _live.Track((url, db) => new AsyncRavenDBStore<T868Row>(url, db));
         foreach (var row in Oracle()) await store.CreateAsync(row);
 
-        Exception? thrown = null;
-        try { await store.AggregateAsync(Native(x => x.A > 0)); }
-        catch (Exception ex) { thrown = ex; }
+        var got = Render(await store.AggregateAsync(SingleField(x => x.A > 0)), withCode: false);
 
-        thrown.Should().NotBeNull("the native facet path still fails; if it works now, remove IsNativeFacetGap");
-        IsNativeFacetGap(thrown!).Should().BeTrue(thrown!.Message);
+        got.Should().Be(Expected(Oracle(), x => x.A > 0, withCode: false));
     }
 
     [Fact]

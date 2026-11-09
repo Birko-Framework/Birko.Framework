@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB single-field aggregates run (2026-11-09)
+[[TASK-877]] (the user's decision: LINQ fallback). `Aggregate` with one GROUP BY field sent a facet query that RavenDB
+refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads
+the filtered documents and aggregates them in LINQ, as several fields already did. **Breaking:** the public
+`FacetAggregationHelper` is gone (no caller).
 ### Grouped SQL views read every aggregate type (2026-11-09)
 [[TASK-887]]. A grouped view's SUM/MAX of a `long`, `short` or `double` column, and an AVG into a `double` or integer,
 threw a cast error on all four providers: the reader was chosen from the function name and a closed list of source
@@ -372,12 +377,6 @@ CREATE TABLE on every provider, `Rank` on MySQL, `User` on PostgreSQL and SQL Se
 `CURRENT_DATE` was created, and a filtered delete on it then matched no rows, silently (measured). Each provider now
 holds the list its server rejects, measured live, and the table build refuses such a column with
 `NotSupportedException` naming it, before any SQL is sent. Map it with `[NamedField]` or `HasColumnName`.
-### SQL view filters with computed values run again; persistent views refuse them by name (2026-11-08)
-[[TASK-858]]. Since TASK-857, every on-the-fly `SqlViewStore` filter with arithmetic, COALESCE, CASE, Round or a
-column-vs-column comparison threw "Cannot translate operand", on all four providers (reproduced). Its re-render looked
-the view's columns up again after their scope had closed. The parse now records them once (`FragmentResolution`). A
-persistent view used to fail with an error naming something else. It now refuses a computed filter by name, before
-anything runs.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
