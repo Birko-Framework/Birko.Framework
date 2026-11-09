@@ -296,6 +296,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL Server refuses a LIKE term past its 4000-character limit (2026-11-09)
+[[TASK-874]]. A plain `Contains` / `StartsWith` / `EndsWith` whose pattern passed 4000 characters failed count, update
+and delete with Msg 8152, and the read returned no rows, silently (measured). It is now refused by name before anything
+runs, through the same limit TASK-869 set. The silent empty read is a reader-loop defect of its own ([[TASK-880]], P1).
 ### RavenDB index helpers and aggregates, and MongoDB aggregates, fold null orderings too (2026-11-09)
 [[TASK-868]]. TASK-867's fold missed these paths (measured live): RavenDB's map-reduce helpers and store aggregates
 counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`; MongoDB's `Aggregate` and the public
@@ -373,14 +377,6 @@ never matched NULL.
 - [[TASK-846]], [[TASK-847]]: a mapping that throws while the registries scan an assembly arrives as
   `InvalidOperationException` naming the mapping and stage, with the original inside. It used to arrive as
   `TargetInvocationException` (the user's decision over rule 9's keep-the-type default).
-### A view that projects a nested member reads it, on every provider (2026-11-07)
-[[TASK-843]]. `ViewDefinitionBuilder` kept only the last member name, so `Select(r => r.Sub.X, …)` read the top-level
-`X` on SQLite, Cosmos DB, MongoDB, RavenDB and Elasticsearch, silently (reproduced on each).
-- The builder now records the full path (`FieldSelector.SourcePath`), and each provider renders it.
-- **Refused by name:** SQL views refuse a nested projection, since a table has no nested member; so do nested join,
-  group and aggregate keys.
-- **Breaking:** `c => c.Guid!.Value` is recorded as `Guid`, not `Value`.
-- The fluent SQL mapping had the same flaw and now refuses a nested member by name ([[TASK-845]]): `map.Property(x => x.Sub.Code)` had renamed and indexed the top-level `Code` (reproduced).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

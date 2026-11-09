@@ -180,6 +180,13 @@ stays `false` — the guard means the condition never reaches the client.
 ## Limitations
 - Requires SQL Server 2012 or later
 - Some features may require specific SQL Server editions
+- **LIKE patterns take at most 4000 UTF-16 code units** (TASK-874, measured on 2022: 4001 is Msg 8152, also bound as
+  `nvarchar(max)`), counting the `%` wildcards and each `!` escape. `MSSqlValueFragmentDialect.RequireLikePattern`
+  is the one check, before anything runs, for the no-argument `Contains` / `StartsWith` / `EndsWith`
+  (`LikeConditionStrategy`) and for TASK-869's `Ordinal` / `OrdinalIgnoreCase` forms. So a plain `Contains` term
+  takes 3998 characters, a `StartsWith` / `EndsWith` 3999, and a term of metacharacters half that. Before, a read past
+  the limit returned **no rows, silently** (the error arrives after the result's metadata and the reader never read
+  it); a count, update or delete failed with Msg 8152. Equality has no such limit (a 9000-character `==` runs).
 
 ## Maintenance
 

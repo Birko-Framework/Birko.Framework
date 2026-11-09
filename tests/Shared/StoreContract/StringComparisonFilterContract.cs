@@ -312,6 +312,73 @@ public abstract class StringComparisonFilterContract
     }
 
     /// <summary>
+    /// TASK-874 — a long term in a no-argument <c>Contains</c> / <c>StartsWith</c> / <c>EndsWith</c>. SQL Server's limit is
+    /// the LIKE pattern's, in UTF-16 code units, counting the <c>%</c> wildcards and each escape character (measured on
+    /// 2022: 4000 runs, 4001 fails with Msg 8152, so a <c>Contains</c> term of 3999 plain characters, or of 2000 <c>%</c>,
+    /// is past it). Past the limit the filter is refused by name before anything runs; at it, and on every other
+    /// provider, it matches. Before: the read and the delete failed with the server's Msg 8152.
+    /// </summary>
+    [Theory]
+    [InlineData("Contains", 'a', 3998)]
+    [InlineData("Contains", 'a', 3999)]
+    [InlineData("StartsWith", 'a', 3999)]
+    [InlineData("StartsWith", 'a', 4000)]
+    [InlineData("EndsWith", 'a', 3999)]
+    [InlineData("EndsWith", 'a', 4000)]
+    [InlineData("Contains", '%', 1999)]
+    [InlineData("Contains", '%', 2000)]
+    [InlineData("Contains", '!', 2000)]
+    public async Task Contract_A_long_no_argument_term_matches_or_is_refused_by_its_limit(string kind, char fill, int length)
+    {
+        if (!Ready()) return;
+        var (store, seed) = await Seeded();
+        var term = new string(fill, length);
+        await store.CreateAsync(new StringMatchRow { Guid = Guid.NewGuid(), Text = term, Hits = 1 });
+        Expression<Func<StringMatchRow, bool>> filter = kind switch
+        {
+            "Contains" => x => x.Text.Contains(term),
+            "StartsWith" => x => x.Text.StartsWith(term),
+            _ => x => x.Text.EndsWith(term),
+        };
+        // Each LIKE metacharacter (! % _ [) is escaped with '!', so it costs two pattern characters.
+        var pattern = length * (fill is '!' or '%' or '_' or '[' ? 2 : 1) + (kind == "Contains" ? 2 : 1);
+
+        if (MaxLikePatternLength is { } limit && pattern > limit)
+        {
+            var read = () => store.ReadAsync(filter, null, null, null);
+            (await read.Should().ThrowAsync<NotSupportedException>()).Which.Message.Should()
+                .Contain(limit.ToString(CultureInfo.InvariantCulture)).And.Contain(pattern.ToString(CultureInfo.InvariantCulture));
+            var count = () => store.CountAsync(filter);
+            await count.Should().ThrowAsync<NotSupportedException>();
+            var update = () => store.UpdateAsync(filter, new PropertyUpdate<StringMatchRow>().Set(x => x.Hits, 100));
+            await update.Should().ThrowAsync<NotSupportedException>();
+            var delete = () => store.DeleteAsync(filter);
+            await delete.Should().ThrowAsync<NotSupportedException>();
+            (await store.CountAsync(EveryRow)).Should().Be(seed.Count + 1, "the refused delete never ran");
+            (await store.CountAsync(x => x.Hits == 100)).Should().Be(0, "the refused update never ran");
+            return;
+        }
+        TextsOf(await store.ReadAsync(filter, null, null, null)).Should().Equal(new[] { term }, $"only the long row {kind} the term");
+        await store.DeleteAsync(filter);
+        (await store.CountAsync(EveryRow)).Should().Be(seed.Count, "the delete removed the long row and nothing else");
+    }
+
+    /// <summary>TASK-874 — equality has no such limit: a 9000-character term is compared, on reads and on a delete.</summary>
+    [Fact]
+    public async Task Contract_A_long_equality_term_matches()
+    {
+        if (!Ready()) return;
+        var (store, seed) = await Seeded();
+        var term = new string('a', 9000);
+        await store.CreateAsync(new StringMatchRow { Guid = Guid.NewGuid(), Text = term, Hits = 1 });
+
+        (await store.CountAsync(x => x.Text == term)).Should().Be(1);
+        (await store.CountAsync(x => x.Text.Equals(term))).Should().Be(1);
+        await store.DeleteAsync(x => x.Text == term);
+        (await store.CountAsync(EveryRow)).Should().Be(seed.Count);
+    }
+
+    /// <summary>
     /// The user's decision (TASK-869, option A): without a comparison the LIKE family follows the column's collation, so
     /// these differ from C# on purpose and per provider. Pinned, so a change to it is seen.
     /// </summary>

@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — A view that projects a nested member reads it, on every provider
+[[TASK-843]]. `ViewDefinitionBuilder` kept only the last member name, so `Select(r => r.Sub.X, …)` read the top-level
+`X` on SQLite, Cosmos DB, MongoDB, RavenDB and Elasticsearch, silently (reproduced on each).
+- The builder now records the full path (`FieldSelector.SourcePath`), and each provider renders it.
+- **Refused by name:** SQL views refuse a nested projection, since a table has no nested member; so do nested join,
+  group and aggregate keys.
+- **Breaking:** `c => c.Guid!.Value` is recorded as `Guid`, not `Value`.
+- The fluent SQL mapping had the same flaw and now refuses a nested member by name ([[TASK-845]]): `map.Property(x => x.Sub.Code)` had renamed and indexed the top-level `Code` (reproduced).
+
 ## 2026-11-07 — Cosmos DB: nested view paths read the right field; string lists split
 - [[TASK-840]]: a view filter on `v.Child.X` rendered `c.X` and read the wrong field, silently (reproduced). It renders
   the full path now. The projection side is [[TASK-843]].

@@ -43,12 +43,23 @@ namespace Birko.Data.SQL.Connectors
             };
             if (pattern == null) return base.StringMatch(kind, operand, term, comparison, bind);
             // An OrdinalIgnoreCase pattern spends four characters on each cased letter ([Aa]), so a ~1000-letter term reaches it.
-            if (pattern.Length > MaxLikePatternLength)
-                throw new NotSupportedException(
-                    $"Cannot translate a string comparison with StringComparison.{comparison} to SQL Server: its LIKE pattern would be "
-                    + $"{pattern.Length} characters, past SQL Server's limit of {MaxLikePatternLength} (Msg 8152). Shorten the term, "
-                    + "or compare in memory.");
+            RequireLikePattern(pattern, $"a string comparison with StringComparison.{comparison}");
             return CollatedLike(operand, BinaryCollation, bind(pattern));
+        }
+
+        /// <summary>
+        /// TASK-874 — refuses a pattern past <see cref="MaxLikePatternLength"/>. The limit counts the whole pattern: the
+        /// <c>%</c> wildcards and each escape character (measured: 3999 plain characters inside <c>%…%</c> fail, and so do
+        /// 2000 escaped <c>%</c>), so a no-argument <c>Contains</c> takes at most 3998 plain characters. Before, a read
+        /// past it returned no rows, silently (the error arrives after the result's metadata and the reader never read),
+        /// and a count, update or delete failed with Msg 8152.
+        /// </summary>
+        public override void RequireLikePattern(string pattern, string form)
+        {
+            if (pattern.Length <= MaxLikePatternLength) return;
+            throw new NotSupportedException(
+                $"Cannot translate {form} to SQL Server: its LIKE pattern would be {pattern.Length} characters, past SQL "
+                + $"Server's limit of {MaxLikePatternLength} (Msg 8152). Shorten the term, or compare in memory.");
         }
     }
 }

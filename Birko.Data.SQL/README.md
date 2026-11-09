@@ -275,6 +275,9 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   - `StringComparison.OrdinalIgnoreCase` — C#'s own case classes (`ı` and `ſ` stay apart from `I` / `S`, as in C#),
     accent-sensitive. On SQL Server a term holding a cased letter outside the BMP (e.g. Deseret) is refused, and so is
     a term whose LIKE pattern passes SQL Server's 4000-character limit (each cased letter costs four: `[Aa]`).
+  - SQL Server's 4000-character LIKE limit applies to the no-argument forms too (TASK-874): the pattern counts its
+    `%` wildcards and an escape per `%` / `_` / `[` / `!`, so a `Contains` term past 3998 plain characters throws
+    `NotSupportedException` before anything runs. The other providers have no such limit.
   - On MySQL `Ordinal` names `COLLATE utf8mb4_bin`, so the column must be `utf8mb4` (every framework-created table is);
     on a `utf8mb3` / `latin1` column MySQL fails the statement with ERROR 1253.
   - `string.Equals(x.Col, v, comparison)` and `x.Col.Equals(v, comparison)` translate the same way.

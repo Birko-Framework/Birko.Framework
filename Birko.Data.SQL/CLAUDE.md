@@ -708,7 +708,10 @@ calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Regi
   NULL rows (TASK-859's leg); a null value is `IS NULL`. Column-vs-column is refused. Plain `==` is unchanged (collation).
 - **Limits:** SQL Server's LIKE takes at most 4000 pattern characters (measured: 4001 is Msg 8152, also bound as
   `nvarchar(max)`), so `MSSqlValueFragmentDialect` refuses a longer pattern by name before anything runs — an
-  `OrdinalIgnoreCase` term of ~1000 cased letters. MySQL's `COLLATE utf8mb4_bin` requires a `utf8mb4` column (every
+  `OrdinalIgnoreCase` term of ~1000 cased letters. TASK-874: the no-argument forms go through the same check
+  (`SqlValueFragmentDialect.RequireLikePattern`, a no-op except on SQL Server, called by `LikeConditionStrategy` with
+  the escaped, wildcarded pattern), so a plain `Contains` term past 3998 characters is refused too; before, its read
+  returned no rows silently. MySQL's `COLLATE utf8mb4_bin` requires a `utf8mb4` column (every
   framework-created table is); a `utf8mb3` / `latin1` column fails the statement with ERROR 1253.
 - **Group collapse:** a group that folds onto its one non-constant child (`!(x.Text.Contains("a", Ordinal) && T)`) takes
   the child's predicate through `Condition.BecomePredicateOf`, which shares its property list with `Condition.Copy`. The

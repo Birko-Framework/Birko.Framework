@@ -69,6 +69,13 @@ namespace Birko.Data.SQL.Connectors.Strategies
             return condition.IsNot ? $"NOT ({sql})" : sql;
         }
 
+        private static string FormName(Conditions.Condition condition) => condition.Type switch
+        {
+            Conditions.ConditionType.StartsWith => "a StartsWith",
+            Conditions.ConditionType.EndsWith => "an EndsWith",
+            _ => "a Contains",
+        } + (condition.IsNot ? " under NOT" : "");
+
         private string BuildValueExpression(Conditions.Condition condition, DbCommand command, SqlBuilderContext context)
         {
             if (condition.Values == null)
@@ -83,6 +90,9 @@ namespace Birko.Data.SQL.Connectors.Strategies
             if (!condition.IsField && first != null)
             {
                 var formattedValue = context.FormatValue(first, condition.Type);
+                // TASK-874: SQL Server fails a pattern past 4000 characters (Msg 8152), and its read answers that with no rows.
+                if (formattedValue is string pattern)
+                    context.Dialect.RequireLikePattern(pattern, $"{FormName(condition)} on {condition.Name}");
                 var paramName = context.GenerateParameterName(condition.Name!, 0, command);
                 context.AddParameter(command, paramName, formattedValue);
                 return paramName;

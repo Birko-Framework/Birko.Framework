@@ -126,6 +126,14 @@ namespace Birko.Data.SQL.Conditions
                 $"Cannot translate a string comparison with StringComparison.{comparison} to SQL on this provider: it has no form "
                 + "that matches exactly what C# matches. Compare in memory.");
 
+        /// <summary>
+        /// TASK-874 — refuses, before anything runs, a <c>LIKE</c> <paramref name="pattern"/> (escaped, with its wildcards)
+        /// this provider cannot run; <paramref name="form"/> names the filter in the message. Every <c>LIKE</c> the framework
+        /// renders on a provider with a limit passes here: the no-argument forms, and its <see cref="StringMatch"/>. The base accepts any length
+        /// (SQLite, PostgreSQL and MySQL ran every term measured); SQL Server refuses past its 4000-character limit.
+        /// </summary>
+        public virtual void RequireLikePattern(string pattern, string form) { }
+
         /// <summary>TASK-869 — <c>operand COLLATE binary LIKE pattern ESCAPE '!'</c>, the ordinal LIKE every server but SQLite uses.</summary>
         protected static string CollatedLike(string operand, string collation, string pattern)
             => $"{operand} COLLATE {collation} LIKE {pattern} ESCAPE '{Connectors.SqlBuilderContext.LikeEscapeCharacter}'";
