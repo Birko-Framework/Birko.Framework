@@ -355,6 +355,9 @@ namespace Birko.Data.SQL
                 // a column) the servers refuse, since each keeps its own scale of the quotient. The servers' + - * % render as before.
                 if (IsArithmeticNode(binaryExpression.NodeType) && UnwrapNullable(binaryExpression.Type) == typeof(decimal))
                     return dialect.Arithmetic(binaryExpression.NodeType, sqlOperator, left!, right!, binaryExpression.Type);
+                // TASK-888: a floating division too, so its divisor is guarded as in a filter (SQLite and MySQL computed NULL).
+                if (binaryExpression.NodeType is ExpressionType.Divide or ExpressionType.Modulo)
+                    return dialect.Arithmetic(binaryExpression.NodeType, sqlOperator, left!, right!, binaryExpression.Type);
                 return $"({left} {sqlOperator} {right})";
             }
             if (expr is MethodCallExpression callExpression)

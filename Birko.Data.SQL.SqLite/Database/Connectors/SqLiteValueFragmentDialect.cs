@@ -55,6 +55,13 @@ namespace Birko.Data.SQL.Connectors
             return $"{function}({left}, {right})";
         }
 
+        /// <summary>
+        /// TASK-888 — through <see cref="SqLiteExactFunctions.DivisorFunction"/>, which fails a zero divisor: SQLite's
+        /// <c>/</c> and <c>%</c> answer NULL. A <c>decimal</c> never comes here: its functions compute in C#'s decimal, which
+        /// throws on a zero divisor already.
+        /// </summary>
+        public override string Divisor(string divisor, Type type) => SqLiteExactFunctions.DivisorCall(divisor);
+
         /// <inheritdoc />
         public override string? Literal(object value)
             => value is decimal d ? "'" + SqLiteDecimal.Format(d) + "'" : null;

@@ -53,6 +53,8 @@ namespace Birko.Data.SQL.Conditions
         /// </remarks>
         public virtual string Arithmetic(ExpressionType op, string sqlOperator, string left, string right, Type type)
         {
+            if (op is ExpressionType.Divide or ExpressionType.Modulo)
+                right = Divisor(right, type);
             if (op == ExpressionType.Divide && SqlConversion.IsIntegral(type))
                 return IntegralDivide(left, right);
             if (op == ExpressionType.Divide && (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal) && !ReferenceEquals(this, Portable))
@@ -71,6 +73,16 @@ namespace Birko.Data.SQL.Conditions
         /// MySQL's <c>/</c> always divides fractions (measured: <c>x.Hits / 4 == 0</c> missed 4 of 5 rows) and overrides this.
         /// </summary>
         public virtual string IntegralDivide(string left, string right) => $"({left} / {right})";
+
+        /// <summary>
+        /// TASK-888 — the divisor of a <c>/</c> or <c>%</c> computed in <paramref name="type"/>, in a filter or an update's SET
+        /// value: a zero divisor fails the statement (the user's decision, 2026-11-09: every provider throws). C# throws
+        /// <see cref="DivideByZeroException"/> for an integer or a <c>decimal</c>; a <c>double</c> gives Infinity or NaN, which
+        /// no provider computes as C# does, so it fails too. A NULL divisor stays NULL, as C#'s lifted operators give null.
+        /// The base keeps the divisor: PostgreSQL (22012) and SQL Server (Msg 8134) fail the statement for every numeric type
+        /// (measured). SQLite and MySQL compute NULL, so a read or a count lost the row silently; they override it.
+        /// </summary>
+        public virtual string Divisor(string divisor, Type type) => divisor;
 
         /// <summary>A constant's literal, or null for the portable one.</summary>
         public virtual string? Literal(object value) => null;

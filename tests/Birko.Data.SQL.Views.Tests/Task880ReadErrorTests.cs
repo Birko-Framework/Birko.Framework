@@ -30,7 +30,7 @@ namespace Birko.Data.SQL.Views.Tests;
 /// error raised during execution only after the result's metadata, so the error was never read. Measured on SQL Server
 /// 2022: a divide by zero or an overflow in a filter, or a SUM that overflows in a view, made every read, paged read,
 /// view read and the SELECT before <c>Update(filter, Action)</c> return 0 rows, while the count threw. SQLite, PostgreSQL
-/// and MySQL already threw wherever they raise the error (SQLite and MySQL answer a divide by zero with NULL).
+/// and MySQL already threw wherever they raise the error (SQLite and MySQL answered a divide by zero with NULL until TASK-888).
 /// </para>
 /// <para>
 /// The contract: a read answers what the count answers. When the count throws, so does every read; when it answers, the

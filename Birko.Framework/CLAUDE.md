@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A division by zero in a SQL filter or SET fails on every provider (2026-11-09)
+[[TASK-888]] (the user's decision: every provider throws). SQLite answered NULL on every path, so a Delete or Update with
+such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now
+guard the divisor so a zero fails the statement, as PostgreSQL and SQL Server already did. A `double` divided by zero
+fails too: C#'s Infinity/NaN has no SQL form.
 ### RavenDB single-field aggregates run (2026-11-09)
 [[TASK-877]] (the user's decision: LINQ fallback). `Aggregate` with one GROUP BY field sent a facet query that RavenDB
 refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads

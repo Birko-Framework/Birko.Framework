@@ -196,9 +196,10 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// TASK-826 — a division keeps the dividend's scale plus <c>div_precision_increment</c> (4), capped at 30; a
         /// dividend with scale 26 makes the quotient keep 30 decimals.
+        /// <para>TASK-888: the divisor is guarded as in a filter, so a zero fails whatever the session's <c>sql_mode</c>.</para>
         /// </summary>
         public override string ComputedDivide(string left, string right)
-            => "(CAST(" + left + " AS DECIMAL(65,26)) / " + right + ")";
+            => "(CAST(" + left + " AS DECIMAL(65,26)) / " + FragmentDialect.Divisor(right, typeof(decimal)) + ")";
 
         /// <summary>TASK-860 — an integer division is <c>DIV</c> and a <c>double</c> cast <c>DOUBLE</c> here.</summary>
         protected override Conditions.SqlValueFragmentDialect FragmentDialect

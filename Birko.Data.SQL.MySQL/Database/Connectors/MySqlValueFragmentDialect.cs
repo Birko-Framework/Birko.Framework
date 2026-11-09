@@ -21,6 +21,22 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override string IntegralDivide(string left, string right) => $"({left} DIV {right})";
 
+        /// <summary>The text <see cref="Divisor"/> raises; MySQL reports it as error 1411 ("Incorrect string value: '…'").</summary>
+        public const string DivisionByZeroText = "Division by zero in a filter or SET value: C# throws DivideByZeroException";
+
+        /// <summary>
+        /// TASK-888 — a zero divisor fails the statement. MySQL divides by zero into NULL in a <c>SELECT</c> whatever its
+        /// <c>sql_mode</c> (measured on 8.4: <c>x.Hits / x.Div == 2</c> read no row and counted none for a zero <c>Div</c>), and
+        /// fails a data-change statement (1365) only under <c>ERROR_FOR_DIVISION_BY_ZERO</c> with strict mode. <c>SIGNAL</c> is
+        /// not an expression, so the divisor is <c>CASE WHEN d = 0 THEN LENGTH(UUID_TO_BIN('…')) ELSE d END</c>: the branch is
+        /// evaluated only for a zero divisor (measured: rows with a non-zero divisor, and an empty table with a constant zero,
+        /// answer as before) and raises error 1411 naming <see cref="DivisionByZeroText"/>, in a read and a write alike.
+        /// <c>LENGTH</c> keeps the branch an integer, so the CASE keeps the divisor's numeric type (a string branch would turn a
+        /// <c>decimal</c> divisor into a double). A NULL divisor is not <c>= 0</c> and stays NULL.
+        /// </summary>
+        public override string Divisor(string divisor, Type type)
+            => $"(CASE WHEN {divisor} = 0 THEN LENGTH(UUID_TO_BIN('{DivisionByZeroText}')) ELSE {divisor} END)";
+
         /// <inheritdoc />
         protected override string FloatingTypeName(Type type) => type == typeof(float) ? "FLOAT" : "DOUBLE";
 

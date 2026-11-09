@@ -296,6 +296,14 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   own scale of the quotient (SQL Server as few as six decimals, MySQL four more than the dividend, PostgreSQL about
   sixteen significant digits), so it throws `NotSupportedException` there before anything runs. A decimal `%`
   translates everywhere.
+- **Division by zero (TASK-888), in filters, update SET values and `PropertyUpdate.Compute`.** A zero divisor of `/` or
+  `%` fails the statement on every provider, and nothing is written; a NULL divisor gives NULL, as C#'s lifted operators
+  do. C# throws `DivideByZeroException` for an integer or a decimal. For a `double` C# gives Infinity or NaN, which no
+  provider can compute, so it fails too (a refusal, never another answer). What the caller sees is the provider's own
+  exception: PostgreSQL `PostgresException` 22012, SQL Server `SqlException` 8134, SQLite `SqliteException` (from the
+  registered `birko_divisor`, with a `DivideByZeroException` message), MySQL `MySqlException` 1411 naming
+  "Division by zero in a filter or SET value" (MySQL has no error-raising expression, so the divisor is a `CASE` whose
+  zero branch raises). Before, SQLite and MySQL computed NULL: a read lost the row and a count left it out, silently.
 - **Update SET values (TASK-870).** `x.At.Date` renders `CAST(… AS DATE)` (SQL Server has no `DATE()`), and on SQLite
   midnight in the text a DateTime parameter binds as. `Replace(a, b)` matches ordinally, as C#: under SQL Server's
   default collation it matched case-insensitively and by linguistic rules (`ß` = `ss`), so the column is compared in

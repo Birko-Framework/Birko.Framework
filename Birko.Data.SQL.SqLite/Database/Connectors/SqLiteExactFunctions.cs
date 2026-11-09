@@ -32,6 +32,13 @@ namespace Birko.Data.SQL.Connectors
 
         public const string CheckedIntegerFunction = "birko_checked_int";
 
+        /// <summary>
+        /// TASK-888 — <c>birko_divisor(value)</c>: the divisor of a <c>/</c> or <c>%</c>, unchanged (NULL stays NULL), or an
+        /// error when it is zero. SQLite divides by zero into NULL (measured: <c>x.Hits / x.Div == 2</c> read no row for a zero
+        /// <c>Div</c>, its count left it out, and <c>SET NHits = Hits / NZero</c> stored NULL), where C# throws.
+        /// </summary>
+        public const string DivisorFunction = "birko_divisor";
+
         public static void Register(SqliteConnection connection)
         {
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -39,6 +46,26 @@ namespace Birko.Data.SQL.Connectors
                 (value, upper, culture) => value == null ? null : Fold(value, upper != 0, culture),
                 isDeterministic: true);
             connection.CreateFunction<object?, long, long, object?>(CheckedIntegerFunction, Checked, isDeterministic: true);
+            connection.CreateFunction<object?, object?>(DivisorFunction, NonZero, isDeterministic: true);
+        }
+
+        /// <summary><c>birko_divisor(divisor)</c>, the SQL of <see cref="DivisorFunction"/>.</summary>
+        public static string DivisorCall(string divisor)
+            => string.Format(CultureInfo.InvariantCulture, "{0}({1})", DivisorFunction, divisor);
+
+        private static object? NonZero(object? value)
+        {
+            var zero = value switch
+            {
+                long integer => integer == 0,
+                double real => real == 0d,
+                _ => false,
+            };
+            if (!zero) return value;
+            throw new DivideByZeroException(
+                "Division by zero in a filter or an update's SET value. C# throws DivideByZeroException for an integer or a "
+                + "decimal divisor (and computes Infinity or NaN for a double, which SQL has no form of); the statement is "
+                + "failed instead of answering NULL, as PostgreSQL and SQL Server fail it.");
         }
 
         /// <summary>
