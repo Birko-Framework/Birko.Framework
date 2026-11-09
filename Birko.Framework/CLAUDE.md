@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB job queue stamps a claim when it writes it (2026-11-09)
+[[TASK-879]]. `RavenDBJobQueue` stamped a claim with the time its dequeue started, before the candidate query. Under
+load the query outran a short claim timeout, so a fresh claim looked abandoned and was reclaimed at once (measured: the
+TASK-664 live test failed 2 of 3 suite runs). The claim is now stamped inside the conditional write. Elasticsearch has
+the same shape ([[TASK-884]]).
 ### A SQL rule answers NULL the way C# does (2026-11-09)
 [[TASK-864]]. `RuleConditionConverter` built conditions without TASK-859's NULL handling: 53 of 117 rule shapes on NULL
 rows returned different rows than the compiled rule, on all four providers (measured). Negated and NotIn rules lost the
@@ -372,14 +377,6 @@ x.A > 0)` and, since TASK-859, `!(x.Score > nul && …)` with `nul == null` dele
 (measured on all four SQL providers). The guard and the renderer now share one three-valued reduction
 (`ConstantTruth`), so such a Delete or Update throws `WholeTableWriteException`; `Update(filter, Action)` checks the same
 tree. Reads are unchanged. The non-SQL guard has the same gap for null orderings ([[TASK-865]]).
-### SQL filters treat NULL the way C# does — BREAKING (2026-11-07)
-[[TASK-859]] (the user's decision: always, no flag). Measured on all four SQL providers: 34 of 61 nullable shapes
-returned different rows than the C# expression. `x.Score != 5` missed the NULL rows, and `{null, 10}.Contains(x.Score)`
-never matched NULL.
-- **Now:** `!=`, `!Contains` and negated comparisons include NULL rows; `Contains` with `null` matches NULL; an ordering
-  against a null variable matches nothing. Deletes and updates with these filters affect those rows too.
-- The rendered SQL gains `OR col IS NULL` legs only where SQL and C# would differ; non-nullable columns are unchanged.
-- A split IN list keeps the IS NULL leg in its first chunk only, so the chunks stay disjoint.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

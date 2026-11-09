@@ -221,6 +221,34 @@ public class RavenDBJobQueueTests
         job.CompletedAt.Should().NotBeNull();
     }
 
+    // ── TASK-879: the claim is stamped when it is written, not when the dequeue began ──
+
+    /// <summary>A store whose candidate query takes longer than the claim timeout, as a RavenDB query can while the
+    /// server builds the auto-index for a fresh collection (measured live: 333-519 ms against a 300 ms timeout).</summary>
+    private sealed class SlowQueryRavenStore : InMemoryRavenStore<RavenJobDescriptorModel>
+    {
+        protected override async Task<IEnumerable<RavenJobDescriptorModel>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<RavenJobDescriptorModel, bool>>? filter = null,
+            Birko.Data.Stores.OrderBy<RavenJobDescriptorModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+        {
+            await Task.Delay(Task664Timeout + TimeSpan.FromMilliseconds(150), ct);
+            return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+    }
+
+    [Fact]
+    public async Task TASK_879_a_claim_behind_a_slow_candidate_query_is_not_reclaimed_at_once()
+    {
+        var queue = new RavenDBJobQueue(new SlowQueryRavenStore(), new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, Task664Timeout);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        var claimed = await queue.DequeueAsync();
+        var afterClaim = DateTime.UtcNow;
+        claimed!.Guid.Should().Be(id);
+        claimed.LastAttemptAt.Should().BeOnOrAfter(afterClaim - Task664Timeout, "the claim is stamped when it is written, after the candidate query");
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed, however long the query that found it took");
+        (await queue.GetAsync(id))!.AttemptCount.Should().Be(1);
+    }
+
     // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
 
     [Fact]

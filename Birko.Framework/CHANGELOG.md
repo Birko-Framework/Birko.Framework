@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-07 — SQL filters treat NULL the way C# does — BREAKING
+[[TASK-859]] (the user's decision: always, no flag). Measured on all four SQL providers: 34 of 61 nullable shapes
+returned different rows than the C# expression. `x.Score != 5` missed the NULL rows, and `{null, 10}.Contains(x.Score)`
+never matched NULL.
+- **Now:** `!=`, `!Contains` and negated comparisons include NULL rows; `Contains` with `null` matches NULL; an ordering
+  against a null variable matches nothing. Deletes and updates with these filters affect those rows too.
+- The rendered SQL gains `OR col IS NULL` legs only where SQL and C# would differ; non-nullable columns are unchanged.
+- A split IN list keeps the IS NULL leg in its first chunk only, so the chunks stay disjoint.
+
 ## 2026-11-07 — Cosmos DB view names are quoted; a failing mapping names itself
 - [[TASK-844]]: a Cosmos DB view property named like a keyword (`Value`, `Inner`) failed every query with SC1001. Aliases
   are now quoted (`AS "Value"`), and so are paths (`c["Sub"]["Value"]`), measured.

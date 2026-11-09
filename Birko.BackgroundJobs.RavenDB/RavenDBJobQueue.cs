@@ -95,7 +95,10 @@ namespace Birko.BackgroundJobs.RavenDB
                             m.Status = (int)JobStatus.Processing;
                             m.ClaimToken = Guid.NewGuid();
                             m.AttemptCount++;
-                            m.LastAttemptAt = now;
+                            // TASK-879: stamped when the claim is written, as on Cosmos DB. `now` was taken before the
+                            // candidate query, which can outlast the claim timeout (measured: 333-519 ms on a fresh
+                            // database), so the claim was already stale and the next dequeue reclaimed it.
+                            m.LastAttemptAt = DateTime.UtcNow;
                         },
                         cancellationToken).ConfigureAwait(false);
                     if (claimed != null) return claimed.ToDescriptor();

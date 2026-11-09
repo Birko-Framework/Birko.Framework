@@ -33,7 +33,9 @@ optimistic concurrency. The candidate query is index-served and may be stale, so
 `UpdateAsync` this used before (TASK-158, and the `ClaimToken` re-read of CR-M021 before that) runs on RavenDB as that
 same query followed by an unconditional write, and a cancel racing a claim let both win (measured). A store substituted
 for tests must override `UpdateIfAsync`. Job handlers should still be idempotent: a reclaim after the claim timeout can
-hand a slow job to a second worker.
+hand a slow job to a second worker. The claim's `LastAttemptAt` is stamped inside the compare-and-set, when the claim
+is written, never from the time the dequeue began: the candidate query can outlast a short claim timeout (TASK-879,
+measured 333-519 ms on a fresh database), and a claim stamped before it was already stale.
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs
