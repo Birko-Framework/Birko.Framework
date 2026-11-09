@@ -3,7 +3,7 @@ id: TASK-889
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -28,10 +28,15 @@ collation. The gap is pinned as per-provider budgets (`MeasuredFoldGap`, rule 56
 
 ## Acceptance criteria
 
-- [ ] **Decide with the user:** (A) leave and document (current); (B) exact in TASK-869 style, which also makes Symbio's
+- [x] **Decide with the user:** (A) leave and document (current); (B) exact in TASK-869 style, which also makes Symbio's
       searches accent-sensitive on MySQL and SQL Server; or move Symbio's searches to `OrdinalIgnoreCase` (exact
       already). A fold in SET has no exact server form; the only exact remedy there is refusal.
-- [ ] Implement the decision, inverting the budget tests where they close (rule 56).
+      → **Decided 2026-11-09 by the user: (A) leave and document.** The servers keep `LOWER` / `UPPER`; the gap stays
+        pinned by the `MeasuredFoldGap` budgets.
+- [x] Implement the decision, inverting the budget tests where they close (rule 56).
+      → Nothing to change in code: `Birko.Data.SQL/README.md` already documents the server folds per provider (TASK-870,
+        2e552b23) with the measured counts and the remedy (`OrdinalIgnoreCase`, or the invariant forms), and the
+        `MeasuredFoldGap` budgets in `TranslationLeftoversContract` keep the gap from growing. No budget closes.
 
 ## Out of scope
 
