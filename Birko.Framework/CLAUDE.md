@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL rule answers NULL the way C# does (2026-11-09)
+[[TASK-864]]. `RuleConditionConverter` built conditions without TASK-859's NULL handling: 53 of 117 rule shapes on NULL
+rows returned different rows than the compiled rule, on all four providers (measured). Negated and NotIn rules lost the
+NULL rows, and `NotIn` with a null set matched every row. Rule leaves over nullable columns are now marked and run
+through TASK-859's pass, so a rule and a lambda render NULL alike. `RuleEvaluator` in memory still differs
+([[TASK-881]]).
 ### A SQL filter's group next to a constant `bool` keeps its AND/OR (2026-11-09)
 [[TASK-866]]. When `&&` / `||` had a constant operand beside a group, the parser's collapse overwrote the group's own
 separator, so an OR group rendered as AND and the reverse, silently, on all four providers since 2026-03 (measured: 7 of
@@ -374,14 +380,6 @@ never matched NULL.
   against a null variable matches nothing. Deletes and updates with these filters affect those rows too.
 - The rendered SQL gains `OR col IS NULL` legs only where SQL and C# would differ; non-nullable columns are unchanged.
 - A split IN list keeps the IS NULL leg in its first chunk only, so the chunks stay disjoint.
-### Cosmos DB view names are quoted; a failing mapping names itself (2026-11-07)
-- [[TASK-844]]: a Cosmos DB view property named like a keyword (`Value`, `Inner`) failed every query with SC1001. Aliases
-  are now quoted (`AS "Value"`), and so are paths (`c["Sub"]["Value"]`), measured.
-- [[TASK-848]]: sorting a grouped Cosmos DB view by an aggregate is refused by name before the request; Cosmos rejects
-  every form. Sorting by a group key works.
-- [[TASK-846]], [[TASK-847]]: a mapping that throws while the registries scan an assembly arrives as
-  `InvalidOperationException` naming the mapping and stage, with the original inside. It used to arrive as
-  `TargetInvocationException` (the user's decision over rule 9's keep-the-type default).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

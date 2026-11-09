@@ -290,6 +290,10 @@ namespace Birko.Data.SQL
         /// </para>
         /// </summary>
         internal static string? ResolveFieldNameIn(IReadOnlyList<Tables.Table> tables, string key, bool withTableName)
+            => FindFieldIn(tables, key)?.GetSelectName(withTableName);
+
+        /// <summary>The field <see cref="ResolveFieldNameIn"/> resolves <paramref name="key"/> to, in the same lookup order.</summary>
+        private static Fields.AbstractField? FindFieldIn(IReadOnlyList<Tables.Table> tables, string key)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -301,7 +305,7 @@ namespace Birko.Data.SQL
                 var field = table.GetFieldByPropertyName(key);
                 if (field != null)
                 {
-                    return field.GetSelectName(withTableName);
+                    return field;
                 }
             }
 
@@ -311,11 +315,34 @@ namespace Birko.Data.SQL
                     .FirstOrDefault(f => f.Name.Equals(key, StringComparison.OrdinalIgnoreCase));
                 if (field != null)
                 {
-                    return field.GetSelectName(withTableName);
+                    return field;
                 }
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// TASK-864 — whether the column a rule field names can hold NULL, by the rule TASK-859's parser applies to a lambda's
+        /// column: its CLR type can hold null and it is not declared NOT NULL or primary. A field with no entity type, or one
+        /// resolved only through <see cref="ResolveFieldSelectName"/>, is taken as nullable: the <c>IS NULL</c> leg that costs
+        /// is never wrong, and leaving it out on a column that does hold NULL is.
+        /// </summary>
+        internal static bool RuleFieldCanBeNull(Type? entityType, string field)
+        {
+            if (entityType == null)
+            {
+                return true;
+            }
+
+            var table = TryLoadTable(entityType);
+            var column = table == null ? null : FindFieldIn(new[] { table }, field);
+            if (column?.Property == null)
+            {
+                return true;
+            }
+
+            return CanBeNull(column.Property.PropertyType) && ColumnMayHoldNull(column);
         }
     }
 }

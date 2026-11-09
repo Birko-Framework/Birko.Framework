@@ -30,8 +30,9 @@ public class RuleConditionConverterTests
         var conditions = RuleConditionConverter.ToConditions(rule).ToList();
 
         conditions.Should().HaveCount(1);
-        conditions[0].Type.Should().Be(ConditionType.Equal);
-        conditions[0].IsNot.Should().BeTrue();
+        var compared = WithNullLeg(conditions[0], "Status");
+        compared.Type.Should().Be(ConditionType.Equal);
+        compared.IsNot.Should().BeTrue();
     }
 
     [Fact]
@@ -88,8 +89,9 @@ public class RuleConditionConverterTests
         var rule = new Rule("Name", ComparisonOperator.NotContains, "spam");
         var conditions = RuleConditionConverter.ToConditions(rule).ToList();
 
-        conditions[0].Type.Should().Be(ConditionType.Like);
-        conditions[0].IsNot.Should().BeTrue();
+        var compared = WithNullLeg(conditions[0], "Name");
+        compared.Type.Should().Be(ConditionType.Like);
+        compared.IsNot.Should().BeTrue();
     }
 
     [Fact]
@@ -126,8 +128,9 @@ public class RuleConditionConverterTests
         var rule = new Rule("Status", ComparisonOperator.NotIn, new[] { "Deleted" });
         var conditions = RuleConditionConverter.ToConditions(rule).ToList();
 
-        conditions[0].Type.Should().Be(ConditionType.In);
-        conditions[0].IsNot.Should().BeTrue();
+        var compared = WithNullLeg(conditions[0], "Status");
+        compared.Type.Should().Be(ConditionType.In);
+        compared.IsNot.Should().BeTrue();
     }
 
     // ── Groups ──
@@ -211,7 +214,23 @@ public class RuleConditionConverterTests
         var rule = new Rule("A", ComparisonOperator.Equal, 1) { IsNegated = true };
         var conditions = RuleConditionConverter.ToConditions(rule).ToList();
 
-        conditions[0].Type.Should().Be(ConditionType.Equal);
-        conditions[0].IsNot.Should().BeTrue();
+        var compared = WithNullLeg(conditions[0], "A");
+        compared.Type.Should().Be(ConditionType.Equal);
+        compared.IsNot.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// TASK-864: a negated comparison over a column that can hold NULL is <c>(comparison OR column IS NULL)</c>, as C# answers
+    /// it on a NULL row. Without an entity type the converter cannot know the column is NOT NULL, so it adds the leg.
+    /// </summary>
+    private static Condition WithNullLeg(Condition term, string column)
+    {
+        term.IsOr.Should().BeTrue("the null leg is ORed onto the comparison");
+        var subs = term.SubConditions!.ToList();
+        subs.Should().HaveCount(2);
+        subs[1].Type.Should().Be(ConditionType.IsNull);
+        subs[1].IsNot.Should().BeFalse();
+        subs[1].Name.Should().Be(column);
+        return subs[0];
     }
 }

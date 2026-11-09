@@ -2191,7 +2191,7 @@ namespace Birko.Data.SQL
         /// An ordering used to bind the null (UNKNOWN, so no row, but every row under a <c>NOT</c>) or, from a closure,
         /// to become <c>IS NULL</c>.
         /// </summary>
-        private static void ComparedWithNull(Condition condition)
+        internal static void ComparedWithNull(Condition condition)
         {
             condition.NullableOperands = null;
             if (condition.Type is ConditionType.Less or ConditionType.Greather or ConditionType.LessAndEqual or ConditionType.GreatherAndEqual)
@@ -2212,9 +2212,12 @@ namespace Birko.Data.SQL
         {
             var inner = UnwrapConvert(operand);
             if (!CanBeNull(inner.Type)) return false;
-            if (exprType != null && ComparedField(inner, exprType) is { } field && (field.IsNotNull || field.IsPrimary)) return false;
+            if (exprType != null && ComparedField(inner, exprType) is { } field && !ColumnMayHoldNull(field)) return false;
             return true;
         }
+
+        /// <summary>TASK-859 — false for a column declared NOT NULL or primary; its CLR type is the caller's question.</summary>
+        internal static bool ColumnMayHoldNull(Fields.AbstractField field) => !field.IsNotNull && !field.IsPrimary;
 
         /// <summary>
         /// TASK-859 — records the plain column of an <c>==</c> / <c>!=</c> / ordering against a value as a nullable operand,
@@ -2246,17 +2249,28 @@ namespace Birko.Data.SQL
         /// </summary>
         private static void MarkNullableIn(Condition condition, Expression operand, Type? exprType, FragmentResolution resolved)
         {
+            var nullable = string.IsNullOrEmpty(condition.Name) || !OperandCanBeNull(operand, exprType)
+                || (operand.Type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(operand.Type))
+                ? null
+                : IsPlainColumnOperand(operand, exprType)
+                    ? new NullableOperand(condition.Name!)
+                    : FragmentOperand(condition.Name!, operand, exprType, resolved);
+            MarkNullableIn(condition, nullable);
+        }
+
+        /// <summary>
+        /// The expression-free half of <see cref="MarkNullableIn(Condition, Expression, Type, FragmentResolution)"/>, shared with
+        /// <see cref="Conditions.RuleConditionConverter"/> (TASK-864). <paramref name="nullable"/> is null for an operand that
+        /// cannot be NULL, whose list merely loses its nulls.
+        /// </summary>
+        internal static void MarkNullableIn(Condition condition, NullableOperand? nullable)
+        {
             var values = condition.Values?.Cast<object?>().ToList();
             var hadNull = values?.Any(v => v == null) == true;
             if (hadNull)
                 condition.Values = values!.Where(v => v != null).ToArray();
-            if (string.IsNullOrEmpty(condition.Name) || !OperandCanBeNull(operand, exprType)
-                || (operand.Type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(operand.Type)))
+            if (nullable == null)
                 return;
-
-            var nullable = IsPlainColumnOperand(operand, exprType)
-                ? new NullableOperand(condition.Name)
-                : FragmentOperand(condition.Name, operand, exprType, resolved);
             if (hadNull && values!.All(v => v == null))
             {
                 condition.Type = ConditionType.IsNull;
@@ -2290,7 +2304,7 @@ namespace Birko.Data.SQL
         /// exactly what it saw. An <c>IN</c> that gains an <c>OR</c> leg sits in an OR group, which TASK-833's planner never
         /// splits (each chunk would match the NULL rows again).
         /// </summary>
-        private static IEnumerable<Condition> ApplyCSharpNullSemantics(IEnumerable<Condition> roots)
+        internal static IEnumerable<Condition> ApplyCSharpNullSemantics(IEnumerable<Condition> roots)
         {
             var terms = roots as IList<Condition> ?? roots.ToList();
             List<Condition>? result = null;

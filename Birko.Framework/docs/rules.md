@@ -268,6 +268,8 @@ There are two conversion paths from rules:
 
 The SQL converter selects the same rows as `RuleSpecification` / `RuleEvaluator`: a disabled rule, an empty
 group or a disabled `RuleSet` **matches nothing** (an always-false `1 = 0`), never every row.
+On a row whose column is NULL it answers what the rule compiled to C# answers (TASK-864): `NotEqual`, `NotIn`,
+`NotContains` and every negated comparison include the NULL rows, and `In` with a `null` element matches them.
 
 The expression converter is the universal path — use it unless you need SQL-specific optimizations.
 

@@ -112,10 +112,15 @@ public static class RuleConditionConverter
     // so `A OR B` returned the intersection (measured on SQLite, TASK-559). An OR group is now an OR sub-condition,
     // and a top-level term is wrapped so that flag never joins it to its sibling.
 
+    // TASK-864. A leaf over a column that can hold NULL records it as a nullable operand, and the finished tree goes through
+    // TASK-859's ApplyCSharpNullSemantics — the one place an IS NULL leg is added, for a lambda and for a rule alike — so a
+    // rule answers on a NULL row what the same rule compiled to C# (RuleExpressionConverter) answers. Negation is already at
+    // the leaves (no group built here carries IsNot), so each leaf's own IsNot is its whole polarity.
+
     private static IEnumerable<Condition> Convert(IRule rule, Type? entityType)
     {
         var node = Build(rule, negate: false, entityType);
-        return [node == null ? MatchNone() : AsAndTerm(node)];
+        return node == null ? [MatchNone()] : DataBase.ApplyCSharpNullSemantics([AsAndTerm(node)]).ToList();
     }
 
     private static IEnumerable<Condition> ConvertSet(RuleSet ruleSet, Type? entityType)
@@ -135,7 +140,7 @@ public static class RuleConditionConverter
         if (nodes.Count == 0 || nodes.Any(n => n == null))
             return [MatchNone()];
 
-        return nodes.Select(n => AsAndTerm(n!)).ToList();
+        return DataBase.ApplyCSharpNullSemantics(nodes.Select(n => AsAndTerm(n!)).ToList()).ToList();
     }
 
     /// <summary>A term of a flat AND chain: an OR group carries IsOr for its children, so it is wrapped.</summary>
@@ -184,7 +189,7 @@ public static class RuleConditionConverter
     /// </summary>
     private static Condition MatchNone() => new("1", Array.Empty<object>(), ConditionType.In);
 
-    private static Condition ConvertLeaf(Rules.Rule rule, bool negate, Type? entityType)
+    private static Condition? ConvertLeaf(Rules.Rule rule, bool negate, Type? entityType)
     {
         // SH-H023 (TASK-111). The single place a rule.Field becomes a Condition.Name, and therefore the
         // single place to check it — Condition.Name is interpolated raw by every strategy. With an entity
@@ -194,29 +199,24 @@ public static class RuleConditionConverter
             ? DataBase.ResolveRuleField(entityType, rule.Field)
             : DataBase.ValidateRuleFieldIdentifier(rule.Field);
 
-        // TASK-153. Each operator below answers what RuleEvaluator (ComparisonHelper) answers for the same rule.
+        // TASK-153. Each operator below answers what RuleEvaluator (ComparisonHelper) answers for the same rule — except on a
+        // NULL row, where TASK-864 follows C# (RuleExpressionConverter): the evaluator orders NULL below every value and never
+        // matches it from an In list, measured as 21 of 117 shapes apart from C#.
         var isNegated = rule.IsNegated != negate;
+        // TASK-864: the column's IS NULL operand, or null where it cannot hold NULL (never assumed without metadata).
+        var nullable = DataBase.RuleFieldCanBeNull(entityType, rule.Field) ? new NullableOperand(name) : null;
 
         // SH-M129: Between kept only `>= lower`. Inclusive on both bounds, as the evaluator; negated by De Morgan
-        // (`< lower OR > upper`) rather than a NOT around a group, as the rest of this converter does.
+        // (`NOT >= lower OR NOT <= upper`) rather than a NOT around a group, as the rest of this converter does. TASK-864:
+        // each bound keeps its own IsNot, so a negated Between gains the IS NULL leg C# gives it (`< lower OR > upper` had
+        // none, and dropped the NULL rows).
         if (rule.Operator == ComparisonOperator.Between)
         {
             if (rule.Value is null || rule.UpperValue is null)
                 throw new ArgumentException($"A Between rule on '{rule.Field}' needs both bounds.", nameof(rule));
-            return isNegated
-                ? Condition.OrSubCondition([
-                    new Condition(name, new[] { rule.Value }, ConditionType.Less),
-                    new Condition(name, new[] { rule.UpperValue }, ConditionType.Greather)])
-                : Condition.AndSubCondition([
-                    new Condition(name, new[] { rule.Value }, ConditionType.GreatherAndEqual),
-                    new Condition(name, new[] { rule.UpperValue }, ConditionType.LessAndEqual)]);
-        }
-
-        // SH-M130: Equal / NotEqual with a null value rendered `Field = NULL`, which no row satisfies.
-        if (rule.Value is null && rule.Operator is ComparisonOperator.Equal or ComparisonOperator.NotEqual)
-        {
-            var notNull = (rule.Operator == ComparisonOperator.NotEqual) != isNegated;
-            return new Condition(name, null, ConditionType.IsNull, false, notNull);
+            var lower = Comparison(name, new[] { rule.Value }, ConditionType.GreatherAndEqual, isNegated, nullable);
+            var upper = Comparison(name, new[] { rule.UpperValue }, ConditionType.LessAndEqual, isNegated, nullable);
+            return isNegated ? Condition.OrSubCondition([lower, upper]) : Condition.AndSubCondition([lower, upper]);
         }
 
         // SH-M132: Like wrapped the author's pattern in %…% again, so `FV2026%` matched anywhere. The evaluator reads
@@ -229,7 +229,7 @@ public static class RuleConditionConverter
                 : pattern.StartsWith('%') ? (ConditionType.EndsWith, pattern[1..])
                 : pattern.EndsWith('%') ? (ConditionType.StartsWith, pattern[..^1])
                 : (ConditionType.Equal, pattern);
-            return new Condition(name, new object[] { likeValue }, likeType, false, isNegated);
+            return Comparison(name, new object[] { likeValue }, likeType, isNegated, nullable);
         }
 
         var (condType, values) = MapOperator(rule);
@@ -257,7 +257,55 @@ public static class RuleConditionConverter
             isNot = !isNegated;
         }
 
-        return new Condition(name, values, condType, false, isNot);
+        // TASK-156: a null set is no predicate (RuleExpressionConverter degrades it), so In and NotIn match nothing under any
+        // negation. It used to bind no values: In matched nothing, but NotIn — and a negated In — matched every row.
+        if (condType == ConditionType.In && values == null)
+            return null;
+
+        // SH-M296 (TASK-171): a null needle is no predicate either; both in-memory engines match nothing under any negation.
+        if (values == null && condType is ConditionType.Like or ConditionType.StartsWith or ConditionType.EndsWith)
+            return null;
+
+        var condition = new Condition(name, values, condType, false, isNot);
+        if (condType == ConditionType.IsNull)
+            return condition;
+
+        // SH-M130 / TASK-859: against a null value, Equal / NotEqual is the column's IS [NOT] NULL (it rendered `Field = NULL`,
+        // which no row satisfies) and an ordering is C#'s constant false — always true when negated, which TASK-861's guard
+        // refuses as a whole-table write. One producer with the lambda parser.
+        if (values == null && condType is ConditionType.Equal or ConditionType.Greather or ConditionType.GreatherAndEqual
+                or ConditionType.Less or ConditionType.LessAndEqual)
+        {
+            DataBase.ComparedWithNull(condition);
+            return condition;
+        }
+
+        if (condType == ConditionType.In)
+            DataBase.MarkNullableIn(condition, nullable);
+        else
+            MarkNullable(condition, nullable);
+        return condition;
+    }
+
+    /// <summary>A comparison leaf over <paramref name="name"/>, marked nullable for TASK-859's legs.</summary>
+    private static Condition Comparison(string name, object?[] values, ConditionType type, bool isNot, NullableOperand? nullable)
+    {
+        var condition = new Condition(name, values, type, false, isNot);
+        MarkNullable(condition, nullable);
+        return condition;
+    }
+
+    /// <summary>
+    /// TASK-864: C# answers false on a NULL operand for every comparison and string test this converter builds (the
+    /// string tests guard `x != null` first, as RuleExpressionConverter does), so the leg is <c>OR IS NULL</c> exactly where the
+    /// leaf is negated.
+    /// </summary>
+    private static void MarkNullable(Condition condition, NullableOperand? nullable)
+    {
+        if (nullable == null)
+            return;
+        condition.NullableOperands = new[] { nullable };
+        condition.NullOperandMatches = false;
     }
 
     private static (ConditionType type, IEnumerable? values) MapOperator(Rules.Rule rule)
