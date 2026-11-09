@@ -161,6 +161,15 @@ public abstract class DataBaseStore<DB, T> : AbstractStore<T>
 }
 ```
 
+### `OnExecute` receives the text with values (TASK-871)
+
+Every statement a connector runs reaches `OnExecute` as `DataBase.GetGeneratedQuery(command)`: the command text with each
+parameter's value written in place of its name. That is diagnostic text only; the command itself still runs with
+parameters. Reads, counts, inserts, updates, deletes and view reads, sync and async, all use one producer,
+`AbstractConnector.AnnounceCommand`, which also hands the same text to `InitException`. A new execution path calls it;
+it never raises `OnExecute` itself. Before TASK-871 the reader paths passed the raw text with `@name` placeholders
+(measured on all four providers). `InvokeOnExecute(string)` was removed.
+
 ## Implementation Example
 
 ```csharp

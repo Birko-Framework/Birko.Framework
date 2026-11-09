@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### `OnExecute` gets the values on reads too (2026-11-09)
+[[TASK-871]]. A SQL connector's `OnExecute` received the text with values for writes and counts, but the raw text with
+`@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four
+providers). Every statement now goes through one producer, `AnnounceCommand`. **Breaking for subclasses:**
+`InvokeOnExecute(string)` is gone.
 ### A SQL `Contains` / `StartsWith` / `EndsWith` / `Equals` honours an explicit `StringComparison` (2026-11-08)
 [[TASK-869]] (the user's decision: option A). The comparison argument used to be ignored, so the column collation
 decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-insensitive on MySQL (measured: 49–113 of

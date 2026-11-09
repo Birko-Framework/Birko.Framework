@@ -476,9 +476,21 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Invokes the OnExecute event. Can be called from derived classes.
+        /// Renders <paramref name="command"/>'s diagnostic text once and passes it to <c>OnExecute</c>: the one producer
+        /// of what a subscriber receives, for every statement kind (TASK-871).
         /// </summary>
-        protected void InvokeOnExecute(string commandText) => OnExecute?.Invoke(commandText);
+        /// <remarks>
+        /// The text is <see cref="DataBase.GetGeneratedQuery"/>, values written in place of parameter names. Before,
+        /// the reader paths passed <c>command.CommandText</c> instead, so a subscriber saw placeholders on every read
+        /// and values on every write (measured on all four providers). <paramref name="commandText"/> is assigned
+        /// before the subscriber runs, so a subscriber that throws still leaves the caller the text for
+        /// <c>InitException</c>.
+        /// </remarks>
+        protected void AnnounceCommand(DbCommand command, out string commandText)
+        {
+            commandText = DataBase.GetGeneratedQuery(command);
+            OnExecute?.Invoke(commandText);
+        }
 
         public virtual void InitException(Exception ex, string? commandText)
         {
@@ -1225,8 +1237,7 @@ namespace Birko.Data.SQL.Connectors
                 try
                 {
                     createCommand?.Invoke(command);
-                    commandText = DataBase.GetGeneratedQuery(command);
-                    OnExecute?.Invoke(command.CommandText);
+                    AnnounceCommand(command, out commandText);
                 }
                 catch (Exception ex) { InitException(ex, commandText); faulted = true; } // CR-M134
                 if (faulted) yield break;
@@ -1269,8 +1280,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     command.Transaction = transaction;
                     createCommand?.Invoke(command);
-                    commandText = DataBase.GetGeneratedQuery(command);
-                    OnExecute?.Invoke(commandText);
+                    AnnounceCommand(command, out commandText);
                     executeCommand?.Invoke(command);
                 }
             }
@@ -1295,8 +1305,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         command.Transaction = transaction;
                         createCommand?.Invoke(command);
-                        commandText = DataBase.GetGeneratedQuery(command);
-                        OnExecute?.Invoke(commandText);
+                        AnnounceCommand(command, out commandText);
                         executeCommand?.Invoke(command);
                     }
                     transaction.Commit();
@@ -1326,8 +1335,7 @@ namespace Birko.Data.SQL.Connectors
                     using (var command = db.CreateCommand())
                     {
                         createCommand?.Invoke(command);
-                        commandText = DataBase.GetGeneratedQuery(command);
-                        OnExecute?.Invoke(commandText);
+                        AnnounceCommand(command, out commandText);
                         executeCommand?.Invoke(command);
                     }
                 }
@@ -1369,8 +1377,7 @@ namespace Birko.Data.SQL.Connectors
                 try
                 {
                     createCommand?.Invoke(command);
-                    commandText = DataBase.GetGeneratedQuery(command);
-                    OnExecute?.Invoke(command.CommandText);
+                    AnnounceCommand(command, out commandText);
                 }
                 catch (Exception ex)
                 {

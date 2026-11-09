@@ -242,8 +242,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     command.Transaction = transaction;
                     if (createCommand != null) await createCommand.Invoke(command);
-                    commandText = DataBase.GetGeneratedQuery(command);
-                    InvokeOnExecute(commandText);
+                    AnnounceCommand(command, out commandText);
                     if (executeCommand != null) await executeCommand.Invoke(command);
                 }
             }
@@ -268,8 +267,7 @@ namespace Birko.Data.SQL.Connectors
                     {
                         command.Transaction = transaction;
                         if (createCommand != null) await createCommand.Invoke(command);
-                        commandText = DataBase.GetGeneratedQuery(command);
-                        InvokeOnExecute(commandText);
+                        AnnounceCommand(command, out commandText);
                         if (executeCommand != null) await executeCommand.Invoke(command);
                     }
                     await transaction.CommitAsync(ct);
@@ -299,8 +297,7 @@ namespace Birko.Data.SQL.Connectors
                     await using (var command = db.CreateCommand())
                     {
                         if (createCommand != null) await createCommand.Invoke(command);
-                        commandText = DataBase.GetGeneratedQuery(command);
-                        InvokeOnExecute(commandText);
+                        AnnounceCommand(command, out commandText);
                         if (executeCommand != null) await executeCommand.Invoke(command);
                     }
                 }
@@ -360,8 +357,7 @@ namespace Birko.Data.SQL.Connectors
                 try
                 {
                     if (createCommand != null) await createCommand.Invoke(command);
-                    commandText = DataBase.GetGeneratedQuery(command);
-                    InvokeOnExecute(command.CommandText);
+                    AnnounceCommand(command, out commandText);
                 }
                 catch (Exception ex)
                 {

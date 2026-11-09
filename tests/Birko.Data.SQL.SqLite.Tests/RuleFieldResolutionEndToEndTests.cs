@@ -195,7 +195,8 @@ public class RuleFieldResolutionEndToEndTests : IDisposable
         connector.Select(typeof(RRow), conditions).ToList();
 
         var where = _executed.First(t => t.Contains("WHERE"));
-        where.Should().Contain("RRows.label_col = @",
+        // OnExecute receives the text with values written in on reads too (TASK-871), hence 'b' rather than @param.
+        where.Should().Contain("RRows.label_col = 'b'",
             "the resolved identifier is table-qualified, matching what the expression path emits");
         where.Should().NotContain("WHERE Label",
             "the CLR property name is what the database rejected before the fix");
