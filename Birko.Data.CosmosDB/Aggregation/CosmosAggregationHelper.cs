@@ -88,15 +88,10 @@ namespace Birko.Data.CosmosDB.Aggregation
 
         /// <summary>
         /// <see cref="WallClockKey(string)"/>, without the suffix when <paramref name="withSuffix"/> is false: the wall clock
-        /// alone, which a DateTime group is grouped on (TASK-897).
+        /// alone, which a DateTime group is grouped on (TASK-897). Rendered from the filter's own key parts (TASK-905: one
+        /// producer, <see cref="Stores.CosmosFilterRewrite.WallClockKeySql"/>).
         /// </summary>
-        private static string WallClockKey(string x, bool withSuffix)
-        {
-            var suffixLength = $"(ENDSWITH({x}, \"Z\") ? 1 : (SUBSTRING({x}, LENGTH({x}) - 6, 1) IN (\"+\", \"-\") ? 6 : 0))";
-            var fraction = $"(SUBSTRING({x}, 19, 1) = \".\" ? SUBSTRING({x}, 20, LENGTH({x}) - 20 - {suffixLength}) : \"\")";
-            var suffix = withSuffix ? $", RIGHT({x}, {suffixLength})" : "";
-            return $"CONCAT(LEFT({x}, 19), \".\", LEFT(CONCAT({fraction}, \"0000000\"), 7){suffix})";
-        }
+        private static string WallClockKey(string x, bool withSuffix) => Stores.CosmosFilterRewrite.WallClockKeySql(x, withSuffix);
 
         /// <summary>
         /// TASK-897: the type an aggregate of <paramref name="member"/> answers in, as the in-memory aggregation answers it

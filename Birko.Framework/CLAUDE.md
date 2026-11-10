@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB `TimeSpan` filters answer as C#; one DateTime key producer (2026-11-10)
+[[TASK-905]]. Cosmos compared a TimeSpan's stored text (`"1.02:03:04"` < `"23:00:00"`, `"-00:00:01"` < `"-00:00:02"`),
+so 60–68 of 124 filter shapes per path answered other rows than C# (measured). Orderings now compare the sign and a
+fixed-width magnitude key; equality keeps its index. TimeSpan sorts, members (`Ticks`) and arithmetic on a member are
+refused by name. The DateTime wall-clock key used by filters and aggregates now has one producer.
 ### RavenDB view, MongoDB and InfluxDB aggregates answer as LINQ (2026-11-10)
 [[TASK-906]]. RavenDB view MIN/AVG did not skip nulls (MIN of {3, null} was null) and a negative value next to a null
 broke the index; the MongoDB store aggregate ignored ordering, paging and time buckets (36 of 38 cases wrong); the
@@ -374,12 +379,6 @@ way: Cosmos store reads match every row for `x.Score.HasValue` ([[TASK-896]], P1
 from an `In` list and matched every row for `GreaterThan null`: 21 of TASK-864's 117 shapes differed from the compiled
 rule and from SQL (measured). One comparison now returns no answer on NULL, so a rule gives one result in memory, as an
 expression and in SQL. Symbio's IoT rules use non-null values and are unchanged.
-### SQL string `==` and IN are exact on every provider — BREAKING (2026-11-09)
-[[TASK-873]] (the user's decision: the default is exact). MySQL and SQL Server compared strings by collation: 97 and 113
-of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ignoring trailing spaces; measured).
-`==` / IN now render `(col = @p AND <exact>)`, so the index still seeks, and `!=` / NOT IN negate that; SQLite and
-PostgreSQL return the same rows as before. On MySQL and SQL Server, lookups like `UserName == login` become
-case-sensitive. Rules and hand-built conditions are unchanged ([[TASK-895]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosInListChunking.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosFilterRewrite.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosFilterRewrite.DateTime.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosFilterRewrite.TimeSpan.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDateTimeOrder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosChunkedWriteException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\CosmosDBModelRepository.cs" />

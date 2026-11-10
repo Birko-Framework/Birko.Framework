@@ -53,12 +53,15 @@ namespace Birko.Data.CosmosDB.Stores;
 /// <c>All(p)</c>, which the provider cannot render, is <c>!Any(!p)</c>.</para>
 /// <para><b>DateTime (TASK-902)</b>: a comparison of a <see cref="DateTime"/> member compares its wall-clock key, not the
 /// stored text; see <see cref="DateTimeKeys{T}"/>.</para>
+/// <para><b>TimeSpan (TASK-905)</b>: an ordering of a <see cref="TimeSpan"/> member compares its sign and a fixed-width
+/// magnitude key; see <see cref="TimeSpanKeys{T}"/> and <see cref="TimeSpanShapes{T}"/>.</para>
 /// </remarks>
 public static partial class CosmosFilterRewrite
 {
     /// <summary>
     /// Every rewrite a Cosmos DB filter takes before rendering, in order: <c>SpanContains</c>, <c>DateTruncation</c>,
-    /// <c>NullOrderingFold</c>, <see cref="NullSemantics{T}"/>, then <see cref="DateTimeKeys{T}"/>. Returns
+    /// <c>NullOrderingFold</c>, <see cref="TimeSpanShapes{T}"/>, <see cref="NullSemantics{T}"/>, <see cref="DateTimeKeys{T}"/>,
+    /// then <see cref="TimeSpanKeys{T}"/>. Returns
     /// <paramref name="filter"/> by reference when none applies.
     /// </summary>
     /// <exception cref="NotSupportedException">The filter holds a shape no Cosmos DB rendering answers as C# does.</exception>
@@ -67,8 +70,10 @@ public static partial class CosmosFilterRewrite
         filter = Birko.Data.Expressions.SpanContains.Rewrite(filter);
         filter = Birko.Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
         filter = Birko.Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = TimeSpanShapes(filter);   // TASK-905
         filter = NullSemantics(filter);   // TASK-896
-        return DateTimeKeys(filter);   // TASK-902
+        filter = DateTimeKeys(filter);   // TASK-902
+        return TimeSpanKeys(filter);   // TASK-905
     }
 
     /// <summary>
@@ -220,8 +225,8 @@ public static partial class CosmosFilterRewrite
 
         protected override Expression VisitUnary(UnaryExpression node)
         {
-            // TASK-902: a DateTime member read as its stored text, inside a wall-clock key an earlier pass produced.
-            if (IsDateTimeText(node)) return node;
+            // TASK-902, TASK-905: a DateTime or TimeSpan member read as its stored text, inside a key an earlier pass produced.
+            if (IsStoredText(node)) return node;
             if (node.NodeType == ExpressionType.Not && node.Type == typeof(bool))
             {
                 return node.Update(In(Flip(_polarity), node.Operand));

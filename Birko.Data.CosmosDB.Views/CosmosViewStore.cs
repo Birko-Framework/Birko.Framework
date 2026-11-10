@@ -810,7 +810,7 @@ internal static class CosmosFilterTranslator
             return "\"" + text + "\"";
         }
         if (!ParameterFinder.Uses(expression)) return BindValue(expression, parameters);
-        if (CosmosFilterRewrite.IsDateTimeText(expression))
+        if (CosmosFilterRewrite.IsStoredText(expression))   // TASK-905: a DateTime's or a TimeSpan's
         {
             return TranslateOperand(((UnaryExpression)((UnaryExpression)expression).Operand).Operand, parameters, mapMember);
         }

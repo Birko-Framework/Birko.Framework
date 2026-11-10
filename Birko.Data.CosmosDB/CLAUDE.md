@@ -90,7 +90,8 @@ Settings mapping from `RemoteSettings`:
 ## Filters answer null and missing members as C# does (TASK-896)
 Every filter, on every path (reads sync and async, counts, the read behind `Update(filter, …)` / `Delete(filter)`,
 aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prepare` = `SpanContains`,
-`DateTruncation`, `NullOrderingFold`, `NullSemantics`, then `DateTimeKeys` (TASK-902). Add a rewrite there, never at a call site.
+`DateTruncation`, `NullOrderingFold`, `TimeSpanShapes` (TASK-905), `NullSemantics`, `DateTimeKeys` (TASK-902), then
+`TimeSpanKeys` (TASK-905). Add a rewrite there, never at a call site.
 - **Measured before** (emulator, vnext-preview, 2026-11-10; 93 shapes over nullable members, 2 of 10 documents
   omitting them): 53 shapes silently answered other rows than the compiled expression and 14 threw the SDK's
   `DocumentQueryException`, identically on all 7 paths.
@@ -149,6 +150,24 @@ aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prep
   `(IS_DEFINED(c.A) ? c.A : 0) = 5`), so it cannot show index use. A test the default fails keeps its plain, indexable
   rendering; the `NOT IS_DEFINED(m) OR ..` leg and a defaulted computed operand are what a real account would have to
   be measured for.
+
+## TimeSpan filters answer as C#; TimeSpan sorts are refused (TASK-905)
+- **How a TimeSpan is stored.** System.Text.Json writes `[-][d.]hh:mm:ss[.fffffff]`: the day count only when there is
+  one, unpadded, and seven fraction digits only when there is a fraction. Cosmos DB compared that text, so
+  `"1.02:03:04"` < `"23:00:00"`, `"10.00:00:00"` < `"2.00:00:00"` and `"-00:00:01"` < `"-00:00:02"`. Measured (17
+  documents, 124 shapes): reads 68, counts and aggregate WHERE 60, update/delete 68 shapes answered other rows than C#;
+  view filters 59 of 96; sorts 4 of 4. Equality was already exact (one text per value).
+- **Filters (`TimeSpanKeys`, last in `Prepare`).** An ordering compares the sign as a plain range on the member
+  (`t < "0"` is negative) and a fixed 23-character magnitude key built from `SUBSTRING`/`REPLACE`/`INDEX_OF`/`CONCAT`
+  (so the view translator renders it too); negative values compare in reverse magnitude. The caller's value is keyed in
+  C# (`TimeSpanKeyOf`). `==`, `!=` and `Contains` keep their plain rendering and index. `TimeSpanShapes` (before
+  `NullSemantics`) translates `Equals` and `Compare`/`CompareTo` against 0.
+- **Refused by name** (naming TASK-905, before any request): members of a stored TimeSpan (`Ticks`, `TotalSeconds`,
+  ...), a TimeSpan computed from a member (`+`, `-`, negation, any method), `Compare` against anything but 0, and any sort
+  by a TimeSpan (`CosmosDateTimeOrder.Plan`; store the ticks as a number to sort).
+- **Assumption.** The keys assume System.Text.Json's TimeSpan format, as TASK-902's keys assume its DateTime format.
+- **One wall-clock key producer.** `CosmosFilterRewrite.WallClockParts` defines the DateTime key; the filter's expression
+  key and `WallClockKeySql` (used by `CosmosAggregationHelper.WallClockKey`) both render it (rule 16).
 
 ## DateTime filters and sorts answer as C# (TASK-902)
 - **How a DateTime is stored.** Birko's serializer (System.Text.Json defaults) writes ISO 8601 text with as many

@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — SQL string `==` and IN are exact on every provider — BREAKING
+[[TASK-873]] (the user's decision: the default is exact). MySQL and SQL Server compared strings by collation: 97 and 113
+of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ignoring trailing spaces; measured).
+`==` / IN now render `(col = @p AND <exact>)`, so the index still seeks, and `!=` / NOT IN negate that; SQLite and
+PostgreSQL return the same rows as before. On MySQL and SQL Server, lookups like `UserName == login` become
+case-sensitive. Rules and hand-built conditions are unchanged ([[TASK-895]]).
+
 ## 2026-11-09 — A throwing `OnExecute` subscriber no longer fails the statement; bulk writes are announced
 [[TASK-875]]. A logging subscriber that threw failed 21 operations on all four SQL providers and stopped later
 subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.

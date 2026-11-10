@@ -75,18 +75,84 @@ public static partial class CosmosFilterRewrite
             && dated.Type == typeof(DateTime))
         {
             // A date: its first ten characters, at midnight.
-            return Concat(Substring(Text(dated), 0, 10), Expression.Constant("T00:00:00" + new string('0', 7)));
+            return Concat(Substring(Text(dated), 0, 10), Expression.Constant("T00:00:00" + new string('0', WallClockFractionDigits)));
         }
 
-        var text = Text(unwrapped);
-        // What follows the second, the suffix's first character made a "Z", the "." dropped, a "Z" appended: the digits
-        // run up to the first "Z".
+        var (second, fraction) = WallClockParts(Text(unwrapped));
+        return Concat(second, fraction);
+    }
+
+    /// <summary>The length of the wall clock to the second, <c>yyyy-MM-ddTHH:mm:ss</c>, at the start of every stored form.</summary>
+    private const int WallClockSecondLength = 19;
+
+    /// <summary>The fraction digits a wall-clock key carries: a DateTime's seven.</summary>
+    private const int WallClockFractionDigits = 7;
+
+    /// <summary>
+    /// TASK-905: the two parts of the wall-clock key of a stored DateTime's text: its first 19 characters (the second) and the
+    /// fraction, padded to seven digits. The one definition of the key, which the filter's key
+    /// (<see cref="WallClockKey(Expression)"/>, the parts joined) and the aggregates' (<see cref="WallClockKeySql"/>, the parts
+    /// joined by a <c>.</c>, so the key reads back as a DateTime) both take.
+    /// </summary>
+    /// <remarks>What follows the second is <c>.fffffff</c> (one to seven digits) or nothing, then the suffix (<c>Z</c>, an
+    /// offset's <c>+</c> or <c>-</c>, or nothing). The suffix's first character is made a <c>Z</c>, the <c>.</c> dropped and a
+    /// <c>Z</c> appended, so the digits run up to the first <c>Z</c>.</remarks>
+    private static (Expression Second, Expression Fraction) WallClockParts(Expression text)
+    {
         var rest = Concat(
-            Replace(Replace(Replace(Substring(text, 19, 20), "+", "Z"), "-", "Z"), ".", ""),
+            Replace(Replace(Replace(Substring(text, WallClockSecondLength, 20), "+", "Z"), "-", "Z"), ".", ""),
             Expression.Constant("Z"));
         var digits = Substring(rest, Expression.Constant(0), Expression.Call(rest, StringIndexOf, Expression.Constant("Z")));
-        var fraction = Substring(Concat(digits, Expression.Constant("0000000")), 0, 7);
-        return Concat(Substring(text, 0, 19), fraction);
+        var fraction = Substring(Concat(digits, Expression.Constant(new string('0', WallClockFractionDigits))), 0, WallClockFractionDigits);
+        return (Substring(text, 0, WallClockSecondLength), fraction);
+    }
+
+    /// <summary>
+    /// TASK-905: the wall-clock key of the stored DateTime at <paramref name="column"/> (a Cosmos SQL accessor), as SQL text for
+    /// an aggregate: <see cref="WallClockParts"/> joined by a <c>.</c>, so a MIN/MAX of it reads back as a DateTime, then the
+    /// stored suffix when <paramref name="withSuffix"/> (a DateTime group is grouped on the wall clock alone). TASK-897's
+    /// <c>CosmosAggregationHelper.WallClockKey</c>, now rendered from the filter's own key parts.
+    /// </summary>
+    internal static string WallClockKeySql(string column, bool withSuffix)
+    {
+        var (second, fraction) = WallClockParts(StoredTextLeaf);
+        var key = KeySql(Concat(Concat(second, Expression.Constant(".")), fraction), column);
+        if (!withSuffix) return key;
+        // The suffix, as it was stored: "Z", an offset ("+01:00"), or nothing.
+        var x = column;
+        var suffixLength = $"(ENDSWITH({x}, \"Z\") ? 1 : (SUBSTRING({x}, LENGTH({x}) - 6, 1) IN (\"+\", \"-\") ? 6 : 0))";
+        return $"CONCAT({key}, RIGHT({x}, {suffixLength}))";
+    }
+
+    /// <summary>The stored text a <see cref="KeySql"/> rendering reads: the column it is given.</summary>
+    private static readonly ParameterExpression StoredTextLeaf = Expression.Parameter(typeof(string), "storedText");
+
+    /// <summary>
+    /// TASK-905: a key built of <see cref="Substring(Expression, int, int)"/>, <see cref="Replace"/>, <c>IndexOf</c> and
+    /// <see cref="Concat"/> over <see cref="StoredTextLeaf"/>, as Cosmos SQL text over <paramref name="column"/>: what the
+    /// store's LINQ provider renders for the same tree. Its constants are this file's, never a caller's.
+    /// </summary>
+    private static string KeySql(Expression key, string column)
+    {
+        switch (key)
+        {
+            case ParameterExpression leaf when ReferenceEquals(leaf, StoredTextLeaf):
+                return column;
+            case ConstantExpression { Value: int number }:
+                return number.ToString(CultureInfo.InvariantCulture);
+            case ConstantExpression { Value: string text }:
+                return "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            case MethodCallExpression call when call.Method == StringSubstring:
+                return $"SUBSTRING({KeySql(call.Object!, column)}, {KeySql(call.Arguments[0], column)}, {KeySql(call.Arguments[1], column)})";
+            case MethodCallExpression call when call.Method == StringReplace:
+                return $"REPLACE({KeySql(call.Object!, column)}, {KeySql(call.Arguments[0], column)}, {KeySql(call.Arguments[1], column)})";
+            case MethodCallExpression call when call.Method == StringIndexOf:
+                return $"INDEX_OF({KeySql(call.Object!, column)}, {KeySql(call.Arguments[0], column)})";
+            case MethodCallExpression call when call.Method == StringConcat:
+                return $"CONCAT({KeySql(call.Arguments[0], column)}, {KeySql(call.Arguments[1], column)})";
+            default:
+                throw new InvalidOperationException($"A wall-clock key holds a {key.NodeType} no key holds. (TASK-905)");
+        }
     }
 
     /// <summary>

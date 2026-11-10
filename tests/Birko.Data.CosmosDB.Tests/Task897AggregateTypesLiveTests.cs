@@ -419,7 +419,7 @@ public class Task897AggregateQueryTests
     public void A_DateTime_MIN_compares_the_padded_wall_clock()
     {
         Text(new AggregateField(AggregateFunction.Min, "T", "m")).Should().Contain(
-            "MIN(IS_NULL(root[\"T\"]) ? undefined : CONCAT(LEFT(root[\"T\"], 19), \".\", LEFT(CONCAT(");
+            "MIN(IS_NULL(root[\"T\"]) ? undefined : CONCAT(CONCAT(CONCAT(SUBSTRING(root[\"T\"], 0, 19), \".\"), SUBSTRING(CONCAT(SUBSTRING(CONCAT(");
     }
 
     [Fact]
@@ -438,8 +438,8 @@ public class Task897AggregateQueryTests
             GroupByFields = new[] { "t" },
             Aggregates = new[] { new AggregateField(AggregateFunction.Count, "A", "n") },
         }, null).Query.QueryText;
-        text.Should().StartWith("SELECT COUNT(1) AS \"n\", MIN(IS_NULL(root[\"T\"]) ? undefined : CONCAT(LEFT(root[\"T\"], 19)")
-            .And.Contain("AS \"t\" FROM root GROUP BY CONCAT(LEFT(root[\"T\"], 19)");
+        text.Should().StartWith("SELECT COUNT(1) AS \"n\", MIN(IS_NULL(root[\"T\"]) ? undefined : CONCAT(CONCAT(CONCAT(SUBSTRING(root[\"T\"], 0, 19)")
+            .And.Contain("AS \"t\" FROM root GROUP BY CONCAT(CONCAT(SUBSTRING(root[\"T\"], 0, 19)");
     }
 
     [Theory]

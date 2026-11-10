@@ -25,6 +25,8 @@ namespace Birko.Data.CosmosDB.Stores;
 /// run's rows at the positions the page covered. Where a single run covers the whole page, the rows after the page are read
 /// (at most the run's size) to find where in the run the page begins. A run is one second of one key, so the extra reads
 /// are small unless many rows share a second.</para>
+/// <para>A sort by a <see cref="TimeSpan"/> member is refused by name (TASK-905): its stored text orders neither the day
+/// count nor a negative value as C# does, so the server's order is not C#'s even across seconds.</para>
 /// <para>A sort by a <see cref="DateTimeOffset"/> member is refused by name: C# orders the instant, the stored text holds
 /// the writer's offset, so no second-prefix of it orders as the instant does.</para>
 /// </remarks>
@@ -52,6 +54,15 @@ internal static class CosmosDateTimeOrder
                     $"Cosmos DB cannot sort {owner} by {property.Name}, a DateTimeOffset, as C# sorts it: C# orders the instant, "
                     + "Cosmos DB the stored text, which holds the writer's offset. Sort by a DateTime stored in UTC, or sort in the "
                     + "caller. (TASK-902)");
+            }
+            if (type == typeof(TimeSpan))
+            {
+                // TASK-905: the stored text is [-][d.]hh:mm:ss[.fffffff], so "1.02:03:04" sorts before "23:00:00" and
+                // "-00:00:01" before "-00:00:02" (measured: 4 of 4 sorts wrong), and only a document path can be sorted on.
+                throw new NotSupportedException(
+                    $"Cosmos DB cannot sort {owner} by {property.Name}, a TimeSpan, as C# sorts it: Cosmos DB sorts the stored "
+                    + "text, which orders neither the day count nor a negative value as the value. Store the ticks as a number "
+                    + "and sort by that, or sort in the caller. (TASK-905)");
             }
             fields.Add(new Field(property, field.Descending));
         }
