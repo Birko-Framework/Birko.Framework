@@ -32,6 +32,10 @@ Found by TASK-876 and TASK-878 (2026-11-09):
   **Decide with the user.**
 - Not measured live on Elasticsearch: `DateTimeOffset` keys and metrics, string-mapped enums.
 
+**Decided 2026-11-10 by the user:** (1) an ungrouped aggregate over no rows returns ONE row with Count 0 (other
+aggregates null) on every provider — LINQ/in-memory, MongoDB, RavenDB and Elasticsearch change; (2) SUM over only NULLs
+is 0 everywhere, like LINQ's `Sum` (MIN / MAX / AVG stay null) — `AggregateHelper` and every store's `Aggregate` change.
+
 ## Acceptance criteria
 
 - [ ] Measure each per provider (rule 54).
