@@ -247,6 +247,9 @@ here — the "already exists" condition never reaches the client. `CreateIndexes
 drops the conditional clause so the flag means the same thing as on MySQL rather than being a silent no-op.
 
 ## Limitations
+- **`CHAR(n)` (`bpchar`) and string equality (TASK-873 / TASK-895):** the exact form is `(col)::text COLLATE "C"`, and
+  `::text` strips a `bpchar`'s padding where C# reads it padded, so `== "ab"` matches a `CHAR(4)` holding `ab  `. The
+  framework never creates `CHAR(n)` (strings are `VARCHAR` / `TEXT`); a hand-made one compares as its trimmed text.
 - Requires PostgreSQL 9.5 or later
 - Some features may require specific versions
 

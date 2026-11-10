@@ -21,8 +21,10 @@ namespace Birko.Data.SQL
         /// <c>a != b</c>, which TASK-863 expands. Before (measured on all four providers): the parser dropped
         /// <c>GetValueOrDefault</c> and compared the bare column, so <c>x.Score.GetValueOrDefault() != 5</c> missed every NULL row,
         /// and <c>x.Hits.Equals(x.Score.Value)</c> matched nothing. <c>Equals(object)</c> and a lifted <c>bool?</c> XOR are not
-        /// rewritten, and the parser refuses them. A string <c>Equals</c> with a <see cref="StringComparison"/> becomes the
-        /// static <c>string.Equals(row, value, comparison)</c>, which the parser translates or refuses (TASK-869).
+        /// rewritten, and the parser refuses them. A string <c>Equals</c> with <see cref="StringComparison.Ordinal"/> is C#'s
+        /// <c>==</c> and becomes it (TASK-895), so it renders through TASK-873's exact equality, over a value or another column;
+        /// with any other <see cref="StringComparison"/> it becomes the static <c>string.Equals(row, value, comparison)</c>,
+        /// which the parser translates or refuses (TASK-869).
         /// </remarks>
         internal static Expression RewriteTranslatableCalls(Expression body) => new TranslatableCallRewriter().Visit(body)!;
 
@@ -71,6 +73,9 @@ namespace Birko.Data.SQL
                         var (a, b, comparison) = method.IsStatic
                             ? (visited.Arguments[0], visited.Arguments[1], visited.Arguments[2])
                             : (visited.Object!, visited.Arguments[0], visited.Arguments[1]);
+                        // TASK-895: Ordinal is C#'s ==, which TASK-873 renders exactly (OrdinalTextEquality): the index
+                        // answers it, it has no LIKE pattern limit, and two columns translate. It was a BIN2 LIKE.
+                        if (IsOrdinal(comparison)) return Expression.Equal(a, b);
                         if (!ContainsParameter(a) && ContainsParameter(b)) (a, b) = (b, a);
                         return Expression.Call(StaticStringEqualsWithComparison, a, b, comparison);
                     }
@@ -92,6 +97,25 @@ namespace Birko.Data.SQL
                     }
                 }
                 return visited;
+            }
+
+            /// <summary>
+            /// TASK-895 — a <see cref="StringComparison"/> argument that is <see cref="StringComparison.Ordinal"/> and not read
+            /// from the row. Anything else (another comparison, one read from the row, one that cannot be evaluated) is left
+            /// to <see cref="TranslatableComparison"/>, which translates or refuses it by name.
+            /// </summary>
+            private static bool IsOrdinal(Expression comparison)
+            {
+                if (ContainsParameter(comparison)) return false;
+                if (comparison is ConstantExpression constant) return constant.Value is StringComparison.Ordinal;
+                try
+                {
+                    return Expression.Lambda(comparison).Compile().DynamicInvoke() is StringComparison.Ordinal;
+                }
+                catch (TargetInvocationException)
+                {
+                    return false;
+                }
             }
 
             /// <summary><c>a == b</c> for values of one type; an enum (or nullable enum) is compared as its integer.</summary>
@@ -268,8 +292,9 @@ namespace Birko.Data.SQL
                 TranslatableComparison(call);
                 if (!ContainsParameter(call.Arguments[1])) return;
                 throw new NotSupportedException(
-                    "Cannot translate String.Equals with a StringComparison to SQL when both strings are read from the row: only "
-                    + "a column compared with a value is translated. Compare in memory.");
+                    "Cannot translate String.Equals with StringComparison.OrdinalIgnoreCase to SQL when both strings are read from "
+                    + "the row: only a column compared with a value is translated. StringComparison.Ordinal (C#'s ==) translates "
+                    + "between two columns. Compare in memory.");
             }
             if (method.Name == "Contains")
             {
@@ -299,8 +324,8 @@ namespace Birko.Data.SQL
 
         /// <summary>
         /// TASK-869 — <c>string.Equals(row, value, comparison)</c> (the shape <see cref="RewriteTranslatableCalls"/> leaves for
-        /// every string <c>Equals</c> with a comparison) as a <see cref="ConditionType.TextEqual"/> condition, rendered by the
-        /// provider's exact form. As in C#, a NULL column is not equal to a value (so a negation includes the NULL rows,
+        /// every string <c>Equals</c> with a comparison but <see cref="StringComparison.Ordinal"/>, which it makes <c>==</c>,
+        /// TASK-895) as a <see cref="ConditionType.TextEqual"/> condition, rendered by the provider's exact form. As in C#, a NULL column is not equal to a value (so a negation includes the NULL rows,
         /// TASK-859) and a null value is the column's <c>IS NULL</c>. The row's side must be a column or a case fold of one.
         /// </summary>
         private static Condition ParseStringEquals(MethodCallExpression call, Condition condition, Type? exprType)

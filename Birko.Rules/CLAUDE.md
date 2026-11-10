@@ -55,9 +55,10 @@ Birko.Rules/
   `RuleSpecification.ToExpression` calls it. Nested properties with null guards, invariant value conversion
   (string→DateTime/Guid/enum), case-insensitive property resolution. A leaf it cannot express (unknown field, mistyped
   value, string ordering, null needle, interior `%`) matches nothing and is never negated (TASK-116's invariant); an
-  operator with no arm throws. String `Equal` is plain `==` (store-translatable; ordinal or by collation at the store),
-  while `RuleEvaluator` compares case-insensitively: the one recorded divergence (SH-M295). String methods
-  (`Contains` / `StartsWith` / `EndsWith` / `Like`) stay `OrdinalIgnoreCase`
+  operator with no arm throws. String `Equal` / `NotEqual` / `In` / `NotIn` is plain `==`, ordinal, and so is
+  `RuleEvaluator`'s comparison of two strings and the SQL rule (`RuleConditionConverter`, through TASK-873's exact
+  equality): one answer for a rule (TASK-895, the user's decision; the evaluator ignored case before, SH-M295). String
+  methods (`Contains` / `StartsWith` / `EndsWith` / `Like`) stay `OrdinalIgnoreCase`
 
 ## Conventions
 - Namespace: `Birko.Rules`

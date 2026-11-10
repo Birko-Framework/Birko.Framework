@@ -197,6 +197,8 @@ public static class SqlViewTranslator
             var condition = Condition.AndField(
                 leftTable.Name + "." + leftField.Name,
                 rightTable.Name + "." + rightField.Name);
+            // TASK-895: string keys join exactly, as a LINQ join does.
+            DataBase.MarkOrdinalJoin(condition, leftField.Property?.PropertyType, rightField.Property?.PropertyType);
 
             view.AddJoin(Join.Create(leftTable.Name, rightTable.Name, condition, sqlJoinType));
         }

@@ -148,8 +148,14 @@ statements: read (rows streamed), count (summed), delete and update (each chunk 
 `RunAtomically(Async)` boundary).
 - **Provider limits (`MaxCommandParameters`):** SQLite 32766, SQL Server 2098 (2099 fails, measured live), PostgreSQL
   and MySQL 65535. The other parameters are counted by a probe build.
-- **When it splits:** only an IN that is a plain AND conjunct over non-string values of one type: whole-microsecond,
+- **When it splits:** only an IN that is a plain AND conjunct over values of one type: whole-microsecond,
   single-`Kind` dates, with no sort, limit or offset, in an update that does not write that column.
+- **Strings (TASK-895, the user's decision, 2026-11-10):** a string list split like any other once it compares exactly
+  (`Condition.Comparison == Ordinal`: every list the expression parser and `RuleConditionConverter` build, TASK-873's
+  `OrdinalTextEquality`). A row then equals at most one distinct C# string of the list, so the chunks stay disjoint
+  (measured: an increment applies once on all four providers, with case, accent, `ß` / `ss` and trailing-space twins in
+  other chunks). A hand-built string `Condition` (no `Comparison`) follows the collation and is still refused past the
+  limit, as is a `char` list. It used to refuse every string list (TASK-833).
 - **Any other shape** stays one statement within the limit; past it, `NotSupportedException` before anything runs,
   naming the reason.
 - **Not a snapshot:** a chunked read outside a transaction is not one snapshot.
@@ -760,10 +766,13 @@ calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Regi
   a comparison read from the row); the parser stores it on `Condition.Comparison`; `LikeConditionStrategy` hands it to
   the provider's `SqlValueFragmentDialect.StringMatch` (PostgreSQL and SQL Server got their own dialect classes for it).
   The base dialect refuses, so a provider without an exact form fails loudly.
-- **Equality:** `x.Col.Equals(v, comparison)` and `string.Equals(x.Col, v, comparison)` (either argument order) are
-  rewritten to one static shape and become `ConditionType.TextEqual`, rendered by the same `StringMatch` (a `LIKE`
-  without wildcards, so trailing spaces count as in C#). As in C#, a NULL column is not equal, so the negation includes
-  NULL rows (TASK-859's leg); a null value is `IS NULL`. Column-vs-column is refused. Plain `==` is unchanged (collation).
+- **Equality:** with `Ordinal`, `x.Col.Equals(v, Ordinal)` / `string.Equals(a, b, Ordinal)` is C#'s `==` and is rewritten
+  to it (TASK-895), so it renders through TASK-873's `OrdinalTextEquality`: the index seeks it (it was a BIN2 `LIKE`, a
+  scan on SQL Server and MySQL), it has no 4000-character limit (a 4001-character value was refused on SQL Server), and
+  two columns translate (they were refused). With `OrdinalIgnoreCase` the call keeps one static shape and becomes
+  `ConditionType.TextEqual`, rendered by the same `StringMatch` (a `LIKE` without wildcards, so trailing spaces count as
+  in C#); as in C#, a NULL column is not equal, so the negation includes NULL rows (TASK-859's leg), a null value is
+  `IS NULL`, and column-vs-column is refused by name.
 - **Limits:** SQL Server's LIKE takes at most 4000 pattern characters (measured: 4001 is Msg 8152, also bound as
   `nvarchar(max)`), so `MSSqlValueFragmentDialect` refuses a longer pattern by name before anything runs — an
   `OrdinalIgnoreCase` term of ~1000 cased letters. TASK-874: the no-argument forms go through the same check
@@ -779,6 +788,25 @@ calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Regi
   this. Tests: `tests/Shared/StoreContract/StringComparisonFilterContract.cs` (259 cases per SQL provider; 104–131
   exact-match and 10 refusal cases red before), `Birko.Data.SQL.Views.Tests/Task869ViewStringComparisonTests`,
   `Birko.Data.SQL.Tests/SqlStringMatchTests` (the case classes against C# over planes 0 and 1).
+
+#### String equality: rules, view joins and the documented limits (TASK-895)
+
+- **Rules are exact** (the user's decision, 2026-11-10): `RuleConditionConverter` marks a string `Equal` / `NotEqual` /
+  `In` / `NotIn` leaf `Ordinal` through `DataBase.MarkRuleOrdinalText` → `MarkOrdinalText`, the lambda parser's producer,
+  so it renders through `OrdinalTextEquality`. A leaf is marked when every value is a string and the column is a string
+  column (by its mapped property; the type-less overloads have no metadata and go by the values). A `Like` without a
+  wildcard keeps the collation, as every LIKE-family rule does. `RuleEvaluator` compares two strings ordinally too, so a
+  rule answers alike in SQL, compiled and in memory. Measured before: 30 of 42 string rule cases read other rows than the
+  compiled rule on MySQL, 36 on SQL Server (SQLite / PostgreSQL 0), and the evaluator differed on 30.
+- **View joins on string keys are exact:** `DataBase.MarkOrdinalJoin`, called by both join builders (`[View]` attribute
+  and `SqlViewTranslator`), and `ViewSelectSqlBuilder` renders a marked join through the provider's
+  `OrdinalTextEquality` in the persistent DDL (the read path's strategies already did). See `Birko.Data.SQL.View`.
+- **MySQL 5.7 and MariaDB:** `utf8mb4_0900_bin` (TASK-873's exact form) exists from MySQL 8.0 only, so every string
+  `==` / `IN` / rule / string join key fails there loudly (ERROR 1273 unknown collation), never silently. The framework
+  targets 8.x; not measured on 5.7 or MariaDB (no server).
+- **PostgreSQL `CHAR(n)` (`bpchar`):** `(col)::text` strips the padding while C# reads the padded value, so `== "ab"`
+  matches a `CHAR(4)` holding `ab  `, which C# does not. The framework never creates `CHAR(n)` columns (strings are
+  `VARCHAR` / `TEXT`); a hand-made `CHAR(n)` column compares as its trimmed text.
 
 #### Enum parameter values bind as their underlying integer
 

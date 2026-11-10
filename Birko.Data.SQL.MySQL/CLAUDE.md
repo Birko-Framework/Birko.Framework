@@ -208,6 +208,9 @@ re-wraps every command failure as `new Exception(commandText, ex)`.
 
 ## Limitations
 - Requires MySQL 5.7 or later
+  - ⚠ **Except string equality, which needs MySQL 8.0+ (TASK-873 / TASK-895).** A string `==` / `IN`, a rule's string
+    `Equal` / `In` and a view's string join key render `COLLATE utf8mb4_0900_bin`, which 5.7 and MariaDB do not have:
+    there they fail loudly (unknown collation), never silently. Not measured (no 5.7 / MariaDB server).
   - ⚠ **Except `ISchemaBuilder.RenameField`, which needs MySQL 8.0+.** It emits `ALTER TABLE … RENAME
     COLUMN`, added in 8.0. The 5.7 form is `CHANGE old new <type>`, and measured on 8.4.11 a type-less
     `CHANGE` is `ERROR 1064` — so a fallback must read the column's full definition from the catalogue and

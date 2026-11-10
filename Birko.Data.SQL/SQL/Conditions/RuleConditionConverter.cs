@@ -283,6 +283,11 @@ public static class RuleConditionConverter
             DataBase.MarkNullableIn(condition, nullable);
         else
             MarkNullable(condition, nullable);
+
+        // TASK-895 (the user's decision): string Equal / NotEqual / In / NotIn are exact, as a lambda's == and Contains are —
+        // one answer for a rule in SQL, compiled to C# and in RuleEvaluator. Like without a wildcard stays a collation compare.
+        if (rule.Operator is ComparisonOperator.Equal or ComparisonOperator.NotEqual or ComparisonOperator.In or ComparisonOperator.NotIn)
+            DataBase.MarkRuleOrdinalText(condition, entityType, rule.Field);
         return condition;
     }
 

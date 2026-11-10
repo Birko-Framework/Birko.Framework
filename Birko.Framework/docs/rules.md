@@ -55,7 +55,7 @@ var negated = new Rule("Temperature", ComparisonOperator.GreaterThan, 100)
 
 | Operator | Description |
 |----------|-------------|
-| Equal | Exact match (numeric promotion, case-insensitive strings) |
+| Equal | Exact match (numeric promotion; strings ordinal, case- and accent-sensitive) |
 | NotEqual | Not equal |
 | GreaterThan | Greater than (numeric, DateTime, IComparable) |
 | GreaterThanOrEqual | Greater than or equal |
@@ -196,7 +196,8 @@ ComparisonHelper handles type-safe comparisons:
   text (`"007"` is not `"7"`)
 - **DateTime**: direct comparison
 - **IComparable**: fallback for custom types
-- **String**: case-insensitive comparison as last resort
+- **String**: two strings compare ordinally for `Equal` / `NotEqual` / `In` / `NotIn`, as C#'s `==` (TASK-895); a value
+  of another type against text falls back to a case-insensitive comparison of the two texts
 - **NULL as C# answers it** (TASK-881): `Equal` / `NotEqual` against `null` test for null; every ordering and `Between`
   with NULL on either side is false (negated: true), as `x.Score < 5` is false for a null `Score`; `In` matches NULL only
   from a list holding `null`. The same rule compiled by `RuleExpressionConverter` and converted for SQL answers alike.
@@ -206,10 +207,11 @@ ComparisonHelper handles type-safe comparisons:
 `RuleExpressionConverter` bridges rules and stores — converts any `IRule`, `RuleGroup`, `RuleSet`, or `IEnumerable<IRule>` into an `Expression<Func<T, bool>>` that all Birko stores accept (SQL, Elasticsearch, MongoDB, JSON, etc.). It is the only rule-to-LINQ translator: `RuleSpecification<T>.ToExpression()` uses it.
 
 - A rule it cannot express as a store filter matches nothing, and is never turned into "everything" by a negation.
-- **String equality differs between the two engines.** In memory (`RuleEvaluator`) `Equal` on strings ignores case. As a
-  store filter it is plain `==`: ordinal on SQLite and PostgreSQL, by the collation on MySQL and SQL Server. No
-  case-insensitive equality translates on every store; where case must not matter, store the value normalised (for
-  example lower-cased) and compare against the normalised form.
+- **String equality is exact everywhere** (TASK-895, the user's decision): `Equal` / `NotEqual` / `In` / `NotIn` on
+  strings is plain `==`, ordinal, in memory (`RuleEvaluator`), compiled, and in SQL (`RuleConditionConverter`, through
+  TASK-873's exact equality, on every provider whatever the column's collation). No case-insensitive equality translates
+  on every store; where case must not matter, store the value normalised (for example lower-cased) and compare against
+  the normalised form. The string methods (`Contains`, `StartsWith`, `EndsWith`, `Like`) ignore case in memory.
 
 ### Basic Usage
 

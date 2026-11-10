@@ -178,7 +178,8 @@ public abstract class StringComparisonFilterContract
             ["StartsWith(\"a\", true, InvariantCulture)"] = (x => x.Text.StartsWith("a", true, CultureInfo.InvariantCulture), "CultureInfo"),
             ["EndsWith(\"a\", false, CurrentCulture)"] = (x => x.Text.EndsWith("a", false, CultureInfo.CurrentCulture), "CultureInfo"),
             ["Contains(null, Ordinal)"] = (x => x.Text.Contains(NullText!, StringComparison.Ordinal), "null"),
-            ["string.Equals(Text, Opt, Ordinal)"] = (x => string.Equals(x.Text, x.Opt, StringComparison.Ordinal), "both strings"),
+            // TASK-895: with Ordinal it is C#'s ==, translated between two columns (StringEqualityLeftoversContract).
+            ["string.Equals(Text, Opt, OrdinalIgnoreCase)"] = (x => string.Equals(x.Text, x.Opt, StringComparison.OrdinalIgnoreCase), "both strings"),
             ["Text.Trim().Equals(\"pad\", Ordinal)"] = (x => x.Text.Trim().Equals("pad", StringComparison.Ordinal), "Equals"),
         };
 

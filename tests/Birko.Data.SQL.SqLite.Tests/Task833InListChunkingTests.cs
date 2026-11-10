@@ -502,7 +502,7 @@ public sealed class Task833InListChunkingTests : IDisposable
     public static IEnumerable<object[]> Refusals() => new[]
     {
         new object[] { "NOT IN read" }, new object[] { "NOT IN delete" }, new object[] { "NOT IN update" },
-        new object[] { "string list count" }, new object[] { "OR read" }, new object[] { "sorted read" },
+        new object[] { "OR read" }, new object[] { "sorted read" },
         new object[] { "paged read" }, new object[] { "sync NOT IN delete" }, new object[] { "sync sorted read" },
     };
 
@@ -512,7 +512,6 @@ public sealed class Task833InListChunkingTests : IDisposable
     {
         var f = await SeedAsync();
         var ids = f.Rows.Select(r => r.Guid!.Value).Take(45).ToList();
-        var names = f.Rows.Select(r => r.Name!).Take(45).ToList();
         f.Executed.Clear();
 
         Func<Task> act = shape switch
@@ -520,7 +519,6 @@ public sealed class Task833InListChunkingTests : IDisposable
             "NOT IN read" => () => f.Store.ReadAsync(x => !ids.Contains(x.Guid!.Value), ct: CancellationToken.None),
             "NOT IN delete" => () => f.Store.DeleteAsync(x => !ids.Contains(x.Guid!.Value), CancellationToken.None),
             "NOT IN update" => () => f.Store.UpdateAsync(x => !ids.Contains(x.Guid!.Value), new PropertyUpdate<ChunkRow>().Set(x => x.Score, -1), CancellationToken.None),
-            "string list count" => () => f.Store.CountAsync(x => names.Contains(x.Name!), CancellationToken.None),
             "OR read" => () => f.Store.ReadAsync(x => ids.Contains(x.Guid!.Value) || x.Score == 1, ct: CancellationToken.None),
             "sorted read" => () => f.Store.ReadAsync(x => ids.Contains(x.Guid!.Value), OrderBy<ChunkRow>.By(x => x.Score), ct: CancellationToken.None),
             "paged read" => () => f.Store.ReadAsync(x => ids.Contains(x.Guid!.Value), null, 5, 0, CancellationToken.None),
@@ -533,6 +531,29 @@ public sealed class Task833InListChunkingTests : IDisposable
         f.Executed.Should().BeEmpty();
         RawCount(f).Should().Be(60);
         RawCount(f, "Score = -1").Should().Be(0);
+    }
+
+    /// <summary>
+    /// TASK-895 (the user's decision, 2026-11-10): a string list past the limit is split like a Guid list. Since TASK-873 it
+    /// compares exactly, so a row equals at most one distinct value and the chunks are disjoint. It was refused here.
+    /// </summary>
+    [Fact]
+    public async Task A_string_list_past_the_limit_is_split_and_each_row_counts_once()
+    {
+        var f = await SeedAsync();
+        // 45 names, 5 of them twice and 5 that match nothing: 55 values, 50 distinct.
+        var names = f.Rows.Select(r => r.Name!).Take(45).ToList();
+        names.AddRange(names.Take(5).ToList());
+        names.AddRange(new[] { "R0", "r0 ", "x1", "x2", "x3" });
+        var expected = f.Rows.Count(r => names.Contains(r.Name!) && r.DeletedAt == null);
+        f.Executed.Clear();
+
+        (await f.Store.CountAsync(x => names.Contains(x.Name!) && x.DeletedAt == null, CancellationToken.None)).Should().Be(expected);
+        expected.Should().Be(40);
+        f.Executed.Should().HaveCount(5, "50 distinct values in chunks of 10");
+        await f.Store.UpdateAsync(x => names.Contains(x.Name!), new PropertyUpdate<ChunkRow>().Increment(x => x.Score, 1000), CancellationToken.None);
+        RawCount(f, "Score >= 1000").Should().Be(45, "each named row is incremented once");
+        RawCount(f, "Score >= 2000").Should().Be(0);
     }
 
     [Fact]

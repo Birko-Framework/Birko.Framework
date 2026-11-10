@@ -344,5 +344,31 @@ namespace Birko.Data.SQL
 
             return CanBeNull(column.Property.PropertyType) && ColumnMayHoldNull(column);
         }
+
+        /// <summary>
+        /// TASK-895 (the user's decision, 2026-11-10: a rule's string equality is exact, as the lambda's is) — marks a rule's
+        /// <c>Equal</c> / <c>NotEqual</c> / <c>In</c> / <c>NotIn</c> leaf as <see cref="StringComparison.Ordinal"/> through
+        /// <see cref="MarkOrdinalText"/>, the producer the expression parser uses, so it renders through
+        /// <see cref="Conditions.SqlValueFragmentDialect.OrdinalTextEquality"/> and answers what the rule compiled to C# answers.
+        /// A leaf is string equality when every value it binds is a string and the column is a string column: by its mapped
+        /// property when <paramref name="entityType"/> resolves it, and taken as one when nothing says otherwise (the type-less
+        /// overloads). A column known to be of another type (a number, a Guid) keeps <c>=</c>: the value is converted there.
+        /// </summary>
+        /// <remarks>
+        /// Before (measured, TASK-895): the converter rendered <c>=</c> / <c>IN</c>, which follows the column's collation, so
+        /// on MySQL 30 and on SQL Server 36 of 42 string rule cases read other rows than the compiled rule (<c>Equal "abc"</c>
+        /// matched <c>ABC</c> and <c>abc </c>, <c>Equal "ss"</c> matched <c>ß</c>); SQLite and PostgreSQL were already exact.
+        /// </remarks>
+        internal static void MarkRuleOrdinalText(Conditions.Condition condition, Type? entityType, string field)
+        {
+            if (condition.Values == null) return;
+            var values = condition.Values.Cast<object?>().Where(v => v != null).ToList();
+            if (values.Count == 0 || !values.All(v => v is string)) return;
+
+            var table = entityType == null ? null : TryLoadTable(entityType);
+            var columnType = table == null ? null : FindFieldIn(new[] { table }, field)?.Property?.PropertyType;
+            if (columnType != null && UnwrapNullable(columnType) != typeof(string)) return;
+            MarkOrdinalText(condition, typeof(string));
+        }
     }
 }

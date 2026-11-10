@@ -36,6 +36,13 @@ SQL view generation framework for creating database views from entity attributes
 
 ### Connectors — DDL (persistent CREATE/DROP VIEW)
 - `AbstractConnectorBase_View.cs` — `BuildViewSelectSql`, `BuildCreateViewSql` (virtual), `BuildViewJoinConditionSql`
+- **A join on string keys is exact (TASK-895).** `DataBase.MarkOrdinalJoin` marks a `[View]` (and `SqlViewTranslator`)
+  join condition `Ordinal` when both keys are strings; the on-the-fly read renders it through the condition strategies
+  and `ViewSelectSqlBuilder` through the provider's `OrdinalTextEquality` in the DDL, so a view pairs the rows a LINQ
+  join pairs. Before (measured), `=` followed the collation: SQL Server joined 18 extra pairs, MySQL 20. The plain `=`
+  stays in front, so the key's index is still sought (measured, 100,000 rows, PostgreSQL / MySQL / SQL Server), and SQL
+  Server still creates an indexed view over it. The migration generator (`ViewSqlGenerator`) knows no provider and keeps
+  the plain `=` (TASK-898). Tests: `Birko.Data.SQL.Views.Tests/Task895ViewJoinKeyTests`.
 - **A persistent view column named like a reserved word is refused by name (TASK-872).** A persistent view's columns
   are its view properties, emitted bare (`AS User`, `SELECT User, …`, `WHERE User = …`). Measured live: PostgreSQL and
   SQLite created such a view and every read returned the value function (the session user, the current date) in place

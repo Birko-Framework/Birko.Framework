@@ -63,11 +63,15 @@ namespace Birko.Data.SQL.Connectors
     /// A NOT IN is never split (the user's decision): "not in chunk 1" deleted on its own deletes chunk 2's rows. The one OR
     /// group that splits is <c>IN(L) OR c IS NULL</c> (TASK-859, a list holding <c>null</c>): its NULL leg goes with the first
     /// chunk only.</para>
-    /// <para><b>Values.</b> Only Guid, numeric, enum, date/time and bool lists are split. A string list is refused past the
-    /// limit (the user's decision): under a case- or accent-insensitive collation two distinct C# strings can be one database
-    /// value, so a row would match two chunks, a count would over-count and an increment would apply twice. Duplicates are
-    /// dropped for the same reason, so .NET equality must be the database's: a list mixing value types is refused, and so
-    /// is a <see cref="DateTimeOffset"/> list holding one instant at two offsets (equal in .NET, two values in SQLite).</para>
+    /// <para><b>Values.</b> Guid, numeric, enum, date/time and bool lists are split, and so is a string list that compares
+    /// exactly (<see cref="Condition.Comparison"/> <see cref="StringComparison.Ordinal"/>: every list the expression parser
+    /// and the rule converter build, TASK-873 / TASK-895). TASK-895 (the user's decision, 2026-11-10) reverses TASK-833's
+    /// refusal for those: since TASK-873 a row equals at most one distinct C# string of the list, so the chunks are disjoint.
+    /// A string list built by hand compares by the column's collation, under which two distinct C# strings can be one
+    /// database value (a row would match two chunks, a count would over-count and an increment would apply twice), so it is
+    /// still refused past the limit, and so is a <c>char</c> list. Duplicates are dropped, so .NET equality must be the
+    /// database's: a list mixing value types is refused, and so is a <see cref="DateTimeOffset"/> list holding one instant at
+    /// two offsets (equal in .NET, two values in SQLite).</para>
     /// <para><b>Statements that are not a union.</b> A sort, a limit or an offset makes the chunked read a different query
     /// (a global sort and page), and an aggregate's groups span chunks. The caller states such a reason; past the limit
     /// the statement is refused with it, below the limit nothing changes.</para>
@@ -158,7 +162,7 @@ namespace Birko.Data.SQL.Connectors
                     ?? (Identifiers(leaf.Condition.Name ?? string.Empty).Any(written.Contains)
                         ? "the update writes the filtered column, so a row one chunk changes could be matched by a later chunk"
                         : null)
-                    ?? ValueReason(leaf.Condition.Values, out distinct);
+                    ?? ValueReason(leaf.Condition, out distinct);
                 if (reason == null)
                 {
                     chosen = leaf;
@@ -332,9 +336,12 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// Null when the list can be split, with its distinct values in list order; otherwise the reason it cannot.
         /// </summary>
-        private static string? ValueReason(IEnumerable? values, out List<object?>? distinct)
+        private static string? ValueReason(Condition leaf, out List<object?>? distinct)
         {
             distinct = null;
+            var values = leaf.Values;
+            // TASK-895: an exact string list matches each row by at most one of its distinct (ordinal) values.
+            var exactText = leaf.Comparison == StringComparison.Ordinal;
             var result = new List<object?>();
             var seen = new HashSet<object?>();
             var instants = new Dictionary<long, TimeSpan>();
@@ -345,12 +352,13 @@ namespace Birko.Data.SQL.Connectors
                 if (value != null)
                 {
                     var valueType = value.GetType();
-                    if (valueType == typeof(string) || valueType == typeof(char))
+                    if (valueType == typeof(char) || (valueType == typeof(string) && !exactText))
                     {
-                        return "its values are strings, and under a case- or accent-insensitive collation two distinct strings can "
-                            + "be one database value, so a row could match two chunks";
+                        return "its values are strings compared by the column's collation (a condition built by hand), and under a "
+                            + "case- or accent-insensitive collation two distinct strings can be one database value, so a row could "
+                            + "match two chunks";
                     }
-                    if (!IsSplittableType(valueType))
+                    if (valueType != typeof(string) && !IsSplittableType(valueType))
                     {
                         return $"its values are of type {valueType.Name}; only Guid, numeric, enum, date/time and bool lists are split";
                     }

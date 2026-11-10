@@ -149,7 +149,7 @@ namespace Birko.Data.SQL.Connectors
                         if (joingroup.Value.Any())
                         {
                             sql += " ON (";
-                            sql += BuildViewJoinConditionSql(joingroup.Value, quoteIdentifier, boolLiteral);
+                            sql += BuildViewJoinConditionSql(joingroup.Value, quoteIdentifier, boolLiteral, dialect);
                             sql += ")";
                         }
                     }
@@ -173,8 +173,16 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// Builds join condition SQL for view creation (field = field comparisons).
         /// </summary>
-        private static string BuildViewJoinConditionSql(IEnumerable<Conditions.Condition> conditions, Func<string, string> quoteIdentifier, Func<bool, string>? boolLiteral)
+        /// <remarks>
+        /// TASK-895: a condition on string keys (<see cref="Conditions.Condition.Comparison"/> Ordinal, <c>DataBase.MarkOrdinalJoin</c>)
+        /// renders through the provider's <see cref="Conditions.SqlValueFragmentDialect.OrdinalTextEquality"/>, as the
+        /// on-the-fly read renders it, so the persistent view pairs the rows a LINQ join pairs. Without a provider (the
+        /// migration generator) the portable dialect renders the plain <c>=</c>, which follows the collation.
+        /// </remarks>
+        private static string BuildViewJoinConditionSql(IEnumerable<Conditions.Condition> conditions, Func<string, string> quoteIdentifier,
+            Func<bool, string>? boolLiteral, Conditions.SqlValueFragmentDialect? dialect)
         {
+            dialect ??= Conditions.SqlValueFragmentDialect.Portable;
             var parts = new List<string>();
             foreach (var condition in conditions)
             {
@@ -185,7 +193,9 @@ namespace Birko.Data.SQL.Connectors
                     {
                         var left = QuoteFieldReference(condition.Name, quoteIdentifier);
                         var right = QuoteFieldReference(fieldName, quoteIdentifier);
-                        parts.Add(left + " = " + right);
+                        parts.Add(condition.Comparison == StringComparison.Ordinal
+                            ? dialect.OrdinalTextEquality(left, new[] { right }, null, isNot: false)
+                            : left + " = " + right);
                     }
                 }
                 else if (!string.IsNullOrEmpty(condition.Name) && condition.Values != null)
@@ -194,7 +204,10 @@ namespace Birko.Data.SQL.Connectors
                     if (value != null)
                     {
                         var left = QuoteFieldReference(condition.Name, quoteIdentifier);
-                        parts.Add(left + " = " + FormatJoinConditionValue(value, boolLiteral));
+                        var literal = FormatJoinConditionValue(value, boolLiteral);
+                        parts.Add(condition.Comparison == StringComparison.Ordinal
+                            ? dialect.OrdinalTextEquality(left, new[] { literal }, new[] { value }, isNot: false)
+                            : left + " = " + literal);
                     }
                 }
             }

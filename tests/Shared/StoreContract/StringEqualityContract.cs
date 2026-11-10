@@ -78,7 +78,7 @@ public abstract class StringEqualityContract
     private static readonly string[] Blanks = { "", " " };
 
     /// <summary>
-    /// A long list (1503 values, under SQL Server's 2098-parameter limit, past which a string list is refused, TASK-833):
+    /// A long list (1503 values, under SQL Server's 2098-parameter limit; past it a string list is split since TASK-895, see StringEqualityLeftoversContract):
     /// <c>ABC</c>, <c>ß</c> and <c>abc </c>, which the collations matched to other rows, and junk.
     /// </summary>
     private static readonly string[] LongList =

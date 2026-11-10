@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Long string IN lists split; rules and view joins compare strings exactly (2026-11-10)
+[[TASK-895]] (the user's decisions). A string IN list past the parameter limit is now split like other lists, since
+TASK-873 made string IN exact. SQL rules compared strings by collation (MySQL 30, SQL Server 36 of 42 shapes wrong) and
+`RuleEvaluator` ignored case; both are now ordinal, like lambdas. String view joins returned extra case- and
+space-twin pairs on MySQL and SQL Server; they are exact and keep the index. `string.Equals(.., Ordinal)` renders like
+`==`.
 ### SQL integer arithmetic fails where checked C# would, on every provider (2026-11-10)
 [[TASK-890]]. MySQL computed `int` arithmetic in BIGINT, so overflowing filters matched rows and a SET stored the
 unwrapped value, silently; PostgreSQL and SQL Server dropped widening casts and failed `(long)x.Hits * 2` where C#
@@ -374,11 +380,6 @@ threw a cast error on all four providers: the reader was chosen from the functio
 types, not from what the server returns. COUNT of a group with a NULL key answered 0, silently. One reading rule now
 converts the server's value exactly to the view property's type, an integer AVG renders as a fraction (SQL Server
 truncated it), and COUNT counts the key column. The SELECT and the reader share one column sequence.
-### Direct connector calls and persistent views refuse reserved column names too (2026-11-09)
-[[TASK-872]]. TASK-862's check ran only through store init. A direct `connector.Delete(type, x => x.User == …)` on a table
-Birko did not build compared the database's current user, not the column, and deleted every row, on all four providers
-(measured). A persistent view's own column named `User` read the function the same way. Every typed connector entry point
-now resolves the table through one checking funnel, and persistent view DDL and reads check their columns.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

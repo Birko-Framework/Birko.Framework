@@ -32,10 +32,11 @@ namespace Birko.Rules;
 /// intermediate never matches either way.
 /// </para>
 /// <para>
-/// <b>Store-translatable output only.</b> String <c>Equal</c> / <c>NotEqual</c> is plain <c>==</c>, ordinal on the
-/// stores that compare ordinally (SQLite, PostgreSQL) and by collation elsewhere: no case-insensitive equality has one
-/// form every store translates (SH-M295). The in-memory <see cref="RuleEvaluator"/> compares case-insensitively, so the
-/// two can differ on case; that is the one recorded divergence. The string-method operators keep
+/// <b>Store-translatable output only.</b> String <c>Equal</c> / <c>NotEqual</c> / <c>In</c> / <c>NotIn</c> is plain
+/// <c>==</c>, C#'s ordinal equality: no case-insensitive equality has one form every store translates (SH-M295). The
+/// in-memory <see cref="RuleEvaluator"/> compares two strings ordinally too, and so does every SQL provider, the lambda's
+/// <c>==</c> since TASK-873 and <c>RuleConditionConverter</c> since TASK-895 (the user's decision, 2026-11-10): one answer
+/// for a rule. It used to be the one recorded divergence (the evaluator ignored case). The string-method operators keep
 /// <c>StringComparison.OrdinalIgnoreCase</c>, which the stores this framework ships translate.
 /// </para>
 /// <para>

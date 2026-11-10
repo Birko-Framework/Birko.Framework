@@ -108,6 +108,12 @@ internal static class ComparisonHelper
         if (a is null && b is null) return true;
         if (a is null || b is null) return false;
 
+        // TASK-895 (the user's decision, 2026-11-10: a rule's string equality is exact): two strings compare ordinally, as
+        // the compiled rule's == and, since TASK-873 / TASK-895, every SQL provider do. It was OrdinalIgnoreCase (SH-M295's
+        // recorded divergence, TASK-144): `Status Equal "open"` matched "Open" here and not at the store. Equal, NotEqual,
+        // In and NotIn all come here; the string methods (Contains, StartsWith, EndsWith, Like) keep ignoring case.
+        if (a is string sa && b is string sb) return string.Equals(sa, sb, StringComparison.Ordinal);
+
         // SH-M360 (TASK-156): two exact numbers (integers, decimal) compare exactly, as decimal. Promoting both to
         // double equated 9007199254740993L with ...992L and 1.0000000000000000001m with 1.0.
         if (TryToExact(a, out var ea) && TryToExact(b, out var eb))

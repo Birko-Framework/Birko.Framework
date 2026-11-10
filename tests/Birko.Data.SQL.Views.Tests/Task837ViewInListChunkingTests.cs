@@ -265,7 +265,6 @@ public sealed class Task837ViewInListChunkingTests : IDisposable
         new object[] { "paged", "paged" },
         new object[] { "or", "OR" },
         new object[] { "not-in", "NOT IN" },
-        new object[] { "strings", "strings" },
         new object[] { "aggregate-read", "aggregate" },
         new object[] { "aggregate-count", "aggregate" },
     };
@@ -277,7 +276,6 @@ public sealed class Task837ViewInListChunkingTests : IDisposable
         var f = await SeedAsync();
         var ids = OrderIds(f);
         var personIds = f.Persons.Select(p => p.Guid!.Value).Concat(Enumerable.Range(0, 20).Select(_ => Guid.NewGuid())).ToList();
-        var names = Enumerable.Range(0, 60).Select(i => "p" + i.ToString("00")).ToList();
         var lines = new SqlViewStore<LineView>(f.Low, Lines());
         var totals = new SqlViewStore<TotalView>(f.Low, Totals());
 
@@ -287,7 +285,6 @@ public sealed class Task837ViewInListChunkingTests : IDisposable
             "paged" => () => lines.QueryAsync(v => ids.Contains(v.OrderId), limit: 100),
             "or" => () => lines.QueryAsync(v => ids.Contains(v.OrderId) || v.Amount > 1000m),
             "not-in" => () => lines.QueryAsync(v => !ids.Contains(v.OrderId)),
-            "strings" => () => lines.QueryAsync(v => names.Contains(v.PersonName)),
             "aggregate-read" => () => totals.QueryAsync(v => personIds.Contains(v.PersonId)),
             "aggregate-count" => () => totals.CountAsync(v => personIds.Contains(v.PersonId)),
             _ => throw new ArgumentOutOfRangeException(nameof(shape)),
@@ -295,6 +292,27 @@ public sealed class Task837ViewInListChunkingTests : IDisposable
 
         (await act.Should().ThrowAsync<NotSupportedException>()).Which.Message.Should().Contain(reason).And.Contain("TASK-833");
         f.Executed.Should().BeEmpty("the refusal is raised before any statement");
+    }
+
+    /// <summary>
+    /// TASK-895 (the user's decision, 2026-11-10): a view's string list past the limit is split like a Guid list, since
+    /// TASK-873 made it exact. It was refused here.
+    /// </summary>
+    [Fact]
+    public async Task A_view_string_list_past_the_limit_is_split()
+    {
+        var f = await SeedAsync();
+        // 30 names that exist, 25 that do not, 5 repeated, and case and space twins C# does not match.
+        var names = Enumerable.Range(0, 55).Select(i => "p" + i.ToString("00")).ToList();
+        names.AddRange(names.Take(5).ToList());
+        names.AddRange(new[] { "P01", "p02 " });
+        var lines = new SqlViewStore<LineView>(f.Low, Lines());
+        f.Executed.Clear();
+
+        var rows = (await lines.QueryAsync(v => names.Contains(v.PersonName))).ToList();
+        rows.Select(r => r.OrderId).Should().BeEquivalentTo(f.Orders.Select(o => (Guid?)o.Guid)).And.OnlyHaveUniqueItems();
+        (await lines.CountAsync(v => names.Contains(v.PersonName))).Should().Be(60);
+        Selects(f).Count.Should().BeGreaterThan(2, "57 distinct values are read in chunks");
     }
 
     [Fact]

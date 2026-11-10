@@ -148,14 +148,18 @@ namespace Birko.Data.SQL
                                 if (fieldLeft != null && fieldRight != null)
                                 {
                                     cond = Conditions.Condition.AndField(tableLeft.Name + "." + fieldLeft.Name, tableRight!.Name + "." + fieldRight.Name);
+                                    // TASK-895: string keys join exactly, as a LINQ join does.
+                                    MarkOrdinalJoin(cond, fieldLeft.Property?.PropertyType, fieldRight.Property?.PropertyType);
                                 }
                                 else if (fieldLeft != null && fieldRight == null)
                                 {
                                     cond = Conditions.Condition.AndValue(tableLeft.Name + "." + fieldLeft.Name, attr.ModelProperyRight);
+                                    MarkOrdinalJoin(cond, fieldLeft.Property?.PropertyType, attr.ModelProperyRight?.GetType());
                                 }
                                 else if (fieldLeft == null && fieldRight != null)
                                 {
                                     cond = Conditions.Condition.AndValue(tableRight!.Name + "." + fieldRight.Name, attr.ModelProperyLeft);
+                                    MarkOrdinalJoin(cond, fieldRight.Property?.PropertyType, attr.ModelProperyLeft?.GetType());
                                 }
                                 if (cond != null)
                                 {

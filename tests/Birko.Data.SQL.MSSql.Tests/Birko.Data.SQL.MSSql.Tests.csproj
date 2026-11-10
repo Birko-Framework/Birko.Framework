@@ -56,6 +56,7 @@
     <Compile Include="..\Shared\StoreContract\RejectedColumnNameContract.cs" Link="Shared\RejectedColumnNameContract.cs" />
     <Compile Include="..\Shared\StoreContract\RuleNullContract.cs" Link="Shared\RuleNullContract.cs" />
     <Compile Include="..\Shared\StoreContract\CollapsedGroupContract.cs" Link="Shared\CollapsedGroupContract.cs" />
+    <Compile Include="..\Shared\StoreContract\StringEqualityLeftoversContract.cs" Link="Shared\StringEqualityLeftoversContract.cs" />
   </ItemGroup>
 
 </Project>
