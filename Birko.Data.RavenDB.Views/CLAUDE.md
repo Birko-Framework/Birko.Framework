@@ -17,6 +17,9 @@ RavenDB view implementation for the Birko data layer. Translates portable `ViewD
 - Map: `from entity in docs.{Collection} select new { ... }`, the collection named by the store's conventions (`Order` is in `Orders`)
 - Joins: `LoadDocument("{RightCollection}/" + key, "{RightCollection}")`, on the right model's `Guid` only (a document's id is `RavenDocumentId.For`); Inner adds `where joined != null`; other join types refused
 - Avg divides as `double`
+- Min / Max / Avg skip nulls, as LINQ does (TASK-906): Min / Max reduce over the non-null values (null when none), and
+  Avg's `_Count` counts the non-null values (null when none). The MIN of {3, null} was null and its AVG 1.5, and a group
+  mixing nulls and numbers could fail to reduce, erroring the index (measured). Pinned by `Task906RavenViewNullAggregateLiveTests`
 - A nested source (`r.Sub.X`, TASK-843) maps the whole path, null-guarded: `(entity.Sub == null ? null : entity.Sub.X)`. Read through a missing object, the index stores nothing and the projection fell back to the document's same-named top-level field (measured); it used to read `entity.X`
 - Reduce: groups results and applies Sum/Count/Min/Max/Avg aggregates
 - Non-aggregate views produce Map only (no Reduce)

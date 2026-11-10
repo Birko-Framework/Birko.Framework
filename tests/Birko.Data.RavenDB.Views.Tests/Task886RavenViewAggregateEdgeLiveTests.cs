@@ -101,10 +101,12 @@ public class Task886RavenViewAggregateEdgeLiveTests
         await rows.CreateAsync(new T886Row { Grp = "a", Score = 3 });
         await rows.CreateAsync(new T886Row { Grp = "a", Score = null });
         await Ensure(store, Whole());
-        // Recorded, not fixed here: the index's MIN of {3, null} is null and its AVG 1.5 (C#: 3 and 3), measured; own task.
+        // TASK-906: the index's MIN of {3, null} was null and its AVG 1.5 (C#: 3 and 3), measured; it skips the null now.
         var row = (await view.QueryAsync(v => v.Cnt > 0)).Should().ContainSingle().Subject;
         row.Cnt.Should().Be(2);
         row.SumScore.Should().Be(3);
+        row.MinScore.Should().Be(3);
+        row.AvgScore.Should().Be(3);
         (await view.QueryFirstAsync()).Should().NotBeNull();
         (await view.QueryAsync(offset: 1)).Should().BeEmpty();
     });

@@ -1,5 +1,7 @@
 using Birko.Data.Stores;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
@@ -51,40 +53,120 @@ namespace Birko.Data.MongoDB.Aggregation
         /// <typeparam name="T">The model type.</typeparam>
         /// <param name="query">The aggregation query specification.</param>
         /// <returns>A tuple containing the $group document and $project document.</returns>
-        /// <exception cref="ArgumentException">The query has nothing to aggregate (TASK-886; it answered one empty row).</exception>
+        /// <exception cref="ArgumentException">The query has nothing to aggregate (TASK-886; it answered one empty row), or
+        /// names a group-by field, aggregate source or time column that is no property of <typeparamref name="T"/>, or its
+        /// time bucket is incomplete or not a positive interval (as <see cref="AggregateHelper.LinqAggregate{T}"/> refuses them).</exception>
+        /// <exception cref="NotSupportedException">A named member is not stored, or the time bucket cannot be answered as
+        /// the in-memory aggregation answers it (see <see cref="TimeBucketExpression{T}"/>).</exception>
+        /// <remarks>
+        /// TASK-906: each name is resolved as the in-memory aggregation resolves it (a property, case-insensitively) and read
+        /// at the element the driver stores it under (<c>_id</c> for the identity). The raw name used to be read, so a
+        /// differently-cased name or the identity grouped every row as null, and a time bucket was ignored (measured: one row
+        /// per kind where C# has one per hour).
+        /// </remarks>
         public static (BsonDocument groupDoc, BsonDocument projection) BuildGroupStage<T>(AggregateQuery<T> query)
             where T : Data.Models.AbstractModel
         {
             query.ThrowIfNothingToAggregate();
             var groupId = new BsonDocument();
-            foreach (var field in query.GroupByFields)
+            var projection = new BsonDocument { { "_id", 0 } };
+            for (var i = 0; i < query.GroupByFields.Count; i++)
             {
-                groupId[field] = "$" + field;
+                var field = query.GroupByFields[i];
+                groupId["k" + i] = "$" + Member<T>(field, "group-by field").ElementName;
+                projection[field] = "$_id.k" + i;
             }
 
-            var groupAccumulators = new BsonDocument();
-            foreach (var agg in query.Aggregates)
+            var bucket = TimeBucketExpression<T>(query);
+            if (bucket != null)
             {
-                groupAccumulators[agg.ResolvedAlias] = BuildAccumulatorExpression(agg.Function, agg.SourcePropertyName);
+                groupId["bucket"] = bucket;
+                projection[AggregateBucketAlias] = "$_id.bucket";
             }
 
             var groupDoc = new BsonDocument { { "_id", groupId } };
-            foreach (var element in groupAccumulators.Elements)
-            {
-                groupDoc[element.Name] = element.Value;
-            }
-
-            var projection = new BsonDocument { { "_id", 0 } };
-            foreach (var field in query.GroupByFields)
-            {
-                projection[field] = "$_id." + field;
-            }
             foreach (var agg in query.Aggregates)
             {
+                var source = agg.Function == AggregateFunction.Count ? null : Member<T>(agg.SourcePropertyName, "aggregate source").ElementName;
+                groupDoc[agg.ResolvedAlias] = BuildAccumulatorExpression(agg.Function, source);
                 projection[agg.ResolvedAlias] = 1;
             }
 
             return (groupDoc, projection);
+        }
+
+        /// <summary>The result key of the time bucket, as in memory.</summary>
+        private const string AggregateBucketAlias = "bucket_time";
+
+        /// <summary>
+        /// TASK-906: the property <paramref name="name"/> names, looked up as <see cref="AggregateHelper"/> looks it up, and
+        /// how the driver stores it.
+        /// </summary>
+        private static (string ElementName, IBsonSerializer Serializer, Type Type) Member<T>(string name, string role)
+        {
+            var property = typeof(T).GetProperty(name,
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase)
+                ?? throw new ArgumentException($"Aggregate {role} '{name}' is not a property of {typeof(T).Name}.", nameof(name));
+            var classMap = global::MongoDB.Bson.Serialization.BsonClassMap.LookupClassMap(typeof(T));
+            var memberMap = classMap.AllMemberMaps.FirstOrDefault(m => m.MemberName == property.Name)
+                ?? throw new NotSupportedException(
+                    $"MongoDB aggregate of {typeof(T).Name} refused: {role} '{property.Name}' is not stored in the document. (TASK-906)");
+            var element = ReferenceEquals(memberMap, classMap.IdMemberMap) ? "_id" : memberMap.ElementName;
+            return (element, memberMap.GetSerializer(), property.PropertyType);
+        }
+
+        /// <summary>
+        /// TASK-906: the <c>$group</c> key of the query's time bucket, or <c>null</c> when it has none. The bucket is the
+        /// stored time floored to the interval: <c>t - ((t mod ms) + ms) mod ms</c> in milliseconds since 1970, as a date; a
+        /// row whose time is not a date (null, missing) is the null bucket, as in memory.
+        /// </summary>
+        /// <remarks>
+        /// Refused where MongoDB cannot answer as <see cref="AggregateHelper.LinqAggregate{T}"/> does over the rows a read
+        /// returns: a time column that is not a <see cref="DateTime"/>; a member not stored as the driver's default (a BSON
+        /// date read back as UTC), since the in-memory bucket floors the time a read returns; an interval that is not whole
+        /// milliseconds (a BSON date has no finer part); and an interval that does not divide the time from 0001-01-01 to
+        /// 1970-01-01, since the in-memory bucket counts from 0001-01-01 (the rule TASK-878 and TASK-885 measured for
+        /// Elasticsearch and Cosmos DB).
+        /// </remarks>
+        private static BsonValue? TimeBucketExpression<T>(AggregateQuery<T> query)
+            where T : Data.Models.AbstractModel
+        {
+            if (string.IsNullOrEmpty(query.TimeBucketInterval) && string.IsNullOrEmpty(query.TimeColumn)) return null;
+            if (string.IsNullOrEmpty(query.TimeBucketInterval) || string.IsNullOrEmpty(query.TimeColumn))
+                throw new ArgumentException("Time bucketing needs both TimeBucketInterval and TimeColumn.", nameof(query));
+            var span = TimeIntervalParser.Parse(query.TimeBucketInterval);
+            if (span <= TimeSpan.Zero)
+                throw new ArgumentException($"Time bucket interval '{query.TimeBucketInterval}' is not a positive interval.", nameof(query));
+
+            var (element, serializer, type) = Member<T>(query.TimeColumn, "time column");
+            var refused = $"MongoDB aggregate of {typeof(T).Name} refused: ";
+            if ((Nullable.GetUnderlyingType(type) ?? type) != typeof(DateTime))
+                throw new NotSupportedException(refused + $"time column '{query.TimeColumn}' is {type.Name}; only a DateTime member is bucketed. (TASK-906)");
+            if (serializer is IChildSerializerConfigurable nullable) serializer = nullable.ChildSerializer;
+            if (serializer is not DateTimeSerializer { Kind: DateTimeKind.Utc, Representation: BsonType.DateTime, DateOnly: false })
+                throw new NotSupportedException(refused + $"time column '{query.TimeColumn}' is not stored as a BSON date read back "
+                    + "as UTC (the driver's default), so its buckets would not be the ones the rows a read returns fall into. (TASK-906)");
+            if (span.Ticks % TimeSpan.TicksPerMillisecond != 0)
+                throw new NotSupportedException(refused + $"time bucket interval '{query.TimeBucketInterval}' is not a whole number "
+                    + "of milliseconds; a stored date has no finer part. (TASK-906)");
+            if (DateTime.UnixEpoch.Ticks % span.Ticks != 0)
+                throw new NotSupportedException(refused + $"time bucket interval '{query.TimeBucketInterval}' does not divide the "
+                    + "time from 0001-01-01 to 1970-01-01, so MongoDB's buckets would start at other times than the in-memory "
+                    + "ones. Use an interval that divides a day. (TASK-906)");
+
+            var ms = new BsonInt64(span.Ticks / TimeSpan.TicksPerMillisecond);
+            var time = new BsonDocument("$toLong", "$" + element);
+            var offset = new BsonDocument("$mod", new BsonArray
+            {
+                new BsonDocument("$add", new BsonArray { new BsonDocument("$mod", new BsonArray { time, ms }), ms }),
+                ms,
+            });
+            return new BsonDocument("$cond", new BsonArray
+            {
+                new BsonDocument("$eq", new BsonArray { new BsonDocument("$type", "$" + element), "date" }),
+                new BsonDocument("$toDate", new BsonDocument("$subtract", new BsonArray { time, offset })),
+                BsonNull.Value,
+            });
         }
 
         /// <summary>
@@ -160,8 +242,12 @@ namespace Birko.Data.MongoDB.Aggregation
         /// is <see cref="AggregateHelper.LinqAggregate{T}"/>'s over no rows: Count 0, Sum 0, the others null.</para>
         /// <para>Each Count, Sum and Avg, and a numeric Min / Max, is read into the type
         /// <see cref="AggregateMath.ResultType"/> names. Measured before: a <c>$sum</c> over only nulls answered an
-        /// <c>Int32</c> 0 for a <c>decimal?</c> member, and a decimal Sum / Avg a <c>Decimal128</c>, not a <c>decimal</c>. A
-        /// non-numeric Min / Max is left as the driver maps it.</para>
+        /// <c>Int32</c> 0 for a <c>decimal?</c> member, and a decimal Sum / Avg a <c>Decimal128</c>, not a <c>decimal</c>.</para>
+        /// <para>TASK-906: a group key, a time bucket and a Min / Max are read with their member's serializer, so each is the
+        /// value a read of that member returns (measured before: an enum key or Max answered its stored <c>Int32</c>). The
+        /// query's <see cref="AggregateQuery{T}.OrderBy"/>, <see cref="AggregateQuery{T}.Offset"/> and
+        /// <see cref="AggregateQuery{T}.Limit"/> are applied here by <see cref="AggregateHelper.ApplyOrderingAndPaging"/>, as
+        /// Elasticsearch and Cosmos DB apply them; they used to be ignored (measured: every group, in the server's order).</para>
         /// </remarks>
         public static IReadOnlyList<AggregateResult> ReadResults<T>(AggregateQuery<T> query, List<BsonDocument> bsonResults)
             where T : Data.Models.AbstractModel
@@ -171,42 +257,76 @@ namespace Birko.Data.MongoDB.Aggregation
                 return AggregateHelper.LinqAggregate(Array.Empty<T>(), query);
             }
 
-            var types = new Dictionary<string, Type>(StringComparer.Ordinal);
+            var readers = new Dictionary<string, Func<BsonValue, object?>>(StringComparer.Ordinal);
+            foreach (var field in query.GroupByFields)
+            {
+                var serializer = Member<T>(field, "group-by field").Serializer;
+                readers[field] = value => Deserialize(value, serializer);
+            }
+            if (!string.IsNullOrEmpty(query.TimeColumn))
+            {
+                var serializer = Member<T>(query.TimeColumn, "time column").Serializer;
+                readers[AggregateBucketAlias] = value => Deserialize(value, serializer);
+            }
             foreach (var aggregate in query.Aggregates)
             {
-                var type = ResultTypeOf<T>(aggregate);
-                if (type != null) types[aggregate.ResolvedAlias] = type;
+                readers[aggregate.ResolvedAlias] = ReaderOf<T>(aggregate);
             }
 
             var rows = new List<AggregateResult>(bsonResults.Count);
-            foreach (var mapped in MapBsonResults(bsonResults))
+            foreach (var doc in bsonResults)
             {
-                var row = new Dictionary<string, object?>(mapped.Values);
-                foreach (var (alias, type) in types)
+                var row = new Dictionary<string, object?>();
+                foreach (var element in doc.Elements)
                 {
-                    if (row.TryGetValue(alias, out var value) && value != null) row[alias] = ToNumber(value, type);
+                    row[element.Name] = readers.TryGetValue(element.Name, out var read) ? read(element.Value) : MapValue(element.Value);
                 }
                 rows.Add(new AggregateResult(row));
             }
-            return rows.AsReadOnly();
+            return AggregateHelper.ApplyOrderingAndPaging(rows, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
         }
 
-        /// <summary>The numeric type an aggregate answers in, or null where it is not numeric or names no member.</summary>
-        private static Type? ResultTypeOf<T>(AggregateField aggregate)
+        /// <summary>
+        /// How an aggregate's answer is read: a Count as an <c>int</c>; a Sum or Avg as the number
+        /// <see cref="AggregateMath.ResultType"/> names; a Min or Max as its member is read.
+        /// </summary>
+        private static Func<BsonValue, object?> ReaderOf<T>(AggregateField aggregate)
         {
-            if (aggregate.Function == AggregateFunction.Count) return typeof(int);
-            var member = typeof(T).GetProperty(aggregate.SourcePropertyName,
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-            if (member == null) return null;
-            var underlying = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
-            if (!IsNumber(underlying)) return null;
-            return AggregateMath.ResultType(aggregate.Function, member.PropertyType);
+            if (aggregate.Function == AggregateFunction.Count) return value => ToNumberOrNull(value, typeof(int));
+            var (_, serializer, type) = Member<T>(aggregate.SourcePropertyName, "aggregate source");
+            if (aggregate.Function is AggregateFunction.Min or AggregateFunction.Max) return value => Deserialize(value, serializer);
+            var resultType = AggregateMath.ResultType(aggregate.Function, type);
+            return value => ToNumberOrNull(value, resultType);
         }
 
-        private static bool IsNumber(Type type)
-            => type == typeof(int) || type == typeof(long) || type == typeof(decimal) || type == typeof(double) || type == typeof(float)
-               || type == typeof(short) || type == typeof(byte) || type == typeof(sbyte) || type == typeof(ushort) || type == typeof(uint)
-               || type == typeof(ulong);
+        private static object? ToNumberOrNull(BsonValue value, Type type)
+        {
+            var mapped = MapValue(value);
+            return mapped == null ? null : ToNumber(mapped, type);
+        }
+
+        private static object? MapValue(BsonValue value)
+        {
+            if (value.IsBsonNull) return null;
+            try
+            {
+                return BsonTypeMapper.MapToDotNetValue(value);
+            }
+            catch
+            {
+                return value.ToString();
+            }
+        }
+
+        /// <summary>A stored value as <paramref name="serializer"/> reads it, the way a read of the member reads it.</summary>
+        private static object? Deserialize(BsonValue value, IBsonSerializer serializer)
+        {
+            if (value.IsBsonNull || value.IsBsonUndefined) return null;
+            using var reader = new global::MongoDB.Bson.IO.BsonDocumentReader(new BsonDocument("v", value));
+            reader.ReadStartDocument();
+            reader.ReadName();
+            return serializer.Deserialize(BsonDeserializationContext.CreateRoot(reader));
+        }
 
         /// <summary>A number the driver mapped (an <c>int</c>, <c>long</c>, <c>double</c> or <c>Decimal128</c>) as <paramref name="type"/>, checked.</summary>
         private static object ToNumber(object value, Type type)

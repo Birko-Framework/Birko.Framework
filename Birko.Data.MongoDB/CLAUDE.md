@@ -68,8 +68,16 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `Aggregate(AggregateQuery)` answers through `StoreAggregationHelper.ReadResults` (TASK-886): an ungrouped query over no
   documents answers one row (Count 0, Sum 0, the others null; `$group` answers none), each Count / Sum / Avg and a numeric
   Min / Max is read into `AggregateMath.ResultType` (a `$sum` over only nulls was an `Int32` 0 for a `decimal?`, a decimal
-  Sum a `Decimal128`), and a query with nothing to aggregate is refused (it answered one empty row). Ordering and paging
-  are still not applied (recorded).
+  Sum a `Decimal128`), and a query with nothing to aggregate is refused (it answered one empty row).
+- TASK-906: `OrderBy`, `Offset` and `Limit` are applied to the answer by `AggregateHelper.ApplyOrderingAndPaging`, as on
+  Elasticsearch and Cosmos DB (they were ignored). A time bucket is grouped on the stored date floored to the interval
+  (`t - ((t mod ms) + ms) mod ms`, under `bucket_time`; it was ignored); refused by name: a non-`DateTime` time column, one
+  not stored as the driver's default UTC BSON date, an interval that is not whole milliseconds or does not divide
+  0001-01-01..1970-01-01 (a week). Group-by fields, sources and the time column are resolved as `AggregateHelper` resolves
+  them (case-insensitive, a missing one an `ArgumentException`) and read at their stored element (`_id` for the identity).
+  A group key, bucket and Min / Max are read with the member's serializer, so an enum is the enum (it was its `Int32`).
+  Pinned by `Task906MongoStoreAggregateLiveTests`. A string Min / Max compares as MongoDB does (binary), not as C#'s
+  culture comparer: recorded, not fixed.
 
 ## Connection
 

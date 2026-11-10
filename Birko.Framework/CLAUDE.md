@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB view, MongoDB and InfluxDB aggregates answer as LINQ (2026-11-10)
+[[TASK-906]]. RavenDB view MIN/AVG did not skip nulls (MIN of {3, null} was null) and a negative value next to a null
+broke the index; the MongoDB store aggregate ignored ordering, paging and time buckets (36 of 38 cases wrong); the
+InfluxDB native Flux aggregate was wrong in 24 of 27 cases (one row per stored point, buckets on write time). Raven and
+Mongo now follow LINQ; InfluxDB aggregates through `AggregateHelper` (no server-side aggregation).
 ### Aggregates answer the same edge cases on every provider (2026-11-10)
 [[TASK-886]] (the user's decisions). An ungrouped aggregate over no rows now returns one row with Count 0 everywhere
 (before: no row on InMemory, MongoDB, RavenDB, Elasticsearch; RavenDB and ES threw on an empty store), and SUM over only
@@ -375,11 +380,6 @@ of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ign
 `==` / IN now render `(col = @p AND <exact>)`, so the index still seeks, and `!=` / NOT IN negate that; SQLite and
 PostgreSQL return the same rows as before. On MySQL and SQL Server, lookups like `UserName == login` become
 case-sensitive. Rules and hand-built conditions are unchanged ([[TASK-895]]).
-### A throwing `OnExecute` subscriber no longer fails the statement; bulk writes are announced (2026-11-09)
-[[TASK-875]]. A logging subscriber that threw failed 21 operations on all four SQL providers and stopped later
-subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.
-Each subscriber now runs contained, failures are recorded on `SubscriberFailures`, every connector statement is
-announced, and an `ExecuteReader` error carries its statement like any other.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

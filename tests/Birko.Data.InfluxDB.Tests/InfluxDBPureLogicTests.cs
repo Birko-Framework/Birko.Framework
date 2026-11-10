@@ -43,25 +43,6 @@ public class InfluxDBPureLogicTests
 
     #endregion
 
-    #region FormatFluxInterval
-
-    [Theory]
-    [InlineData("01:00:00", "1h")]
-    [InlineData("00:30:00", "30m")]
-    [InlineData("00:00:45", "45s")]
-    [InlineData("2.00:00:00", "2d")]
-    [InlineData("3 hours", "3h")]
-    [InlineData("10 minutes", "10m")]
-    [InlineData("5 seconds", "5s")]
-    [InlineData("2 days", "2d")]
-    [InlineData("garbage", "1h")]
-    public void FormatFluxInterval_maps_to_flux_units(string input, string expected)
-    {
-        AsyncInfluxDBStore<TestModel>.FormatFluxInterval(input).Should().Be(expected);
-    }
-
-    #endregion
-
     #region ModelToPoint
 
     private sealed class PointExposingStore : AsyncInfluxDBStore<TestModel>

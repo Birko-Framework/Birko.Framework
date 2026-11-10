@@ -151,11 +151,12 @@ public static class RavenViewTranslator
             }
         }
 
-        // For Avg, emit a count helper field so reduce can compute the average
-        var avgAggregates = definition.Aggregates.Where(a => a.Function == AggregateFunction.Avg).ToList();
+        // For Avg, emit a count helper field so reduce can compute the average. TASK-906: it counts the non-null values
+        // only, as LINQ's Average does; it counted every row, so the AVG of {3, null} was 1.5 (measured).
+        var avgAggregates = definition.Aggregates.Where(a => a.Function == AggregateFunction.Avg && a.SourceProperty != null).ToList();
         foreach (var avg in avgAggregates)
         {
-            parts.Add($"{avg.ViewProperty}_Count = 1");
+            parts.Add($"{avg.ViewProperty}_Count = ({GetSourceAlias(avg.SourceType, definition)}.{avg.SourceProperty} != null ? 1 : 0)");
         }
 
         return string.Join(", ", parts);
@@ -283,14 +284,13 @@ public static class RavenViewTranslator
                     // each pass. Summing the already-averaged ViewProperty would double-average.
                     selectParts.Add($"{agg.ViewProperty}_Sum = g.Sum(x => x.{agg.ViewProperty}_Sum)");
                     selectParts.Add($"{agg.ViewProperty}_Count = g.Sum(x => x.{agg.ViewProperty}_Count)");
-                    // TASK-151 (SH-M397): as double, or an integer column averaged 10 and 15 to 12.
-                    selectParts.Add($"{agg.ViewProperty} = (double)g.Sum(x => x.{agg.ViewProperty}_Sum) / (double)g.Sum(x => x.{agg.ViewProperty}_Count)");
+                    // TASK-151 (SH-M397): as double, or an integer column averaged 10 and 15 to 12. TASK-906: null over no
+                    // non-null value, as LINQ's Average is.
+                    selectParts.Add($"{agg.ViewProperty} = g.Sum(x => x.{agg.ViewProperty}_Count) == 0 ? (double?)null : (double)g.Sum(x => x.{agg.ViewProperty}_Sum) / (double)g.Sum(x => x.{agg.ViewProperty}_Count)");
                     break;
                 case AggregateFunction.Min:
-                    selectParts.Add($"{agg.ViewProperty} = g.Min(x => x.{agg.ViewProperty})");
-                    break;
                 case AggregateFunction.Max:
-                    selectParts.Add($"{agg.ViewProperty} = g.Max(x => x.{agg.ViewProperty})");
+                    selectParts.Add($"{agg.ViewProperty} = {NonNullExtreme(agg)}");
                     break;
             }
         }
@@ -299,6 +299,19 @@ public static class RavenViewTranslator
         sb.Append(" }");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// TASK-906: a MIN or MAX over the non-null values only, null when there is none, as LINQ's <c>Min</c> / <c>Max</c> over a
+    /// nullable member answer. The index's <c>g.Min</c> compared a null too: the MIN of {3, null} was null (measured), and a
+    /// group whose values mixed nulls with numbers could fail to reduce at all. A reduce result is reduced again, so its own
+    /// null is skipped the same way.
+    /// </summary>
+    private static string NonNullExtreme(AggregateClause agg)
+    {
+        var function = agg.Function == AggregateFunction.Min ? "Min" : "Max";
+        var value = $"x.{agg.ViewProperty}";
+        return $"g.Any(x => {value} != null) ? g.Where(x => {value} != null).{function}(x => {value}) : null";
     }
 
     private static string FindViewPropertyForGroupBy(GroupByClause grp, ViewDefinition definition)

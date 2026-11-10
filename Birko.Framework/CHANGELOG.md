@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — A throwing `OnExecute` subscriber no longer fails the statement; bulk writes are announced
+[[TASK-875]]. A logging subscriber that threw failed 21 operations on all four SQL providers and stopped later
+subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.
+Each subscriber now runs contained, failures are recorded on `SubscriberFailures`, every connector statement is
+announced, and an `ExecuteReader` error carries its statement like any other.
+
 ## 2026-11-09 — A division by zero in a SQL filter or SET fails on every provider
 [[TASK-888]] (the user's decision: every provider throws). SQLite answered NULL on every path, so a Delete or Update with
 such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now

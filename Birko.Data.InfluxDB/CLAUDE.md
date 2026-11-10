@@ -107,6 +107,13 @@ rows) or a sort whose fields do not share one direction, the sort, offset and li
 otherwise they go into the Flux. It also parses a `DateTime` field with its kind (`RoundtripKind`), so UTC stays UTC.
 `Read(Guid)` opens the lazy-init gate, and no operation rewraps a cancellation.
 
+## Aggregation (TASK-906)
+
+`AggregateAsync` (and the sync `Aggregate`) read the rows and aggregate them with `AggregateHelper`. The native Flux path
+for one aggregate without a filter is gone: measured on InfluxDB 2 it answered otherwise in 24 of 27 cases (a row per
+stored point, a Count of field points, no grouping by a field, buckets of the write time, no row over nothing, decimals
+summed as double). Pinned by `Task906InfluxAggregateLiveTests`.
+
 ## Flux Query Language
 
 InfluxDB uses Flux for queries:

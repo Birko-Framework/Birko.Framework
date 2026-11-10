@@ -64,14 +64,15 @@ public class RavenViewTranslatorTests
 
         // Map must carry a running sum + count, not just the raw averaged field.
         map.Should().Contain("Average_Sum = entity.Amount");
-        map.Should().Contain("Average_Count = 1");
+        // TASK-906: the count is of the non-null values, as LINQ's Average counts them.
+        map.Should().Contain("Average_Count = (entity.Amount != null ? 1 : 0)");
 
         // Reduce must sum the running Sum/Count (stable) and recompute the ratio — never re-sum the
         // already-averaged Average field.
         reduce.Should().NotBeNull();
         reduce!.Should().Contain("Average_Sum = g.Sum(x => x.Average_Sum)");
         reduce.Should().Contain("Average_Count = g.Sum(x => x.Average_Count)");
-        reduce.Should().Contain("Average = (double)g.Sum(x => x.Average_Sum) / (double)g.Sum(x => x.Average_Count)");
+        reduce.Should().Contain("Average = g.Sum(x => x.Average_Count) == 0 ? (double?)null : (double)g.Sum(x => x.Average_Sum) / (double)g.Sum(x => x.Average_Count)");
         reduce.Should().NotContain("g.Sum(x => x.Average)");   // the double-average bug
     }
 
