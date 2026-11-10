@@ -36,7 +36,7 @@ Found by TASK-870 (2026-11-09):
 
 - [x] Measure each (rule 54) and record.
       → Measured 2026-11-10 live on all four providers (reads, counts, Delete, both Update forms, SET, on-the-fly views).
-        Oracle chosen: **checked C#** — C#'s default `int` arithmetic wraps, which no provider can compute; PostgreSQL and
+        Oracle chosen (**confirmed by the user 2026-11-10**): **checked C#** — C#'s default `int` arithmetic wraps, which no provider can compute; PostgreSQL and
         SQL Server already fail, and TASK-870 made SQLite fail, so "fail where C# would wrap, never answer differently".
         - **MySQL silently wrong:** every `int` overflow answered (BIGINT arithmetic): `Hits * 2 / 2 == Hits` matched the
           int.MaxValue row; `SET Hits = Hits * 2 / 2` stored int.MaxValue.
