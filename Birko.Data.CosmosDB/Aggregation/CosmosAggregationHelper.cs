@@ -15,21 +15,38 @@ namespace Birko.Data.CosmosDB.Aggregation
     {
         /// <summary>
         /// Returns the Cosmos DB SQL aggregate expression for the given function and field.
-        /// For Count returns "COUNT(1)", for others returns "FUNC(fieldExpression)".
-        /// Shared by store-level and view-level aggregation.
+        /// For Count returns "COUNT(1)", for others "FUNC(IS_NULL(field) ? undefined : field)": over the field's non-null
+        /// values only. Shared by store-level and view-level aggregation.
         /// </summary>
+        /// <remarks>
+        /// TASK-885: a null is a value to Cosmos DB's aggregates, not an absence. Measured on the emulator (vnext-preview,
+        /// 2026-11-10), over a group holding a null: <c>SUM</c> and <c>AVG</c> answer undefined (SUM(Score) nothing where
+        /// C# gives 140), and <c>MIN</c> answers null, which sorts below every number and string (MIN(Score) null where C#
+        /// gives 10), on the store aggregate and on a grouped view alike; <c>MAX</c> was right. C# and every other provider
+        /// skip nulls. A missing field is undefined, which every aggregate already skips, so the null is turned into
+        /// undefined (<c>c.X ?? undefined</c> does not: <c>??</c> only replaces undefined). Measured with the conditional:
+        /// SUM 140, MIN 10, AVG 35, MAX 60, also for decimal, double, string and DateTime members. Over no non-null value
+        /// SUM answers 0, the others undefined; the store aggregate makes that SUM null (<see cref="CosmosAggregatePlan"/>).
+        /// </remarks>
         public static string BuildFunctionSql(AggregateFunction function, string? fieldExpression)
         {
             return function switch
             {
                 AggregateFunction.Count => "COUNT(1)",
-                AggregateFunction.Sum => $"SUM({fieldExpression})",
-                AggregateFunction.Avg => $"AVG({fieldExpression})",
-                AggregateFunction.Min => $"MIN({fieldExpression})",
-                AggregateFunction.Max => $"MAX({fieldExpression})",
+                AggregateFunction.Sum => $"SUM({NonNull(fieldExpression)})",
+                AggregateFunction.Avg => $"AVG({NonNull(fieldExpression)})",
+                AggregateFunction.Min => $"MIN({NonNull(fieldExpression)})",
+                AggregateFunction.Max => $"MAX({NonNull(fieldExpression)})",
                 _ => throw new NotSupportedException($"Aggregate function {function} is not supported")
             };
         }
+
+        /// <summary>TASK-885: the field's value, or undefined where it is null, so an aggregate skips it as C# does.</summary>
+        internal static string NonNull(string? fieldExpression)
+            => $"IS_NULL({fieldExpression}) ? undefined : {fieldExpression}";
+
+        /// <summary>TASK-885: how many of the group's values of the field are not null (a missing field is not counted).</summary>
+        internal static string NonNullCount(string fieldExpression) => $"COUNT({NonNull(fieldExpression)})";
 
         /// <summary>
         /// Builds the SELECT and GROUP BY parts of a Cosmos DB SQL aggregation query.
@@ -42,16 +59,19 @@ namespace Birko.Data.CosmosDB.Aggregation
         public static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates)
-            => BuildAggregateSqlParts(groupByFields, aggregates, "c");
+            => BuildAggregateSqlParts(groupByFields, aggregates, "c", Array.Empty<(string, string)>(), Array.Empty<string>());
 
         /// <summary>
         /// The SELECT and GROUP BY parts over the container named <paramref name="source"/>: <c>FROM source</c>, and every
-        /// accessor <c>source["Field"]</c>.
+        /// accessor <c>source["Field"]</c>. <paramref name="extraColumns"/> are selected after the aggregates, and
+        /// <paramref name="extraGroupBy"/> grouped after the fields (TASK-885: the time bucket and the non-null counts).
         /// </summary>
         private static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates,
-            string source)
+            string source,
+            IReadOnlyList<(string Expression, string Alias)> extraColumns,
+            IReadOnlyList<string> extraGroupBy)
         {
             var selectParts = new List<string>();
             var groupByFieldList = groupByFields.ToList();
@@ -67,10 +87,16 @@ namespace Birko.Data.CosmosDB.Aggregation
                 selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {Alias(alias)}");
             }
 
+            foreach (var (expression, alias) in extraColumns)
+            {
+                selectParts.Add($"{expression} AS {Alias(alias)}");
+            }
+
             var selectFromSql = $"SELECT {string.Join(", ", selectParts)} FROM {source}";
 
-            string? groupBySql = groupByFieldList.Count > 0
-                ? $" GROUP BY {string.Join(", ", groupByFieldList.Select(g => FieldRef(g.FieldName, source)))}"
+            var groupByParts = groupByFieldList.Select(g => FieldRef(g.FieldName, source)).Concat(extraGroupBy).ToList();
+            string? groupBySql = groupByParts.Count > 0
+                ? $" GROUP BY {string.Join(", ", groupByParts)}"
                 : null;
 
             return (selectFromSql, groupBySql);
@@ -146,27 +172,79 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// <c>SELECT VALUE root FROM root WHERE &lt;predicate&gt;</c>; the predicate is taken from it with every parameter it
         /// carries, and the aggregate is written over the provider's own alias, <c>root</c>. A rendering of any other
         /// shape is refused by name, never guessed at: a filter is never dropped.</para>
+        /// <para>TASK-885: every SUM also selects how many non-null values it saw, so a SUM over none answers null, as the
+        /// in-memory aggregation does (Cosmos DB answers 0); a time bucket is grouped on as
+        /// <see cref="CosmosAggregatePlan"/> describes. Those columns are read and removed by
+        /// <see cref="CosmosAggregatePlan.Read"/>.</para>
         /// </remarks>
         /// <param name="query">The aggregation. Its filter is not read here; <paramref name="filtered"/> carries it.</param>
         /// <param name="filtered">The store's rendering of the rewritten filter, or <c>null</c> for no filter.</param>
-        /// <exception cref="NotSupportedException">The rendering is not a plain WHERE over the container.</exception>
-        internal static QueryDefinition BuildAggregateQuery<T>(AggregateQuery<T> query, QueryDefinition? filtered)
+        /// <exception cref="NotSupportedException">The rendering is not a plain WHERE over the container, or the time bucket
+        /// cannot be answered as the in-memory aggregation answers it.</exception>
+        /// <exception cref="ArgumentException">The time bucket is incomplete, does not parse, or names no property.</exception>
+        internal static CosmosAggregatePlan BuildAggregateQuery<T>(AggregateQuery<T> query, QueryDefinition? filtered)
             where T : Data.Models.AbstractModel
         {
+            var bucket = CosmosAggregatePlan.ResolveTimeBucket<T>(query.TimeColumn, query.TimeBucketInterval);
+
+            var used = new HashSet<string>(query.GroupByFields, StringComparer.Ordinal);
+            used.UnionWith(query.Aggregates.Select(a => a.ResolvedAlias));
+            used.Add(CosmosAggregatePlan.BucketAlias);
+
+            var extraColumns = new List<(string Expression, string Alias)>();
+            var extraGroupBy = new List<string>();
+            var sumCounts = new List<(string Alias, string CountAlias)>();
+            foreach (var aggregate in query.Aggregates.Where(a => a.Function == AggregateFunction.Sum))
+            {
+                var countAlias = HiddenAlias(used);
+                extraColumns.Add((NonNullCount(FieldRef(aggregate.SourcePropertyName, LinqRoot)), countAlias));
+                sumCounts.Add((aggregate.ResolvedAlias, countAlias));
+            }
+
+            string? timeCountAlias = null;
+            if (bucket != null)
+            {
+                var column = FieldRef(bucket.Value.Member, LinqRoot);
+                var ms = bucket.Value.Milliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var expression = $"FLOOR(DateTimeToTimestamp(LEFT({column}, 19)) / {ms}) * {ms}";
+                extraColumns.Add((expression, CosmosAggregatePlan.BucketAlias));
+                extraGroupBy.Add(expression);
+                timeCountAlias = HiddenAlias(used);
+                extraColumns.Add((NonNullCount(column), timeCountAlias));
+            }
+
             var (selectFromSql, groupBySql) = BuildAggregateSqlParts(
                 query.GroupByFields.Select(f => (f, f)),
                 query.Aggregates.Select(a => (a.Function, (string?)a.SourcePropertyName, a.ResolvedAlias)),
-                LinqRoot);
+                LinqRoot,
+                extraColumns,
+                extraGroupBy);
 
             var where = filtered == null ? null : WhereOf<T>(filtered.QueryText);
             var definition = new QueryDefinition(selectFromSql + (where == null ? "" : " WHERE " + where) + (groupBySql ?? ""));
-            if (filtered == null) return definition;
-
-            foreach (var (name, value) in filtered.GetQueryParameters())
+            if (filtered != null)
             {
-                definition = definition.WithParameter(name, value);
+                foreach (var (name, value) in filtered.GetQueryParameters())
+                {
+                    definition = definition.WithParameter(name, value);
+                }
             }
-            return definition;
+
+            return new CosmosAggregatePlan(
+                definition,
+                typeof(T).Name,
+                query.GroupByFields,
+                query.Aggregates.Select(a => a.ResolvedAlias).ToList(),
+                sumCounts,
+                bucket == null ? null : (bucket.Value.Member, timeCountAlias!));
+        }
+
+        /// <summary>A result column name no group field or aggregate alias uses.</summary>
+        private static string HiddenAlias(HashSet<string> used)
+        {
+            var alias = "__birko_n" + used.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            while (!used.Add(alias)) alias += "_";
+            return alias;
         }
 
         /// <summary>The predicate of a rendered <c>Where</c>, or <c>null</c> when the provider rendered none.</summary>

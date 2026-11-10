@@ -20,7 +20,7 @@ public class CosmosAggregationHelperTests
             new[] { (AggregateFunction.Sum, (string?)"Amount", "Total") });
 
         select.Should().Contain("c[\"Category\"] AS \"Category\"");
-        select.Should().Contain("SUM(c[\"Amount\"]) AS \"Total\"");
+        select.Should().Contain("SUM(IS_NULL(c[\"Amount\"]) ? undefined : c[\"Amount\"]) AS \"Total\""); // TASK-885: nulls skipped
         select.Should().NotContain("c.Category");
         select.Should().NotContain("c.Amount");
 

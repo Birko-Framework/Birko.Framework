@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — RavenDB index helpers and aggregates, and MongoDB aggregates, fold null orderings too
+[[TASK-868]]. TASK-867's fold missed these paths (measured live): RavenDB's map-reduce helpers and store aggregates
+counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`; MongoDB's `Aggregate` and the public
+`Aggregate().Match(...)` matched null rows. They now take the stores' own pre-pass. Found on the way: Cosmos DB's
+`Aggregate` ignores the filter entirely ([[TASK-876]], P1).
+
 ## 2026-11-09 — `OnExecute` gets the values on reads too
 [[TASK-871]]. A SQL connector's `OnExecute` received the text with values for writes and counts, but the raw text with
 `@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four

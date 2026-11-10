@@ -28,6 +28,13 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 - **Every identifier is quoted (TASK-844).** Aliases are quoted strings, `c["Sub"] AS "Inner"` (`CosmosAggregationHelper.Alias`, the one producer, also for group-by and aggregate aliases); WHERE and ORDER BY paths are bracket-quoted, `c["Sub"]["Value"]` (`PathRef`). Measured on the emulator (vnext-preview, 2026-11-07): a bare `AS Inner` / `AS Value` and a dotted `c.Value` / `c.Sub.Value` are 400 SC1001 syntax errors; `AS "Value"` works (`[Value]` and backticks do not). So any property name works
 - **ORDER BY an aggregate view property (`Total`) is refused with `NotSupportedException`, by name, before any request (TASK-848).** Cosmos DB cannot run it in any form, also as a second key after a group key (bare alias SC2001, quoted alias or the aggregate expression 2206, measured on the emulator 2026-11-07); it used to be sent and fail with a 400. Not sorted in memory: a grouped read pages on the server (`OFFSET … LIMIT`, measured), so a correct page would mean reading every group first. Ordering by a group key works, paged too
 - Aggregate SQL built via shared `CosmosAggregationHelper` from `Birko.Data.CosmosDB`
+- **SUM, AVG, MIN and MAX skip nulls (TASK-885).** Each argument is `IS_NULL(x) ? undefined : x`. Before, a group holding a null answered no SUM and no AVG, and a null MIN (measured on the emulator, 2026-11-10). Over no non-null value, SUM is 0, as C#'s `Sum` over `int?` is; AVG, MIN and MAX are absent, so the property is null
+- **Two filter translators, kept on measurement (TASK-885).** View filters go through `CosmosFilterTranslator`; the store's reads and aggregates go through the SDK's LINQ provider. 34 filter shapes were compared against C# on the emulator (2026-11-10):
+  - **Both wrong:** `!(Score > 20)` misses the null rows.
+  - **Store only wrong:** `Score.HasValue` matches every row; `string.Compare(x, "c2") > 0` misses a row.
+  - **View refuses 11 shapes by name:** `HasValue`, StartsWith, a bool member and its negation, `+`, `%`, ToLower, IsNullOrEmpty, column vs column, Equals, Compare. The store answers 8 of them right, 2 wrong (`HasValue`, Compare), and refuses IsNullOrEmpty.
+
+  Moving the view onto the store's translator would turn two of those refusals into wrong answers. So the view keeps its own translator until the LINQ provider's wrong shapes are fixed or refused (filed separately)
 - Joins are refused in the constructor (`NotSupportedException`); Cosmos DB has no cross-document join
 
 ### CosmosViewManager

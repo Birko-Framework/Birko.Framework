@@ -596,16 +596,16 @@ public class CosmosDBStore<T>
         EnsureInitialized();
         if (_container == null) return Array.Empty<AggregateResult>();
 
-        var queryDef = BuildAggregateQuery(query);
+        var plan = BuildAggregateQuery(query);
 
         var results = new List<AggregateResult>();
-        using var iterator = _container.GetItemQueryIterator<System.Text.Json.JsonElement>(queryDef);
+        using var iterator = _container.GetItemQueryIterator<System.Text.Json.JsonElement>(plan.Query);
         while (iterator.HasMoreResults)
         {
             var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
             foreach (var doc in response)
             {
-                results.Add(new AggregateResult(CosmosAggregationHelper.ParseJsonResult(doc)));
+                results.Add(plan.Read(doc));
             }
         }
 
@@ -617,19 +617,20 @@ public class CosmosDBStore<T>
     /// <summary>
     /// TASK-876: the aggregation query, its WHERE rendered exactly as a read renders the filter: the same rewrites, then
     /// <see cref="BuildQuery"/>'s <c>Where</c>. Groups cannot be merged across IN-list chunks, so a list past the ceiling
-    /// is refused by name before any request, as a sorted read's is.
+    /// is refused by name before any request, as a sorted read's is. TASK-885: the plan also reads each answered row
+    /// (nullable SUM, time bucket), and refuses a time bucket it cannot answer before any request.
     /// </summary>
-    private QueryDefinition BuildAggregateQuery(AggregateQuery<T> query)
+    private CosmosAggregatePlan BuildAggregateQuery(AggregateQuery<T> query)
     {
         var filter = Data.Expressions.SpanContains.Rewrite(query.Filter);
         filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
         filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
 
-        QueryDefinition Render(Expression<Func<T, bool>>? f)
+        CosmosAggregatePlan Render(Expression<Func<T, bool>>? f)
             => CosmosAggregationHelper.BuildAggregateQuery(query, f == null ? null : BuildQuery(f, null, null, null).ToQueryDefinition());
 
         CosmosInListChunking.Plan(filter, "aggregate", InListChunkSize, MaxQueryTextLength, sortedOrPaged: true,
-            f => Render(f).QueryText.Length, "groups and aggregates cannot be combined across chunks");
+            f => Render(f).Query.QueryText.Length, "groups and aggregates cannot be combined across chunks");
         return Render(filter);
     }
 

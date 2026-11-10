@@ -431,8 +431,8 @@ public class Task876AggregateQueryTests
     [Fact]
     public void No_filter_renders_no_WHERE()
     {
-        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, null);
-        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(root[\"A\"]) AS \"sumA\" FROM root GROUP BY root[\"Grp\"]");
+        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, null).Query;
+        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\", COUNT(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"__birko_n4\" FROM root GROUP BY root[\"Grp\"]");
     }
 
     [Fact]
@@ -443,8 +443,8 @@ public class Task876AggregateQueryTests
         read.QueryText.Should().StartWith("SELECT VALUE root FROM root WHERE ");
         var predicate = read.QueryText.Substring("SELECT VALUE root FROM root WHERE ".Length);
 
-        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, read);
-        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(root[\"A\"]) AS \"sumA\" FROM root WHERE "
+        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, read).Query;
+        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\", COUNT(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"__birko_n4\" FROM root WHERE "
                                 + predicate + " GROUP BY root[\"Grp\"]");
     }
 
@@ -452,7 +452,7 @@ public class Task876AggregateQueryTests
     public void Every_parameter_of_the_rendering_is_carried()
     {
         var read = new QueryDefinition("SELECT VALUE root FROM root WHERE (root[\"A\"] > @a)").WithParameter("@a", 3);
-        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, read);
+        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, read).Query;
         q.QueryText.Should().Contain(" FROM root WHERE (root[\"A\"] > @a) GROUP BY ");
         q.GetQueryParameters().Should().ContainSingle().Which.Should().Be(("@a", (object)3));
     }
@@ -460,7 +460,7 @@ public class Task876AggregateQueryTests
     [Fact]
     public void A_rendering_with_no_predicate_is_the_whole_container()
     {
-        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, new QueryDefinition("SELECT VALUE root FROM root"));
+        var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, new QueryDefinition("SELECT VALUE root FROM root")).Query;
         q.QueryText.Should().NotContain("WHERE");
     }
 

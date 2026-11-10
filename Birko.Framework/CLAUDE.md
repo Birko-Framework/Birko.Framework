@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB aggregates skip nulls and apply the time bucket (2026-11-10)
+[[TASK-885]]. SUM/AVG/MIN over a member holding a null returned undefined or null where LINQ skips the nulls, in stores
+and grouped views, and `TimeBucketInterval` was ignored (measured: 24 of 26 cases wrong). Aggregates now skip nulls, a
+SUM of no values is null as in LINQ, and the time bucket is grouped in wall-clock time or refused by name. Found on the
+way: Cosmos store reads match every row for `x.Score.HasValue` ([[TASK-896]], P1).
 ### `RuleEvaluator` answers NULL the way C# does (2026-11-10)
 [[TASK-881]]. In memory, a rule ordered NULL below every value (`Score LessThan 5` matched NULL rows), never matched NULL
 from an `In` list and matched every row for `GreaterThan null`: 21 of TASK-864's 117 shapes differed from the compiled
@@ -376,11 +381,6 @@ without the whole-table guard firing. The surviving group now keeps its separato
 [[TASK-874]]. A plain `Contains` / `StartsWith` / `EndsWith` whose pattern passed 4000 characters failed count, update
 and delete with Msg 8152, and the read returned no rows, silently (measured). It is now refused by name before anything
 runs, through the same limit TASK-869 set. The silent empty read is a reader-loop defect of its own ([[TASK-880]], P1).
-### RavenDB index helpers and aggregates, and MongoDB aggregates, fold null orderings too (2026-11-09)
-[[TASK-868]]. TASK-867's fold missed these paths (measured live): RavenDB's map-reduce helpers and store aggregates
-counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`; MongoDB's `Aggregate` and the public
-`Aggregate().Match(...)` matched null rows. They now take the stores' own pre-pass. Found on the way: Cosmos DB's
-`Aggregate` ignores the filter entirely ([[TASK-876]], P1).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

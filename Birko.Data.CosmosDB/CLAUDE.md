@@ -96,9 +96,41 @@ Settings mapping from `RemoteSettings`:
 - **IN lists:** groups cannot be merged across chunks, so an aggregate is one query. Past the ceiling it is refused
   before any request, as a sorted read is.
 - **Lazy init:** an aggregate initialises the store. On a fresh store it used to answer nothing.
-- **Known gaps (not fixed here):** SUM and MIN over a nullable field answer null when any value in the group is null
-  (measured; Cosmos DB's SUM is undefined over a null, and null sorts below numbers). `TimeBucketInterval` /
-  `TimeColumn` are ignored.
+
+## Aggregation answers what LINQ answers (TASK-885)
+The oracle is `AggregateHelper.LinqAggregate` over the documents as read back. Measured on the emulator (vnext-preview,
+2026-11-10), 26 shapes, sync and async: 24 differed before, 0 after (`Task885AggregateLiveTests`).
+- **Nulls are skipped.** Cosmos DB's aggregates treat a null as a value: over a group holding one, SUM and AVG were
+  undefined (absent) and MIN was null, for int, decimal, double, string and DateTime members. Every aggregate argument
+  is now `IS_NULL(x) ? undefined : x` (`CosmosAggregationHelper.BuildFunctionSql`, shared with the view store).
+  `x ?? undefined` does not work: `??` only replaces undefined.
+- **A SUM over no non-null value is null**, as in memory (Cosmos DB answers 0). Each SUM selects a hidden
+  `COUNT(IS_NULL(x) ? undefined : x)`, and `CosmosAggregatePlan.Read` nulls the SUM where it is 0. An aggregate or group
+  key Cosmos DB leaves undefined comes back as a null entry, so each row has every key. Aggregates cannot be combined in
+  one expression (`COUNT(..) > 0 ? SUM(..) : null` is a 400), so this is done after the query.
+- **The time bucket is applied.** It was ignored: one row where C# had five buckets. It is now grouped on
+  `FLOOR(DateTimeToTimestamp(LEFT(t, 19)) / ms) * ms` and returned as `bucket_time`.
+  - **LEFT 19.** In memory, a bucket floors the stored wall-clock time (`dt.Ticks`, any kind), while Cosmos DB's date
+    functions convert an offset to UTC (`10:30+01:00` → `09:00Z`). So the bucket uses the first 19 characters of the
+    stored text.
+  - **Kind.** The bucket is `DateTimeKind.Unspecified`.
+  - **Refused by name before any request:**
+    - an interval that does not divide 0001-01-01 → 1970-01-01, because Cosmos DB counts from the epoch (`7 days` is
+      refused; any divisor of a day passes; same rule as Elasticsearch, TASK-878);
+    - an interval that is not a whole number of seconds (the fraction is not read);
+    - a time column that is not `DateTime`/`DateTime?`.
+  - **As in memory, `ArgumentException`:** one half of the pair, an interval that does not parse, an unknown column.
+    The column is matched case-insensitively and rendered by its property name.
+  - **Before 1601-01-01** (e.g. `DateTime.MinValue`), every Cosmos DB date function answers undefined. A group holding
+    such a time is refused after the query, told apart from a null time by a hidden non-null count. It is never
+    answered as the null bucket.
+- **Recorded, not decided (TASK-886):** an ungrouped aggregate over no rows is one row (count 0, every other aggregate
+  null; SUM was 0). In memory there is no row.
+- **Not fixed here:**
+  - Result types are what the JSON holds (long/double; MIN/MAX of a DateTime is its stored text). LINQ answers the
+    member's type.
+  - Group and aggregate names are sent verbatim (case-sensitive), where LINQ matches any case.
+  - Sum/Avg of a non-numeric member is not refused.
 
 ## Conditional update (TASK-661)
 - `AsyncCosmosDBStore.UpdateIfAsync(guid, condition, update)` is a compare-and-set on one item: read with its ETag, apply
