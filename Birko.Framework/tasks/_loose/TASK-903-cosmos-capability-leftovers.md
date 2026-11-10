@@ -29,6 +29,12 @@ Recorded by TASK-899 (2026-11-10); none returns wrong rows:
   in TASK-899.
 - `IS_DEFINED` / `IS_NULL` query cost on a real Cosmos account (the emulator gives no metrics).
 
+**Deferred by the user (2026-11-10)** until a consumer runs on Cosmos DB in production (none does: Symbio has it
+selectable but not configured). Nothing here returns wrong rows; each item is a refusal that could be lifted, or a cost
+that needs a real account. Also carries TASK-905's deferred items: DateTimeOffset support (a UTC-normalising key) and
+Cosmos computed properties for index-served DateTime sorts and filters (needs a real account; the emulator does not
+evaluate them).
+
 ## Acceptance criteria
 
 - [ ] Decide each on cost; implement or record.
