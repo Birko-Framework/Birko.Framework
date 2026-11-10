@@ -17,12 +17,19 @@ public class SharedHelperTests
     // ---- AggregateMath ----
 
     [Fact]
-    public void ComputeSum_EmptyOrAllNull_ReturnsNullOrZeroPerSemantics()
+    public void ComputeSum_EmptyOrAllNull_IsZeroInTheResultType()
     {
-        AggregateMath.ComputeSum(new List<object?>(), typeof(int)).Should().BeNull();
+        // TASK-886 (the user's decision; rule 56): 0 as LINQ's Sum over int? answers; it used to be null.
+        AggregateMath.ComputeSum(new List<object?>(), typeof(int)).Should().Be(0);
         // ComputeAggregate strips nulls first, so an all-null group sums an empty list.
-        AggregateMath.ComputeAggregate(AggregateFunction.Sum, new List<object?> { null, null }, typeof(int), 2)
-            .Should().BeNull();
+        AggregateMath.ComputeAggregate(AggregateFunction.Sum, new List<object?> { null, null }, typeof(int?), 2)
+            .Should().Be(0);
+        AggregateMath.SumOfNoValues(typeof(decimal?)).Should().Be(0m);
+        AggregateMath.SumOfNoValues(typeof(short)).Should().Be(0L);
+        AggregateMath.SumOfNoValues(typeof(ulong)).Should().Be(0m);
+        AggregateMath.SumOfNoValues(typeof(double)).Should().Be(0d);
+        AggregateMath.SumOfNoValues(typeof(float)).Should().Be(0f);
+        FluentActions.Invoking(() => AggregateMath.SumOfNoValues(typeof(string))).Should().Throw<NotSupportedException>();
     }
 
     [Fact]

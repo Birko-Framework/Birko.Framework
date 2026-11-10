@@ -321,8 +321,14 @@ The answer is the LINQ aggregation's (`AggregateHelper`) over the same rows, mea
   time buckets are one composite aggregation with `missing_bucket` (a null key is a group), read page by page
   (`AggregateGroupPageSize`, 1000).
 - `Count` is the row count (bucket `doc_count`, `hits.total` without grouping); its source is ignored, as `COUNT(*)`.
-- A sum of no values is null; keys and metrics come back as the member's type (int sum, DateTime min, enum key…); a query
-  over no rows answers no rows.
+- A sum of no values is 0, as Elasticsearch answers it; keys and metrics come back as the member's type (int sum, DateTime
+  min, enum key…); an ungrouped query over no rows answers one row (Count 0, Sum 0, the others null), a grouped one none;
+  a query with nothing to aggregate is refused (`ArgumentException`; it answered one empty row). TASK-886, the user's
+  decision: one answer on every provider (TASK-878 had answered null and no rows). The stores initialise first, as every
+  read does: on a fresh store the aggregate failed with `index_not_found`.
+- `StoreAggregationHelper.BuildSingleMetricAggregation` refuses a Count with no field: a row count is the document count
+  (TASK-886; it was a `value_count` on `_id`, which Elasticsearch 8 refuses by default). A view's `Count` is the bucket's
+  `doc_count`, or the hit total of an ungrouped view.
 - **Refused by name:** an unknown or nested name (`ArgumentException`, as LINQ); a group on a `[Text]` or object member; a
   metric over a string or Guid (or Sum/Avg over a non-number); a time column that is not a `DateTime`; an interval that does
   not divide 0001-01-01..1970-01-01 (a week: ES aligns at the epoch, LINQ at year 1); a time bucket without its column or

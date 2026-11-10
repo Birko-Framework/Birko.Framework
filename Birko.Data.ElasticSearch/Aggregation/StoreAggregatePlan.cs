@@ -25,8 +25,10 @@ namespace Birko.Data.ElasticSearch.Aggregation
     /// <para>
     /// What is answered matches the LINQ aggregation over the same rows: <c>Count</c> is the number of rows (the bucket's
     /// doc count, never a value count of its source, which read 0); a null key is a group (composite <c>missing_bucket</c>);
-    /// a sum of no values is null, not 0; keys and metrics come back as the member's type; every page of groups is read;
-    /// and a query over no rows answers no rows. What cannot match is refused by name: a metric over a string or a Guid,
+    /// a sum of no values is 0, as Elasticsearch answers it (TASK-886; TASK-878 had made it null); keys and metrics come back
+    /// as the member's type; every page of groups is read; an ungrouped query over no rows answers one row (Count 0, Sum 0,
+    /// the others null), a grouped one no rows (TASK-886, the user's decision; TASK-878 had answered no rows for both); and a
+    /// query with nothing to aggregate is refused (it answered one empty row). What cannot match is refused by name: a metric over a string or a Guid,
     /// a group on a <c>[Text]</c> or non-scalar member, a time bucket not aligned as LINQ aligns it.
     /// </para>
     /// </remarks>
@@ -56,6 +58,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
             if (query == null) throw new ArgumentNullException(nameof(query));
             if (pageSize < 1) throw new ArgumentOutOfRangeException(nameof(pageSize));
 
+            query.ThrowIfNothingToAggregate();
             var plan = new StoreAggregatePlan(ResolveTime(typeof(T), query.TimeColumn, query.TimeBucketInterval), pageSize);
 
             for (var i = 0; i < query.GroupByFields.Count; i++)
@@ -76,14 +79,14 @@ namespace Birko.Data.ElasticSearch.Aggregation
                 if (aggregate.Function == AggregateFunction.Count)
                 {
                     // As COUNT(*) and LINQ's group.Count(): the rows, whatever the source names.
-                    plan._metrics.Add(new Metric(aggregate.ResolvedAlias, AggregateFunction.Count, null, null, null, null));
+                    plan._metrics.Add(new Metric(aggregate.ResolvedAlias, AggregateFunction.Count, null, null, null));
                     continue;
                 }
 
                 var member = ElasticSearch.ResolveMember(typeof(T), aggregate.SourcePropertyName, "Aggregate source");
                 var type = RequireMetricType(member, aggregate.Function);
                 var field = ElasticSearch.StoredFieldName(member, null)!;
-                plan._metrics.Add(new Metric(aggregate.ResolvedAlias, aggregate.Function, type, field, "m" + Index(i), "c" + Index(i)));
+                plan._metrics.Add(new Metric(aggregate.ResolvedAlias, aggregate.Function, type, field, "m" + Index(i)));
             }
 
             return plan;
@@ -156,8 +159,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
 
             if (!Grouped)
             {
-                // LINQ groups no rows into no groups, so a query over nothing answers nothing.
-                if (response.Total == 0) return null;
+                // TASK-886: one row, also over no rows (Count 0, Sum 0), as LINQ and SQL answer it.
                 var row = new Dictionary<string, object?>();
                 ReadMetrics(response.Aggregations, response.Total, row);
                 rows.Add(new AggregateResult(row));
@@ -201,11 +203,6 @@ namespace Birko.Data.ElasticSearch.Aggregation
             {
                 if (metric.Function == AggregateFunction.Count) continue;
                 dict.Add(metric.Name!, StoreAggregationHelper.BuildSingleMetricAggregation(metric.Function, metric.Name!, metric.Field));
-                if (metric.Function == AggregateFunction.Sum)
-                {
-                    // Elasticsearch sums no values to 0; LINQ to null. The value count tells them apart.
-                    dict.Add(metric.ValueCount!, new AggregationContainer { ValueCount = new ValueCountAggregation(metric.ValueCount!, metric.Field) });
-                }
             }
             return dict;
         }
@@ -217,7 +214,8 @@ namespace Birko.Data.ElasticSearch.Aggregation
                 row[metric.Alias] = metric.Function switch
                 {
                     AggregateFunction.Count => (object)checked((int)rowCount),
-                    AggregateFunction.Sum => (source.ValueCount(metric.ValueCount!)?.Value ?? 0) == 0 ? null : ConvertMetric(source.Sum(metric.Name!)?.Value, metric),
+                    // TASK-886: Elasticsearch sums no values to 0, which is now the answer everywhere.
+                    AggregateFunction.Sum => ConvertMetric(source.Sum(metric.Name!)?.Value ?? 0, metric),
                     AggregateFunction.Avg => ConvertMetric(source.Average(metric.Name!)?.Value, metric),
                     AggregateFunction.Min => ConvertMetric(source.Min(metric.Name!)?.Value, metric),
                     AggregateFunction.Max => ConvertMetric(source.Max(metric.Name!)?.Value, metric),
@@ -331,7 +329,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
         private sealed record GroupKey(string Name, string Source, string Field, Type Type, string? TextField, string TextCheck);
 
         /// <summary>A metric: <paramref name="Name"/> is its aggregation (null for Count, read from the doc count).</summary>
-        private sealed record Metric(string Alias, AggregateFunction Function, Type? Type, string? Field, string? Name, string? ValueCount);
+        private sealed record Metric(string Alias, AggregateFunction Function, Type? Type, string? Field, string? Name);
 
         private sealed record TimeBucket(string Field, Nest.Time Interval);
     }

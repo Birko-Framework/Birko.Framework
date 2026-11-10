@@ -642,7 +642,7 @@ namespace Birko.Data.MongoDB.Stores
 
             // Execute and map to AggregateResult
             var bsonResults = await pipeline.ToListAsync(ct);
-            return StoreAggregationHelper.MapBsonResults(bsonResults);
+            return StoreAggregationHelper.ReadResults(query, bsonResults);   // TASK-886
         }
 
         #endregion

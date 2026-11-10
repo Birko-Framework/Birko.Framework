@@ -18,6 +18,7 @@ MongoDB platform implementation for Birko.Data.Views. Translates ViewDefinition 
 |---|---|
 | Join | $lookup + $unwind |
 | GroupBy + Aggregates | $group |
+| Aggregates, no GroupBy | $facet { rows: [$group] } + $replaceRoot ($ifNull: the empty row) — one row also over no documents (TASK-886) |
 | Select fields | $project |
 | Filter (at query time) | $match |
 | OrderBy | $sort |

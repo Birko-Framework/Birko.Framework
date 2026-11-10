@@ -36,6 +36,8 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
             where T : Models.AbstractModel
         {
+            query.ThrowIfNothingToAggregate();
+
             var filtered = source;
 
             // Apply filter
@@ -69,45 +71,46 @@ namespace Birko.Data.Stores
                 // on-the-fly at group/result time from the untouched property below.
             }
 
-            // No aggregation requested — raw rows, still ordered and paged (SH-M383: they were returned whole).
-            if (query.Aggregates.Count == 0 && query.GroupByFields.Count == 0 && timeProp == null)
-            {
-                var rawResults = list.Select(item => new AggregateResult(AggregateMath.ToValueDictionary(item))).ToList();
-                return Task.FromResult<IReadOnlyList<AggregateResult>>(
-                    ApplyOrderingAndPaging(rawResults, query.OrderBy, query.Offset, query.Limit).AsReadOnly());
-            }
-
-            // Group by the key tuple itself. SH-M384: the key was the values joined with "|", so ("a|b", "c") and
+            // TASK-886 (the user's decision): an ungrouped query is ONE group of every row, so over no rows it still answers
+            // one row (Count 0, Sum 0, Avg / Min / Max null), as SQL does. It used to group no rows into no groups.
+            // A query with nothing to aggregate is refused above; it used to answer the raw rows (SH-M383).
+            // Grouped: by the key tuple itself. SH-M384: the key was the values joined with "|", so ("a|b", "c") and
             // ("a", "b|c"), or null and "", fell into one group.
-            var grouped = list.GroupBy(item =>
-            {
-                var key = new object?[keyProperties.Length + (timeProp != null ? 1 : 0)];
-                for (var i = 0; i < keyProperties.Length; i++)
+            var groups = keyProperties.Length == 0 && timeProp == null
+                ? new List<List<T>> { list }
+                : list.GroupBy(item =>
                 {
-                    key[i] = keyProperties[i].GetValue(item);
-                }
-                if (timeProp != null)
-                {
-                    key[keyProperties.Length] = BucketTimeOf(item, timeProp, bucketTicks);
-                }
-                return key;
-            }, KeyTupleComparer.Instance);
+                    var key = new object?[keyProperties.Length + (timeProp != null ? 1 : 0)];
+                    for (var i = 0; i < keyProperties.Length; i++)
+                    {
+                        key[i] = keyProperties[i].GetValue(item);
+                    }
+                    if (timeProp != null)
+                    {
+                        key[keyProperties.Length] = BucketTimeOf(item, timeProp, bucketTicks);
+                    }
+                    return key;
+                }, KeyTupleComparer.Instance).Select(g => g.ToList()).ToList();
 
             // Compute aggregates per group
             var results = new List<AggregateResult>();
-            foreach (var group in grouped)
+            foreach (var group in groups)
             {
                 var row = new Dictionary<string, object?>();
 
-                var first = group.First();
-                for (int i = 0; i < keyProperties.Length; i++)
+                // A grouped group always holds a row; only the ungrouped one can be empty, and it has no keys.
+                if (group.Count > 0)
                 {
-                    row[query.GroupByFields[i]] = keyProperties[i].GetValue(first);
-                }
+                    var first = group[0];
+                    for (int i = 0; i < keyProperties.Length; i++)
+                    {
+                        row[query.GroupByFields[i]] = keyProperties[i].GetValue(first);
+                    }
 
-                if (timeProp != null)
-                {
-                    row["bucket_time"] = BucketTimeOf(first, timeProp, bucketTicks);
+                    if (timeProp != null)
+                    {
+                        row["bucket_time"] = BucketTimeOf(first, timeProp, bucketTicks);
+                    }
                 }
 
                 // Aggregate functions
@@ -115,7 +118,7 @@ namespace Birko.Data.Stores
                 {
                     if (agg.Function == AggregateFunction.Count)
                     {
-                        row[agg.ResolvedAlias] = group.Count();
+                        row[agg.ResolvedAlias] = group.Count;
                         continue;
                     }
 
@@ -123,7 +126,7 @@ namespace Birko.Data.Stores
 
                     var values = group.Select(item => prop.GetValue(item)).ToList();
 
-                    row[agg.ResolvedAlias] = AggregateMath.ComputeAggregate(agg.Function, values, prop.PropertyType, group.Count());
+                    row[agg.ResolvedAlias] = AggregateMath.ComputeAggregate(agg.Function, values, prop.PropertyType, group.Count);
                 }
 
                 results.Add(new AggregateResult(row));

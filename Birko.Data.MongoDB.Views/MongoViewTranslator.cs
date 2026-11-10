@@ -82,7 +82,25 @@ public static class MongoViewTranslator
             var groupDoc = Aggregation.StoreAggregationHelper.BuildGroupStageFromPaths(
                 groupByPaths, groupByPaths, accumulators);
 
-            stages.Add(new BsonDocument("$group", groupDoc));
+            if (definition.HasGroupBy)
+            {
+                stages.Add(new BsonDocument("$group", groupDoc));
+            }
+            else
+            {
+                // TASK-886 (the user's decision): an ungrouped aggregate answers ONE row, also over no rows (Count 0, Sum 0,
+                // the others null), on every provider. $group answers no document over no input (measured, on the fly and
+                // as a persistent view); $facet always answers one, so the group runs inside it and an empty result is
+                // replaced by that row.
+                var empty = new BsonDocument();
+                foreach (var agg in definition.Aggregates)
+                {
+                    empty.Add(agg.ViewProperty, agg.Function is AggregateFunction.Count or AggregateFunction.Sum ? 0 : BsonNull.Value);
+                }
+                stages.Add(new BsonDocument("$facet", new BsonDocument("rows", new BsonArray { new BsonDocument("$group", groupDoc) })));
+                stages.Add(new BsonDocument("$replaceRoot", new BsonDocument("newRoot",
+                    new BsonDocument("$ifNull", new BsonArray { new BsonDocument("$arrayElemAt", new BsonArray { "$rows", 0 }), empty }))));
+            }
         }
 
         // 3. $project stage — map to view shape

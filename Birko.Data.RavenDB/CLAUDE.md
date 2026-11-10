@@ -204,6 +204,8 @@ every filter ("Facet query must be executed against static index", measured: 72 
 - The whole matching set is loaded (no `Take`, no streaming) and tracked by the session; measured with 2,600 documents,
   nothing is cut short. Narrow the filter for large collections.
 - A null group key is its own group (key `null`), as in LINQ.
+- The store initialises first, as every read does (TASK-886): on a fresh store the aggregate threw
+  `DatabaseDoesNotExistException` where it answers the empty answer (one row for an ungrouped query).
 
 ## Indexes
 

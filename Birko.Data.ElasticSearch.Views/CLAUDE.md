@@ -9,6 +9,9 @@ ElasticSearch platform implementation for Birko.Data.Views. Translates ViewDefin
 ## Components
 
 - **ElasticSearchViewStore\<TView\>** — Implements IViewStore\<TView\> using NEST SearchRequest. Non-aggregate queries use _source filtering with sort/pagination. Aggregate queries use shared `StoreAggregationHelper` for metric creation (`BuildSingleMetricAggregation`) and metric extraction (`ExtractMetricValues`); the GROUP BY is the view's own composite aggregation (the entity stores' builder went with TASK-878). Joins are refused (`NotSupportedException`) rather than ignored. Filters, sorts and group keys name view properties and are mapped to the source fields they select (TASK-151). A grouping view reads a composite aggregation page by page to the end, then orders, pages and counts its rows in memory; `CountAsync` counts groups. `EnsureAsync` creates only a Persistent view's own index. A nested source (`r.Sub.X`, TASK-843) is read down its path (`sub.x` in the source filter, a null object reads null) and sorts by its stored sub-field; a filter on it is refused by name (the entity translator does not translate a member below the document, SH-M142).
+- **Count** of the rows is the bucket's `doc_count`, or the hit total of an ungrouped view (TASK-886). It was a
+  `value_count` on `_id`: measured on 7.17 with `indices.id_field_data.enabled: false` (Elasticsearch 8's default) every
+  Count view failed with a 400. An ungrouped view answers one row, also over no documents (Count 0, Sum 0).
 - **ElasticSearchViewManager** — Implements IViewManager. EnsureAsync creates a destination index for persistent views (ES lacks native views; data population requires Transforms or reindex jobs). DropAsync/ExistsAsync/RefreshAsync map to index lifecycle operations.
 
 ## Filter translation

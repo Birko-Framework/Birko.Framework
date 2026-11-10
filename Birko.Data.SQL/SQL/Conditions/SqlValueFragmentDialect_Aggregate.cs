@@ -29,15 +29,15 @@ namespace Birko.Data.SQL.Conditions
         /// <c>COUNT(*)</c>), whose column holds <paramref name="source"/> values and whose answer is read into
         /// <paramref name="result"/>.
         /// </summary>
-        /// <param name="sumOfNoValuesIsZero">
-        /// A <c>SUM</c> over no values (a group of only NULLs) answers 0 rather than NULL: a view, whose property LINQ's
-        /// <c>Sum</c> fills with 0 for <c>int?</c> as for <c>int</c>. The store's <c>Aggregate</c> keeps NULL, which is what
-        /// <c>AggregateHelper</c> answers on every other store (TASK-878).
-        /// </param>
+        /// <remarks>
+        /// A <c>SUM</c> over no values (no rows, or only NULLs) answers 0 rather than NULL, as LINQ's <c>Sum</c> over
+        /// <c>int?</c> does: for a view since TASK-892, and for the store's <c>Aggregate</c> since TASK-886 (the user's
+        /// decision: one answer on every provider), which used to keep NULL through a <c>sumOfNoValuesIsZero</c> flag.
+        /// </remarks>
         /// <exception cref="NotSupportedException">
         /// An <c>AVG</c> this provider cannot compute as C# does (<see cref="Average"/> answered null), on a provider's dialect.
         /// </exception>
-        public string Aggregate(AggregateFunction function, string? operand, Type? source, Type result, bool sumOfNoValuesIsZero)
+        public string Aggregate(AggregateFunction function, string? operand, Type? source, Type result)
         {
             if (function == AggregateFunction.Count)
             {
@@ -52,7 +52,7 @@ namespace Birko.Data.SQL.Conditions
             {
                 case AggregateFunction.Sum:
                     var sum = Sum(operand, underlying);
-                    return AggregateResult(sumOfNoValuesIsZero ? $"COALESCE({sum}, {ZeroSum(underlying)})" : sum, function, underlying, result);
+                    return AggregateResult($"COALESCE({sum}, {ZeroSum(underlying)})", function, underlying, result);
                 case AggregateFunction.Avg:
                     var average = Average(operand, underlying, Nullable.GetUnderlyingType(result) ?? result);
                     if (average != null) return AggregateResult(average, function, underlying, result);
@@ -78,7 +78,7 @@ namespace Birko.Data.SQL.Conditions
         /// <summary><c>SUM(operand)</c> over a column of <paramref name="source"/> values. SQLite sums a decimal exactly.</summary>
         public virtual string Sum(string operand, Type source) => $"SUM({operand})";
 
-        /// <summary>The 0 a <c>SUM</c> over no values answers where <c>sumOfNoValuesIsZero</c>. SQLite's decimal is text.</summary>
+        /// <summary>The 0 a <c>SUM</c> over no values answers. SQLite's decimal is text.</summary>
         protected virtual string ZeroSum(Type source) => "0";
 
         /// <summary>

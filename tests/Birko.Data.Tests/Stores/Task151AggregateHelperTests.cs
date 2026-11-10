@@ -43,18 +43,40 @@ public class Task151AggregateHelperTests
     }
 
     [Fact]
-    public void Raw_rows_are_ordered_and_paged()
+    public void A_query_with_nothing_to_aggregate_is_refused()
     {
+        // TASK-886 (rule 56): SH-M383 ordered and paged the raw rows this answered; such a query is now refused on every
+        // provider, which answered raw rows, one empty row, or a syntax error.
         var rows = Enumerable.Range(1, 30).Select(i => new Row { Qty = (short)i }).ToList();
 
-        var page = AggregateHelper.LinqAggregate(rows, new AggregateQuery<Row>
+        FluentActions.Invoking(() => AggregateHelper.LinqAggregate(rows, new AggregateQuery<Row>
         {
             OrderBy = new Dictionary<string, bool> { ["Qty"] = true },
             Offset = 5,
             Limit = 3,
-        });
+        })).Should().Throw<ArgumentException>().WithMessage("*nothing to aggregate*");
+    }
 
-        page.Select(r => r.GetValue<short>("Qty")).Should().Equal((short)25, (short)24, (short)23);
+    [Fact]
+    public void An_ungrouped_query_over_no_rows_answers_one_row_and_a_grouped_one_none()
+    {
+        var aggregates = new[]
+        {
+            new AggregateField(AggregateFunction.Count, "Qty", "n"),
+            new AggregateField(AggregateFunction.Sum, "Qty", "sum"),
+            new AggregateField(AggregateFunction.Avg, "Qty", "avg"),
+            new AggregateField(AggregateFunction.Min, "Qty", "min"),
+        };
+
+        var row = Single(Array.Empty<Row>(), new AggregateQuery<Row> { Aggregates = aggregates });
+        row.Values.Should().BeEquivalentTo(new Dictionary<string, object?> { ["n"] = 0, ["sum"] = 0L, ["avg"] = null, ["min"] = null });
+        AggregateHelper.LinqAggregate(Array.Empty<Row>(), new AggregateQuery<Row> { Aggregates = aggregates, Offset = 1 }).Should().BeEmpty();
+        AggregateHelper.LinqAggregate(Array.Empty<Row>(), new AggregateQuery<Row> { Aggregates = aggregates, GroupByFields = new[] { "A" } })
+            .Should().BeEmpty();
+        FluentActions.Invoking(() => AggregateHelper.LinqAggregate(Array.Empty<Row>(), new AggregateQuery<Row>
+        {
+            Aggregates = new[] { new AggregateField(AggregateFunction.Sum, "Bogus") },
+        })).Should().Throw<ArgumentException>("an unknown source is refused over no rows too").WithMessage("*Bogus*");
     }
 
     [Fact]

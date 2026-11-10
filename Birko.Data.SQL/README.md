@@ -265,11 +265,13 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
   decimal average is exact: SQLite's `birko_decimal_avg`; on a server, which keeps its own scale, the SUM and COUNT are
   read and divided in C#'s decimal. Ordering by that alias uses the server's `AVG`, so averages that differ only past the
   server's scale (SQL Server: 6 decimals) may order as ties.
-- **Sum over no values** (a group of only NULLs) is NULL, as `AggregateHelper` answers. A view's SUM answers 0 there,
-  as LINQ's `Sum` fills a property.
+- **Edges** (TASK-886, the user's decision: one answer on every provider). A Sum over no values (no rows, or only NULLs)
+  is 0 (`COALESCE(SUM(..), 0)`), as LINQ's `Sum` and a view's SUM answer; it was NULL. An ungrouped aggregate over no
+  rows answers one row (Count 0, Sum 0, the others null), a grouped one none. A query with nothing to aggregate is refused
+  with `ArgumentException` before the statement (it was a syntax error, and a row of no columns per row on PostgreSQL).
 - **Recorded, not fixed:** a SUM / AVG of `double` values adds the rows in the server's order, so it can differ from
-  LINQ in the last digit; an integral average whose sum passes 2^53 is a double sum (LINQ sums in `long`); an ungrouped
-  aggregate over no rows answers one row on SQL and none in LINQ (TASK-886); a time bucket needs TimescaleDB.
+  LINQ in the last digit; an integral average whose sum passes 2^53 is a double sum (LINQ sums in `long`); a time bucket
+  needs TimescaleDB.
 
 ### Filter translation notes
 

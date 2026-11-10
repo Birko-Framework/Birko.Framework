@@ -2013,7 +2013,7 @@ namespace Birko.Data.SQL.Connectors
         /// view reads by, into <see cref="Birko.Data.Stores.AggregateMath.ResultType"/>. A group key and a non-numeric MIN /
         /// MAX are read by their column's own reader, as a row of the table is. An average the provider cannot compute as C#
         /// does in one column (a decimal on a server) is read as its SUM and COUNT and divided here, as LINQ divides it; it is
-        /// ordered by the server's own AVG. A SUM over no values stays NULL, as <c>AggregateHelper</c> answers.
+        /// ordered by the server's own AVG. A SUM over no values is 0 (TASK-886), as <c>AggregateHelper</c> answers.
         /// </para>
         /// </remarks>
         protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields, Func<DbDataReader, Birko.Data.Stores.AggregateResult> read) BuildAggregateQueryParts<T>(
@@ -2021,6 +2021,9 @@ namespace Birko.Data.SQL.Connectors
             Birko.Data.Stores.AggregateQuery<T> query)
             where T : Models.AbstractModel
         {
+            // TASK-886: nothing to select was a syntax error on SQLite, MySQL and SQL Server, and a row of no columns per row
+            // on PostgreSQL.
+            query.ThrowIfNothingToAggregate();
             var fields = new Dictionary<int, string>();
             var groupFields = new Dictionary<int, string>();
             var readers = new List<Action<DbDataReader, Dictionary<string, object?>>>();
@@ -2090,7 +2093,7 @@ namespace Birko.Data.SQL.Connectors
                     continue;
                 }
 
-                var sql = dialect.Aggregate(agg.Function, field.Name, source, result, sumOfNoValuesIsZero: false);
+                var sql = dialect.Aggregate(agg.Function, field.Name, source, result);
                 fields[idx++] = $"{sql} AS {QuoteIdentifier(alias)}";
                 orderable[alias] = QuoteIdentifier(alias);
                 if (!Birko.Data.SQL.Fields.AggregateValue.IsNumeric(result))

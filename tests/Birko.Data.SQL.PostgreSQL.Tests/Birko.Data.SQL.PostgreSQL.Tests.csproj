@@ -40,6 +40,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\StoreContract\UpdateMissContract.cs" Link="Shared\UpdateMissContract.cs" />
+    <Compile Include="..\Shared\StoreContract\AggregateEdgeContract.cs" Link="Shared\AggregateEdgeContract.cs" />
     <Compile Include="..\Shared\StoreContract\WriteEdgeContract.cs" Link="Shared\WriteEdgeContract.cs" />
     <Compile Include="..\Shared\StoreContract\ComputedSetContract.cs" Link="Shared\ComputedSetContract.cs" />
     <Compile Include="..\Shared\StoreContract\MathFilterContract.cs" Link="Shared\MathFilterContract.cs" />

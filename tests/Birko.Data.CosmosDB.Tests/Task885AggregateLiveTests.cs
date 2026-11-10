@@ -24,8 +24,8 @@ namespace Birko.Data.CosmosDB.Tests;
 /// <para>Measured before the fix (vnext-preview, 2026-11-10): SUM, AVG and MIN over a member holding a null answered null
 /// (SUM(Score) where C# gives 140, MIN 10, AVG 35; also decimal, double, string MIN, DateTime MIN), and a time bucket was
 /// ignored: one row where C# has five buckets.</para>
-/// <para>Not compared here, TASK-886's: an ungrouped aggregate over no rows (C# answers no row, Cosmos DB one).
-/// <see cref="An_ungrouped_aggregate_over_no_rows_is_one_row_of_count_zero_and_nulls"/> records what Cosmos DB answers.</para>
+/// <para>An ungrouped aggregate over no rows is compared too since TASK-886 made the in-memory aggregation answer one row
+/// (<see cref="An_ungrouped_aggregate_over_no_rows_is_one_row_of_count_zero_and_nulls"/>).</para>
 /// <para>Gated on <c>BIRKO_COSMOS_CONNECTION</c> (+ <c>BIRKO_COSMOS_CONNECTION_MODE=Gateway</c> for the emulator); with
 /// <c>BIRKO_REQUIRE_LIVE</c> set, an absent server is a failure.</para>
 /// </remarks>
@@ -205,11 +205,6 @@ public class Task885AggregateLiveTests
         foreach (var (label, query) in cases)
         {
             var expected = AggregateHelper.LinqAggregate(all, query);
-            if (expected.Count == 0 && query.GroupByFields.Count == 0 && query.TimeColumn == null)
-            {
-                report.AppendLine($"{label,-32} -> skipped: no rows, TASK-886's");
-                continue;
-            }
 
             string line;
             try
@@ -272,9 +267,8 @@ public class Task885AggregateLiveTests
     }
 
     /// <summary>
-    /// Recorded, not decided (TASK-886 owns the cross-provider answer): over no rows an ungrouped aggregate is one row, its
-    /// count 0 and every other aggregate null. SUM was 0 before TASK-885; it is null now, as a SUM over no non-null value
-    /// is in a group.
+    /// TASK-886 (the user's decision; rule 56): over no rows an ungrouped aggregate is one row, its count 0, each SUM 0 and
+    /// every other aggregate null, as the in-memory aggregation answers. TASK-885 had made the SUM null here.
     /// </summary>
     [Fact]
     public async Task An_ungrouped_aggregate_over_no_rows_is_one_row_of_count_zero_and_nulls()
@@ -290,9 +284,12 @@ public class Task885AggregateLiveTests
             var rows = await store.AggregateAsync(new AggregateQuery<AggRow> { Filter = x => x.A > 100, Aggregates = Aggregates });
             rows.Should().ContainSingle();
             rows[0].GetValue<long>("cnt").Should().Be(0);
+            var expected = AggregateHelper.LinqAggregate(Array.Empty<AggRow>(), new AggregateQuery<AggRow> { Aggregates = Aggregates }).Single();
             foreach (var aggregate in Aggregates.Where(a => a.Function != AggregateFunction.Count))
             {
-                rows[0].Values.Should().ContainKey(aggregate.ResolvedAlias).WhoseValue.Should().BeNull(aggregate.ResolvedAlias);
+                var value = rows[0].Values.Should().ContainKey(aggregate.ResolvedAlias).WhoseValue;
+                if (aggregate.Function == AggregateFunction.Sum) value.Should().NotBeNull(aggregate.ResolvedAlias);
+                value.Should().Be(expected.Values[aggregate.ResolvedAlias], aggregate.ResolvedAlias);
             }
             rows[0].Values.Keys.Should().NotContain(k => k.StartsWith("__birko", StringComparison.Ordinal));
         }
@@ -426,14 +423,14 @@ public class Task885AggregateQueryTests
     };
 
     [Fact]
-    public void Every_aggregate_skips_nulls_and_a_SUM_counts_what_it_saw()
+    public void Every_aggregate_skips_nulls()
     {
+        // TASK-886 (rule 56): a SUM no longer selects a hidden count of its values; a SUM over none is 0, as Cosmos DB answers.
         var plan = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(
             new AggregateQuery<Task885AggregateLiveTests.AggRow> { Aggregates = Fields }, null);
         const string v = "IS_NULL(root[\"Score\"]) ? undefined : root[\"Score\"]";
         plan.Query.QueryText.Should().Be(
-            $"SELECT SUM({v}) AS \"s\", AVG({v}) AS \"a\", MIN({v}) AS \"mi\", MAX({v}) AS \"ma\", COUNT(1) AS \"n\", "
-            + $"COUNT({v}) AS \"__birko_n6\" FROM root");
+            $"SELECT SUM({v}) AS \"s\", AVG({v}) AS \"a\", MIN({v}) AS \"mi\", MAX({v}) AS \"ma\", COUNT(1) AS \"n\" FROM root");
     }
 
     [Fact]
@@ -460,8 +457,11 @@ public class Task885AggregateQueryTests
         var plan = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(
             new AggregateQuery<Task885AggregateLiveTests.AggRow>
             {
-                Aggregates = new[] { new AggregateField(AggregateFunction.Sum, "A", "__birko_n2"), new AggregateField(AggregateFunction.Sum, "A", "__birko_n3") },
+                // TASK-886: a SUM has no hidden column any more; the time bucket's non-null count still has one.
+                TimeBucketInterval = "15 minutes",
+                TimeColumn = "t",
+                Aggregates = new[] { new AggregateField(AggregateFunction.Count, "A", "__birko_n2") },
             }, null);
-        plan.Query.QueryText.Should().Contain("AS \"__birko_n3_\"").And.Contain("AS \"__birko_n4\"");
+        plan.Query.QueryText.Should().Contain("AS \"__birko_n2\"").And.Contain("AS \"__birko_n2_\"");
     }
 }

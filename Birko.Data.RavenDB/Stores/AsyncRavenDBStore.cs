@@ -836,6 +836,7 @@ public class AsyncRavenDBStore<T>
         AggregateQuery<T> query,
         CancellationToken ct = default)
     {
+        await EnsureInitializedAsync(ct).ConfigureAwait(false);   // TASK-886 — see RavenDBStore.Aggregate
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
         // TASK-868: the stores' translator pre-pass — see RavenDBStore.Aggregate.

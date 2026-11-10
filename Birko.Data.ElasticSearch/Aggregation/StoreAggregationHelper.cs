@@ -15,18 +15,25 @@ namespace Birko.Data.ElasticSearch.Aggregation
     {
         /// <summary>
         /// Builds a single metric aggregation container for the given function and field.
-        /// Shared by store-level and view-level aggregation.
+        /// Shared by store-level and view-level aggregation. A Count of a field counts its non-null values (SQL's
+        /// <c>COUNT(col)</c>); a Count of the rows is the document count, never an aggregation here (TASK-886: it was a
+        /// <c>value_count</c> on <c>_id</c>, which Elasticsearch 8 refuses by default), so a Count with no field is refused.
         /// </summary>
+        /// <exception cref="ArgumentException">A Count with no field.</exception>
         public static AggregationContainer BuildSingleMetricAggregation(
             AggregateFunction function, string name, string? fieldName)
         {
+            if (function == AggregateFunction.Count && fieldName == null)
+                throw new ArgumentException(
+                    "A Count of the rows is the document count (a bucket's doc_count, or the hit total), not a metric aggregation. (TASK-886)",
+                    nameof(fieldName));
             return function switch
             {
                 AggregateFunction.Sum => new AggregationContainer { Sum = new SumAggregation(name, fieldName) },
                 AggregateFunction.Avg => new AggregationContainer { Average = new AverageAggregation(name, fieldName) },
                 AggregateFunction.Min => new AggregationContainer { Min = new MinAggregation(name, fieldName) },
                 AggregateFunction.Max => new AggregationContainer { Max = new MaxAggregation(name, fieldName) },
-                AggregateFunction.Count => new AggregationContainer { ValueCount = new ValueCountAggregation(name, fieldName ?? "_id") },
+                AggregateFunction.Count => new AggregationContainer { ValueCount = new ValueCountAggregation(name, fieldName) },
                 _ => throw new NotSupportedException($"Aggregate function {function} is not supported")
             };
         }

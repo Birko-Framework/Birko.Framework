@@ -11,8 +11,8 @@ namespace Birko.Data.CosmosDB.Aggregation
     /// <see cref="AggregateHelper.LinqAggregate{T}"/> shapes it. Built by <see cref="CosmosAggregationHelper.BuildAggregateQuery{T}"/>.
     /// </summary>
     /// <remarks>
-    /// <para><b>SUM over no non-null value is null.</b> Cosmos DB answers 0 (measured), the in-memory aggregation null. Each
-    /// SUM is selected with a count of the values it saw; where that is 0 the SUM is null. An aggregate Cosmos DB leaves
+    /// <para><b>SUM over no non-null value is 0</b> (TASK-886, the user's decision), as Cosmos DB and the in-memory
+    /// aggregation answer it; TASK-885 had made it null with a hidden count of the values. An aggregate Cosmos DB leaves
     /// undefined (AVG, MIN, MAX over no value) is null, and a group key it leaves undefined (a missing field) is null, so
     /// every row carries every key, as in memory.</para>
     /// <para><b>The time bucket</b> (<see cref="AggregateQuery{T}.TimeBucketInterval"/> on <see cref="AggregateQuery{T}.TimeColumn"/>)
@@ -47,7 +47,7 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// <summary>
         /// TASK-897: one aggregate of the query, and how its answer is read: <paramref name="ResultType"/> is the type the
         /// in-memory aggregation answers in (<see cref="AggregateMath.ResultType"/>). <paramref name="CountAlias"/> is the
-        /// hidden count of the values a SUM (or a decimal AVG) saw; <paramref name="SumAlias"/> the hidden SUM a decimal AVG
+        /// hidden count of the values a decimal AVG saw; <paramref name="SumAlias"/> the hidden SUM a decimal AVG
         /// is divided from, in which case <paramref name="Alias"/> itself is not selected.
         /// </summary>
         internal sealed record Metric(string Alias, AggregateFunction Function, Type ResultType, string? CountAlias, string? SumAlias);
@@ -131,9 +131,11 @@ namespace Birko.Data.CosmosDB.Aggregation
                     var count = CountOf(doc, metric.CountAlias!);
                     var sum = Property(doc, metric.SumAlias);
                     return count == 0 || sum == null ? null : (decimal)Number(sum.Value, typeof(decimal)) / count;
-                case AggregateFunction.Sum when CountOf(doc, metric.CountAlias!) == 0:
-                    // Cosmos DB sums no value to 0; LINQ to null (TASK-885).
-                    return null;
+                case AggregateFunction.Sum:
+                    // TASK-886 (the user's decision): a SUM over no value is 0 in the in-memory aggregation too. TASK-885
+                    // had made it null with a hidden count of the values; Cosmos DB answers 0.
+                    var total = Property(doc, metric.Alias);
+                    return total == null ? AggregateMath.SumOfNoValues(metric.ResultType) : Number(total.Value, metric.ResultType);
                 default:
                     var value = Property(doc, metric.Alias);
                     return value == null ? null : Number(value.Value, metric.ResultType);

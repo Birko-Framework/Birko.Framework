@@ -245,11 +245,20 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
         var metricAggregations = new AggregationDictionary();
         var metricNames = new List<(string Name, AggregateFunction Function)>();
+        // TASK-886: a Count of no member (COUNT(*)) is the number of rows: the bucket's document count, or the hit total of
+        // an ungrouped view. It was a value_count on _id, which Elasticsearch 8 refuses by default (measured on 7.17 with
+        // indices.id_field_data.enabled false: every Count view failed with a 400).
+        var rowCounts = new List<string>();
         for (int i = 0; i < _definition.Aggregates.Count; i++)
         {
             var aggregate = _definition.Aggregates[i];
             // Named by position: two aggregates of one function over one field collided under "{fn}_{field}".
             var name = "m" + i.ToString(CultureInfo.InvariantCulture);
+            if (aggregate.Function == AggregateFunction.Count && aggregate.SourceProperty == null)
+            {
+                rowCounts.Add(name);
+                continue;
+            }
             var field = aggregate.SourceProperty != null ? StoredField(aggregate.SourceProperty, exact: true) : null;
             metricAggregations.Add(name, StoreAggregationHelper.BuildSingleMetricAggregation(aggregate.Function, name, field));
             metricNames.Add((name, aggregate.Function));
@@ -257,9 +266,9 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
         if (!_definition.HasGroupBy)
         {
-            var response = await SearchAsync(new SearchRequest(_indexName) { Size = 0, Query = filterQuery, Aggregations = metricAggregations }, ct).ConfigureAwait(false);
+            var response = await SearchAsync(new SearchRequest(_indexName) { Size = 0, Query = filterQuery, TrackTotalHits = true, Aggregations = metricAggregations }, ct).ConfigureAwait(false);
             var row = new TView();
-            SetMetrics(row, StoreAggregationHelper.ExtractMetricValues(response.Aggregations, metricNames));
+            SetMetrics(row, WithRowCounts(StoreAggregationHelper.ExtractMetricValues(response.Aggregations, metricNames), rowCounts, response.Total));
             return new List<TView> { row };
         }
 
@@ -306,7 +315,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                         SetPropertyValue(row, keyProperties[i], value);
                     }
                 }
-                SetMetrics(row, StoreAggregationHelper.ExtractMetricValues(bucket, metricNames));
+                SetMetrics(row, WithRowCounts(StoreAggregationHelper.ExtractMetricValues(bucket, metricNames), rowCounts, bucket.DocCount ?? 0));
                 rows.Add(row);
             }
 
@@ -328,6 +337,13 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 response.OriginalException);
         }
         return response;
+    }
+
+    /// <summary><paramref name="values"/> with each row-count aggregate in <paramref name="names"/> set to <paramref name="rows"/>.</summary>
+    private static Dictionary<string, double?> WithRowCounts(Dictionary<string, double?> values, List<string> names, long rows)
+    {
+        foreach (var name in names) values[name] = rows;
+        return values;
     }
 
     private void SetMetrics(TView row, Dictionary<string, double?> values)

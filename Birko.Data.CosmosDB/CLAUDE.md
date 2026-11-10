@@ -214,10 +214,9 @@ The oracle is `AggregateHelper.LinqAggregate` over the documents as read back. M
   undefined (absent) and MIN was null, for int, decimal, double, string and DateTime members. Every aggregate argument
   is now `IS_NULL(x) ? undefined : x` (`CosmosAggregationHelper.BuildFunctionSql`, shared with the view store).
   `x ?? undefined` does not work: `??` only replaces undefined.
-- **A SUM over no non-null value is null**, as in memory (Cosmos DB answers 0). Each SUM selects a hidden
-  `COUNT(IS_NULL(x) ? undefined : x)`, and `CosmosAggregatePlan.Read` nulls the SUM where it is 0. An aggregate or group
-  key Cosmos DB leaves undefined comes back as a null entry, so each row has every key. Aggregates cannot be combined in
-  one expression (`COUNT(..) > 0 ? SUM(..) : null` is a 400), so this is done after the query.
+- **A SUM over no non-null value is 0** (TASK-886, the user's decision: one answer on every provider, as LINQ's `Sum`),
+  as Cosmos DB answers it. TASK-885 had made it null with a hidden `COUNT(IS_NULL(x) ? undefined : x)`; that column is
+  gone. An aggregate or group key Cosmos DB leaves undefined comes back as a null entry, so each row has every key.
 - **The time bucket is applied.** It was ignored: one row where C# had five buckets. It is now grouped on
   `FLOOR(DateTimeToTimestamp(LEFT(t, 19)) / ms) * ms` and returned as `bucket_time`.
   - **LEFT 19.** In memory, a bucket floors the stored wall-clock time (`dt.Ticks`, any kind), while Cosmos DB's date
@@ -234,8 +233,10 @@ The oracle is `AggregateHelper.LinqAggregate` over the documents as read back. M
   - **Before 1601-01-01** (e.g. `DateTime.MinValue`), every Cosmos DB date function answers undefined. A group holding
     such a time is refused after the query, told apart from a null time by a hidden non-null count. It is never
     answered as the null bucket.
-- **Recorded, not decided (TASK-886):** an ungrouped aggregate over no rows is one row (count 0, every other aggregate
-  null; SUM was 0). In memory there is no row.
+- **TASK-886 (the user's decision, 2026-11-10):** an ungrouped aggregate over no rows is one row (Count 0, Sum 0, the
+  others null), as Cosmos DB answers it and every provider now does; a query with nothing to aggregate (no aggregate, no
+  group, no time bucket) is refused with `ArgumentException` before any request (it was a 400, SC1001). Pinned by the
+  shared `AggregateEdgeContract`.
 - Result types, DateTime MIN/MAX and names: TASK-897, below.
 
 ## Aggregation answers in LINQ's types and names (TASK-897)

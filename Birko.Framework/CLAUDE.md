@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Aggregates answer the same edge cases on every provider (2026-11-10)
+[[TASK-886]] (the user's decisions). An ungrouped aggregate over no rows now returns one row with Count 0 everywhere
+(before: no row on InMemory, MongoDB, RavenDB, Elasticsearch; RavenDB and ES threw on an empty store), and SUM over only
+NULLs is 0 everywhere, like LINQ's `Sum` (MIN / MAX / AVG stay null). An empty `AggregateQuery` is refused by name
+(five providers gave five answers). **Breaking:** `SqlValueFragmentDialect.Aggregate` lost its last parameter.
 ### Cosmos DB `DateTime` filters and sorts answer as C# (2026-11-10)
 [[TASK-902]]. Cosmos compared the stored ISO text, whose fraction length varies, so inside one second `…00.5Z` sorted
 before `…00Z`: 76 of 88 filter shapes and 62 of 120 sorted pages were wrong (measured), e.g. `x.T > 10:00:00Z` missed
@@ -375,11 +380,6 @@ case-sensitive. Rules and hand-built conditions are unchanged ([[TASK-895]]).
 subscribers (rule 25, measured). Bulk inserts, COPY, `SqlBulkCopy` and the index manager never reached `OnExecute`.
 Each subscriber now runs contained, failures are recorded on `SubscriberFailures`, every connector statement is
 announced, and an `ExecuteReader` error carries its statement like any other.
-### A division by zero in a SQL filter or SET fails on every provider (2026-11-09)
-[[TASK-888]] (the user's decision: every provider throws). SQLite answered NULL on every path, so a Delete or Update with
-such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now
-guard the divisor so a zero fails the statement, as PostgreSQL and SQL Server already did. A `double` divided by zero
-fails too: C#'s Infinity/NaN has no SQL form.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

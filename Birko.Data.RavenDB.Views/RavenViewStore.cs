@@ -50,6 +50,13 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
 
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (IsUngroupedAggregate)
+        {
+            IEnumerable<TView> row = await UngroupedRowAsync(query, filter, ct).ConfigureAwait(false);
+            if (offset.HasValue) row = row.Skip(offset.Value);
+            if (limit.HasValue) row = row.Take(limit.Value);
+            return row.ToList();
+        }
         if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return Enumerable.Empty<TView>();   // after the mode and index checks
 
         if (filter != null)
@@ -94,6 +101,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
 
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (IsUngroupedAggregate) return (await UngroupedRowAsync(query, filter, ct).ConfigureAwait(false)).FirstOrDefault();
         if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return null;   // after the mode and index checks
 
         if (filter != null)
@@ -115,6 +123,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
 
         using var session = _documentStore.OpenAsyncSession();
         var query = await BuildQueryAsync(session, ct);
+        if (IsUngroupedAggregate) return (await UngroupedRowAsync(query, filter, ct).ConfigureAwait(false)).Count;
         if (Birko.Data.RavenDB.Expressions.RavenFilterRewriter.MatchesNothing(filter)) return 0;   // after the mode and index checks
 
         if (filter != null)
@@ -131,6 +140,40 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
     /// </summary>
     private IRavenQueryable<TView> Project(IRavenQueryable<TView> query)
         => _definition.HasAggregates ? query : query.ProjectInto<TView>();
+
+    /// <summary>An aggregate view with no group-by: its index reduces every document into one row.</summary>
+    private bool IsUngroupedAggregate => _definition.HasAggregates && !_definition.HasGroupBy;
+
+    /// <summary>
+    /// TASK-886 (the user's decision): an ungrouped aggregate view answers ONE row, also over no documents (Count 0, Sum 0,
+    /// the others null), on every provider. A map-reduce index has no reduce result over no documents, so the view
+    /// answered no row (measured). The index holds at most one row, so it is read whole, replaced by that row when there
+    /// is none, and filtered here as C# filters it; paging applies to the one row.
+    /// </summary>
+    private async Task<List<TView>> UngroupedRowAsync(IRavenQueryable<TView> query, Expression<Func<TView, bool>>? filter, CancellationToken ct)
+    {
+        var rows = await Project(query).ToListAsync(ct).ConfigureAwait(false);
+        if (rows.Count == 0) rows.Add(EmptyRow());
+        if (filter == null) return rows;
+        var matches = filter.Compile();
+        return rows.Where(matches).ToList();
+    }
+
+    /// <summary>The row of an ungrouped aggregate over no documents: each Count and Sum 0, every other member its default.</summary>
+    private TView EmptyRow()
+    {
+        var row = (TView)(Activator.CreateInstance(typeof(TView))
+            ?? throw new InvalidOperationException($"View '{typeof(TView).Name}' has no parameterless constructor."));
+        foreach (var aggregate in _definition.Aggregates)
+        {
+            if (aggregate.Function is not (AggregateFunction.Count or AggregateFunction.Sum)) continue;
+            var property = typeof(TView).GetProperty(aggregate.ViewProperty)
+                ?? throw new InvalidOperationException($"View '{typeof(TView).Name}' has no property '{aggregate.ViewProperty}'.");
+            var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+            property.SetValue(row, Convert.ChangeType(0, type, System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return row;
+    }
 
     private async Task<IRavenQueryable<TView>> BuildQueryAsync(IAsyncDocumentSession session, CancellationToken ct)
     {

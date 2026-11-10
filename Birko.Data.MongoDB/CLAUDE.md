@@ -65,6 +65,11 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `Match(Expression)` folds a lifted ordering against null to `false` before the driver renders it (TASK-868): MongoDB's
   `$gte: null` matches the null rows, where C# matches none. The store's `Aggregate(AggregateQuery)` uses it, so both agree
   with the stores' reads (TASK-867).
+- `Aggregate(AggregateQuery)` answers through `StoreAggregationHelper.ReadResults` (TASK-886): an ungrouped query over no
+  documents answers one row (Count 0, Sum 0, the others null; `$group` answers none), each Count / Sum / Avg and a numeric
+  Min / Max is read into `AggregateMath.ResultType` (a `$sum` over only nulls was an `Int32` 0 for a `decimal?`, a decimal
+  Sum a `Decimal128`), and a query with nothing to aggregate is refused (it answered one empty row). Ordering and paging
+  are still not applied (recorded).
 
 ## Connection
 

@@ -64,6 +64,28 @@ namespace Birko.Data.Stores
         /// <summary>Number of results to skip.</summary>
         public int? Offset { get; init; }
 
+        /// <summary>
+        /// Whether the rows are grouped: by a group-by field or by a time bucket. An ungrouped query answers ONE row, also
+        /// over no rows (TASK-886); a grouped one answers a row per group, so none over no rows.
+        /// </summary>
+        public bool IsGrouped
+            => GroupByFields.Count > 0 || !string.IsNullOrEmpty(TimeBucketInterval) || !string.IsNullOrEmpty(TimeColumn);
+
+        /// <summary>
+        /// TASK-886: refuses a query with nothing to aggregate (no aggregate, no group-by field, no time bucket), before
+        /// anything runs. Measured before: the in-memory aggregation answered the raw rows, MongoDB and Elasticsearch one
+        /// empty row, PostgreSQL a row with no columns per row, and SQLite, MySQL, SQL Server and Cosmos DB a syntax error.
+        /// Every provider calls this where it reads the query.
+        /// </summary>
+        /// <exception cref="ArgumentException">The query names no aggregate, no group-by field and no time bucket.</exception>
+        public void ThrowIfNothingToAggregate()
+        {
+            if (Aggregates.Count > 0 || IsGrouped) return;
+            throw new ArgumentException(
+                $"The aggregate query of {typeof(T).Name} has nothing to aggregate: it names no aggregate, no group-by field and "
+                + "no time bucket. Read the rows with Read instead. (TASK-886)", "query");
+        }
+
         /// <summary>This query with <paramref name="filter"/> in place of <see cref="Filter"/> (a scoping decorator's, TASK-631).</summary>
         public AggregateQuery<T> WithFilter(Expression<Func<T, bool>>? filter) => new()
         {

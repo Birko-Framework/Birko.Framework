@@ -432,7 +432,7 @@ public class Task876AggregateQueryTests
     public void No_filter_renders_no_WHERE()
     {
         var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, null).Query;
-        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\", COUNT(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"__birko_n4\" FROM root GROUP BY root[\"Grp\"]");
+        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\" FROM root GROUP BY root[\"Grp\"]");
     }
 
     [Fact]
@@ -444,7 +444,7 @@ public class Task876AggregateQueryTests
         var predicate = read.QueryText.Substring("SELECT VALUE root FROM root WHERE ".Length);
 
         var q = Aggregation.CosmosAggregationHelper.BuildAggregateQuery(CountByGrp, read).Query;
-        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\", COUNT(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"__birko_n4\" FROM root WHERE "
+        q.QueryText.Should().Be("SELECT root[\"Grp\"] AS \"Grp\", COUNT(1) AS \"cnt\", SUM(IS_NULL(root[\"A\"]) ? undefined : root[\"A\"]) AS \"sumA\" FROM root WHERE "
                                 + predicate + " GROUP BY root[\"Grp\"]");
     }
 

@@ -654,6 +654,9 @@ public class RavenDBStore<T>
     /// </summary>
     public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
     {
+        // TASK-886: the store initialises first, as every read does; on a fresh store the aggregate threw
+        // DatabaseDoesNotExistException where it answers the empty answer (one row for an ungrouped query).
+        EnsureInitialized();
         if (_documentStore == null) return Array.Empty<AggregateResult>();
 
         // TASK-868: the stores' translator pre-pass, as every read takes it. Measured live before: a lifted ordering against

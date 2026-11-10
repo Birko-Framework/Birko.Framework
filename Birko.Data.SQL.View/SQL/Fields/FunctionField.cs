@@ -87,7 +87,7 @@ namespace Birko.Data.SQL.Fields
             }
             try
             {
-                return dialect.Aggregate(function.Value, prefix + Parameters[0], SourceType, Property.PropertyType, sumOfNoValuesIsZero: true);
+                return dialect.Aggregate(function.Value, prefix + Parameters[0], SourceType, Property.PropertyType);
             }
             catch (NotSupportedException ex)
             {

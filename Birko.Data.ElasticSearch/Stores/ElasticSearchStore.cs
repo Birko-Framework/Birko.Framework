@@ -1002,6 +1002,9 @@ namespace Birko.Data.ElasticSearch.Stores
         /// </remarks>
         public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
         {
+            // TASK-886: the store initialises first, as every read does; on a fresh store the aggregate failed with
+            // index_not_found where it answers the empty answer (one row for an ungrouped query).
+            EnsureInitialized();
             RequireConnector();
 
             var plan = StoreAggregatePlan.For(query, AggregateGroupPageSize);

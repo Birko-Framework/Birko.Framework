@@ -27,6 +27,9 @@ RavenDB view implementation for the Birko data layer. Translates portable `ViewD
 - **Persistent/Auto** mode: queries a static index via `session.Query<TView>(indexName)`; Auto reports a missing index by name
 - A map-only index stores its fields and is read with `ProjectInto<TView>()`
 - Supports filter, orderBy, skip/take pagination
+- An ungrouped aggregate view answers ONE row, also over no documents (Count 0, Sum 0, the others null; TASK-886, the
+  user's decision). A map-reduce index has no result over no documents (measured: no row), so the index's at most one
+  row is read whole, replaced by that row when absent, and filtered and paged in memory as C# does
 - Uses shared `OrderByHelper.ApplyTo()` for dynamic ordering
 
 ### RavenViewManager

@@ -1023,6 +1023,7 @@ namespace Birko.Data.ElasticSearch.Stores
             AggregateQuery<T> query,
             CancellationToken ct = default)
         {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);   // TASK-886 — see ElasticSearchStore.Aggregate
             RequireConnector();
 
             var plan = StoreAggregatePlan.For(query, AggregateGroupPageSize);

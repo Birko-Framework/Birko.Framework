@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — A division by zero in a SQL filter or SET fails on every provider
+[[TASK-888]] (the user's decision: every provider throws). SQLite answered NULL on every path, so a Delete or Update with
+such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now
+guard the divisor so a zero fails the statement, as PostgreSQL and SQL Server already did. A `double` divided by zero
+fails too: C#'s Infinity/NaN has no SQL form.
+
 ## 2026-11-09 — RavenDB single-field aggregates run
 [[TASK-877]] (the user's decision: LINQ fallback). `Aggregate` with one GROUP BY field sent a facet query that RavenDB
 refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads

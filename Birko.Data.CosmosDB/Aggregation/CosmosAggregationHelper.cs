@@ -343,6 +343,8 @@ namespace Birko.Data.CosmosDB.Aggregation
             // TASK-897: every name is resolved as the in-memory aggregation resolves it, in its order: the group-by fields,
             // the time column, the aggregate sources. The query names each member by its own name; a result keeps the
             // name as the caller wrote it, as in memory.
+            // TASK-886: nothing to select was a 400 (SC1001, syntax error near FROM).
+            query.ThrowIfNothingToAggregate();
             var owner = typeof(T).Name;
             var groups = query.GroupByFields
                 .Select(name => (Name: name, Member: ResolveMember(typeof(T), name, "group-by field")))
@@ -382,14 +384,9 @@ namespace Birko.Data.CosmosDB.Aggregation
                     continue;
                 }
 
+                // TASK-886: a SUM over no value is 0, as Cosmos DB answers it; the hidden count that made it null is gone.
                 selected.Add((aggregate.Function, member.Name, alias, member.PropertyType));
-                string? countAlias = null;
-                if (aggregate.Function == AggregateFunction.Sum)
-                {
-                    countAlias = HiddenAlias(used);
-                    extraColumns.Add((NonNullCount(field), countAlias));
-                }
-                metrics.Add(new CosmosAggregatePlan.Metric(alias, aggregate.Function, resultType, countAlias, null));
+                metrics.Add(new CosmosAggregatePlan.Metric(alias, aggregate.Function, resultType, null, null));
             }
 
             string? timeCountAlias = null;

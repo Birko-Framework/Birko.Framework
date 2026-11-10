@@ -18,19 +18,20 @@ namespace Birko.Data.SQL.Tests.Views
         private static readonly SqlValueFragmentDialect Provider = SqlValueFragmentDialect.WithRounding((v, d, m) => $"ROUND({v}, {d})");
 
         [Fact]
-        public void A_view_sum_answers_zero_over_no_values_and_the_store_sum_answers_null()
+        public void A_sum_answers_zero_over_no_values_for_a_view_and_the_store_alike()
         {
-            Provider.Aggregate(AggregateFunction.Sum, "T.Hits", typeof(int?), typeof(int?), sumOfNoValuesIsZero: true)
+            // TASK-886 (the user's decision; rule 56): the store's SUM used to stay bare and answer NULL.
+            Provider.Aggregate(AggregateFunction.Sum, "T.Hits", typeof(int?), typeof(int?))
                 .Should().Be("COALESCE(SUM(T.Hits), 0)");
-            Provider.Aggregate(AggregateFunction.Sum, "T.Hits", typeof(int?), typeof(int), sumOfNoValuesIsZero: false)
-                .Should().Be("SUM(T.Hits)");
+            Provider.Aggregate(AggregateFunction.Sum, "T.Hits", typeof(int?), typeof(int))
+                .Should().Be("COALESCE(SUM(T.Hits), 0)");
         }
 
         [Fact]
         public void An_integral_average_is_a_double_average()
         {
-            Provider.Aggregate(AggregateFunction.Avg, "Hits", typeof(int), typeof(double), false).Should().Be("AVG(Hits * 1.0E0)");
-            Provider.Aggregate(AggregateFunction.Avg, "Ratio", typeof(double), typeof(double), false).Should().Be("AVG(Ratio)");
+            Provider.Aggregate(AggregateFunction.Avg, "Hits", typeof(int), typeof(double)).Should().Be("AVG(Hits * 1.0E0)");
+            Provider.Aggregate(AggregateFunction.Avg, "Ratio", typeof(double), typeof(double)).Should().Be("AVG(Ratio)");
         }
 
         [Theory]
@@ -41,7 +42,7 @@ namespace Birko.Data.SQL.Tests.Views
         {
             Provider.HasExactAverage(source, result).Should().BeFalse();
 
-            var act = () => Provider.Aggregate(AggregateFunction.Avg, "Price", source, result, false);
+            var act = () => Provider.Aggregate(AggregateFunction.Avg, "Price", source, result);
 
             act.Should().Throw<NotSupportedException>().WithMessage("*AVG(Price)*28 to 29 significant digits*TASK-892*");
         }
@@ -49,16 +50,16 @@ namespace Birko.Data.SQL.Tests.Views
         [Fact]
         public void The_portable_form_never_refuses()
         {
-            SqlValueFragmentDialect.Portable.Aggregate(AggregateFunction.Avg, "Price", typeof(decimal), typeof(decimal), false)
+            SqlValueFragmentDialect.Portable.Aggregate(AggregateFunction.Avg, "Price", typeof(decimal), typeof(decimal))
                 .Should().Be("AVG(Price)");
         }
 
         [Fact]
         public void Count_and_min_max_render_as_written()
         {
-            Provider.Aggregate(AggregateFunction.Count, null, null, typeof(int), false).Should().Be("COUNT(*)");
-            Provider.Aggregate(AggregateFunction.Count, "T.Guid", typeof(Guid), typeof(long), true).Should().Be("COUNT(T.Guid)");
-            Provider.Aggregate(AggregateFunction.Min, "Name", typeof(string), typeof(string), true).Should().Be("MIN(Name)");
+            Provider.Aggregate(AggregateFunction.Count, null, null, typeof(int)).Should().Be("COUNT(*)");
+            Provider.Aggregate(AggregateFunction.Count, "T.Guid", typeof(Guid), typeof(long)).Should().Be("COUNT(T.Guid)");
+            Provider.Aggregate(AggregateFunction.Min, "Name", typeof(string), typeof(string)).Should().Be("MIN(Name)");
         }
 
         [Theory]

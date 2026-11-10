@@ -487,7 +487,7 @@ namespace Birko.Data.MongoDB.Stores
             pipeline.Project(projection);
 
             var bsonResults = pipeline.ToList();
-            return StoreAggregationHelper.MapBsonResults(bsonResults);
+            return StoreAggregationHelper.ReadResults(query, bsonResults);   // TASK-886
         }
 
         #endregion

@@ -20,14 +20,14 @@ namespace Birko.Data.Stores
         }
 
         /// <summary>
-        /// Computes Sum over a set of boxed values for a given numeric property type.
-        /// Returns null if values is empty.
+        /// Computes Sum over a set of boxed values for a given numeric property type, in the type
+        /// <see cref="ResultType"/> names. Over no values it is 0, as LINQ's <c>Sum</c> over <c>int?</c> or <c>decimal?</c> is
+        /// (TASK-886, the user's decision: it used to be null).
         /// </summary>
         public static object? ComputeSum(List<object?> values, Type propertyType)
         {
             var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
             if (!IsNumeric(underlying)) throw new NotSupportedException($"Sum is not defined for {underlying.Name}.");
-            if (values.Count == 0) return null;
 
             if (underlying == typeof(decimal)) return values.Cast<decimal?>().Sum();
             if (underlying == typeof(double)) return values.Cast<double?>().Sum();
@@ -40,6 +40,15 @@ namespace Birko.Data.Stores
             if (underlying == typeof(ulong)) return values.Sum(v => Convert.ToDecimal(v));
             throw new NotSupportedException($"Sum is not defined for {underlying.Name}.");
         }
+
+        /// <summary>
+        /// TASK-886: the Sum over no values (or over only nulls) of a property of <paramref name="propertyType"/>: 0 in the
+        /// type <see cref="ResultType"/> names. The one producer a store that sums natively answers that edge with, where
+        /// its server answers null or a 0 of another type. <see cref="ResultType"/> of a Sum is its own Sum type, so the
+        /// Sum's result type may be passed as well.
+        /// </summary>
+        /// <exception cref="NotSupportedException"><paramref name="propertyType"/> is not numeric.</exception>
+        public static object SumOfNoValues(Type propertyType) => ComputeSum(new List<object?>(), propertyType)!;
 
         /// <summary>
         /// Computes Average over a set of boxed values for a given numeric property type.
