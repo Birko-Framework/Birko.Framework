@@ -114,9 +114,17 @@ entity, table and provider, **before any SQL is sent**. The caller maps the prop
   direct call skips store init, and measured live on all four providers a write's WHERE named the column bare:
   `User` (PostgreSQL, SQL Server), `CURRENT_USER` (MySQL) or `CURRENT_DATE` (SQLite) was read as the function, and a
   filtered `Delete` or `Update` wrote 2 of 2 rows that matched nothing in C#, silently.
-- **Not covered:** the overloads that take a resolved `Tables.Table` or a table name (`Delete(Table, …)`,
-  `Insert(string, values)`, …) trust the caller's resolution. Schema operations (`DropTable`, `AlterTableDrop`,
-  `EnsureColumns`, drift and repair) are not refused either: they name no column in a WHERE.
+- **`Table` and table-name overloads (TASK-891):** they are public API (a store's bulk update runs through
+  `Update(string, …)`), so they are checked too, before any SQL. An overload taking a `Tables.Table` runs
+  `RequireUsableTable` (the check `LoadUsableTable` runs); a table-name funnel (`Delete`, `Update`, `Insert`, `Select`,
+  `SelectCount`, sync and async) runs `RequireUsableStatementColumns` over the columns the statement writes and the ones
+  its filter compares, bare or qualified by the statement's own table (the parser qualifies, a write strips its target's
+  qualifier). Both not virtual; `InsertAsync(string, …)` stopped being virtual (rule 12; no override existed). Measured
+  live before: `Delete(DataBase.LoadTable(t), filter)` deleted 2 of 2 rows and every `Update(table or name, …)`
+  rewrote 2 of 2 on all four providers. A name qualified by another table and a value fragment pass.
+- **Not covered:** schema operations (`DropTable`, `AlterTableDrop`, `EnsureColumns`, drift and repair) name no
+  column in a WHERE. The providers' own `BulkInsert` / `BulkUpdate` / `BulkDelete(Type, …)` resolve with
+  `DataBase.LoadTable`, not the funnel; not measured, their WHERE names only `Guid` (left for its own task).
 - **Persistent SQL views:** see `Birko.Data.SQL.View/CLAUDE.md` (`RequireUsableViewColumnNames`, TASK-872).
 - `Every_refused_name_is_rejected_by_the_server` (shared `RejectedColumnNameContract`) re-measures each list live.
   Re-run it when a supported server version moves.
@@ -203,7 +211,8 @@ loop: `RunReaderCommandOn` (sync; the owned-connection path calls it too) and `R
 `Read()` until it returns false and never checks `HasRows` first. SQL Server reports an error raised while it produces
 rows (divide by zero, overflow) after the result's metadata, so `HasRows` is false and only `Read()` raises it. Before
 TASK-880 such a read returned 0 rows while the count threw (measured on SQL Server 2022; SQLite, PostgreSQL and MySQL
-already threw). The loop swallows exactly one thing, a missing table at `ExecuteReader` (rule 26). Do not add a
+already threw). The loop swallows exactly one thing, a missing table at `ExecuteReader` (rule 26), and only for a
+table read (`missingTableIsEmpty`, TASK-891): a view read reports it, as the view count does. Do not add a
 `HasRows` short-circuit back. Any other `ExecuteReader` error goes through `InitException` like a `Read()` error, so it
 reaches the caller as itself with the statement on `Exception.Data[CommandTextDataKey]` (TASK-875; before, it arrived
 without it on all four providers).
@@ -409,6 +418,11 @@ schema for the *next* attempt) and then **always throws**.
 - **Reads are unaffected and deliberately asymmetric.** `RunReaderCommandOn` catches
   `IsMissingTableException` itself and yields break, so a read of a missing table still answers *empty* —
   TASK-211's decision, with its own callers. Both sides are pinned by tests.
+- **Except a view read (TASK-891).** A view read passes `missingTableIsEmpty: false`, so a missing view or source table
+  goes through `InitException` and throws as the view count does. Measured live before, on all four providers: a
+  persistent view never created (its `EnsureAsync` failed), an Auto view dropped after it was seen, and an on-the-fly
+  view over a missing source table each answered 0 rows from every read, sync and async, while `SelectCount` threw.
+  Nothing creates a view on a read, so the empty answer healed nothing. `Task891MissingViewReadTests`.
 - MSSql's handler also stopped classifying by the raw `"Invalid object name"` substring and now uses
   `IsMissingTableException` like the rest.
 - **Pinned by:** `SchemaEnsureRollbackResidueTests` (SQLite, write throws + read still empty) and

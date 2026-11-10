@@ -43,9 +43,14 @@ SQL view generation framework for creating database views from entity attributes
   `RequireUsableViewColumnNames` (not virtual) checks the view's columns against the provider's TASK-862 list in
   `BuildViewSelectSql` (every `CreateView`, sync and async, and PostgreSQL's materialized views) and wherever a read
   decides to use the persistent view (`ShouldUsePersistentView(Async)`, select and count). An on-the-fly read names
-  source columns qualified and is not checked; the source tables are checked where Birko builds them. Not covered:
-  the migrations `ViewSqlGenerator` (no connector) and SQL Server's indexed-view builder, which call
-  `ViewSelectSqlBuilder` directly; SQL Server rejects such a DDL anyway.
+  source columns qualified and is not checked; the source tables are checked where Birko builds them. The migrations
+  `ViewSqlGenerator` runs the same check through the migration's connector (TASK-891). Not covered: SQL Server's
+  indexed-view builder, which calls `ViewSelectSqlBuilder` directly; SQL Server rejects such a DDL anyway.
+- **A missing view is reported by a read, not answered empty (TASK-891).** `Select(Tables.View, …)` and its async twin
+  run the reader with `missingTableIsEmpty: false`: a persistent view that does not exist, or an on-the-fly view over a
+  missing source table, throws through `InitException` as the view count does (rule 26). Measured live before: every
+  read answered 0 rows while the count threw, on all four providers. Auto mode caches a positive existence probe, so a
+  view dropped outside the connector keeps being read (and now reported) until `InvalidateViewExistsCache`.
 - `AbstractConnector_CreateView.cs` — Sync: `CreateView`, `DropView`, `RecreateView`, `ViewExists`, `CreateViewIfNotExists`, `CreateViews`, `DropViews`
 - `AbstractAsyncConnector_CreateView.cs` — Async equivalents: `CreateViewAsync`, `DropViewAsync`, `RecreateViewAsync`, `ViewExistsAsync`, `CreateViewIfNotExistsAsync`, `CreateViewsAsync`, `DropViewsAsync`
 

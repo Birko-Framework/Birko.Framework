@@ -31,7 +31,10 @@ namespace Birko.Data.SQL.Connectors
 
         public long SelectCount(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null)
         {
-            return (tables != null) ? SelectCount(tables.Where(x => x != null).Select(x => x.Name), conditions) : 0;
+            if (tables == null) return 0;
+            var resolved = tables.Where(x => x != null).ToList();
+            resolved.ForEach(RequireUsableTable); // TASK-891
+            return SelectCount(resolved.Select(x => x.Name), conditions);
         }
 
         public long SelectCount(IEnumerable<string> tableNames, IEnumerable<Conditions.Condition>? conditions = null)
@@ -53,6 +56,7 @@ namespace Birko.Data.SQL.Connectors
             var names = tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
             var joins = joinconditions?.ToList();
             var terms = conditions?.ToList();
+            RequireUsableStatementColumns(names, null, terms); // TASK-891
             var plan = PlanInListChunks("count", terms, (command, chunk) => CreateCountCommand(command, names, joins, chunk));
             plan.ThrowIfRefused();
 

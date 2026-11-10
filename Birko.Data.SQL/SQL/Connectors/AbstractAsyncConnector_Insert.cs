@@ -25,6 +25,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task InsertAsync(Tables.Table table, object model, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             if (model != null)
             {
                 return InsertAsync(table, new[] { DataBase.Write(table.Fields.Select(f => f.Value), model) }, ct);
@@ -34,12 +35,14 @@ namespace Birko.Data.SQL.Connectors
 
         public Task InsertAsync(Tables.Table table, IDictionary<string, object> values, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             return InsertAsync(tableName, values, ct);
         }
 
         public Task InsertAsync(Tables.Table table, IEnumerable<object> models, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             if (models != null && models.Any() && models.Any(x => x != null))
             {
                 var tableName = table.Name;
@@ -55,11 +58,16 @@ namespace Birko.Data.SQL.Connectors
 
         public Task InsertAsync(Tables.Table table, IEnumerable<IDictionary<string, object>> values, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             return InsertAsync(tableName, values, ct);
         }
 
-        public virtual async Task InsertAsync(string tableName, IEnumerable<IDictionary<string, object>> values, CancellationToken ct = default)
+        /// <remarks>
+        /// Not virtual since TASK-891 (rule 12): it refuses a column the provider rejects, and an override would skip that. None
+        /// was found in the framework or the consumer repos.
+        /// </remarks>
+        public async Task InsertAsync(string tableName, IEnumerable<IDictionary<string, object>> values, CancellationToken ct = default)
         {
             if (values == null) return;
             // Materialize once: values is enumerated for the guard, the first-row schema, and the
@@ -82,6 +90,8 @@ namespace Birko.Data.SQL.Connectors
                         nameof(values));
                 }
             }
+            // TASK-891 — see the sync twin.
+            RequireUsableStatementColumns(new[] { tableName }, first.Keys, null);
 
             await DoCommandWithTransactionAsync(async (command) =>
             {

@@ -22,6 +22,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Insert(Tables.Table table, object model)
         {
+            RequireUsableTable(table); // TASK-891
             if (model != null)
             {
                 Insert(table, new[] { DataBase.Write(table.Fields.Select(f => f.Value), model) });
@@ -30,12 +31,14 @@ namespace Birko.Data.SQL.Connectors
 
         public void Insert(Tables.Table table, IDictionary<string, object> values)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             Insert(tableName, values);
         }
 
         public void Insert(Tables.Table table, IEnumerable<object> models)
         {
+            RequireUsableTable(table); // TASK-891
             if (models != null && models.Any() && models.Any(x => x != null))
             {
                 var tableName = table.Name;
@@ -50,6 +53,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Insert(Tables.Table table, IEnumerable<IDictionary<string, object>> values)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             Insert(tableName, values);
         }
@@ -77,6 +81,8 @@ namespace Birko.Data.SQL.Connectors
                         nameof(values));
                 }
             }
+            // TASK-891: a column the provider rejects is refused by name, before the transaction wrapper re-wraps it.
+            RequireUsableStatementColumns(new[] { tableName }, first.Keys, null);
 
             DoCommandWithTransaction((command) =>
             {

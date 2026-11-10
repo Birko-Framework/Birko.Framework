@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A SQL view read over a missing view throws; table-name overloads refuse reserved columns (2026-11-10)
+[[TASK-891]]. A view read over a view or source table that did not exist answered 0 rows on all four providers while
+its count threw (rule 26, measured): the reader's missing-table swallow, meant for tables a store heals, applied to
+views, which nothing heals. Only table reads keep it now. The migrations view generator and the connector's `Table` /
+table-name overloads now run TASK-872's reserved-column check; before, they read the database function or rewrote
+every row.
 ### Cosmos DB aggregates answer in LINQ's types and names (2026-11-10)
 [[TASK-897]]. All 15 measured store shapes differed from `AggregateHelper`: numbers came back as long/double, Guid and
 DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
@@ -371,11 +377,6 @@ now resolves the table through one checking funnel, and persistent view DDL and 
 returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on
 `HasRows == false` and never read the error. They now read until the end, so the error reaches the caller (rule 26).
 PostgreSQL, MySQL and SQLite already threw. Found on the way: grouped views over one table fail ([[TASK-887]], P1).
-### Elasticsearch store aggregates answer what LINQ answers (2026-11-09)
-[[TASK-878]]. 93 of 99 measured aggregate shapes were wrong, mostly silently: property names were sent verbatim and ES
-answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
-container form), and Count counted a field's values, not rows. Names now resolve through the sort lookup, one composite
-aggregation pages through every group, and unsupported shapes are refused by name. No consumer used it.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

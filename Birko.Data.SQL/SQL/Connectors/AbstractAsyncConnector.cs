@@ -312,7 +312,8 @@ namespace Birko.Data.SQL.Connectors
             }, ct);
         }
 
-        private async IAsyncEnumerable<IEnumerable<object>> RunReaderCommandAsync(Func<DbCommand, Task> createCommand, Func<DbDataReader, Task<IEnumerable<object>>> transformFunction, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        /// <param name="missingTableIsEmpty">False for a view read (TASK-891); see the sync twin, <c>RunReaderCommandOn</c>.</param>
+        private async IAsyncEnumerable<IEnumerable<object>> RunReaderCommandAsync(Func<DbCommand, Task> createCommand, Func<DbDataReader, Task<IEnumerable<object>>> transformFunction, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default, bool missingTableIsEmpty = true)
         {
             if (transformFunction == null)
             {
@@ -325,7 +326,7 @@ namespace Birko.Data.SQL.Connectors
             var ambient = AmbientTransaction;
             if (ambient != null)
             {
-                await foreach (var row in ReadOnAsync(ambient.Connection, ambient.Transaction, createCommand, transformFunction, ct))
+                await foreach (var row in ReadOnAsync(ambient.Connection, ambient.Transaction, createCommand, transformFunction, missingTableIsEmpty, ct))
                 {
                     yield return row;
                 }
@@ -334,7 +335,7 @@ namespace Birko.Data.SQL.Connectors
 
             await using var db = CreateConnection(_settings);
             await db.OpenAsync(ct);
-            await foreach (var row in ReadOnAsync(db, null, createCommand, transformFunction, ct))
+            await foreach (var row in ReadOnAsync(db, null, createCommand, transformFunction, missingTableIsEmpty, ct))
             {
                 yield return row;
             }
@@ -347,7 +348,7 @@ namespace Birko.Data.SQL.Connectors
         /// Disposes the command and the reader but never the connection — when the connection belongs to
         /// an ambient boundary, closing it here would end the caller's transaction mid-operation.
         /// </remarks>
-        private async IAsyncEnumerable<IEnumerable<object>> ReadOnAsync(DbConnection db, DbTransaction? transaction, Func<DbCommand, Task> createCommand, Func<DbDataReader, Task<IEnumerable<object>>> transformFunction, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        private async IAsyncEnumerable<IEnumerable<object>> ReadOnAsync(DbConnection db, DbTransaction? transaction, Func<DbCommand, Task> createCommand, Func<DbDataReader, Task<IEnumerable<object>>> transformFunction, bool missingTableIsEmpty, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             string? commandText = null;
             await using (var command = db.CreateCommand())
@@ -375,7 +376,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     reader = await command.ExecuteReaderAsync(ct);
                 }
-                catch (Exception ex) when (IsMissingTableException(ex))
+                catch (Exception ex) when (missingTableIsEmpty && IsMissingTableException(ex))
                 {
                     yield break;
                 }

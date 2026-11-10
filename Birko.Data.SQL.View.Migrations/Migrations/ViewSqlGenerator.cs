@@ -26,8 +26,17 @@ namespace Birko.Data.SQL.View.Migrations
         /// <param name="viewType">The type decorated with ViewAttribute(s) and ViewFieldAttribute(s).</param>
         /// <param name="viewName">Optional custom view name. If null, derives from type metadata.</param>
         /// <param name="quoteChar">Quote character for identifiers. Defaults to ANSI SQL double quote.</param>
+        /// <param name="connector">
+        /// The provider the view is created on. When given, a view whose own column (a view property) is a name this provider
+        /// rejects is refused before any SQL is generated, through the connector's
+        /// <see cref="AbstractConnectorBase.RequireUsableViewColumnNames"/>, the check its own view DDL runs (TASK-891).
+        /// <c>ViewMigrationExtensions</c> always passes the migration's connector. Without one nothing is checked: the
+        /// columns are emitted bare, so on PostgreSQL and SQLite a column named <c>User</c> or <c>CURRENT_DATE</c> is
+        /// created and every bare read of it returns the function's value (measured).
+        /// </param>
         /// <returns>The CREATE VIEW SQL statement.</returns>
-        public static string GenerateCreateViewSql(Type viewType, string? viewName = null, char quoteChar = DefaultQuoteChar)
+        /// <exception cref="NotSupportedException">A view column name is one <paramref name="connector"/>'s provider rejects.</exception>
+        public static string GenerateCreateViewSql(Type viewType, string? viewName = null, char quoteChar = DefaultQuoteChar, AbstractConnector? connector = null)
         {
             if (viewType == null)
             {
@@ -60,6 +69,7 @@ namespace Birko.Data.SQL.View.Migrations
                     $"View '{name}' reads {string.Join(", ", scoped)}, declared in a schema; this generator has no connector to render "
                     + "it. Create the view through the connector's CreateView instead.");
             }
+            connector?.RequireUsableViewColumnNames(view);
             var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar));
             return "CREATE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
         }

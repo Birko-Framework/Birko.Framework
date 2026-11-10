@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — Elasticsearch store aggregates answer what LINQ answers
+[[TASK-878]]. 93 of 99 measured aggregate shapes were wrong, mostly silently: property names were sent verbatim and ES
+answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
+container form), and Count counted a field's values, not rows. Names now resolve through the sort lookup, one composite
+aggregation pages through every group, and unsupported shapes are refused by name. No consumer used it.
+
 ## 2026-11-09 — Cosmos DB `Aggregate` applies its filter
 [[TASK-876]]. `Aggregate` / `AggregateAsync` ignored the filter and aggregated the whole container, silently (measured:
 22 of 22 filtered cases wrong; `A > 3` counted 6 rows, not 3). The filter now goes through the reads' own translator,

@@ -92,6 +92,7 @@ namespace Birko.Data.SQL.Connectors
             int i = 0;
             foreach (var table in tables.Where(x => x != null))
             {
+                RequireUsableTable(table); // TASK-891
                 var tablefields = table.GetSelectFields(true);
                 foreach (var kvp in tablefields)
                 {
@@ -134,6 +135,7 @@ namespace Birko.Data.SQL.Connectors
             }
             var names = tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
             var terms = conditions?.ToList();
+            RequireUsableStatementColumns(names, null, terms); // TASK-891
 
             // TASK-833: a list past the provider's limit (or the chunk size) is read chunk after chunk; the rows are the
             // union. Refused before the reader runs, whose exception path would re-wrap it.

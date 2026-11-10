@@ -457,4 +457,99 @@ public abstract class RejectedColumnNameContract
             untouched.Should().Be(2, "nothing was updated");
         }
     }
+
+    /// <summary>
+    /// TASK-891 — the connector overloads that take a resolved <see cref="Birko.Data.SQL.Tables.Table"/> or a table name
+    /// (a store's bulk update runs through the name one) refuse a column the provider rejects, by name, before any SQL is
+    /// sent, and write nothing: a <c>Table</c> through its columns, as the typed overloads do (TASK-872); a table name through
+    /// the columns the statement names, the ones it writes and the bare ones its filter compares.
+    /// <para>
+    /// Before, measured live: the filter <c>User = 'postgres'</c> (<c>CURRENT_USER</c> on MySQL, <c>CURRENT_DATE</c> on
+    /// SQLite) compared the value function with itself, so the delete and every update hit 2 of 2 rows that C# matches none
+    /// of, and the counts answered 2; the failure message lists each call's outcome.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task A_Table_or_table_name_connector_call_refuses_a_rejected_column_and_writes_nothing()
+    {
+        if (!Ready()) return;
+        var connector = ConnectorOf(NewStore<RejectedValueRow>());
+        var async = (AbstractAsyncConnector)connector;
+        object? value = null;
+        connector.DoCommand(c => c.CommandText = "SELECT " + ValueFunctionColumn, c => value = c.ExecuteScalar());
+        var x = System.Linq.Expressions.Expression.Parameter(typeof(T872DirectRow), "x");
+        var filter = System.Linq.Expressions.Expression.Lambda<Func<T872DirectRow, bool>>(
+            System.Linq.Expressions.Expression.Equal(System.Linq.Expressions.Expression.Property(x, ValueFunctionColumn),
+                System.Linq.Expressions.Expression.Constant(Convert.ToString(value), typeof(string))), x);
+        var conditions = DataBase.ParseConditionExpression(filter).ToList();
+        var table = DataBase.LoadTable(typeof(T872DirectRow));
+        const string name = "T872DirectRows";
+        var model = new T872DirectRow { Guid = Guid.NewGuid(), User = "z", CURRENT_DATE = "z", CURRENT_USER = "z", Amount = 5 };
+        var set = new Dictionary<System.Linq.Expressions.Expression<Func<T872DirectRow, int>>, object> { { r => r.Amount, 9 } };
+        var setExpr = new Dictionary<System.Linq.Expressions.Expression<Func<T872DirectRow, int>>, System.Linq.Expressions.Expression<Func<T872DirectRow, int>>> { { r => r.Amount, r => r.Amount + 7 } };
+        var values = new Dictionary<string, object> { { "Amount", 9 } };
+        var fields = new Dictionary<int, string> { { 0, "Amount" } };
+        var row = new Dictionary<string, object> { { "Guid", Guid.NewGuid() }, { ValueFunctionColumn, "z" }, { "Amount", 5 } };
+        long counted = -1;
+
+        var calls = new (string Name, Func<Task> Call)[]
+        {
+            ("Delete(Table)", () => { connector.Delete(table, conditions); return Task.CompletedTask; }),
+            ("Update(Table, model)", () => { connector.Update(table, model, conditions); return Task.CompletedTask; }),
+            ("Update<T,P>(Table, values)", () => { connector.Update(table, set, conditions); return Task.CompletedTask; }),
+            ("Update<T,P>(Table, expressions)", () => { connector.Update(table, setExpr, conditions); return Task.CompletedTask; }),
+            ("Update(Table, IDictionary)", () => { connector.Update(table, values, conditions); return Task.CompletedTask; }),
+            ("Insert(Table, model)", () => { connector.Insert(table, (object)model); return Task.CompletedTask; }),
+            ("SelectCount(Tables)", () => { counted = connector.SelectCount(new[] { table }, conditions); return Task.CompletedTask; }),
+            ("Select(Tables)", () => { counted = connector.Select(new[] { table }, (f, r) => new object[] { 1 }, conditions).LongCount(); return Task.CompletedTask; }),
+            ("Update<T,P>(name, values)", () => { connector.Update(name, set, conditions); return Task.CompletedTask; }),
+            ("Update<T,P>(name, expressions)", () => { connector.Update(name, setExpr, conditions); return Task.CompletedTask; }),
+            ("Update(name, fields, values)", () => { connector.Update(name, fields, values, conditions); return Task.CompletedTask; }),
+            ("SelectCount(names)", () => { counted = connector.SelectCount(new[] { name }, conditions); return Task.CompletedTask; }),
+            ("Insert(name, rows)", () => { connector.Insert(name, new[] { row }); return Task.CompletedTask; }),
+            ("DeleteAsync(Table)", () => async.DeleteAsync(table, conditions)),
+            ("UpdateAsync(Table, model)", () => async.UpdateAsync(table, model, conditions)),
+            ("UpdateAsync<T,P>(Table, values)", () => async.UpdateAsync(table, set, conditions)),
+            ("UpdateAsync(Table, IDictionary)", () => async.UpdateAsync(table, values, conditions)),
+            ("InsertAsync(Table, model)", () => async.InsertAsync(table, (object)model)),
+            ("SelectCountAsync(Tables)", async () => counted = await async.SelectCountAsync(new[] { table }, conditions)),
+            ("UpdateAsync<T,P>(name, values)", () => async.UpdateAsync(name, set, conditions)),
+            ("UpdateAsync(name, fields, values)", () => async.UpdateAsync(name, fields, values, conditions)),
+            ("SelectCountAsync(names)", async () => counted = await async.SelectCountAsync(new[] { name }, conditions)),
+            ("InsertAsync(name, rows)", () => async.InsertAsync(name, new[] { row })),
+        };
+
+        var failures = new List<string>();
+        try
+        {
+            foreach (var (call, run) in calls)
+            {
+                RebuildDirectTable();
+                counted = -1;
+                Exception? error = null;
+                var sent = await CommandsNaming(connector, name, async () =>
+                {
+                    try { await run(); }
+                    catch (Exception ex) { error = ex; }
+                });
+                long rows = -1, untouched = -1;
+                var identifier = connector.TableIdentifier(name);
+                connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + identifier, c => rows = Convert.ToInt64(c.ExecuteScalar()));
+                connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + identifier + " WHERE Amount IN (1, 2)", c => untouched = Convert.ToInt64(c.ExecuteScalar()));
+                var outcome = error == null
+                    ? $"ran; {rows} rows, {untouched} untouched" + (counted >= 0 ? $", answered {counted}" : string.Empty)
+                    : $"{error.GetType().Name}: {error.Message.Split('\n')[0]}; {rows} rows, {untouched} untouched";
+                var refused = error is NotSupportedException
+                    && error.Message.Contains($"\"{ValueFunctionColumn}\"") && error.Message.Contains(ProviderName);
+                if (!refused || sent.Count > 0 || rows != 2 || untouched != 2)
+                    failures.Add($"{call}: {outcome}" + (sent.Count > 0 ? $"; sent {sent.Count} statement(s)" : string.Empty));
+            }
+        }
+        finally
+        {
+            await NewStore<T872DirectSibling>().DestroyAsync();
+        }
+
+        string.Join(" | ", failures).Should().BeEmpty($"every Table and table-name overload refuses {ValueFunctionColumn} by name before any SQL on {ProviderName}");
+    }
 }

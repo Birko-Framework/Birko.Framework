@@ -41,6 +41,7 @@ namespace Birko.Data.SQL.Connectors
             var plan = PlanViewReadChunks(view, usePersistent, terms, orderFields, limit, offset);
             plan.ThrowIfRefused();
 
+            // TASK-891 — a missing relation is reported, as the count reports it; see the sync twin.
             foreach (var chunk in plan.Statements(terms))
             {
                 if (usePersistent)
@@ -48,7 +49,7 @@ namespace Birko.Data.SQL.Connectors
                     await foreach (var items in RunReaderCommandAsync(
                         (command) => { CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset); return Task.CompletedTask; },
                         (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }),
-                        ct).ConfigureAwait(false))
+                        ct, missingTableIsEmpty: false).ConfigureAwait(false))
                     {
                         yield return items?.FirstOrDefault()!;
                     }
@@ -58,7 +59,7 @@ namespace Birko.Data.SQL.Connectors
                     await foreach (var items in RunReaderCommandAsync(
                         (command) => { CreateSelectCommand(command, view, chunk, orderFields, limit, offset); return Task.CompletedTask; },
                         (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }),
-                        ct).ConfigureAwait(false))
+                        ct, missingTableIsEmpty: false).ConfigureAwait(false))
                     {
                         yield return items?.FirstOrDefault()!;
                     }

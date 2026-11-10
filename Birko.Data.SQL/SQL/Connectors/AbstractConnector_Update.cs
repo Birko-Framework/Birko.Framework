@@ -33,6 +33,7 @@ namespace Birko.Data.SQL.Connectors
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
         public int Update(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null)
         {
+            RequireUsableTable(table); // TASK-891
             if (model == null)
             {
                 return -1;
@@ -66,6 +67,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (table != null)
             {
+                RequireUsableTable(table); // TASK-891
                 Update(table.Name, expresions, conditions);
             }
         }
@@ -74,6 +76,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (table != null)
             {
+                RequireUsableTable(table); // TASK-891
                 Update(table.Name, expresions, conditions);
             }
         }
@@ -110,6 +113,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Update(Tables.Table table, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             IDictionary<int, string> fields = table.GetSelectFields();
             Update(tableName, fields, values, conditions);
@@ -130,6 +134,8 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public int Update(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, bool allowAllRows = false)
         {
+            // TASK-891: a written or filtered column the provider rejects is refused by name, before anything runs.
+            RequireUsableStatementColumns(new[] { tableName }, SetClauses.WrittenBy(fields, isExpressionValues), conditions);
             if (!HasUpdatePayload(fields, values, isExpressionValues))
             {
                 return UpdateCore(tableName, fields, values, conditions, isExpressionValues, allowAllRows);

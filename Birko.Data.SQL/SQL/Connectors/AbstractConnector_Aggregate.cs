@@ -15,8 +15,8 @@ namespace Birko.Data.SQL.Connectors
             AggregateQuery<T> query)
             where T : Models.AbstractModel
         {
+            // TASK-891 (rule 53): LoadUsableTable throws for a type with no table and never returns null, so no null test.
             var table = LoadUsableTable(type);
-            if (table == null) yield break;
 
             var (fields, groupFields, conditions, orderFields, read) = BuildAggregateQueryParts(type, query);
 

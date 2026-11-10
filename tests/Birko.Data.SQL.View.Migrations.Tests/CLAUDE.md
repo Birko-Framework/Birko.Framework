@@ -22,6 +22,11 @@ create/drop-view migration helpers (CR-M150).
   the wrong-context-type guard (`InvalidOperationException` for a non-`SqlMigrationContext`) and the argument
   guards (null context, null view type, empty view name).
 
+- `Task891MigrationViewReservedColumnTests` — live, on SQLite and (gated on `BIRKO_PG_HOST` / `BIRKO_MYSQL_HOST` /
+  `BIRKO_MSSQL_HOST`, `BIRKO_REQUIRE_LIVE` to fail rather than skip) PostgreSQL, MySQL and SQL Server: a migration's
+  `CreateView(Async)` refuses a view property the provider rejects (`User`, `CURRENT_DATE`, `CURRENT_USER`) before any
+  DDL, and a clean view is created. For it the csproj imports the three server providers' projitems (TASK-891).
+
 A recording fake — not a live SQLite connection — is used because `ViewSqlGenerator` emits
 `CREATE OR REPLACE VIEW`, which SQLite does not accept; the fake asserts DDL + transaction wiring
 independent of provider dialect (the finding's sanctioned "at minimum" approach). Base tables in the

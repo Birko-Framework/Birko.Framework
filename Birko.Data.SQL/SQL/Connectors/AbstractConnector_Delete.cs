@@ -20,6 +20,7 @@ namespace Birko.Data.SQL.Connectors
 
         public void Delete(Tables.Table table, IEnumerable<Conditions.Condition>? conditions = null)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             Delete(tableName, conditions);
         }
@@ -40,6 +41,8 @@ namespace Birko.Data.SQL.Connectors
 
         private void Delete(string tableName, IEnumerable<Conditions.Condition>? conditions = null, bool allowAllRows = false)
         {
+            // TASK-891: a filter column the provider rejects is refused by name, before the transaction wrapper re-wraps it.
+            RequireUsableStatementColumns(new[] { tableName }, null, conditions);
             // SH-H002: refuse BEFORE the transaction wrapper — it re-wraps every exception from its callback
             // in a bare Exception, which no `catch (WholeTableWriteException)` could select.
             if (!allowAllRows && WouldTargetEveryRow(conditions))

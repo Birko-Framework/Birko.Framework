@@ -22,6 +22,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task DeleteAsync(Tables.Table table, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             return DeleteAsyncAsync(tableName, conditions, ct);
         }
@@ -34,6 +35,8 @@ namespace Birko.Data.SQL.Connectors
 
         private async Task DeleteAsyncAsync(string tableName, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default, bool allowAllRows = false)
         {
+            // TASK-891 — see the sync twin.
+            RequireUsableStatementColumns(new[] { tableName }, null, conditions);
             // SH-H002 — refuse before the transaction wrapper; see AbstractConnector_Delete.
             if (!allowAllRows && WouldTargetEveryRow(conditions))
             {

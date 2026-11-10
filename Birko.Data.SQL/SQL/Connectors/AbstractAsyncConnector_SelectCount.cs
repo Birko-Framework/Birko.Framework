@@ -34,7 +34,10 @@ namespace Birko.Data.SQL.Connectors
         public Task<long> SelectCountAsync(IEnumerable<Tables.Table> tables, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
             // TASK-724: a null table is skipped, as the sync overload does; it threw NullReferenceException (measured).
-            return (tables != null) ? SelectCountAsync(tables.Where(x => x != null).Select(x => x.Name), conditions, ct) : Task.FromResult(0L);
+            if (tables == null) return Task.FromResult(0L);
+            var resolved = tables.Where(x => x != null).ToList();
+            resolved.ForEach(RequireUsableTable); // TASK-891
+            return SelectCountAsync(resolved.Select(x => x.Name), conditions, ct);
         }
 
         public Task<long> SelectCountAsync(IEnumerable<string> tableNames, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
@@ -53,6 +56,7 @@ namespace Birko.Data.SQL.Connectors
             var names = tableNames.Where(x => !string.IsNullOrEmpty(x)).Distinct().ToList();
             var joins = joinconditions?.ToList();
             var terms = conditions?.ToList();
+            RequireUsableStatementColumns(names, null, terms); // TASK-891
             var plan = PlanInListChunks("count", terms, (command, chunk) => CreateCountCommand(command, names, joins, chunk));
             plan.ThrowIfRefused();
 

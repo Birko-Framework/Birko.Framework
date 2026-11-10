@@ -647,7 +647,8 @@ namespace Birko.Data.SQL.Connectors
         /// <c>RunReaderCommandOn</c> — <c>catch (Exception ex) when (IsMissingTableException(ex))</c> →
         /// <c>yield break</c> — which never reaches here. TASK-211 narrowed *which* errors count as a
         /// missing table; whether an empty result is the right answer for a read is its decision, and it
-        /// keeps its stated callers (lazy create-on-first-use, view-existence probing, CR-M149).
+        /// keeps its stated callers (lazy create-on-first-use, view-existence probing, CR-M149). A view read opts out
+        /// (TASK-891): nothing creates a view on a read, so it reports a missing relation as the view count does.
         /// </para>
         /// </remarks>
         /// <summary>
@@ -1270,7 +1271,13 @@ namespace Birko.Data.SQL.Connectors
             Owned(new RetryAttempt());
         }
 
-        private IEnumerable<IEnumerable<object>> RunReaderCommandOn(DbConnection connection, DbTransaction? transaction, Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction)
+        /// <param name="missingTableIsEmpty">
+        /// Whether a missing table answers no rows: true for a table read, whose store creates its table lazily and whose
+        /// count answers 0 (TASK-285). False for a view read (TASK-891): nothing creates a view or its source tables on a
+        /// read and the view count reports the missing relation, so the read reports it too, through
+        /// <see cref="InitException"/> (rule 26).
+        /// </param>
+        private IEnumerable<IEnumerable<object>> RunReaderCommandOn(DbConnection connection, DbTransaction? transaction, Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction, bool missingTableIsEmpty)
         {
             string? commandText = null;
             using (var command = connection.CreateCommand())
@@ -1286,7 +1293,7 @@ namespace Birko.Data.SQL.Connectors
                 if (faulted) yield break;
                 DbDataReader reader;
                 try { reader = command.ExecuteReader(); }
-                catch (Exception ex) when (IsMissingTableException(ex)) { yield break; }
+                catch (Exception ex) when (missingTableIsEmpty && IsMissingTableException(ex)) { yield break; }
                 // TASK-875: any other ExecuteReader error takes the path a Read() error takes, so it is reported as itself
                 // with the statement on Exception.Data (measured: it reached the caller without it, on all four providers).
                 catch (Exception ex) { InitException(ex, commandText); yield break; }
@@ -1398,7 +1405,7 @@ namespace Birko.Data.SQL.Connectors
             });
         }
 
-        private IEnumerable<IEnumerable<object>> RunReaderCommand(Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction)
+        private IEnumerable<IEnumerable<object>> RunReaderCommand(Action<DbCommand> createCommand, Func<DbDataReader, IEnumerable<object>> transformFunction, bool missingTableIsEmpty = true)
         {
             if (transformFunction == null)
             {
@@ -1411,7 +1418,7 @@ namespace Birko.Data.SQL.Connectors
             var ambient = AmbientTransaction;
             if (ambient != null)
             {
-                foreach (var item in RunReaderCommandOn(ambient.Connection, ambient.Transaction, createCommand, transformFunction))
+                foreach (var item in RunReaderCommandOn(ambient.Connection, ambient.Transaction, createCommand, transformFunction, missingTableIsEmpty))
                     yield return item;
                 yield break;
             }
@@ -1420,7 +1427,7 @@ namespace Birko.Data.SQL.Connectors
             // here, so a fix to one loop could miss the other.
             using var db = CreateConnection(_settings);
             db.Open();
-            foreach (var item in RunReaderCommandOn(db, null, createCommand, transformFunction))
+            foreach (var item in RunReaderCommandOn(db, null, createCommand, transformFunction, missingTableIsEmpty))
                 yield return item;
         }
     }

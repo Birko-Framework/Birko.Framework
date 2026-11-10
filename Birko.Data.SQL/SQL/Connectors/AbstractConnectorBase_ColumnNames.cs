@@ -59,15 +59,104 @@ namespace Birko.Data.SQL.Connectors
         /// never runs that. Measured live on all four providers: a write's WHERE emits the column bare, so
         /// <c>WHERE User = 'postgres'</c> compared <c>current_user</c> (PostgreSQL; <c>USER</c> on SQL Server,
         /// <c>CURRENT_USER</c> on MySQL, <c>CURRENT_DATE</c> on SQLite) and a filtered delete or update hit 2 of 2 rows
-        /// that matched nothing in C#. Not virtual (rule 12). The overloads that take a <see cref="Tables.Table"/> or a
-        /// table name trust the caller's resolution and are not checked.
+        /// that matched nothing in C#. Not virtual (rule 12). The overloads that take a <see cref="Tables.Table"/> check it
+        /// through <see cref="RequireUsableTable"/>, and those that take a table name through
+        /// <see cref="RequireUsableStatementColumns"/> (TASK-891).
         /// </remarks>
         /// <exception cref="NotSupportedException">A column name is one this provider rejects.</exception>
         protected Tables.Table LoadUsableTable(Type type)
         {
             var table = DataBase.LoadTable(type);
-            RequireUsableColumnNames(table.Name, table.Fields.Values);
+            RequireUsableTable(table);
             return table;
+        }
+
+        /// <summary>
+        /// Refuses <paramref name="table"/> if any of its columns is a name this provider rejects: the check
+        /// <see cref="LoadUsableTable"/> runs, for the public overloads that take a resolved <see cref="Tables.Table"/>
+        /// (<c>Delete</c>, <c>Insert</c>, <c>Update</c>, <c>Select</c>, <c>SelectCount</c>, sync and async; TASK-891).
+        /// </summary>
+        /// <remarks>
+        /// TASK-872 left these unchecked, trusting the caller's resolution. Measured live on all four providers with
+        /// <c>DataBase.LoadTable(t)</c> of an entity whose column is <c>User</c> (PostgreSQL, SQL Server), <c>CURRENT_USER</c>
+        /// (MySQL) or <c>CURRENT_DATE</c> (SQLite): <c>Delete(table, filter)</c> deleted 2 of 2 rows and every
+        /// <c>Update(table, …)</c> rewrote 2 of 2, where C# matches none. A null table is passed through, so an overload
+        /// that answers a null table with nothing keeps doing so. Not virtual (rule 12).
+        /// </remarks>
+        /// <exception cref="NotSupportedException">A column name is one this provider rejects.</exception>
+        protected void RequireUsableTable(Tables.Table? table)
+        {
+            if (table == null)
+            {
+                return;
+            }
+            RequireUsableColumnNames(table.Name, table.Fields.Values);
+        }
+
+        /// <summary>
+        /// Refuses, before any SQL is sent, a statement on tables given by name that names a column this provider rejects:
+        /// one it writes (<paramref name="columns"/>, the INSERT column list or the UPDATE SET targets) or one its filter
+        /// compares (a condition's <see cref="Conditions.Condition.Name"/>, at any depth), bare or qualified by one of
+        /// <paramref name="tableNames"/>. TASK-891.
+        /// </summary>
+        /// <remarks>
+        /// The overloads that take a table name have no entity to check, so the statement's own names are checked, through
+        /// the funnels every write, read and count by name runs (<c>Delete</c>, <c>Update</c>, <c>Insert</c>,
+        /// <c>Select</c>, <c>SelectCount</c>, sync and async). A store's bulk update runs through the name overload, on an
+        /// entity its initialisation already checked, so it passes. The parser qualifies a filter's columns
+        /// (<c>T.User</c>) and a write strips its target's qualifier (<c>StripTargetTableQualifier</c>), so the server reads
+        /// the bare name: measured live, <c>Update(name, …)</c> with the filter <c>User = 'postgres'</c> rewrote 2 of 2 rows
+        /// on all four providers, and a count by name failed on PostgreSQL and SQL Server. A name qualified by another table
+        /// and a value fragment are not refused. Not virtual (rule 12).
+        /// </remarks>
+        /// <exception cref="NotSupportedException">A column name is one this provider rejects.</exception>
+        protected void RequireUsableStatementColumns(IReadOnlyCollection<string> tableNames, IEnumerable<string>? columns, IEnumerable<Conditions.Condition>? conditions)
+        {
+            if (ColumnNameRefusals == null || tableNames == null)
+            {
+                return;
+            }
+            var label = string.Join(", ", tableNames);
+            foreach (var column in (columns ?? Enumerable.Empty<string>()).Concat(ConditionColumns(conditions)))
+            {
+                RequireUsableColumnName(label, Unqualified(column, tableNames));
+            }
+        }
+
+        /// <summary><paramref name="name"/> without a qualifier that is one of <paramref name="tableNames"/>.</summary>
+        private static string Unqualified(string name, IReadOnlyCollection<string> tableNames)
+        {
+            var dot = name.LastIndexOf('.');
+            if (dot <= 0)
+            {
+                return name;
+            }
+            var qualifier = name.Substring(0, dot);
+            return tableNames.Contains(qualifier, StringComparer.OrdinalIgnoreCase) ? name.Substring(dot + 1) : name;
+        }
+
+        /// <summary>The column names <paramref name="conditions"/> compare, at any depth; value fragments excluded.</summary>
+        private static IEnumerable<string> ConditionColumns(IEnumerable<Conditions.Condition>? conditions)
+        {
+            if (conditions == null)
+            {
+                yield break;
+            }
+            foreach (var condition in conditions)
+            {
+                if (condition == null)
+                {
+                    continue;
+                }
+                if (condition.NameFragment == null && !string.IsNullOrEmpty(condition.Name))
+                {
+                    yield return condition.Name!;
+                }
+                foreach (var column in ConditionColumns(condition.SubConditions))
+                {
+                    yield return column;
+                }
+            }
         }
 
         /// <summary>

@@ -105,13 +105,15 @@ namespace Birko.Data.SQL.Connectors
             var plan = PlanViewReadChunks(view, usePersistent, terms, orderFields, limit, offset);
             plan.ThrowIfRefused();
 
+            // TASK-891: a missing view or source table is reported, as the view count reports it; the table reader's
+            // empty answer exists for a store's lazily created table, and nothing creates a view on a read (rule 26).
             foreach (var chunk in plan.Statements(terms))
             {
                 if (usePersistent)
                 {
                     foreach (var items in RunReaderCommand((command) => {
                         command = CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset);
-                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }))
+                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }, missingTableIsEmpty: false))
                     {
                         yield return items?.FirstOrDefault()!;
                     }
@@ -120,7 +122,7 @@ namespace Birko.Data.SQL.Connectors
                 {
                     foreach (var items in RunReaderCommand((command) => {
                         command = CreateSelectCommand(command, view, chunk, orderFields, limit, offset);
-                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }))
+                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }, missingTableIsEmpty: false))
                     {
                         yield return items?.FirstOrDefault()!;
                     }

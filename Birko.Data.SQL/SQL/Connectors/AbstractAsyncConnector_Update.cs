@@ -35,6 +35,7 @@ namespace Birko.Data.SQL.Connectors
         /// <returns>Rows the statement matched, as the driver reports them (TASK-555); -1 when nothing was sent.</returns>
         public Task<int> UpdateAsync(Tables.Table table, object model, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             if (model == null)
             {
                 return Task.FromResult(-1);
@@ -68,6 +69,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (table != null)
             {
+                RequireUsableTable(table); // TASK-891
                 return UpdateAsync(table.Name, expresions, conditions, ct);
             }
             return Task.CompletedTask;
@@ -77,6 +79,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (table != null)
             {
+                RequireUsableTable(table); // TASK-891
                 return UpdateAsync(table.Name, expresions, conditions, ct);
             }
             return Task.CompletedTask;
@@ -114,6 +117,7 @@ namespace Birko.Data.SQL.Connectors
 
         public Task UpdateAsync(Tables.Table table, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, CancellationToken ct = default)
         {
+            RequireUsableTable(table); // TASK-891
             var tableName = table.Name;
             IDictionary<int, string> fields = table.GetSelectFields();
             return UpdateAsync(tableName, fields, values, conditions, false, ct);
@@ -127,6 +131,8 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         public async Task<int> UpdateAsync(string tableName, IDictionary<int, string> fields, IDictionary<string, object> values, IEnumerable<Conditions.Condition>? conditions = null, bool isExpressionValues = false, CancellationToken ct = default, bool allowAllRows = false)
         {
+            // TASK-891 — see the sync twin.
+            RequireUsableStatementColumns(new[] { tableName }, SetClauses.WrittenBy(fields, isExpressionValues), conditions);
             if (!HasUpdatePayload(fields, values, isExpressionValues))
             {
                 return await UpdateCoreAsync(tableName, fields, values, conditions, isExpressionValues, allowAllRows, ct).ConfigureAwait(false);

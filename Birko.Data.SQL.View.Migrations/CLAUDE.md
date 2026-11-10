@@ -16,6 +16,12 @@ Integration layer connecting SQL View definitions (from Birko.Data.SQL.View attr
 Static class for generating DDL strings from view attributes:
 - `GenerateCreateViewSql(viewType, viewName?, quoteChar)` — reads `ViewAttribute`/`ViewFieldAttribute` to produce a `CREATE VIEW` statement; `ViewMigrationExtensions.CreateView` runs `DROP VIEW IF EXISTS` first, as a separate command, so a view is replaced on every provider (TASK-717; `CREATE OR REPLACE VIEW` was refused by SQLite and SQL Server)
 - `GenerateDropViewSql(viewType, viewName?, quoteChar)` — produces a `DROP VIEW IF EXISTS` statement
+- `connector` parameter (TASK-891) — when given, a view whose own column (a view property) is a name that connector's
+  provider rejects is refused by name before any SQL is generated, through `RequireUsableViewColumnNames`.
+  `ViewMigrationExtensions.CreateView(Async)` always pass the migration context's connector. Measured live before:
+  PostgreSQL and SQLite created a view column named `User` / `CURRENT_DATE`, holding the stored value, and every bare
+  read of it returned the function (a filter on the function's value matched every row); MySQL and SQL Server failed
+  with a syntax error. Without a connector nothing is checked.
 - `quoteChar` parameter — a single `char` (default `"`) applied **symmetrically** on both sides of an identifier. Supports ANSI/PostgreSQL (`"`) and MySQL (`` ` ``) symmetric quoting only. **Asymmetric bracket quoting (SQL Server `[ ]`) and T-SQL `CREATE OR ALTER VIEW` are out of scope** — use `Birko.Data.SQL.MSSql.View` for SQL Server view DDL.
 
 ### ViewMigrationExtensions
