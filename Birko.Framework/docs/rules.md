@@ -197,7 +197,9 @@ ComparisonHelper handles type-safe comparisons:
 - **DateTime**: direct comparison
 - **IComparable**: fallback for custom types
 - **String**: case-insensitive comparison as last resort
-- **Null safety**: null checks for all operators
+- **NULL as C# answers it** (TASK-881): `Equal` / `NotEqual` against `null` test for null; every ordering and `Between`
+  with NULL on either side is false (negated: true), as `x.Score < 5` is false for a null `Score`; `In` matches NULL only
+  from a list holding `null`. The same rule compiled by `RuleExpressionConverter` and converted for SQL answers alike.
 
 ## LINQ Expression Conversion
 

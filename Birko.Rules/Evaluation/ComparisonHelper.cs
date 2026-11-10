@@ -21,6 +21,10 @@ internal static class ComparisonHelper
             ComparisonOperator.IsNotNull => actual is not null,
             ComparisonOperator.Equal => AreEqual(actual, expected),
             ComparisonOperator.NotEqual => !AreEqual(actual, expected),
+            // TASK-881: an ordering with NULL on either side is false, as C#'s lifted operators answer (and the compiled
+            // rule, and SQL since TASK-864). NULL used to order below every value: `Score LessThan 5` selected the NULL
+            // rows, `Score GreaterThan null` every non-null row. A negated ordering is TRUE on NULL (`!(null < 5)`),
+            // which is CanEvaluate's job to allow, not this method's.
             ComparisonOperator.GreaterThan => CompareValues(actual, expected) > 0,
             ComparisonOperator.GreaterThanOrEqual => CompareValues(actual, expected) >= 0,
             ComparisonOperator.LessThan => CompareValues(actual, expected) < 0,
@@ -135,11 +139,15 @@ internal static class ComparisonHelper
         return a.Equals(b) || string.Equals(a.ToString(), b.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static int CompareValues(object? a, object? b)
+    /// <summary>
+    /// The order of two values, or <c>null</c> when either is null: C#'s lifted comparison has no order for NULL, so every
+    /// ordering over it (<c>&gt;</c>, <c>&gt;=</c>, <c>&lt;</c>, <c>&lt;=</c>) is false, and a lifted <c>int?</c> compared
+    /// with <c>null</c> is false on both sides (TASK-881). The one producer of that answer for this engine: each ordering
+    /// operator compares this with an <c>int</c>, and C# lifts that comparison to false.
+    /// </summary>
+    private static int? CompareValues(object? a, object? b)
     {
-        if (a is null && b is null) return 0;
-        if (a is null) return -1;
-        if (b is null) return 1;
+        if (a is null || b is null) return null;
 
         // SH-M360 (TASK-156): exact numbers order exactly.
         if (TryToExact(a, out var ea) && TryToExact(b, out var eb))
@@ -201,9 +209,14 @@ internal static class ComparisonHelper
         return string.Equals(value, pattern, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Whether <paramref name="actual"/> equals one of the candidates, each by <see cref="AreEqual"/>, so a NULL value is
+    /// in a list holding <c>null</c> (<c>x == null || x == 5</c>, TASK-881) and in no other. A null set is no predicate
+    /// (<see cref="CanEvaluate"/>); it never reaches a candidate.
+    /// </summary>
     private static bool IsIn(object? actual, object? expected)
     {
-        if (actual is null || expected is null) return false;
+        if (expected is null) return false;
 
         if (expected is IEnumerable collection and not string)
         {

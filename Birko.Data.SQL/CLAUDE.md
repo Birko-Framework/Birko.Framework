@@ -674,7 +674,7 @@ On top of that, the SQL parsers themselves handle:
   `NotEqual`, `NotIn`, `NotContains` and any negated comparison, `Between`, `In` or string test include NULL rows; `In`
   with a `null` element matches them; an ordering against `null` is the constant false (negated: every row, refused as a
   whole-table write); a null `In` set or string needle matches nothing under any negation. The in-memory `RuleEvaluator`
-  still orders NULL below every value and never matches it from an `In` list, so it differs from SQL there.
+  answers the same on NULL since TASK-881.
   Tests: `RuleNullContract` (shared, four providers), `Task864RuleNullConditionTests`.
 - **Value-position** (`ParseExpression`, Update SET RHS) — `a ?? b` → `COALESCE(a, b)`,
   `c ? t : f` → `CASE WHEN c THEN t ELSE f END`, and `x == null` / `x != null` → `IS [NOT] NULL`.

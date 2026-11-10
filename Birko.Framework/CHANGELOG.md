@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — `OnExecute` gets the values on reads too
+[[TASK-871]]. A SQL connector's `OnExecute` received the text with values for writes and counts, but the raw text with
+`@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four
+providers). Every statement now goes through one producer, `AnnounceCommand`. **Breaking for subclasses:**
+`InvokeOnExecute(string)` is gone.
+
 ## 2026-11-08 — A SQL `Contains` / `StartsWith` / `EndsWith` / `Equals` honours an explicit `StringComparison`
 [[TASK-869]] (the user's decision: option A). The comparison argument used to be ignored, so the column collation
 decided: case-insensitive on SQLite (ASCII only), MySQL and SQL Server, accent-insensitive on MySQL (measured: 49–113 of

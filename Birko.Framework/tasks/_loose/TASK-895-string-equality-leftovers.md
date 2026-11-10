@@ -33,11 +33,16 @@ Found by TASK-873 (2026-11-09):
 - View joins built from view attributes (`ViewSelectSqlBuilder.BuildViewJoinConditionSql`) render plain `=` on string
   keys and follow the collation.
 - `utf8mb4_0900_bin` does not exist on MySQL 5.7 or MariaDB (string equality would fail there loudly).
+- **In-memory `RuleEvaluator` string `Equal` is case-insensitive (SH-M295)** (noted by TASK-881). Making SQL rules exact
+  per the decision below would make a rule answer differently in memory and in SQL unless the evaluator follows.
 - PostgreSQL `CHAR(n)` (bpchar): `::text` strips padding while C# reads it padded; the framework never creates them.
 
 ## Acceptance criteria
 
-- [ ] Get the user's decisions on the two items above, and record them.
+- [x] Get the user's decisions on the two items above, and record them.
+      → **Decided 2026-11-10 by the user:** (1) a string IN list past the parameter limit is split into chunks like
+        other lists (reverses TASK-833's refusal for strings, now that string IN is exact); (2) rule string
+        Equal / NotEqual / In / NotIn are exact like lambda filters (one answer for a rule and a lambda).
 - [ ] Implement the decided items and the consistency items (TextEqual through `OrdinalTextEquality`, two-column
       `Equals(Ordinal)`, view join keys), or record why not; tests red before each fix.
 

@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### `RuleEvaluator` answers NULL the way C# does (2026-11-10)
+[[TASK-881]]. In memory, a rule ordered NULL below every value (`Score LessThan 5` matched NULL rows), never matched NULL
+from an `In` list and matched every row for `GreaterThan null`: 21 of TASK-864's 117 shapes differed from the compiled
+rule and from SQL (measured). One comparison now returns no answer on NULL, so a rule gives one result in memory, as an
+expression and in SQL. Symbio's IoT rules use non-null values and are unchanged.
 ### SQL string `==` and IN are exact on every provider — BREAKING (2026-11-09)
 [[TASK-873]] (the user's decision: the default is exact). MySQL and SQL Server compared strings by collation: 97 and 113
 of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ignoring trailing spaces; measured).
@@ -376,11 +381,6 @@ runs, through the same limit TASK-869 set. The silent empty read is a reader-loo
 counted `Score > nul` as every non-null row and threw on `ids.Contains(x.Code)`; MongoDB's `Aggregate` and the public
 `Aggregate().Match(...)` matched null rows. They now take the stores' own pre-pass. Found on the way: Cosmos DB's
 `Aggregate` ignores the filter entirely ([[TASK-876]], P1).
-### `OnExecute` gets the values on reads too (2026-11-09)
-[[TASK-871]]. A SQL connector's `OnExecute` received the text with values for writes and counts, but the raw text with
-`@name` placeholders for reads, view reads and the SELECT before `Update(filter, Action)` (measured on all four
-providers). Every statement now goes through one producer, `AnnounceCommand`. **Breaking for subclasses:**
-`InvokeOnExecute(string)` is gone.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

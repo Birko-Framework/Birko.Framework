@@ -38,8 +38,8 @@ public class RuleNullRow : AbstractModel
 /// <c>In</c> set read every row under <c>NotIn</c>, where both in-memory engines match nothing.
 /// </para>
 /// <para>
-/// Not the reference: <c>RuleEvaluator</c>, which orders NULL below every value (<c>Score LessThan 5</c> selects the NULL
-/// rows) and never matches NULL from an <c>In</c> list — 21 of 117 shapes apart from C#.
+/// Not the reference, though it now agrees: <c>RuleEvaluator</c>, which differed from C# on 21 of 117 shapes until TASK-881
+/// (<c>tests/Birko.Rules.Tests/Task881RuleEvaluatorNullTests.cs</c> runs these shapes against it).
 /// </para>
 /// <para>Shared source, linked into each SQL provider's test project, which supplies a seeded connector.</para>
 /// </summary>

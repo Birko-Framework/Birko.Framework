@@ -11,7 +11,8 @@ Data-driven rule engine for the Birko Framework. Define business rules as compos
 - **Rich operators** — Equal, NotEqual, GreaterThan, LessThan, Between, Contains, StartsWith, EndsWith, Like, In, IsNull, and more
 - **Severity levels** — Info, Low, Medium, High, Critical
 - **Negation support** — any rule can be negated
-- **Type-safe comparisons** — numeric promotion, string fallback, null handling
+- **Type-safe comparisons** — numeric promotion, string fallback, and NULL answered as C# answers it (an ordering over
+  NULL is false; `In` matches NULL only from a list holding `null`)
 - **Stateless evaluator** — singleton-safe, no side effects
 - **LINQ expression converter** — convert rules to `Expression<Func<T, bool>>` for any store (SQL, Elasticsearch, MongoDB, JSON)
 

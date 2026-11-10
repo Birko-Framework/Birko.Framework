@@ -46,6 +46,11 @@ Birko.Rules/
   nothing in `RuleEvaluator`, as the store filter answers. An open context (dictionary) still reads a missing key as null
   for the null checks (TASK-144, SH-M297)
 - **RuleEvaluator** is stateless, singleton-safe
+- **NULL follows C#** (TASK-881, TASK-859's decision): `ComparisonHelper.CompareValues` returns `null` when either side is
+  null, so every ordering and `Between` over NULL is false and its negation true; `In` compares each candidate with
+  `AreEqual`, so NULL is in a list holding `null`. Same rows as the compiled rule and as SQL (TASK-864). The evaluator
+  sees values, not declared types, so a non-nullable member against a `null` rule value answers C#'s lifted answer too,
+  where `RuleExpressionConverter` matches nothing (TASK-882). Tests: `Task881RuleEvaluatorNullTests`
 - **RuleExpressionConverter** is `static` and is the framework's **one** rule-to-LINQ translator (TASK-144):
   `RuleSpecification.ToExpression` calls it. Nested properties with null guards, invariant value conversion
   (string→DateTime/Guid/enum), case-insensitive property resolution. A leaf it cannot express (unknown field, mistyped

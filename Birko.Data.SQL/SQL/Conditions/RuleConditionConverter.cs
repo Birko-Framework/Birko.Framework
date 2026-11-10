@@ -199,9 +199,8 @@ public static class RuleConditionConverter
             ? DataBase.ResolveRuleField(entityType, rule.Field)
             : DataBase.ValidateRuleFieldIdentifier(rule.Field);
 
-        // TASK-153. Each operator below answers what RuleEvaluator (ComparisonHelper) answers for the same rule — except on a
-        // NULL row, where TASK-864 follows C# (RuleExpressionConverter): the evaluator orders NULL below every value and never
-        // matches it from an In list, measured as 21 of 117 shapes apart from C#.
+        // TASK-153. Each operator below answers what RuleEvaluator (ComparisonHelper) answers for the same rule. On a NULL
+        // row both follow C# (RuleExpressionConverter): this converter since TASK-864, the evaluator since TASK-881.
         var isNegated = rule.IsNegated != negate;
         // TASK-864: the column's IS NULL operand, or null where it cannot hold NULL (never assumed without metadata).
         var nullable = DataBase.RuleFieldCanBeNull(entityType, rule.Field) ? new NullableOperand(name) : null;
