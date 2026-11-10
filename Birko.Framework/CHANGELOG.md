@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — A SQL rule answers NULL the way C# does
+[[TASK-864]]. `RuleConditionConverter` built conditions without TASK-859's NULL handling: 53 of 117 rule shapes on NULL
+rows returned different rows than the compiled rule, on all four providers (measured). Negated and NotIn rules lost the
+NULL rows, and `NotIn` with a null set matched every row. Rule leaves over nullable columns are now marked and run
+through TASK-859's pass, so a rule and a lambda render NULL alike. `RuleEvaluator` in memory still differs
+([[TASK-881]]).
+
 ## 2026-11-09 — A SQL filter's group next to a constant `bool` keeps its AND/OR
 [[TASK-866]]. When `&&` / `||` had a constant operand beside a group, the parser's collapse overwrote the group's own
 separator, so an OR group rendered as AND and the reverse, silently, on all four providers since 2026-03 (measured: 7 of

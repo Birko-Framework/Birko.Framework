@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB filters answer null and missing members the way C# does (2026-11-10)
+[[TASK-896]]. 53 of 93 measured filter shapes returned other rows than C#, silently, on reads, counts, aggregates and
+writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from
+the JSON failed `== null` and `!=`. One pre-pass shared by store and view now renders "has a value" and "null"
+explicitly. **Breaking:** culture string comparisons and `IsNullOrWhiteSpace` are refused by name.
 ### SQL store aggregates answer what LINQ answers (2026-11-10)
 [[TASK-892]]. The store `Aggregate` differed from `AggregateHelper` on 54–106 of 164 cases per provider (measured):
 PostgreSQL named the group key `kind` so every grouped key read null, SQL Server truncated integral AVG, SQLite summed
@@ -372,12 +377,6 @@ null-ordering fold included; a shape it cannot place is refused by name. **Break
 load the query outran a short claim timeout, so a fresh claim looked abandoned and was reclaimed at once (measured: the
 TASK-664 live test failed 2 of 3 suite runs). The claim is now stamped inside the conditional write. Elasticsearch has
 the same shape ([[TASK-884]]).
-### A SQL rule answers NULL the way C# does (2026-11-09)
-[[TASK-864]]. `RuleConditionConverter` built conditions without TASK-859's NULL handling: 53 of 117 rule shapes on NULL
-rows returned different rows than the compiled rule, on all four providers (measured). Negated and NotIn rules lost the
-NULL rows, and `NotIn` with a null set matched every row. Rule leaves over nullable columns are now marked and run
-through TASK-859's pass, so a rule and a lambda render NULL alike. `RuleEvaluator` in memory still differs
-([[TASK-881]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -17,8 +17,9 @@ namespace Birko.Data.CosmosDB.Views.Tests;
 /// TASK-840: a Cosmos DB view filter on a nested property (<c>v.Child.X</c>) rendered <c>c.X</c>, keeping only the
 /// last member name, so it compared a same-named top-level field (or a missing one) and answered the wrong rows with
 /// no error. Measured on the emulator first (vnext-preview, 2026-11-07). The path is now rendered in full, its first
-/// segment mapped through the view; a member that is not a document path (string <c>Length</c>, <c>HasValue</c>, a
-/// collection's <c>Count</c>, a captured variable) is refused by name before any request.
+/// segment mapped through the view; a member that is not a document path (string <c>Length</c>, a
+/// collection's <c>Count</c>, a captured variable) is refused by name before any request. <c>HasValue</c> was refused
+/// here too until TASK-896, which translates it exactly (IS_DEFINED and not IS_NULL).
 /// Live tests are gated on <c>BIRKO_COSMOS_CONNECTION</c>; the rendering and refusal tests need no server.
 /// </summary>
 public sealed class Task840CosmosViewNestedPathTests : IAsyncLifetime
@@ -196,7 +197,7 @@ public sealed class Task840CosmosViewNestedPathTests : IAsyncLifetime
 
     public static IEnumerable<object[]> NotAPath() => new[]
     {
-        new object[] { "string length", "'Length' of String" }, new object[] { "has value", "'HasValue' of Nullable" },
+        new object[] { "string length", "'Length' of String" },
         new object[] { "count", "'Count' of List" }, new object[] { "struct member", "'A' of Point" },
         new object[] { "captured variable", "does not read the view" }, new object[] { "contains on length", "'Length' of String" },
     };
@@ -217,7 +218,6 @@ public sealed class Task840CosmosViewNestedPathTests : IAsyncLifetime
         Func<Task> act = shape switch
         {
             "string length" => () => store.QueryAsync(v => v.Label!.Length > 3),
-            "has value" => () => store.CountAsync(v => v.Maybe.HasValue == true),
             "count" => () => store.QueryAsync(v => v.Tags!.Count > 1),
             "struct member" => () => store.QueryAsync(v => v.Point.A == 1),
             "captured variable" => () => store.QueryAsync(v => local.X == 3),

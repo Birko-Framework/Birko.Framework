@@ -228,9 +228,7 @@ public class CosmosDBStore<T>
         // not supported"), naming no method, while the List<T> spelling renders IN (1, 5). Rewrite it
         // where the caller's expression arrives, so every use below sees one shape. Same defect and
         // same fix as MongoDB (TASK-218); measured separately rather than assumed.
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         if (_container == null) return null;
 
         // TASK-834: with no order, "the first match" is any match, so the chunks are asked in turn.
@@ -274,9 +272,7 @@ public class CosmosDBStore<T>
     {
         EnsureInitialized();
         if (_container == null) return null;
-        filter = Data.Expressions.SpanContains.Rewrite(filter)!;
-        filter = Data.Expressions.DateTruncation.Rewrite(filter)!;
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter)!;   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter)!;   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         return PlanInList(filter, operation, sortedOrPaged: false);
     }
 
@@ -374,9 +370,7 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         if (_container == null) return 0;
 
         // TASK-834: the chunks' values are distinct, so their counts are disjoint and add up.
@@ -404,9 +398,7 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         if (_container == null) return Enumerable.Empty<T>();
 
         // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,
@@ -622,9 +614,7 @@ public class CosmosDBStore<T>
     /// </summary>
     private CosmosAggregatePlan BuildAggregateQuery(AggregateQuery<T> query)
     {
-        var filter = Data.Expressions.SpanContains.Rewrite(query.Filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        var filter = CosmosFilterRewrite.Prepare(query.Filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
 
         CosmosAggregatePlan Render(Expression<Func<T, bool>>? f)
             => CosmosAggregationHelper.BuildAggregateQuery(query, f == null ? null : BuildQuery(f, null, null, null).ToQueryDefinition());

@@ -28,8 +28,12 @@ namespace Birko.Data.CosmosDB.Views;
 /// Before TASK-837 a collection Contains rendered <c>CONTAINS()</c> and matched nothing.</para>
 /// <para>A member path under a view property (<c>v.Inner.X</c>, also in a <c>Contains</c>) renders in full,
 /// <c>c["Src"]["X"]</c>, only its first segment mapped to the source field (TASK-840; it used to render <c>c.X</c> and read the
-/// wrong field). A member that is not a document field (<c>Length</c>, <c>HasValue</c>, <c>Count</c>, a struct's member)
-/// or a captured variable is refused by name before any request.</para>
+/// wrong field). A member that is not a document field (<c>Length</c>, <c>Count</c>, a struct's member) or a
+/// captured variable is refused by name before any request.</para>
+/// <para>A filter takes the store's own pre-pass, <c>CosmosFilterRewrite.Prepare</c> (TASK-896): <c>HasValue</c>, <c>== null</c>,
+/// <c>!=</c>, a negated comparison and a list holding null answer a stored null and a missing member as C# does, and
+/// <c>string.IsNullOrEmpty</c> and an ordinal string comparison translate; culture comparisons and
+/// <c>IsNullOrWhiteSpace</c> are refused by name.</para>
 /// <para>The server counts the serialized parameter values toward its 524,288-character query limit (measured on the
 /// emulator, 2026-11-07: 13,795 Guids pass, 25,000 fail with SC3020), so a list longer than
 /// <see cref="InListChunkSize"/> is split by TASK-834's planner (<c>CosmosInListChunking</c>): a read or count whose
@@ -460,14 +464,15 @@ internal static class CosmosFilterTranslator
         // TASK-867: an ordering against null is false in C#, but `c.Score > null` is undefined in Cosmos DB and so is its
         // NOT, so `!(v.Score > nul) && v.A > 4` missed rows (measured). Folded before the constant check below, so a
         // filter that folds to true is the empty clause too.
-        filter = Birko.Data.Expressions.NullOrderingFold.Rewrite(filter)!;
+        // TASK-896: the store's own pre-pass, CosmosFilterRewrite.Prepare (rule 47's SpanContains, DateTruncation, the
+        // fold, and the null semantics that guard a comparison under NOT and read a null or missing member as C#'s null),
+        // so a view and a store answer one filter alike. Before it, `!(v.Score > 20)` missed the null rows here too.
+        filter = CosmosFilterRewrite.Prepare(filter)!;
         if (filter.Body is ConstantExpression { Value: true })
         {
             return string.Empty;
         }
 
-        // Rule 47: on .NET 9+ an array's Contains binds MemoryExtensions over a span; rewritten to Enumerable.Contains.
-        filter = Birko.Data.Expressions.SpanContains.Rewrite(filter)!;
         return TranslateExpression(filter.Body, parameters, mapMember);
     }
 
@@ -504,6 +509,16 @@ internal static class CosmosFilterTranslator
             return $"({TranslateExpression(binary.Left, parameters, mapMember)} OR {TranslateExpression(binary.Right, parameters, mapMember)})";
         }
 
+        // TASK-896: a predicate compared with a boolean constant (`v.N.HasValue == false`, `(v.A > 1) == true`).
+        if (binary.NodeType is ExpressionType.Equal or ExpressionType.NotEqual
+            && binary.Left.Type == typeof(bool)
+            && Birko.Data.Expressions.SpanContains.UnwrapConvert(binary.Left) is not MemberExpression
+            && binary.Right is ConstantExpression { Value: bool expected })
+        {
+            var predicate = TranslateExpression(binary.Left, parameters, mapMember);
+            return expected == (binary.NodeType == ExpressionType.Equal) ? predicate : $"NOT ({predicate})";
+        }
+
         var op = binary.NodeType switch
         {
             ExpressionType.Equal => "=",
@@ -526,6 +541,13 @@ internal static class CosmosFilterTranslator
         IList<KeyValuePair<string, object?>> parameters,
         Func<string, string>? mapMember)
     {
+        // TASK-896: the null-or-missing tests CosmosFilterRewrite emits, on a view property or a path under one.
+        if (CosmosFilterRewrite.IsDefinedCall(method) || CosmosFilterRewrite.IsNullCall(method))
+        {
+            var function = CosmosFilterRewrite.IsDefinedCall(method) ? "IS_DEFINED" : "IS_NULL";
+            return $"{function}({TranslateFieldAccess(method.Arguments[0], mapMember)})";
+        }
+
         // TASK-837: only a string's Contains is a substring test. A collection's used to reach the string path and, on a
         // collection-valued field, render CONTAINS(c.Field, @p) over an array, which matches nothing. TASK-839: a
         // collection Contains is ARRAY_CONTAINS, in two shapes only; every other one is refused by name.
@@ -690,7 +712,7 @@ internal static class CosmosFilterTranslator
     /// sides), so every deeper name is the same in the view and in the document. Before TASK-840 only the last name was
     /// kept (<c>c.X</c>), which compared a same-named top-level field, or a missing one, with no error.
     /// <c>Nullable&lt;T&gt;.Value</c> is the value itself. Any other member that is not a document field (a string's
-    /// <c>Length</c>, <c>HasValue</c>, a collection's <c>Count</c>, a struct's member) or a chain that does not start at
+    /// <c>Length</c>, a collection's <c>Count</c>, a struct's member) or a chain that does not start at
     /// the view (a captured variable) is refused by name, before any request.
     /// </summary>
     private static string DocumentPath(MemberExpression member, Func<string, string>? mapMember)

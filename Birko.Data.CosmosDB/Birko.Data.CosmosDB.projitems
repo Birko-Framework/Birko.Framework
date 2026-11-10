@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncCosmosDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosTransactionScopeException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosInListChunking.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosFilterRewrite.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosChunkedWriteException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\CosmosDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncCosmosDBModelRepository.cs" />

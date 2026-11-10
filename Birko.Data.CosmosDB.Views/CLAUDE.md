@@ -35,6 +35,8 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
   - **View refuses 11 shapes by name:** `HasValue`, StartsWith, a bool member and its negation, `+`, `%`, ToLower, IsNullOrEmpty, column vs column, Equals, Compare. The store answers 8 of them right, 2 wrong (`HasValue`, Compare), and refuses IsNullOrEmpty.
 
   Moving the view onto the store's translator would turn two of those refusals into wrong answers. So the view keeps its own translator until the LINQ provider's wrong shapes are fixed or refused (filed separately)
+- **One pre-pass, two renderers (TASK-896).** `CosmosFilterTranslator.Translate` now starts with the store's own `CosmosFilterRewrite.Prepare` (Birko.Data.CosmosDB; see its CLAUDE.md), so the null semantics have one producer: `HasValue`, `== null`, `!=`, a negated comparison, a list holding null and `IsNullOrEmpty` answer a stored null and a missing member as C# does; culture string comparisons and `IsNullOrWhiteSpace` are refused by name; `CompareOrdinal` / `Compare(.., Ordinal)` against a value translate. The translator renders the rewrite's `IS_DEFINED` / `IS_NULL` markers on the mapped path and a predicate compared with a bool constant. Measured live (`Task896CosmosViewNullSemanticsTests`, documents holding null and documents omitting the member): 28 shapes on read and count, and a grouped view's WHERE, all as C#; before, `!(v.Points > 20)` missed the null rows here too, and `== null` / `!=` missed the documents that omit the member.
+  - **The renderer is still the view's own, decided on reading the code, not measured.** The blocker TASK-885 recorded (the LINQ provider's wrong answers) is gone, but moving the view onto `GetItemLinqQueryable` would need a rewrite of the `TView` lambda into the source type (renamed and nested source paths, TASK-843), the `c` alias in place of LINQ's `root`, and gives up the one-array-parameter `ARRAY_CONTAINS` of TASK-839 for LINQ's inline `IN` list. That is a refactor of its own, not a defect fix; the shared pre-pass already keeps the two from disagreeing on null
 - Joins are refused in the constructor (`NotSupportedException`); Cosmos DB has no cross-document join
 
 ### CosmosViewManager
@@ -46,7 +48,7 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 
 ### CosmosFilterTranslator
 - Internal helper that translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses
-- Supports binary comparisons (==, !=, <, >, <=, >=), logical AND/OR, NOT, and string Contains (a substring test)
+- Supports binary comparisons (==, !=, <, >, <=, >=), logical AND/OR, NOT, and string Contains (a substring test); after `CosmosFilterRewrite.Prepare` (TASK-896) also `IS_DEFINED` / `IS_NULL` on a path and a predicate compared with a bool constant
 - Collection `Contains` (TASK-839) renders `ARRAY_CONTAINS`, an exact comparison (no collation), in two shapes:
   - `ids.Contains(v.Key)` (list, array, any `IEnumerable<T>`; span form normalised by `SpanContains.Rewrite`, rule 47) → `ARRAY_CONTAINS(@p, c.Key)`, the whole list bound as **one** array parameter. Guid, int, string, enum (as its number) values
   - `v.Tags.Contains(x)` on a view array property → `ARRAY_CONTAINS(c.Tags, @p)`

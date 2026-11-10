@@ -128,7 +128,10 @@ public class CosmosViewTranslateValueTests
         BoundValue(v => v.Flag == true).Should().Be(true);
         BoundValue(v => v.Count == 42).Should().Be(42);
         BoundValue(v => v.Id == g).Should().Be(g);
-        BoundValue(v => v.Name == null).Should().BeNull();
+        // TASK-896: `== null` renders IS_DEFINED / IS_NULL (a missing member is null too), so it binds no value.
+        var none = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, object?>>();
+        CosmosFilterTranslator.Translate<V>(v => v.Name == null, none).Should().Contain("IS_NULL");
+        none.Should().BeEmpty();
         Evaluate(null, typeof(string)).Should().BeNull();
     }
 }

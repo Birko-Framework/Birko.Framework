@@ -264,9 +264,7 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         if (_container == null) return null;
 
         // TASK-834: with no order, "the first match" is any match, so the chunks are asked in turn.
@@ -325,9 +323,7 @@ public class AsyncCosmosDBStore<T>
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
         if (_container == null) return null;
-        filter = Data.Expressions.SpanContains.Rewrite(filter)!;
-        filter = Data.Expressions.DateTruncation.Rewrite(filter)!;
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter)!;   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter)!;   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         return PlanInList(filter, operation, sortedOrPaged: false);
     }
 
@@ -506,9 +502,7 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
         if (_container == null) return 0;
 
         // TASK-834: the chunks' values are distinct, so their counts are disjoint and add up.
@@ -584,9 +578,7 @@ public class AsyncCosmosDBStore<T>
         CancellationToken ct = default)
     {
         if (_container == null) return Enumerable.Empty<T>();
-        filter = Data.Expressions.SpanContains.Rewrite(filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        filter = CosmosFilterRewrite.Prepare(filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
 
         // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,
         // limit or offset cannot be reproduced over chunks, so such a read stays one query, refused past the ceiling.
@@ -880,9 +872,7 @@ public class AsyncCosmosDBStore<T>
     /// </summary>
     private CosmosAggregatePlan BuildAggregateQuery(AggregateQuery<T> query)
     {
-        var filter = Data.Expressions.SpanContains.Rewrite(query.Filter);
-        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
-        filter = Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
+        var filter = CosmosFilterRewrite.Prepare(query.Filter);   // TASK-220, 224, 867, 896: one pre-pass, shared with the view store
 
         CosmosAggregatePlan Render(Expression<Func<T, bool>>? f)
             => CosmosAggregationHelper.BuildAggregateQuery(query, f == null ? null : BuildQuery(f, null, null, null).ToQueryDefinition());

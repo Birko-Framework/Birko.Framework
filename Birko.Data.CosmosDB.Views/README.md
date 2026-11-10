@@ -6,7 +6,7 @@ Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](.
 
 - **CosmosViewStore\<TView\>** — Implements `IViewStore<TView>`. Non-aggregate views SELECT each source field under its view property's name, with WHERE/ORDER BY/OFFSET LIMIT mapped to the source fields. Aggregate views use Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`. Aggregate SQL built via shared `CosmosAggregationHelper`. Uses `OrderByHelper.ApplyTo()` for dynamic ordering. Joins and Persistent mode are refused: Cosmos DB has no cross-document joins and no stored views.
 - **CosmosViewManager** — Implements `IViewManager`. `EnsureAsync` refuses a Persistent definition or a join and otherwise creates nothing. `DropAsync` never deletes a container and `ExistsAsync` is always false: no container is a view. `RefreshAsync` is a no-op (views are computed on-the-fly).
-- **CosmosFilterTranslator** — Translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses. Supports binary comparisons, logical AND/OR, NOT, and string Contains.
+- **CosmosFilterTranslator** — Translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses. Supports binary comparisons, logical AND/OR, NOT, and string Contains. Null and missing members answer as C# does through the store's shared pre-pass (`CosmosFilterRewrite.Prepare`, TASK-896): `HasValue`, `== null`, `!=`, negated comparisons, `string.IsNullOrEmpty`, ordinal `CompareOrdinal`; culture string comparisons and `IsNullOrWhiteSpace` are refused.
 
 ## Query Translation
 

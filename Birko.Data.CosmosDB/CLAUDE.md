@@ -21,6 +21,7 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 ### Stores
 - `CosmosDBStore<T>` - Synchronous Cosmos DB store
 - `AsyncCosmosDBStore<T>` - Asynchronous Cosmos DB store with transactional batch support
+- `CosmosFilterRewrite` - the one filter pre-pass of both stores and the view store (TASK-896, see below)
 - **A long `Contains` list (TASK-834).** The SDK writes the list into the query text, so past 524,288 characters
   (13,105 Guids, measured) Cosmos DB answers 400 SC3020.
   - **Split, by `CosmosInListChunking`:** reads, counts, and filtered updates and deletes, sync and async, in chunks of
@@ -85,10 +86,41 @@ Settings mapping from `RemoteSettings`:
 - Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 
+## Filters answer null and missing members as C# does (TASK-896)
+Every filter, on every path (reads sync and async, counts, the read behind `Update(filter, …)` / `Delete(filter)`,
+aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prepare` = `SpanContains`,
+`DateTruncation`, `NullOrderingFold`, then `NullSemantics`. Add a rewrite there, never at a call site.
+- **Measured before** (emulator, vnext-preview, 2026-11-10; 93 shapes over nullable members, 2 of 10 documents
+  omitting them): 53 shapes silently answered other rows than the compiled expression and 14 threw the SDK's
+  `DocumentQueryException`, identically on all 7 paths.
+  `x.Score.HasValue` rendered `IS_DEFINED`, true of a stored null (8 rows where C# has 5); `!(x.Score > 20)` missed the
+  null rows (an ordering with null is undefined in Cosmos DB, and so is its NOT); every `== null`, `!=`, `IN (.., null)`,
+  `NOT IN` and negated equality skipped a document that omits the member (undefined under every operator, while C#
+  reads it as null); `x.Flag ?? false` kept a stored null (`??` replaces only undefined); `string.Compare` /
+  `CompareTo` rendered Cosmos DB's ordinal order for C#'s culture order (`"C7"` vs `"c2"` the other way round);
+  `IsNullOrEmpty`, `IsNullOrWhiteSpace`, `GetValueOrDefault`, `CompareOrdinal` and the ordinal `Compare` were the throws.
+- **The rewrite.** "Has a value" is `IS_DEFINED(x) AND NOT IS_NULL(x)`, "null" is `NOT IS_DEFINED(x) OR IS_NULL(x)`
+  (both always true or false). `HasValue`, `== null`, `!= null`, `!=` (a guarded equality, negated), two nullable
+  operands compared for equality, a list holding `null`, `??` and `GetValueOrDefault` (a conditional on "has a value")
+  are rewritten everywhere. A comparison under an odd number of `!`, or anywhere but `&&` / `||` / `!`, is guarded with
+  "has a value"; a positive one keeps its rendering (an undefined row is simply not returned), so ordinary filters
+  render as before.
+- **Strings.** `IsNullOrEmpty` translates. `CompareOrdinal(m, v)` and `Compare(m, v, StringComparison.Ordinal)` against
+  0 render `m op v` with null first. **Refused by name** (`NotSupportedException` naming TASK-896, before any request):
+  `IsNullOrWhiteSpace` (Cosmos DB's TRIM keeps U+00A0, U+0085, U+001C, measured), every culture or ignore-case
+  comparison (`Compare(a, b)`, `CompareTo`, `Compare(.., true)`, `OrdinalIgnoreCase`, culture overloads), an ordinal
+  one whose value holds a character at or above U+D800 (Cosmos DB orders by code point, .NET by UTF-16 unit: U+1F600
+  sorts after U+FFFF, measured), two members compared, a computed member, a result compared with anything but 0.
+- **After:** 0 of the 91 translated shapes differ, on every path; the 12 refused shapes refuse on every path and a
+  refused write changes no row (`Task896NullSemanticsLiveTests`).
+- **Not covered:** a NON-nullable member missing from a document (C# reads the default, Cosmos DB undefined), and
+  nested lambdas (`Any` / `All` predicates), left to the provider. The rewritten tree is never compiled; a second pass
+  (a chunked write prepares each chunk again) only repeats guards.
+
 ## Aggregation (TASK-876)
 - `Aggregate` / `AggregateAsync` run one native query: `SELECT … FROM root [WHERE …] [GROUP BY …]`.
-- **The WHERE is the reads' rendering.** The filter gets the reads' rewrites (`SpanContains`, `DateTruncation`,
-  `NullOrderingFold`), then goes through `BuildQuery(...).ToQueryDefinition()`. `CosmosAggregationHelper.BuildAggregateQuery`
+- **The WHERE is the reads' rendering.** The filter gets the reads' pre-pass (`CosmosFilterRewrite.Prepare`, above),
+  then goes through `BuildQuery(...).ToQueryDefinition()`. `CosmosAggregationHelper.BuildAggregateQuery`
   takes the predicate from that text with its parameters, so the aggregate is written over the LINQ alias `root`.
   A rendering that is not `SELECT VALUE root FROM root WHERE …` is refused by name, never dropped.
 - **Before:** `BuildAggregateSql` (removed) emitted no WHERE, so every filter was ignored, silently. Measured on the

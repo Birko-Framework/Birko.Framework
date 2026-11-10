@@ -205,3 +205,14 @@ await store.InitAsync();
 ## Filter-Based Bulk Operations
 
 Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Cosmos DB has no server-side filter-based bulk operations; `PatchItemAsync` per item could be explored in a future optimization.
+
+## Filters and null
+
+A filter answers what the C# expression answers, also for a member that is null or missing from the stored document
+(TASK-896). `x.N.HasValue`, `x.N == null`, `x.N != 5`, `!(x.N > 5)`, `ids.Contains(x.N)` with a null in the list,
+`x.N ?? 0`, `x.N.GetValueOrDefault()` and `string.IsNullOrEmpty(x.S)` are rewritten before the SDK renders them
+(`CosmosFilterRewrite.Prepare`, shared with `CosmosViewStore`). Ordinal string comparisons
+(`string.CompareOrdinal(x.S, "b") > 0`, `string.Compare(x.S, "b", StringComparison.Ordinal) > 0`) translate.
+Refused with `NotSupportedException` before any request: culture or ignore-case comparisons (`string.Compare(a, b)`,
+`CompareTo`), `string.IsNullOrWhiteSpace`, and an ordinal comparison against a value holding a character at or above
+U+D800.
