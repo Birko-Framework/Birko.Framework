@@ -62,6 +62,36 @@ namespace Birko.Data.Stores
             throw new NotSupportedException($"Avg is not defined for {underlying.Name}.");
         }
 
+        /// <summary>
+        /// The CLR type <see cref="ComputeAggregate"/> answers <paramref name="function"/> over a property of
+        /// <paramref name="propertyType"/> in (when it answers a value). TASK-892: a store that aggregates natively converts
+        /// its server's answer to this type, so every store answers in the same one: Count an <c>int</c>; Sum an
+        /// <c>int</c>, <c>long</c>, <c>decimal</c>, <c>double</c> or <c>float</c> as the property is, a smaller integer as
+        /// <c>long</c>, a <c>ulong</c> as <c>decimal</c>; Avg an integer as <c>double</c>, otherwise as the property is; Min and
+        /// Max the property's own type. A Sum or Avg of a non-numeric type is refused, as <see cref="ComputeSum"/> refuses it.
+        /// </summary>
+        public static Type ResultType(AggregateFunction function, Type propertyType)
+        {
+            var underlying = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+            switch (function)
+            {
+                case AggregateFunction.Count:
+                    return typeof(int);
+                case AggregateFunction.Min:
+                case AggregateFunction.Max:
+                    return underlying;
+                case AggregateFunction.Sum:
+                    if (!IsNumeric(underlying)) throw new NotSupportedException($"Sum is not defined for {underlying.Name}.");
+                    if (IsSmallIntegral(underlying)) return typeof(long);
+                    return underlying == typeof(ulong) ? typeof(decimal) : underlying;
+                case AggregateFunction.Avg:
+                    if (!IsNumeric(underlying)) throw new NotSupportedException($"Avg is not defined for {underlying.Name}.");
+                    return underlying == typeof(decimal) || underlying == typeof(double) || underlying == typeof(float) ? underlying : typeof(double);
+                default:
+                    throw new NotSupportedException($"Aggregate function {function} is not supported.");
+            }
+        }
+
         private static bool IsNumeric(Type type)
             => type == typeof(decimal) || type == typeof(double) || type == typeof(float) || type == typeof(int)
                || type == typeof(long) || type == typeof(ulong) || IsSmallIntegral(type);

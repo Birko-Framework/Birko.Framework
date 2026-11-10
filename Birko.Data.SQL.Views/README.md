@@ -27,6 +27,22 @@ await manager.EnsureAsync(definition);
 await manager.RefreshAsync("customer_order_summary");
 ```
 
+## Aggregates
+
+A view's aggregate is rendered by the provider's dialect (`SqlValueFragmentDialect.Aggregate`) and read by
+`AggregateValue.Convert`, the producer and the rule the store's `Aggregate` uses (TASK-892). It answers what LINQ answers
+over the group's rows:
+
+- A SUM over only NULLs is 0 (`COALESCE(SUM(x), 0)`), as LINQ's `Sum` answers for `int?` as for `int`. MIN, MAX and an
+  average over only NULLs stay null, as in LINQ.
+- An average of an integral column is a double average (PostgreSQL: `CAST(x AS DOUBLE PRECISION)`).
+- A decimal SUM / AVG on SQLite runs `birko_decimal_sum` / `birko_decimal_avg` and orders by the decimal collation.
+- A decimal average, or an average into a `decimal` property, is refused by name on PostgreSQL, MySQL and SQL Server
+  (`NotSupportedException`, before anything runs): a view column is one value, and each server keeps its own scale
+  (SQL Server 6 decimals). Read SUM and COUNT into two properties, average into a `double`, or use the store's
+  `Aggregate`, which divides them exactly.
+- The migration generator (`ViewSqlGenerator`) knows no provider and renders the portable form.
+
 ## Dependencies
 
 - [Birko.Data.Views](../Birko.Data.Views/) (ViewDefinition, IViewStore, IViewManager)

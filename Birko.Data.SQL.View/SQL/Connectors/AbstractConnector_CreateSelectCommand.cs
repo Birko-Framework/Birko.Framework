@@ -19,7 +19,8 @@ namespace Birko.Data.SQL.Connectors
 
             // TASK-151 (SH-M401): a view with no join (a single source) is a plain SELECT from its table. It threw
             // ArgumentNullException("Join"), so the minimal documented view could not be queried at all.
-            return CreateSelectCommand(command, ViewFromTables(view), view.GetSelectFields(), view.Join, conditions, view.HasAggregateFields() ? view.GetSelectFields(true) : null, orderFields, limit, offset);
+            // TASK-892: the aggregates are rendered for this provider, as the store's Aggregate renders them.
+            return CreateSelectCommand(command, ViewFromTables(view), view.GetSelectFields(dialect: FragmentDialect), view.Join, conditions, view.HasAggregateFields() ? view.GetSelectFields(true) : null, orderFields, limit, offset);
         }
 
         /// <summary>

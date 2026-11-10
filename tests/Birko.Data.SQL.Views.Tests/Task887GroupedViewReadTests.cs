@@ -45,6 +45,14 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
     protected abstract IAsyncBulkStore<T887Row> RowStore(PasswordSettings settings);
     protected abstract IAsyncBulkStore<T887Owner> OwnerStore(PasswordSettings settings);
 
+    /// <summary>
+    /// TASK-892: a server keeps its own scale for a decimal average (SQL Server 6 decimals), so a view refuses a decimal
+    /// average, or one into a decimal property, by name before anything runs. SQLite computes it in C#'s decimal.
+    /// </summary>
+    protected virtual bool RefusesDecimalAverage => true;
+
+    private bool Refuses(AggCase c) => RefusesDecimalAverage && c.Name is "Avg decimal" or "Avg int as decimal";
+
     [Table("T887Rows")]
     public class T887Row : AbstractModel
     {
@@ -155,7 +163,7 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
         new AggCase<int> { Name = "Count int", Function = AggregateFunction.Count, Linq = g => g.Count },
         new AggCase<long> { Name = "Count long", Function = AggregateFunction.Count, Linq = g => (long)g.Count },
         new AggCase<int> { Name = "Sum int", Function = AggregateFunction.Sum, Source = r => r.Hits, Linq = g => g.Sum(r => r.Hits) },
-        new AggCase<int?> { Name = "Sum int?", Function = AggregateFunction.Sum, Source = r => r.NHits, Linq = g => g.All(r => r.NHits == null) ? Deviation.SumOfNulls : g.Sum(r => r.NHits) },
+        new AggCase<int?> { Name = "Sum int?", Function = AggregateFunction.Sum, Source = r => r.NHits, Linq = g => g.Sum(r => r.NHits) }, // TASK-892: 0 over only NULLs, as LINQ
         new AggCase<long> { Name = "Sum long", Function = AggregateFunction.Sum, Source = r => r.Big, Linq = g => g.Sum(r => r.Big) },
         new AggCase<short> { Name = "Sum short", Function = AggregateFunction.Sum, Source = r => r.Small, Linq = g => (short)g.Sum(r => r.Small) },
         new AggCase<decimal> { Name = "Sum decimal", Function = AggregateFunction.Sum, Source = r => r.Price, Linq = g => g.Sum(r => r.Price) },
@@ -185,19 +193,6 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
     {
         var average = values.Average();
         return average == Math.Floor(average) ? Convert.ChangeType(average, typeof(TValue)) : Refused.Instance;
-    }
-
-    /// <summary>
-    /// A group whose answer differs from LINQ for a reason outside this task, recorded rather than asserted: the group must
-    /// be there, its value is not compared.
-    /// </summary>
-    private sealed class Deviation
-    {
-        /// <summary>SQL's SUM over only NULLs is NULL; LINQ's Sum of int? is 0. Filed separately.</summary>
-        public static readonly Deviation SumOfNulls = new("SUM of only NULLs: SQL answers NULL, LINQ 0");
-        private readonly string _why;
-        private Deviation(string why) => _why = why;
-        public override string ToString() => $"deviation ({_why})";
     }
 
     /// <summary>The expected answer is an exception: the value cannot be put in the view property without loss.</summary>
@@ -288,13 +283,19 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
         if (mode == PortableMode.Persistent)
         {
             _views.Add(viewName);
+            if (Refuses(c))
+            {
+                var ensure = () => new SqlViewManager(_connector!).EnsureAsync(definition);
+                (await ensure.Should().ThrowAsync<NotSupportedException>()).WithMessage("*Value*TASK-892*");
+                return;
+            }
             await new SqlViewManager(_connector!).EnsureAsync(definition);
         }
         var store = new SqlViewStore<TView>(_connector!, definition);
         var parameter = Expression.Parameter(typeof(TView), "v");
         var filter = Expression.Lambda<Func<TView, bool>>(
             Expression.Equal(Expression.Property(parameter, "Kind"), Expression.Constant("a", typeof(string))), parameter);
-        var expectedA = ExpectedFor(c, "a", join);
+        var expectedA = Refuses(c) ? Refused.Instance : ExpectedFor(c, "a", join);
 
         var failures = new List<string>();
 
@@ -304,7 +305,7 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
         Check("QueryAsync(a)", query, new (string? Key, object? Value)[] { ("a", expectedA) }, failures);
 
         // The sync reader, every group, through the store's own row reader.
-        var expectedAll = Rows.Select(r => GroupKey(r, join)).Distinct().Select(k => (k, ExpectedFor(c, k, join))).ToArray();
+        var expectedAll = Rows.Select(r => GroupKey(r, join)).Distinct().Select(k => (k, Refuses(c) ? Refused.Instance : ExpectedFor(c, k, join))).ToArray();
         var sqlView = SqlViewTranslator.Translate(definition);
         var select = await Measure(() => Task.FromResult(_connector!
             .Select(sqlView, SqlViewStore<TView>.RowReader(sqlView), (IEnumerable<Conditions.Condition>?)null)
@@ -367,7 +368,7 @@ public abstract class Task887GroupedViewReadTestsBase : IAsyncLifetime
         var wanted = expected.OrderBy(e => e.Key ?? "").ToList();
         var same = actual.Count == wanted.Count
                    && actual.Zip(wanted).All(p => p.First.Kind == p.Second.Key
-                                                  && (p.Second.Value is Deviation || Equals(p.First.Boxed, p.Second.Value)));
+                                                  && Equals(p.First.Boxed, p.Second.Value));
         if (!same) failures.Add($"{path}: answered {Show(outcome.Value)}");
     }
 }
@@ -378,6 +379,7 @@ public sealed class SqliteTask887GroupedViewReadTests : Task887GroupedViewReadTe
     public SqliteTask887GroupedViewReadTests(ITestOutputHelper output) : base(output) => Directory.CreateDirectory(_root);
     protected override string Provider => "SQLite";
     protected override string? HostVariable => null;
+    protected override bool RefusesDecimalAverage => false;
     private SqLiteSettings? _settings;
     protected override PasswordSettings Settings() => _settings ??= new SqLiteSettings(_root, "t887.db");
     protected override IAsyncBulkStore<T887Row> RowStore(PasswordSettings settings) { var s = new AsyncSQLiteStore<T887Row>(); s.SetSettings(settings); return s; }

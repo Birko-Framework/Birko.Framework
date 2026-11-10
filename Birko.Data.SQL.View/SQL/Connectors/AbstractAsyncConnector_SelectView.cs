@@ -33,7 +33,7 @@ namespace Birko.Data.SQL.Connectors
 
             // TASK-128: resolve here, after usePersistent is known — see the sync twin in
             // AbstractConnector_SelectView.cs for why this is the single resolution point.
-            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
+            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent, FragmentDialect);
             // TASK-639: the WHERE follows the path too; a persistent view has no source columns.
             var terms = DataBase.ResolveViewConditions(view, conditions, usePersistent)?.ToList();
 

@@ -49,6 +49,7 @@ Settings classes have been extracted to **Birko.Settings (namespace `Birko.Confi
 - **IAggregatableStore\<T\>** — Optional sync interface: `Aggregate(AggregateQuery<T>)` → `IReadOnlyList<AggregateResult>`
 - **IAsyncAggregatableStore\<T\>** — Optional async interface: `AggregateAsync(AggregateQuery<T>, CancellationToken)` → `Task<IReadOnlyList<AggregateResult>>`
 - **AggregateHelper** — Static LINQ fallback for in-memory aggregation (`LinqAggregate`, `LinqAggregateAsync`), shared ordering/paging, time bucketing, numeric computation
+- **AggregateMath.ResultType(function, propertyType)** — the CLR type the in-memory aggregation answers in (Count `int`; Sum as the property, a smaller integer as `long`; Avg of an integer `double`; Min/Max the property type). A native store converts its server's answer to it (SQL, TASK-892); pinned against `ComputeAggregate` by `Task892AggregateResultTypeTests`
 - **TimeIntervalParser** — Parses human-readable intervals (`"5 minutes"`, `"1 hour"`, `"00:15:00"`) to `TimeSpan`; `ToSqlInterval()` for SQL-friendly output
 - **OrderByHelper** — Applies `OrderBy<T>` to `IQueryable<T>` and `IEnumerable<T>` via dynamic expressions
 

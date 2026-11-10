@@ -23,7 +23,7 @@ namespace Birko.Data.SQL.Conditions
     /// always less than it; <c>COALESCE</c> / <c>CASE</c> keep the TEXT but compare it byte-wise.
     /// </para>
     /// </remarks>
-    public class SqlValueFragmentDialect
+    public partial class SqlValueFragmentDialect
     {
         /// <summary>The form the parser writes into <see cref="Condition.Name"/>: plain operators, inlined literals.</summary>
         public static readonly SqlValueFragmentDialect Portable = new();

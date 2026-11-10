@@ -166,17 +166,28 @@ namespace Birko.Data.SQL.Fields
         /// "quote tables, never quote columns" (§ Conventions), and this is the qualifier half of it.
         /// </para>
         /// </param>
-        public string GetSelectName(bool withName = false, Func<string, string>? quoteTable = null)
+        /// <param name="dialect">
+        /// TASK-892: the provider an aggregate is rendered for (<see cref="AggregateExpression"/>). Null renders the portable
+        /// form, for a caller with no provider: a name map, a message.
+        /// </param>
+        public string GetSelectName(bool withName = false, Func<string, string>? quoteTable = null, Conditions.SqlValueFragmentDialect? dialect = null)
         {
             var prefix = withName
                 ? (quoteTable != null ? quoteTable(Table.Name) : Table.Name) + "."
                 : string.Empty;
             return (IsAggregate)
-                        ? string.Format("{0}({1})",
-                            Name,
-                            string.Join(",", ((this as Fields.FunctionField)?.Parameters?.Select(x => string.Format("{0}{1}", prefix, x))) ?? new string[0]))
+                        ? AggregateExpression(prefix, dialect ?? Conditions.SqlValueFragmentDialect.Portable)
                         : prefix + Name;
         }
+
+        /// <summary>
+        /// The SQL of an aggregate column, its operands qualified by <paramref name="prefix"/>. A view's aggregate
+        /// (<c>FunctionField</c>) renders through <paramref name="dialect"/> (TASK-892).
+        /// </summary>
+        protected internal virtual string AggregateExpression(string prefix, Conditions.SqlValueFragmentDialect dialect)
+            => string.Format("{0}({1})",
+                Name,
+                string.Join(",", ((this as Fields.FunctionField)?.Parameters?.Select(x => string.Format("{0}{1}", prefix, x))) ?? new string[0]));
 
         public virtual object? Write(object value)
         {

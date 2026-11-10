@@ -70,7 +70,7 @@ namespace Birko.Data.SQL.Tests.Views
 
             var act = () => Read(field, 2.5m, typeof(decimal));
 
-            act.Should().Throw<InvalidCastException>().WithMessage("*AVG(Hits * 1.0E0) answered 2.5*not a whole number*Target.Int*");
+            act.Should().Throw<InvalidCastException>().WithMessage("*AVG(Hits) answered 2.5*not a whole number*Target.Int*");
         }
 
         [Fact]
@@ -116,10 +116,11 @@ namespace Birko.Data.SQL.Tests.Views
         [Fact]
         public void An_average_over_an_integral_column_is_rendered_fractional()
         {
+            // TASK-892: rendered by the dialect (SqlValueFragmentDialect.Aggregate), the store's Aggregate's producer too.
             FunctionField.CreateFunctionField(T(nameof(Target.Double)), "AVG", new IntegerField(S(nameof(Source.Hits)), "Hits"))
-                .Parameters.Should().Equal("Hits * 1.0E0");
+                .GetSelectName().Should().Be("AVG(Hits * 1.0E0)");
             FunctionField.CreateFunctionField(T(nameof(Target.Double)), "AVG", new DoubleField(S(nameof(Source.Ratio)), "Ratio"))
-                .Parameters.Should().Equal("Ratio");
+                .GetSelectName().Should().Be("AVG(Ratio)");
         }
 
         [Fact]

@@ -32,11 +32,16 @@ namespace Birko.Data.SQL.Connectors
         /// Renders a bool constant of a join condition. Defaults to <c>TRUE</c> / <c>FALSE</c>; SQL Server, which has no
         /// boolean literal, passes <c>1</c> / <c>0</c> (TASK-717: it refused <c>TRUE</c> as a column name, measured).
         /// </param>
+        /// <param name="dialect">
+        /// The provider the aggregates are rendered for (TASK-892), as its own reads render them. Null renders the portable
+        /// form, for the migration generator, which knows no provider.
+        /// </param>
         public static string BuildViewSelectSql(
             Tables.View view,
             Func<string, string> quoteIdentifier,
             Func<string, string>? qualifyTableName = null,
-            Func<bool, string>? boolLiteral = null)
+            Func<bool, string>? boolLiteral = null,
+            Conditions.SqlValueFragmentDialect? dialect = null)
         {
             if (view == null)
             {
@@ -60,7 +65,7 @@ namespace Birko.Data.SQL.Connectors
             // own. Both emitting produced `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — two aliases
             // on one column, which SQLite rejects with `near "AS": syntax error` and which is a syntax error
             // on every other provider, so no persistent (or Auto) aggregate view could be created at all.
-            var fields = view.GetSelectFields(aggregateAlias: false, quoteTable: quoteIdentifier);
+            var fields = view.GetSelectFields(aggregateAlias: false, quoteTable: quoteIdentifier, dialect: dialect);
             if (fields == null || !fields.Any())
             {
                 throw new InvalidOperationException("View must have at least one field.");

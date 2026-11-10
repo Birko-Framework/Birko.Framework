@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
             var table = LoadUsableTable(type);
             if (table == null) yield break;
 
-            var (fields, groupFields, conditions, orderFields) = BuildAggregateQueryParts(type, query);
+            var (fields, groupFields, conditions, orderFields, read) = BuildAggregateQueryParts(type, query);
 
             // TASK-833: an aggregate's groups span chunks, so it is never split; past the provider's limit it is refused
             // here, before the reader runs, rather than failing in the driver.
@@ -42,7 +42,7 @@ namespace Birko.Data.SQL.Connectors
                         query.Limit,
                         query.Offset);
                 },
-                reader => new object[] { ReadAggregateResult(reader) }))
+                reader => new object[] { read(reader) }))
             {
                 foreach (var item in row) yield return (AggregateResult)item;
             }

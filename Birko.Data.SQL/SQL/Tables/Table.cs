@@ -87,8 +87,9 @@ namespace Birko.Data.SQL.Tables
         /// The projection of one column: its select name, and for an aggregate its alias. One producer for a table's
         /// SELECT list and a view's (TASK-887).
         /// </summary>
-        internal static string SelectExpression(KeyValuePair<string, AbstractField> column, bool withName, bool aggregateAlias, Func<string, string>? quoteTable)
-            => column.Value.GetSelectName(withName, quoteTable)
+        internal static string SelectExpression(KeyValuePair<string, AbstractField> column, bool withName, bool aggregateAlias, Func<string, string>? quoteTable,
+            Conditions.SqlValueFragmentDialect? dialect = null)
+            => column.Value.GetSelectName(withName, quoteTable, dialect)
                + (column.Value.IsAggregate && aggregateAlias ? " as " + AggregateAlias(column.Value, column.Key) : "");
 
         /// <summary>

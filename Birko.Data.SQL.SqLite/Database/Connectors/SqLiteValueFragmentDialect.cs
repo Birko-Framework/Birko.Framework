@@ -137,5 +137,31 @@ namespace Birko.Data.SQL.Connectors
         /// the comparison, so a bound value is left as it is.
         /// </summary>
         protected override string? OrdinalText(string operand, bool bothFromRow) => $"({operand}) COLLATE BINARY";
+
+        /// <summary>
+        /// TASK-892 — a decimal SUM in C#'s decimal, through <see cref="SqLiteDecimal.SumAggregate"/>. SQLite's <c>SUM</c> reads
+        /// the TEXT as a REAL (measured: 1234567890123.456789 + 0.000001 + 1 summed to 1234567890124.46).
+        /// </summary>
+        public override string Sum(string operand, Type source)
+            => IsDecimal(source) ? $"{SqLiteDecimal.SumAggregate}({operand})" : base.Sum(operand, source);
+
+        /// <summary>TASK-892 — the decimal 0 as the TEXT a decimal parameter binds as, so it orders among the other sums.</summary>
+        protected override string ZeroSum(Type source) => IsDecimal(source) ? Literal(0m)! : base.ZeroSum(source);
+
+        /// <summary>
+        /// TASK-892 — a decimal average, or one read into a decimal, in C#'s decimal through
+        /// <see cref="SqLiteDecimal.AvgAggregate"/>: the sum divided by the count, as LINQ's <c>Average</c> divides it.
+        /// </summary>
+        protected override string? Average(string operand, Type source, Type result)
+            => IsDecimal(source) || IsDecimal(result) ? $"{SqLiteDecimal.AvgAggregate}({operand})" : base.Average(operand, source, result);
+
+        /// <summary>
+        /// TASK-892 — a decimal aggregate is TEXT, which SQLite orders byte-wise ('10.5' before '9.0'); the decimal collation
+        /// orders it as a number, in an <c>ORDER BY</c> on the expression and on a persistent view's column alike.
+        /// </summary>
+        protected override string AggregateResult(string sql, Birko.Data.Stores.AggregateFunction function, Type source, Type result)
+            => IsDecimal(source) || (function == Birko.Data.Stores.AggregateFunction.Avg && IsDecimal(result))
+                ? $"{sql} COLLATE {SqLiteDecimal.Collation}"
+                : sql;
     }
 }

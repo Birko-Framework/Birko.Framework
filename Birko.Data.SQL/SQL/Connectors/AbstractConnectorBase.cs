@@ -1960,12 +1960,16 @@ namespace Birko.Data.SQL.Connectors
         /// <c>SUM(length(Name))</c> ran). The metadata lookup is the whitelist (rule 15).</para>
         /// </summary>
         protected static string ResolveSqlName(IEnumerable<Birko.Data.SQL.Fields.AbstractField> fields, string propertyName, string role)
+            => ResolveAggregateField(fields, propertyName, role).Name;
+
+        /// <summary>The mapped field an aggregate query's name resolves to (<see cref="ResolveSqlName"/>), or a refusal.</summary>
+        private static Birko.Data.SQL.Fields.AbstractField ResolveAggregateField(IEnumerable<Birko.Data.SQL.Fields.AbstractField> fields, string propertyName, string role)
         {
             var list = fields as IList<Birko.Data.SQL.Fields.AbstractField> ?? fields.ToList();
             var field = list.FirstOrDefault(f => f.Property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
                 ?? list.FirstOrDefault(f => f.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase));
             if (field != null)
-                return field.Name;
+                return field;
 
             throw new ArgumentException(
                 $"Aggregate {role} '{propertyName}' does not resolve to a column. Name a mapped property or its column.",
@@ -1991,28 +1995,52 @@ namespace Birko.Data.SQL.Connectors
             => $"INTERVAL '{interval.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} seconds'";
 
         /// <summary>
-        /// Builds SELECT and GROUP BY field dictionaries for an aggregation query.
+        /// Builds SELECT and GROUP BY field dictionaries for an aggregation query, and the reader of one result row.
         /// Shared by sync and async aggregate connectors to avoid duplicating query-building logic.
         /// </summary>
-        protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields) BuildAggregateQueryParts<T>(
+        /// <remarks>
+        /// <para>
+        /// TASK-892: a row answers what <c>AggregateHelper</c> answers, the in-memory aggregation every other store matches
+        /// (TASK-876, TASK-878). Measured before, on SQLite, PostgreSQL, MySQL and SQL Server: SQL Server averaged an integral
+        /// column in its own type (the AVG of 1, 1 and 2 was 1, silently), SQLite summed and averaged a decimal as a REAL,
+        /// every server averaged a decimal to its own scale, and each value came back in whatever type the provider answered
+        /// (a COUNT as a long, a SUM of an int as a long or a decimal, SQLite's decimal and DateTime as text). PostgreSQL also
+        /// named a group-by column by its folded name (<c>kind</c>), so <c>GetValue("Kind")</c> found nothing.
+        /// </para>
+        /// <para>
+        /// Each aggregate is rendered by the provider's <see cref="Conditions.SqlValueFragmentDialect.Aggregate"/>, the producer
+        /// a view's aggregate renders by, and read by <see cref="Birko.Data.SQL.Fields.AggregateValue.Convert"/>, the rule a
+        /// view reads by, into <see cref="Birko.Data.Stores.AggregateMath.ResultType"/>. A group key and a non-numeric MIN /
+        /// MAX are read by their column's own reader, as a row of the table is. An average the provider cannot compute as C#
+        /// does in one column (a decimal on a server) is read as its SUM and COUNT and divided here, as LINQ divides it; it is
+        /// ordered by the server's own AVG. A SUM over no values stays NULL, as <c>AggregateHelper</c> answers.
+        /// </para>
+        /// </remarks>
+        protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields, Func<DbDataReader, Birko.Data.Stores.AggregateResult> read) BuildAggregateQueryParts<T>(
             Type type,
             Birko.Data.Stores.AggregateQuery<T> query)
             where T : Models.AbstractModel
         {
             var fields = new Dictionary<int, string>();
             var groupFields = new Dictionary<int, string>();
+            var readers = new List<Action<DbDataReader, Dictionary<string, object?>>>();
             int idx = 0;
+            var dialect = FragmentDialect;
 
             var allFields = DataBase.LoadFields(type).ToList();
             // What an ORDER BY key may name: a group-by field (property or column), an aggregate alias, the bucket.
             var orderable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var groupBy in query.GroupByFields)
             {
-                var sqlName = ResolveSqlName(allFields, groupBy, "group-by field");
+                var field = ResolveAggregateField(allFields, groupBy, "group-by field");
+                var sqlName = field.Name;
                 fields[idx] = sqlName;
                 groupFields[idx] = sqlName;
                 orderable[groupBy] = sqlName;
                 orderable[sqlName] = sqlName;
+                var ordinal = idx;
+                var readKey = ColumnValueReader(field);
+                readers.Add((reader, row) => row[groupBy] = readKey(reader, ordinal));
                 idx++;
             }
 
@@ -2029,19 +2057,52 @@ namespace Birko.Data.SQL.Connectors
                 fields[idx] = $"{TimeBucketExpression(interval, timeCol)} AS bucket_time";
                 groupFields[idx] = "bucket_time";
                 orderable["bucket_time"] = "bucket_time";
+                var ordinal = idx;
+                readers.Add((reader, row) => row["bucket_time"] = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal));
                 idx++;
             }
 
             foreach (var agg in query.Aggregates)
             {
                 var alias = agg.ResolvedAlias;
-                var funcName = GetSqlFunctionName(agg.Function);
-                var sqlFunc = agg.Function == Birko.Data.Stores.AggregateFunction.Count
-                    ? "COUNT(*)"
-                    : $"{funcName}({ResolveSqlName(allFields, agg.SourcePropertyName, "source")})";
-                fields[idx] = $"{sqlFunc} AS {QuoteIdentifier(alias)}";
+                var target = $"aggregate '{alias}'";
+                var ordinal = idx;
+                if (agg.Function == Birko.Data.Stores.AggregateFunction.Count)
+                {
+                    fields[idx++] = $"COUNT(*) AS {QuoteIdentifier(alias)}";
+                    orderable[alias] = QuoteIdentifier(alias);
+                    readers.Add((reader, row) => row[alias] = Birko.Data.SQL.Fields.AggregateValue.Convert(
+                        reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal), typeof(int), "COUNT(*)", target));
+                    continue;
+                }
+
+                var field = ResolveAggregateField(allFields, agg.SourcePropertyName, "source");
+                var source = field.Property.PropertyType;
+                var result = Birko.Data.Stores.AggregateMath.ResultType(agg.Function, source);
+                if (agg.Function == Birko.Data.Stores.AggregateFunction.Avg && !dialect.HasExactAverage(source, result))
+                {
+                    // A decimal average on a server: its SUM and COUNT, divided as LINQ divides them.
+                    var sum = dialect.Sum(field.Name, Nullable.GetUnderlyingType(source) ?? source);
+                    fields[idx++] = sum;
+                    fields[idx++] = $"COUNT({field.Name})";
+                    orderable[alias] = $"AVG({field.Name})";
+                    readers.Add((reader, row) => row[alias] = ExactAverage(reader, ordinal, sum, target));
+                    continue;
+                }
+
+                var sql = dialect.Aggregate(agg.Function, field.Name, source, result, sumOfNoValuesIsZero: false);
+                fields[idx++] = $"{sql} AS {QuoteIdentifier(alias)}";
                 orderable[alias] = QuoteIdentifier(alias);
-                idx++;
+                if (!Birko.Data.SQL.Fields.AggregateValue.IsNumeric(result))
+                {
+                    // A MIN / MAX of a string, a date, an enum: the column's own type, read as the column is read.
+                    var readValue = ColumnValueReader(field);
+                    readers.Add((reader, row) => row[alias] = readValue(reader, ordinal));
+                    continue;
+                }
+                var declared = typeof(Nullable<>).MakeGenericType(result);
+                readers.Add((reader, row) => row[alias] = Birko.Data.SQL.Fields.AggregateValue.Convert(
+                    reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal), declared, sql, target));
             }
 
             // TASK-706: SelectAggregate passed query.OrderBy to CreateSelectCommand as written, the ORDER BY sink TASK-110
@@ -2064,21 +2125,47 @@ namespace Birko.Data.SQL.Connectors
                 ? DataBase.ParseConditionExpression(query.Filter as System.Linq.Expressions.LambdaExpression)
                 : null;
 
-            return (fields, groupFields, conditions, orderFields);
+            return (fields, groupFields, conditions, orderFields, reader =>
+            {
+                var row = new Dictionary<string, object?>();
+                foreach (var read in readers) read(reader, row);
+                return new Birko.Data.Stores.AggregateResult(row);
+            });
         }
 
         /// <summary>
-        /// Maps a <see cref="DbDataReader"/> row to an <see cref="Birko.Data.Stores.AggregateResult"/>.
-        /// Shared by sync and async aggregate connectors.
+        /// The decimal average LINQ computes, from the SUM at <paramref name="ordinal"/> and the COUNT after it: the sum divided
+        /// by the count in C#'s decimal; null over no values.
         /// </summary>
-        protected static Birko.Data.Stores.AggregateResult ReadAggregateResult(DbDataReader reader)
+        private static object? ExactAverage(DbDataReader reader, int ordinal, string sum, string target)
         {
-            var dict = new Dictionary<string, object?>();
-            for (int i = 0; i < reader.FieldCount; i++)
+            var count = (long)Birko.Data.SQL.Fields.AggregateValue.Convert(reader.GetValue(ordinal + 1), typeof(long), "COUNT", target)!;
+            if (count == 0) return null;
+            var total = (decimal)Birko.Data.SQL.Fields.AggregateValue.Convert(reader.GetValue(ordinal), typeof(decimal), sum, target)!;
+            return total / count;
+        }
+
+        /// <summary>
+        /// Reads the value at an ordinal the way <paramref name="field"/> reads its column into an entity, into a value of the
+        /// field's property type: SQLite's text dates and Guids, an enum, a UTC column's kind (TASK-892). NULL is null.
+        /// </summary>
+        private static Func<DbDataReader, int, object?> ColumnValueReader(Birko.Data.SQL.Fields.AbstractField field)
+        {
+            var holderType = typeof(ColumnValueHolder<>).MakeGenericType(field.Property.PropertyType);
+            var holderProperty = holderType.GetProperty(nameof(ColumnValueHolder<int>.Value))!;
+            var reader = field.ReadingInto(holderProperty);
+            return (dataReader, ordinal) =>
             {
-                dict[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            }
-            return new Birko.Data.Stores.AggregateResult(dict);
+                if (dataReader.IsDBNull(ordinal)) return null;
+                var holder = Activator.CreateInstance(holderType)!;
+                reader.Read(holder, dataReader, ordinal);
+                return holderProperty.GetValue(holder);
+            };
+        }
+
+        private sealed class ColumnValueHolder<TValue>
+        {
+            public TValue Value { get; set; } = default!;
         }
 
         /// <summary>

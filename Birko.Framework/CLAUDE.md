@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL store aggregates answer what LINQ answers (2026-11-10)
+[[TASK-892]]. The store `Aggregate` differed from `AggregateHelper` on 54–106 of 164 cases per provider (measured):
+PostgreSQL named the group key `kind` so every grouped key read null, SQL Server truncated integral AVG, SQLite summed
+decimals as REAL, and result types were the driver's. Store and view aggregates now render through one dialect hook and
+read through one conversion; a store decimal AVG divides in C#. **Breaking:** a view's decimal AVG is refused on the
+servers, and a view SUM over only NULLs is 0 (the store's stays NULL; decision in [[TASK-886]]).
 ### Cosmos DB aggregates skip nulls and apply the time bucket (2026-11-10)
 [[TASK-885]]. SUM/AVG/MIN over a member holding a null returned undefined or null where LINQ skips the nulls, in stores
 and grouped views, and `TimeBucketInterval` was ignored (measured: 24 of 26 cases wrong). Aggregates now skip nulls, a
@@ -372,15 +378,6 @@ rows returned different rows than the compiled rule, on all four providers (meas
 NULL rows, and `NotIn` with a null set matched every row. Rule leaves over nullable columns are now marked and run
 through TASK-859's pass, so a rule and a lambda render NULL alike. `RuleEvaluator` in memory still differs
 ([[TASK-881]]).
-### A SQL filter's group next to a constant `bool` keeps its AND/OR (2026-11-09)
-[[TASK-866]]. When `&&` / `||` had a constant operand beside a group, the parser's collapse overwrote the group's own
-separator, so an OR group rendered as AND and the reverse, silently, on all four providers since 2026-03 (measured: 7 of
-9 shapes). `!((x.A == 10 || x.A == 20) && flag)` rendered `NOT (A = 10 AND A = 20)`, and its Delete removed every row
-without the whole-table guard firing. The surviving group now keeps its separator (rule 43).
-### SQL Server refuses a LIKE term past its 4000-character limit (2026-11-09)
-[[TASK-874]]. A plain `Contains` / `StartsWith` / `EndsWith` whose pattern passed 4000 characters failed count, update
-and delete with Msg 8152, and the read returned no rows, silently (measured). It is now refused by name before anything
-runs, through the same limit TASK-869 set. The silent empty read is a reader-loop defect of its own ([[TASK-880]], P1).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

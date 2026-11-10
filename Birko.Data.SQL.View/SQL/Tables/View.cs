@@ -181,8 +181,10 @@ namespace Birko.Data.SQL.Tables
         /// passes false and appends its own quoted alias instead (TASK-129) — see
         /// <see cref="Birko.Data.SQL.Tables.Table.GetSelectFields"/>.
         /// </param>
-        public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true, Func<string, string>? quoteTable = null)
-            => Number(Columns(notAggregate).Select(c => Table.SelectExpression(c, true, aggregateAlias, quoteTable)));
+        /// <param name="dialect">The provider the aggregates are rendered for (TASK-892); null for the portable form.</param>
+        public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true, Func<string, string>? quoteTable = null,
+            Conditions.SqlValueFragmentDialect? dialect = null)
+            => Number(Columns(notAggregate).Select(c => Table.SelectExpression(c, true, aggregateAlias, quoteTable, dialect)));
 
         /// <summary>
         /// The fields in SELECT order; a row reader reads field <c>i</c> at ordinal <c>i</c>. It enumerates the same

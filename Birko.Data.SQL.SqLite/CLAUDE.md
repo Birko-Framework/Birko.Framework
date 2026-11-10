@@ -112,7 +112,9 @@ and `SqLiteDecimal` (`Database/Connectors/SqLiteDecimal.cs`) registers on **ever
 - `BIRKO_DECIMAL` collation — `ORDER BY`, `<`, `>`, `=`, `MIN`/`MAX` and indexes compare the text as a number
   (`10.0` equals `10.00`; an unparseable text sorts after every number)
 - `birko_decimal_add` — what `PropertyUpdate.Increment` emits for a decimal column; refuses overflow
-- `birko_decimal_sum` / `birko_decimal_avg` — exact aggregates (views do not emit them yet: TASK-514)
+- `birko_decimal_sum` / `birko_decimal_avg` — exact aggregates: a decimal SUM / AVG (and an AVG into a `decimal`) in the
+  store's `Aggregate` and in a view, with `COLLATE BIRKO_DECIMAL` on the result so it orders as a number (TASK-892;
+  SQLite's `SUM` read the text as a REAL). A persistent view names them, so reading it needs a registered connection
 - `birko_string_match` — `Contains` / `StartsWith` / `EndsWith` / `Equals` with `Ordinal` / `OrdinalIgnoreCase` (TASK-869)
 - `birko_case_fold(text, upper, culture)` — `ToLower()` / `ToUpper()` and their invariant forms, in filters and SET
   values, as C# folds (SQLite's `LOWER` / `UPPER` fold ASCII only); `ToLower()` renders the caller's current culture

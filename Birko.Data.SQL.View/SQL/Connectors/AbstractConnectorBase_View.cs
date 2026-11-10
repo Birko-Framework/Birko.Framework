@@ -253,7 +253,7 @@ namespace Birko.Data.SQL.Connectors
         protected string BuildViewSelectSql(Tables.View view)
         {
             RequireUsableViewColumnNames(view);
-            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation, ViewBoolLiteral);
+            return ViewSelectSqlBuilder.BuildViewSelectSql(view, QuoteIdentifier, ViewRelation, ViewBoolLiteral, FragmentDialect);
         }
 
         /// <summary>

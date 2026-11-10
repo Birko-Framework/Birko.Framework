@@ -204,6 +204,8 @@ public class AggregateViewDdlTests : IDisposable
     private List<string> PhysicalViewColumns(string viewName)
     {
         using var conn = new SqliteConnection(ConnectionString());
+        // TASK-892: the view's decimal SUM is birko_decimal_sum, which a connection must register to read it (rule 64).
+        Birko.Data.SQL.Connectors.SqLiteDecimal.Register(conn);
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT * FROM \"{viewName}\" LIMIT 0";
@@ -253,10 +255,11 @@ public class AggregateViewDdlTests : IDisposable
 
         var sql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => "\"" + id + "\"");
         var projection = sql.Substring("SELECT ".Length, sql.IndexOf(" FROM ", StringComparison.Ordinal) - "SELECT ".Length);
-        var items = projection.Split(',').Select(x => x.Trim()).ToList();
+        var items = TopLevelItems(projection);
 
         items.Should().Contain(i => i.StartsWith("COUNT(", StringComparison.Ordinal) && i.EndsWith(" AS OrderCount", StringComparison.Ordinal));
-        items.Should().Contain(i => i.StartsWith("SUM(", StringComparison.Ordinal) && i.EndsWith(" AS TotalAmount", StringComparison.Ordinal));
+        // TASK-892: a view's SUM over no values is 0, as LINQ's Sum, so it is COALESCE(SUM(...), 0).
+        items.Should().Contain(i => i.StartsWith("COALESCE(SUM(", StringComparison.Ordinal) && i.EndsWith(" AS TotalAmount", StringComparison.Ordinal));
         foreach (var item in items)
         {
             AliasKeywordCount(item).Should().BeLessThanOrEqualTo(1, $"'{item}' must carry at most one alias");
@@ -440,6 +443,26 @@ public class AggregateViewDdlTests : IDisposable
         sql.Should().Contain("AS TotalTax");
         sql.Should().NotContain(" as SUM");
         view!.GetPersistentViewSelectFields().Values.Should().Contain(new[] { "TotalAmount", "TotalTax" });
+    }
+
+    /// <summary>The projection's items: split at the commas outside parentheses (TASK-892's COALESCE has one inside).</summary>
+    private static List<string> TopLevelItems(string projection)
+    {
+        var items = new List<string>();
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i < projection.Length; i++)
+        {
+            if (projection[i] == '(') depth++;
+            else if (projection[i] == ')') depth--;
+            else if (projection[i] == ',' && depth == 0)
+            {
+                items.Add(projection.Substring(start, i - start).Trim());
+                start = i + 1;
+            }
+        }
+        items.Add(projection.Substring(start).Trim());
+        return items;
     }
 
     /// <summary>

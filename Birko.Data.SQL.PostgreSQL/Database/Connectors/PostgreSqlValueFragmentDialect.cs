@@ -23,6 +23,12 @@ namespace Birko.Data.SQL.Connectors
     {
         public PostgreSqlValueFragmentDialect(Func<string, int, MidpointRounding, string> round) : base(round) { }
 
+        /// <summary>
+        /// TASK-892 — a double. <c>1.0E0</c> is an exact numeric here, so the average was a NUMERIC rounded to about 17
+        /// significant digits, and read as a double it was not C#'s (measured: 1000000003.6666667, C# 1000000003.6666666).
+        /// </summary>
+        protected override string FloatingOperand(string operand) => $"CAST({operand} AS DOUBLE PRECISION)";
+
         /// <inheritdoc />
         public override string StringMatch(ConditionType kind, string operand, string term, StringComparison comparison, Func<object, string> bind)
             => comparison switch

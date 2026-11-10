@@ -252,6 +252,25 @@ await store.UpdateAsync(x => x.Price > 100, item => { item.Price *= 0.9m; });
 
 `PropertyUpdate<T>` assignments are translated to SQL SET clauses by `Stores/PropertyUpdateSqlTranslator.cs` (shared by the sync and async bulk stores): a Set renders `col = @SETcol`, an `Increment` / `Decrement` renders `col = col + @SETcol`, all in one UPDATE. Column names come from table metadata and are emitted bare (rule 17 — framework DDL creates them unquoted); the connector quotes the table. The filter expression is converted to a WHERE clause via `DataBase.ParseConditionExpression()`.
 
+### Aggregation
+
+`Aggregate` / `AggregateAsync` (`AggregateQuery<T>`) run one `GROUP BY` statement and answer what the in-memory
+`AggregateHelper` answers on every other store (TASK-892):
+
+- **Types.** Each value is converted to `AggregateMath.ResultType`: Count an `int`; Sum as the property is (a smaller
+  integer as `long`); Avg of an integer a `double`; Min / Max the property's type, a non-numeric one read by the column's
+  own reader (SQLite's text dates included). A group key is read the same way and named as the query names it
+  (PostgreSQL used to answer `kind` for `Kind`). A Sum or Avg of a non-numeric property is refused, as LINQ refuses it.
+- **Average.** An integral column is averaged as a double (SQL Server averaged it as an integer: 1 for 1, 1, 2). A
+  decimal average is exact: SQLite's `birko_decimal_avg`; on a server, which keeps its own scale, the SUM and COUNT are
+  read and divided in C#'s decimal. Ordering by that alias uses the server's `AVG`, so averages that differ only past the
+  server's scale (SQL Server: 6 decimals) may order as ties.
+- **Sum over no values** (a group of only NULLs) is NULL, as `AggregateHelper` answers. A view's SUM answers 0 there,
+  as LINQ's `Sum` fills a property.
+- **Recorded, not fixed:** a SUM / AVG of `double` values adds the rows in the server's order, so it can differ from
+  LINQ in the last digit; an integral average whose sum passes 2^53 is a double sum (LINQ sums in `long`); an ungrouped
+  aggregate over no rows answers one row on SQL and none in LINQ (TASK-886); a time bucket needs TimescaleDB.
+
 ### Filter translation notes
 
 - **Empty membership sets are safe.** `ids.Contains(x.Id)` with an empty collection renders `1 = 0` (matches

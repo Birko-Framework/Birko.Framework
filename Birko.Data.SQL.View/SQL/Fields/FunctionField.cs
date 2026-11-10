@@ -5,6 +5,8 @@ using System.Data.Common;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using Birko.Data.SQL.Conditions;
+using Birko.Data.Stores;
 
 namespace Birko.Data.SQL.Fields
 {
@@ -59,91 +61,71 @@ namespace Birko.Data.SQL.Fields
         private string DescribeProperty() => $"{Property.DeclaringType?.Name}.{Property.Name}";
 
         /// <summary>
-        /// Converts a numeric aggregate the server answered to the view property's type, exactly, or refuses it.
+        /// Converts a numeric aggregate the server answered to the view property's type, exactly, or refuses it: the one
+        /// reading rule, <see cref="AggregateValue.Convert"/>, which the store's <c>Aggregate</c> reads by too (TASK-892).
         /// </summary>
         internal object? ToViewValue(object? raw)
+            => AggregateValue.Convert(raw, Property.PropertyType, Describe(), $"view property '{DescribeProperty()}'");
+
+        /// <summary>
+        /// The CLR type of the aggregated column's values, which decides how the provider renders the aggregate (an integral
+        /// AVG as a double, SQLite's decimal SUM / AVG exactly). Null for a field built without a source column.
+        /// </summary>
+        internal Type? SourceType { get; private set; }
+
+        /// <summary>
+        /// TASK-892: the aggregate rendered by the provider's dialect, <see cref="SqlValueFragmentDialect.Aggregate"/>, the
+        /// producer the store's <c>Aggregate</c> renders by too. A view's SUM over no values (a group of only NULLs) answers
+        /// 0, as LINQ's <c>Sum</c> answers for <c>int?</c> as for <c>int</c>; it answered NULL on all four providers.
+        /// </summary>
+        protected internal override string AggregateExpression(string prefix, SqlValueFragmentDialect dialect)
         {
-            var declared = Property.PropertyType;
-            var target = Nullable.GetUnderlyingType(declared) ?? declared;
-            if (raw == null || raw is DBNull)
+            var function = AggregateFunctionOf(Name);
+            if (function == null || Parameters == null || Parameters.Length != 1 || (SourceType == null && function != AggregateFunction.Count))
             {
-                if (!declared.IsValueType || Nullable.GetUnderlyingType(declared) != null)
-                {
-                    return null;
-                }
-                throw new InvalidCastException(
-                    $"{Describe()} answered NULL, and view property '{DescribeProperty()}' ({declared.Name}) cannot hold NULL. "
-                    + $"Declare it {target.Name}? to read it. (TASK-887)");
+                return base.AggregateExpression(prefix, dialect);
             }
-
-            var numeric = target.IsEnum ? Enum.GetUnderlyingType(target) : target;
-            if (!IsNumeric(numeric))
-            {
-                throw new InvalidCastException(
-                    $"{Describe()} is read as a number, and view property '{DescribeProperty()}' is {declared.Name}. (TASK-887)");
-            }
-
-            // SQLite keeps a decimal column as text, so its MIN / MAX comes back as that text.
-            var value = raw is string text ? decimal.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture) : raw;
-            object converted;
             try
             {
-                converted = IsIntegral(numeric) ? ToIntegral(value, numeric) : Convert.ChangeType(value, numeric, CultureInfo.InvariantCulture);
+                return dialect.Aggregate(function.Value, prefix + Parameters[0], SourceType, Property.PropertyType, sumOfNoValuesIsZero: true);
             }
-            catch (OverflowException ex)
+            catch (NotSupportedException ex)
             {
-                throw new OverflowException(
-                    $"{Describe()} answered {Show(raw)}, which is out of range for view property '{DescribeProperty()}' ({declared.Name}). (TASK-887)", ex);
+                throw new NotSupportedException($"View property '{DescribeProperty()}': {ex.Message}", ex);
             }
-            return target.IsEnum ? Enum.ToObject(target, converted) : converted;
         }
 
-        private object ToIntegral(object value, Type numeric)
+        private static AggregateFunction? AggregateFunctionOf(string? name) => name switch
         {
-            var whole = value switch
-            {
-                decimal m => m == decimal.Truncate(m),
-                double d => !double.IsNaN(d) && !double.IsInfinity(d) && d == Math.Truncate(d),
-                float f => !float.IsNaN(f) && !float.IsInfinity(f) && f == MathF.Truncate(f),
-                _ => IsIntegral(value.GetType()),
-            };
-            if (!whole)
-            {
-                throw new InvalidCastException(
-                    $"{Describe()} answered {Show(value)}, which is not a whole number, and view property '{DescribeProperty()}' "
-                    + $"is {Property.PropertyType.Name}. Declare it double or decimal to read the fraction. (TASK-887)");
-            }
-            return Convert.ChangeType(value, numeric, CultureInfo.InvariantCulture);
-        }
+            "COUNT" => AggregateFunction.Count,
+            "SUM" => AggregateFunction.Sum,
+            "AVG" => AggregateFunction.Avg,
+            "MIN" => AggregateFunction.Min,
+            "MAX" => AggregateFunction.Max,
+            _ => null,
+        };
 
-        private static string Show(object value)
-            => value is IFormattable formattable ? formattable.ToString(null, CultureInfo.InvariantCulture) : value.ToString() ?? string.Empty;
-
-        private static bool IsIntegral(Type type)
-            => type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort)
-               || type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong);
-
-        private static bool IsNumeric(Type type)
-            => IsIntegral(type) || type == typeof(decimal) || type == typeof(double) || type == typeof(float);
+        private static Type? ClrTypeOf(AbstractField field) => field.Property?.PropertyType ?? field switch
+        {
+            ShortField => typeof(short),
+            LongField => typeof(long),
+            IntegerField => typeof(int),
+            DecimalField => typeof(decimal),
+            DoubleField => typeof(double),
+            FloatField => typeof(float),
+            _ => null,
+        };
 
         private static bool IsNumericTarget(PropertyInfo property)
         {
             var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            return IsNumeric(type.IsEnum ? Enum.GetUnderlyingType(type) : type);
+            return AggregateValue.IsNumeric(type.IsEnum ? Enum.GetUnderlyingType(type) : type);
         }
 
         private static bool IsIntegralSource(AbstractField field) => field is IntegerField or LongField or ShortField;
 
         private static bool IsNumericSource(AbstractField field)
             => IsIntegralSource(field) || field is DecimalField or DoubleField or FloatField;
-
-        /// <summary>
-        /// The operand of an AVG over an integral column: the column times a floating-point one. SQL Server averages an
-        /// integral column in its own type, so the AVG of 1 and 4 is 2 there and 2.5 everywhere else and in LINQ (measured
-        /// on 2022, TASK-887). <c>1.0E0</c> is a float on SQL Server, MySQL and SQLite and an exact numeric on PostgreSQL,
-        /// which already averaged an integer column as numeric.
-        /// </summary>
-        private const string FractionalOperand = " * 1.0E0";
 
         public static FunctionField CreateFunctionAggregateField(System.Reflection.PropertyInfo property, Attributes.AggregateFieldAttribute field, AbstractField tablefield)
         {
@@ -198,10 +180,6 @@ namespace Birko.Data.SQL.Fields
             }
             else if (functionName == "AVG")
             {
-                if (IsIntegralSource(sourceField))
-                {
-                    parameters = new object[] { sourceField.Name + FractionalOperand };
-                }
                 functionField = sourceField.IsNotNull
                     ? new DecimalFunction(property, functionName, parameters)
                     : new NullableDecimalFunction(property, functionName, parameters);
@@ -218,6 +196,7 @@ namespace Birko.Data.SQL.Fields
             if (functionField != null)
             {
                 functionField.IsAggregate = true;
+                functionField.SourceType = ClrTypeOf(sourceField);
             }
 
             return functionField!;

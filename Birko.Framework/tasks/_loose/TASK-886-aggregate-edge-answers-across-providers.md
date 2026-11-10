@@ -27,6 +27,9 @@ Found by TASK-876 and TASK-878 (2026-11-09):
 - **An empty `AggregateQuery`** (no aggregates, no groups): LINQ returns raw rows; Elasticsearch returns one empty row.
 - **`ElasticSearchViewStore` Count** uses `value_count` on the source field, or on `_id` (aggregating on `_id` is
   disabled by default in ES 8): a non-null count, not a row count. Not measured.
+- **SUM over only NULLs** (TASK-892): SQL views now answer 0 (`COALESCE`, as LINQ `Sum`); every store `Aggregate`
+  answers NULL, as `AggregateHelper.LinqAggregate` does. One answer means changing `AggregateHelper` (every store).
+  **Decide with the user.**
 - Not measured live on Elasticsearch: `DateTimeOffset` keys and metrics, string-mapped enums.
 
 ## Acceptance criteria

@@ -112,7 +112,8 @@ namespace Birko.Data.SQL.Connectors
                 view,
                 QuoteIdentifier,
                 table => QuoteIdentifier(PhysicalTable(table).Schema ?? GetSchemaName()) + "." + QuoteIdentifier(table),
-                ViewBoolLiteral);
+                ViewBoolLiteral,
+                FragmentDialect);
         }
 
         /// <summary>

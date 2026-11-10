@@ -96,7 +96,7 @@ namespace Birko.Data.SQL.Connectors
             // join select does — and it has to sit here rather than in the command builders, since every view
             // read (both paths, both the string- and expression-keyed entry points) funnels through this
             // method. Resolving makes the ORDER BY clause unreachable from caller-supplied text.
-            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
+            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent, FragmentDialect);
             // TASK-639: the WHERE follows the path too; a persistent view has no source columns.
             var terms = DataBase.ResolveViewConditions(view, conditions, usePersistent)?.ToList();
 
