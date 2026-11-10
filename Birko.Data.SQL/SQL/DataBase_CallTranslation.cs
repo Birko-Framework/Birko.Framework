@@ -325,7 +325,7 @@ namespace Birko.Data.SQL
             }
             if (!string.IsNullOrEmpty(condition.Name) && OperandCanBeNull(inner, exprType))
             {
-                condition.NullableOperands = new[] { new NullableOperand(condition.Name) };
+                condition.NullableOperands = new[] { NullableOperandOf(condition) };
                 condition.NullOperandMatches = false;
             }
             return condition;
@@ -351,9 +351,41 @@ namespace Birko.Data.SQL
             var invariant = IsInvariantFold(fold);
             var innerName = inner.Name!;
             var innerFragment = inner.NameFragment;
+            if (innerFragment == null)
+            {
+                // TASK-890: a fold of a plain column is recorded, so a persistent view can rename the column inside it.
+                FoldColumn(condition, new CaseFoldOperand(innerName, upper, invariant));
+                return;
+            }
             condition.Name = SqlValueFragmentDialect.Portable.CaseFold(innerName, upper, invariant);
-            condition.NameFragment = dialect => dialect.CaseFold(innerFragment?.Invoke(dialect) ?? innerName, upper, invariant);
+            condition.NameFragment = dialect => dialect.CaseFold(innerFragment(dialect), upper, invariant);
         }
+
+        /// <summary>
+        /// TASK-890 — names <paramref name="condition"/> after <paramref name="fold"/>, the case fold of a plain column: the
+        /// portable <c>LOWER</c> / <c>UPPER</c>, the provider's <see cref="SqlValueFragmentDialect.CaseFold"/> re-render, and the
+        /// fold itself (<see cref="Condition.CaseFold"/>). The one producer of a folded column's name, for the parser and for a
+        /// persistent view that renames the column (<c>ResolveViewConditions</c>).
+        /// </summary>
+        internal static void FoldColumn(Condition condition, CaseFoldOperand fold)
+        {
+            condition.Name = FoldedName(fold);
+            condition.NameFragment = dialect => dialect.CaseFold(fold.Column, fold.Upper, fold.Invariant);
+            condition.CaseFold = fold;
+        }
+
+        /// <summary>TASK-890 — the portable name of <paramref name="fold"/>, which a condition carrying it is named.</summary>
+        internal static string FoldedName(CaseFoldOperand fold)
+            => SqlValueFragmentDialect.Portable.CaseFold(fold.Column, fold.Upper, fold.Invariant);
+
+        /// <summary>
+        /// TASK-890 — the operand of <paramref name="condition"/>'s <c>IS NULL</c> leg: the column of a case fold (a fold is
+        /// NULL exactly when its column is, and a persistent view can rename a column, not a fold), else its name.
+        /// </summary>
+        private static NullableOperand NullableOperandOf(Condition condition)
+            => new(condition.CaseFold != null && condition.Name == FoldedName(condition.CaseFold)
+                ? condition.CaseFold.Column
+                : condition.Name!);
 
         /// <summary>
         /// TASK-870 — <c>string.Replace(oldValue, newValue)</c> in an update's SET value, matched ordinally as C# does

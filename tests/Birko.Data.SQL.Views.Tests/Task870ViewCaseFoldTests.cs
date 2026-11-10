@@ -23,8 +23,8 @@ namespace Birko.Data.SQL.Views.Tests;
 /// TASK-870 — an OnTheFly <see cref="SqlViewStore{TView}"/> filter over <c>ToLower()</c> / <c>ToUpper()</c> folds as the
 /// provider's <c>SqlValueFragmentDialect.CaseFold</c> does: C#'s own fold on SQLite (whose <c>LOWER</c> folds ASCII only;
 /// measured before, <c>v.Code.ToLower() == "čučoriedka"</c> matched only the lowercase row), and <c>LOWER</c> / <c>UPPER</c>
-/// on the servers, which fold these texts as C# does. A persistent view refuses a fold by name, as it refuses every computed
-/// fragment (TASK-858).
+/// on the servers, which fold these texts as C# does. TASK-890: a persistent view folds its own column the same way; a fold of
+/// a computed value is refused by name there, as every computed fragment is (TASK-858).
 /// </summary>
 [Collection("T870V")]
 public abstract class Task870ViewCaseFoldTestsBase : IAsyncLifetime
@@ -73,6 +73,8 @@ public abstract class Task870ViewCaseFoldTestsBase : IAsyncLifetime
             ["ToLowerInvariant().StartsWith(\"ab\")"] = v => v.Code!.ToLowerInvariant().StartsWith("ab"),
             ["!(ToUpper() == \"ÄRGER\")"] = v => !(v.Code!.ToUpper() == "ÄRGER"),
             ["string.Equals(ToLower(), \"café\", Ordinal)"] = v => string.Equals(v.Code!.ToLower(), "café", StringComparison.Ordinal),
+            ["string.Equals(ToUpper(), \"čučoriedka\", OrdinalIgnoreCase)"] = v => string.Equals(v.Code!.ToUpper(), "čučoriedka", StringComparison.OrdinalIgnoreCase),
+            ["ToLower() != \"abc\""] = v => v.Code!.ToLower() != "abc",
         };
 
     public static IEnumerable<object[]> ExactNames => Exact.Keys.Select(k => new object[] { k });
@@ -144,18 +146,32 @@ public abstract class Task870ViewCaseFoldTestsBase : IAsyncLifetime
     }
 
     /// <summary>
-    /// A persistent view has no source column to fold (TASK-858's rule for a computed fragment). Measured before, every shape
-    /// failed with an error naming something else ("no such column: T870VItems.Code", 42P01, "could not be bound").
+    /// TASK-890 — a persistent (or Auto, once the view exists) view folds its own column: the fold's column is renamed to the
+    /// view's. Before (TASK-870 to TASK-890) every shape was refused by name ("computes"), and before TASK-870 each failed with
+    /// an error naming something else ("no such column: T870VItems.Code", 42P01, "could not be bound"). This test asserted the
+    /// refusal; it is inverted, not deleted (rule 56).
     /// </summary>
     [Theory]
     [MemberData(nameof(ExactNames))]
-    public async Task A_persistent_view_filter_over_a_case_fold_is_refused_by_name_before_it_runs(string shape)
+    public async Task A_persistent_view_filter_over_a_case_fold_matches_what_CSharp_matches(string shape)
+    {
+        if (_connector == null) return;
+        await Matches(PortableMode.Persistent, shape, Exact[shape]);
+        await Matches(PortableMode.Auto, shape, Exact[shape]);
+    }
+
+    /// <summary>
+    /// TASK-890 — a fold of a computed value (here, of another fold) has no column of the view to fold (TASK-858's rule for
+    /// a computed fragment), so it is refused by name before anything runs.
+    /// </summary>
+    [Fact]
+    public async Task A_persistent_view_filter_over_a_case_fold_of_a_computed_value_is_refused_by_name_before_it_runs()
     {
         if (_connector == null) return;
         var store = new SqlViewStore<T870VView>(_connector, Definition(PortableMode.Persistent));
         _executed.Clear();
 
-        var read = () => store.QueryAsync(Exact[shape]);
+        var read = () => store.QueryAsync(v => v.Code!.ToLower().ToUpper() == "ABC");
         (await read.Should().ThrowAsync<NotSupportedException>()).Which.Message.Should().Contain("computes");
         _executed.Should().NotContain(text => text.Contains("SELECT", StringComparison.OrdinalIgnoreCase), "nothing ran");
     }

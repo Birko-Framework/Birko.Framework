@@ -278,18 +278,12 @@ namespace Birko.Data.SQL
                 var rewritten = RewriteTranslatableCalls(lambdaExpression.Body);
                 var normalizedBody = Birko.Data.Expressions.ExpressionNormalizer.Normalize(rewritten) ?? rewritten;
                 // An integer narrowed to the column's own type (`SET Sh = (short)(Sh + 1)`): stored as SQL computed it, which
-                // is C#'s value until it overflows, and an overflow is the server's error on a provider that is loud.
+                // is C#'s value until it overflows, and an overflow fails the statement (TASK-890: on SQLite through the
+                // dialect's range check; it used to be refused there).
                 if (normalizedBody is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } narrowed
                     && narrowed.Type == lambdaExpression.ReturnType && ContainsParameter(narrowed)
                     && SqlConversion.IsIntegralNarrowing(narrowed.Operand.Type, narrowed.Type))
-                {
-                    if (!dialect.StoresIntegerOverflowLoudly)
-                        throw new NotSupportedException(
-                            $"Cannot translate the conversion from {Describe(narrowed.Operand.Type)} to {Describe(narrowed.Type)} in an "
-                            + "update's SET value on this provider: C# wraps a value that overflows, and this provider stores it "
-                            + "unchanged, out of the column's range, with no error. Compute the value in memory and set it.");
-                    return ParseExpression(narrowed.Operand, parameters, withTableName, type, dialect);
-                }
+                    return dialect.NarrowedInteger(ParseExpression(narrowed.Operand, parameters, withTableName, type, dialect)!, narrowed.Type);
                 return ParseExpression(normalizedBody, parameters, withTableName, type, dialect);
             }
             if (expr is ConditionalExpression conditionalExpression)
@@ -2227,7 +2221,7 @@ namespace Birko.Data.SQL
             if (condition.IsField || string.IsNullOrEmpty(condition.Name) || !IsComparison(condition.Type)
                 || !OperandCanBeNull(column, exprType))
                 return;
-            condition.NullableOperands = new[] { new NullableOperand(condition.Name) };
+            condition.NullableOperands = new[] { NullableOperandOf(condition) };
             condition.NullOperandMatches = false;
         }
 

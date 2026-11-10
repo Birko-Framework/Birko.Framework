@@ -20,8 +20,5 @@ public sealed class SQLiteCallCastFilterContractTests : CallCastFilterContract, 
         return store;
     }
 
-    /// <summary>Measured: SQLite stores an out-of-range integer silently (TASK-860), so it refuses a narrowing SET.</summary>
-    protected override bool NarrowsIntegersInSet => false;
-
     public void Dispose() => TestTempDirectory.Delete(_root);
 }

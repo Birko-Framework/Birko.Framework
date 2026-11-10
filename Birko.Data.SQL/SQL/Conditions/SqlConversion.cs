@@ -53,8 +53,8 @@ namespace Birko.Data.SQL.Conditions
 
         /// <summary>
         /// TASK-860 — an integer cast to a narrower integer (<c>(short)(x.Sh + 1)</c>). C# wraps on overflow; a SQL value
-        /// that does not fit the column it is stored in is refused by the server, so an update SET may keep it where the
-        /// provider is loud (<c>SqlValueFragmentDialect.StoresIntegerOverflowLoudly</c>). A filter never may.
+        /// that does not fit the column it is stored in fails the statement, so an update SET may narrow to its column's type
+        /// (<c>SqlValueFragmentDialect.NarrowedInteger</c>, TASK-890). A filter never may.
         /// </summary>
         public static bool IsIntegralNarrowing(Type from, Type to)
         {

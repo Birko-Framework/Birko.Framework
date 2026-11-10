@@ -93,15 +93,49 @@ namespace Birko.Data.SQL.Conditions
         /// widening integer) renders nothing; an integer becoming a <c>decimal</c> or <c>double</c> is an explicit
         /// <see cref="Cast"/>, because without it <c>(decimal)x.Hits / 4m</c> divided two integers on PostgreSQL and SQL
         /// Server (measured); any other conversion is refused. It used to drop every conversion.
+        /// <para>
+        /// TASK-890: an integer widened to a wider integer is <see cref="IntegerWidening"/>, so the arithmetic over it is
+        /// computed in the type C# computes it in.
+        /// </para>
         /// </summary>
         public virtual string Conversion(string operand, Type from, Type to) => SqlConversion.Classify(from, to) switch
         {
-            SqlConversionKind.Transparent => operand,
+            SqlConversionKind.Transparent => IntegerWidening(operand, from, to),
             SqlConversionKind.Widening => Cast(operand, from, Nullable.GetUnderlyingType(to) ?? to),
             _ => throw new NotSupportedException(
                 $"Cannot translate the conversion from {(Nullable.GetUnderlyingType(from) ?? from).Name} to "
                 + $"{(Nullable.GetUnderlyingType(to) ?? to).Name} over the row to SQL: it is not exact on every provider."),
         };
+
+        /// <summary>
+        /// TASK-890 — a transparent conversion (<see cref="SqlConversionKind.Transparent"/>): an integer widened to <c>int</c>
+        /// or <c>long</c> is cast to it; anything else (a nullable lift, an enum as its own integer, a <c>float</c> as a
+        /// <c>double</c>) renders nothing. C# computes <c>x.Sh * x.Sh</c> in <c>int</c> and <c>(long)x.Hits * 2</c> in
+        /// <c>long</c>; PostgreSQL and SQL Server computed them in the column's own type and failed with an overflow C# never
+        /// has (measured: 22003 "smallint out of range" / "integer out of range", Msg 8115) for <c>x.Sh * x.Sh &gt; 1000</c>,
+        /// <c>-x.Sh &gt; 0</c> at <see cref="short.MinValue"/> and <c>(long)x.Hits * 2 &gt; 0</c> at <see cref="int.MaxValue"/>.
+        /// MySQL computes every integer in <c>BIGINT</c> and SQLite in 64 bits, so both render nothing here.
+        /// </summary>
+        protected virtual string IntegerWidening(string operand, Type from, Type to)
+        {
+            var source = IntegerTypeOf(from);
+            var target = IntegerTypeOf(to);
+            if (source == null || target == null || source == target) return operand;
+            return Type.GetTypeCode(target) switch
+            {
+                TypeCode.Int32 => $"CAST({operand} AS INTEGER)",
+                TypeCode.Int64 => $"CAST({operand} AS BIGINT)",
+                _ => operand,
+            };
+        }
+
+        /// <summary>The integer type of <paramref name="type"/> (an enum's underlying one), or null when it is no integer.</summary>
+        private static Type? IntegerTypeOf(Type type)
+        {
+            var underlying = Nullable.GetUnderlyingType(type) ?? type;
+            if (underlying.IsEnum) underlying = Enum.GetUnderlyingType(underlying);
+            return SqlConversion.IsIntegral(underlying) ? underlying : null;
+        }
 
         /// <summary>
         /// TASK-860 — an exact widening of the integer <paramref name="operand"/> (of <paramref name="from"/>) to
@@ -113,12 +147,14 @@ namespace Birko.Data.SQL.Conditions
                 : $"CAST({operand} AS {FloatingTypeName(to)})";
 
         /// <summary>
-        /// TASK-860 — true when storing an integer that does not fit its column is an error on this provider, so an update
-        /// SET may narrow an integer as C# does (<c>(short)(x.Sh + 1)</c>): exact until it overflows, and an overflow fails
-        /// instead of storing a value C# would have wrapped. Measured (CallCastFilterContract's overflow case): PostgreSQL,
-        /// SQL Server and MySQL (under the STRICT_TRANS_TABLES its 8.x default carries) fail the statement and store nothing.
+        /// TASK-860 / TASK-890 — an update SET value narrowed to its column's own integer type (<c>(short)(x.Sh + 1)</c>):
+        /// exact until it overflows, and an overflow fails the statement instead of storing a value C# would have wrapped. The
+        /// base keeps the value, because storing an integer that does not fit its column is an error there. Measured
+        /// (CallCastFilterContract, Task890ArithmeticOverflowTests): PostgreSQL (22003), SQL Server (Msg 220) and MySQL (1264,
+        /// under the STRICT_TRANS_TABLES its 8.x default carries) fail the statement and store nothing. SQLite stores any
+        /// 64-bit integer whatever the column declares, so it checks the range itself.
         /// </summary>
-        public virtual bool StoresIntegerOverflowLoudly => true;
+        public virtual string NarrowedInteger(string value, Type target) => value;
 
         /// <summary>The SQL type a <c>double</c> (or <c>float</c>) cast names; <c>DOUBLE PRECISION</c> is the standard's.</summary>
         protected virtual string FloatingTypeName(Type type) => type == typeof(float) ? "REAL" : "DOUBLE PRECISION";
@@ -136,8 +172,13 @@ namespace Birko.Data.SQL.Conditions
                 ? _round(value, digits, mode)
                 : $"BIRKO_ROUND_{mode.ToString().ToUpperInvariant()}({value}, {digits.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
 
-        /// <summary>TASK-857 — <c>Math.Abs(operand)</c> in <paramref name="type"/>.</summary>
-        public virtual string Abs(string operand, Type type) => $"ABS({operand})";
+        /// <summary>
+        /// TASK-857 — <c>Math.Abs(operand)</c> in <paramref name="type"/>. TASK-890: a <c>short</c> one is cast back to
+        /// <c>SMALLINT</c>, so <c>Math.Abs(x.Sh)</c> at <see cref="short.MinValue"/> fails as C# throws
+        /// <see cref="OverflowException"/> (measured: SQL Server's <c>ABS</c> answered 32768 for it; PostgreSQL fails either way).
+        /// </summary>
+        public virtual string Abs(string operand, Type type)
+            => (Nullable.GetUnderlyingType(type) ?? type) == typeof(short) ? $"CAST(ABS({operand}) AS SMALLINT)" : $"ABS({operand})";
 
         /// <summary>TASK-857 — <c>-operand</c> in <paramref name="type"/>. Parenthesised, so two minus signs never meet as a comment.</summary>
         public virtual string Negate(string operand, Type type) => $"(-({operand}))";

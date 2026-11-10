@@ -17,7 +17,8 @@ namespace Birko.Data.SQL.Providers.Tests;
 /// <summary>
 /// TASK-858 — on PostgreSQL, MySQL and SQL Server a value fragment's provider re-render (TASK-856) is byte for byte the
 /// portable form the parser wrote into the condition. Only a <c>Math.Round</c> (TASK-857) and MySQL's integer division
-/// and <c>double</c> cast (TASK-860) differ, by design. Before this, one shape pinned it
+/// and <c>double</c> cast (TASK-860) differ, by design, and MySQL's integer widening (TASK-890: MySQL computes every integer in
+/// <c>BIGINT</c>, and its <c>CAST</c> takes no <c>BIGINT</c>, so it renders none). Before this, one shape pinned it
 /// (<c>ThePortableFragment_OtherProvidersRun_IsUnchanged</c>, SQLite tests); this covers <c>CASE</c>, <c>COALESCE</c>, a
 /// conversion, column against column and the <c>IS NULL</c> legs TASK-859 adds, through each connector's own dialect.
 /// Offline: the connectors are built, never connected.
@@ -68,6 +69,13 @@ public class Task858FragmentByteIdentityTests
             ["Ids.Contains(Amount * 2)"] = x => Ids.Contains(x.Amount * 2m),
         };
 
+    /// <summary>The by-design differences: TASK-890's integer widening is a cast on PostgreSQL and SQL Server, nothing on MySQL.</summary>
+    private static readonly IReadOnlyDictionary<(string Provider, string Portable), string> Designed =
+        new Dictionary<(string, string), string>
+        {
+            [("MySQL", "(CAST(T858Rows.Hits AS BIGINT) + 1)")] = "(T858Rows.Hits + 1)",
+        };
+
     public static IEnumerable<object[]> Cases()
         => from provider in new[] { "PostgreSQL", "MySQL", "SQL Server" }
            from shape in Shapes.Keys
@@ -95,7 +103,8 @@ public class Task858FragmentByteIdentityTests
         rendered.Should().NotBeEmpty($"'{shape}' is a value fragment");
         foreach (var condition in rendered)
         {
-            condition.NameFragment!(dialect).Should().Be(condition.Name, $"{provider} runs the portable '{condition.Name}'");
+            var expected = Designed.TryGetValue((provider, condition.Name!), out var designed) ? designed : condition.Name;
+            condition.NameFragment!(dialect).Should().Be(expected, $"{provider} runs the portable '{condition.Name}'");
             if (condition.FieldFragment != null)
                 condition.FieldFragment(dialect).Should().Be((string)condition.Values!.Cast<object>().Single(),
                     $"{provider} runs the portable right side");

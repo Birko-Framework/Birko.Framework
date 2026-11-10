@@ -45,6 +45,26 @@ namespace Birko.Data.SQL.Conditions
         public Condition IsNull(bool isNot) => new(Sql, null, ConditionType.IsNull, isNot: isNot) { NameFragment = Fragment };
     }
 
+    /// <summary>TASK-890: a case fold of the plain column <see cref="Column"/>, as <see cref="Condition.CaseFold"/> records it.</summary>
+    public sealed class CaseFoldOperand
+    {
+        public CaseFoldOperand(string column, bool upper, bool invariant)
+        {
+            Column = column ?? throw new ArgumentNullException(nameof(column));
+            Upper = upper;
+            Invariant = invariant;
+        }
+
+        /// <summary>The folded column, as the condition names it.</summary>
+        public string Column { get; }
+
+        /// <summary><c>ToUpper</c> rather than <c>ToLower</c>.</summary>
+        public bool Upper { get; }
+
+        /// <summary>The invariant form (<c>ToLowerInvariant</c> / <c>ToUpperInvariant</c>).</summary>
+        public bool Invariant { get; }
+    }
+
     public class Condition
     {
         public string? Name { get; set; }
@@ -63,6 +83,13 @@ namespace Birko.Data.SQL.Conditions
 
         /// <summary>TASK-856: the same for the single value of an <see cref="IsField"/> condition.</summary>
         public Func<SqlValueFragmentDialect, string>? FieldFragment { get; set; }
+
+        /// <summary>
+        /// TASK-890: set by the expression parser when <see cref="Name"/> is a case fold (<c>ToLower()</c>, <c>ToUpper()</c> or
+        /// an invariant form) of a plain column, so the column can be renamed inside the fold: a persistent view exposes it
+        /// under the view property's name. Null for anything else.
+        /// </summary>
+        public CaseFoldOperand? CaseFold { get; set; }
 
         /// <summary>
         /// TASK-859: the operands of this comparison that can be NULL, set by the expression parser. SQL answers UNKNOWN
@@ -127,6 +154,7 @@ namespace Birko.Data.SQL.Conditions
             target.IsField = IsField;
             target.NameFragment = NameFragment;
             target.FieldFragment = FieldFragment;
+            target.CaseFold = CaseFold;
             target.NullableOperands = NullableOperands;
             target.NullOperandMatches = NullOperandMatches;
             target.Comparison = Comparison;

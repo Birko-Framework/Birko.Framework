@@ -282,20 +282,18 @@ public abstract class CallCastFilterContract
     };
 
     /// <summary>
-    /// An integer narrowed to its own column's type: exact while it fits, and on overflow C# wraps. Translated where the
-    /// provider refuses an out-of-range value (<see cref="NarrowsIntegersInSet"/>), refused by name where it stores it.
+    /// An integer narrowed to its own column's type: exact while it fits, and on overflow the statement fails (C# wraps).
+    /// TASK-890: translated on every provider; SQLite, which stores an out-of-range integer silently, refused it until it
+    /// range-checked the narrowed value (<c>SqlValueFragmentDialect.NarrowedInteger</c>).
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, (SetCase Case, string Named)> SetNarrowing = new Dictionary<string, (SetCase, string)>
+    public static readonly IReadOnlyDictionary<string, SetCase> SetNarrowing = new Dictionary<string, SetCase>
     {
-        ["Sh = (short)(Sh + 1)"] = (Set(x => x.Sh, x => (short)(x.Sh + 1)), "Int16"),
-        ["Sh = (short)(Sh * 2)"] = (Set(x => x.Sh, x => (short)(x.Sh * 2)), "Int16"),
-        ["Hits = (int)Big"] = (Set(x => x.Hits, x => (int)x.Big), "Int32"),
+        ["Sh = (short)(Sh + 1)"] = Set(x => x.Sh, x => (short)(x.Sh + 1)),
+        ["Sh = (short)(Sh * 2)"] = Set(x => x.Sh, x => (short)(x.Sh * 2)),
+        ["Hits = (int)Big"] = Set(x => x.Hits, x => (int)x.Big),
     };
 
     public static IEnumerable<object[]> SetNarrowingNames => SetNarrowing.Keys.Select(k => new object[] { k });
-
-    /// <summary>False where storing an integer past its column's range is silent (SQLite): a narrowing SET is refused there.</summary>
-    protected virtual bool NarrowsIntegersInSet => true;
 
     public static IEnumerable<object[]> SetRefusedNames => SetRefused.Keys.Select(k => new object[] { k });
 
@@ -412,7 +410,7 @@ public abstract class CallCastFilterContract
     /// <summary>
     /// TASK-860 — an update SET may narrow an integer to its column's type (<c>(short)(x.Sh + 1)</c>) only where an overflow is
     /// loud: C# wraps 32767 + 1 to -32768, and a provider that stored 32768 instead would write a value C# never computes.
-    /// So the statement either writes what C# writes, or fails and writes nothing.
+    /// So the statement either writes what C# writes, or fails and writes nothing (TASK-890: it fails on every provider).
     /// </summary>
     [Fact]
     public async Task Contract_A_narrowing_SET_that_overflows_fails_and_writes_nothing()
@@ -434,20 +432,14 @@ public abstract class CallCastFilterContract
 
     [Theory]
     [MemberData(nameof(SetNarrowingNames))]
-    public async Task Contract_A_narrowing_SET_writes_what_CSharp_writes_or_is_refused_by_name(string shape)
+    public async Task Contract_A_narrowing_SET_writes_what_CSharp_writes(string shape)
     {
         if (!Ready()) return;
         var (store, seed) = await Seeded();
-        var (setCase, named) = SetNarrowing[shape];
-        var run = () => setCase.Run(ConnectorOf(store), EveryRow);
+        var setCase = SetNarrowing[shape];
 
-        if (NarrowsIntegersInSet)
-        {
-            run();
-            foreach (var row in seed) setCase.Oracle(row);
-        }
-        else
-            run.Should().Throw<NotSupportedException>().Which.Message.Should().Contain(named);
+        setCase.Run(ConnectorOf(store), EveryRow);
+        foreach (var row in seed) setCase.Oracle(row);
 
         var stored = (await store.ReadAsync(EveryRow, null, null, null)).ToDictionary(x => x.Code);
         foreach (var row in seed)

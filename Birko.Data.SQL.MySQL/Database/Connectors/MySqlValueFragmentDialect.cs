@@ -21,6 +21,49 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override string IntegralDivide(string left, string right) => $"({left} DIV {right})";
 
+        /// <summary>
+        /// TASK-890 — integer arithmetic computed in a C# type narrower than 64 bits is range-checked by
+        /// <see cref="CheckedInteger"/>. MySQL computes every integer expression in <c>BIGINT</c>, so an <c>int</c> result
+        /// past its range answered silently (measured on 8.4: <c>x.Hits * 2 / 2 == x.Hits</c> matched the
+        /// <see cref="int.MaxValue"/> row and <c>SET Hits = Hits * 2 / 2</c> stored it unchanged, where C# wraps to -1, and
+        /// PostgreSQL, SQL Server and SQLite fail the statement). A <c>long</c> overflows <c>BIGINT</c> itself, which MySQL fails
+        /// with error 1690.
+        /// </summary>
+        public override string Arithmetic(System.Linq.Expressions.ExpressionType op, string sqlOperator, string left, string right, Type type)
+            => CheckedInteger(base.Arithmetic(op, sqlOperator, left, right, type), type);
+
+        /// <summary>TASK-890 — as <see cref="Arithmetic"/>: <c>-x.Hits</c> at <see cref="int.MinValue"/> answered 2147483648.</summary>
+        public override string Negate(string operand, Type type) => CheckedInteger(base.Negate(operand, type), type);
+
+        /// <summary>TASK-890 — as <see cref="Arithmetic"/>: <c>Math.Abs(x.Hits)</c> at <see cref="int.MinValue"/> answered 2147483648.</summary>
+        public override string Abs(string operand, Type type) => CheckedInteger($"ABS({operand})", type);
+
+        /// <summary>TASK-890 — nothing: every integer is computed in <c>BIGINT</c> here already.</summary>
+        protected override string IntegerWidening(string operand, Type from, Type to) => operand;
+
+        /// <summary>
+        /// TASK-890 — <paramref name="value"/>, failing the statement when it leaves the range of the signed C# integer
+        /// <paramref name="type"/> (<c>int</c>, <c>short</c>, <c>sbyte</c>): <c>((value * 2^(64-n)) DIV 2^(64-n))</c>. The product
+        /// fits a signed <c>BIGINT</c> exactly when the value fits n bits, and otherwise MySQL fails it with error 1690 ("BIGINT value
+        /// is out of range in …"), in a read and a write alike, as it fails a <c>long</c> overflow; the division gives the value
+        /// back. The value is referenced once, so nested arithmetic does not grow the statement (a <c>CASE</c> would repeat it at
+        /// every level). NULL stays NULL. Other types are returned unchanged: a <c>long</c> overflows <c>BIGINT</c> itself, and an
+        /// unsigned type would need an offset an <c>UNSIGNED</c> column cannot take.
+        /// </summary>
+        private static string CheckedInteger(string value, Type type)
+        {
+            var bits = Type.GetTypeCode(Nullable.GetUnderlyingType(type) ?? type) switch
+            {
+                TypeCode.Int32 => 32,
+                TypeCode.Int16 => 16,
+                TypeCode.SByte => 8,
+                _ => 0,
+            };
+            if (bits == 0) return value;
+            var scale = (1UL << (64 - bits)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return $"(({value} * {scale}) DIV {scale})";
+        }
+
         /// <summary>The text <see cref="Divisor"/> raises; MySQL reports it as error 1411 ("Incorrect string value: '…'").</summary>
         public const string DivisionByZeroText = "Division by zero in a filter or SET value: C# throws DivideByZeroException";
 

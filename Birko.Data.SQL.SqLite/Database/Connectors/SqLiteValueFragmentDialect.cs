@@ -89,15 +89,28 @@ namespace Birko.Data.SQL.Connectors
         protected override string FloatingTypeName(Type type) => "REAL";
 
         /// <summary>
-        /// TASK-860 — measured: <c>SET Sh = (short)(Sh + 1)</c> on a <c>short</c> column holding 32767 stored 32768 with no
-        /// error (an INTEGER is 64-bit here, whatever the column declares); the row then failed every read with
-        /// <see cref="OverflowException"/>, and a filter saw the out-of-range value. C# writes -32768.
+        /// TASK-890 — the narrowed value through <see cref="SqLiteExactFunctions.CheckedIntegerCall"/> with the target type's
+        /// range, so an overflow fails the statement as the servers fail it. Measured before TASK-860 refused it: <c>SET Sh =
+        /// (short)(Sh + 1)</c> on a <c>short</c> column holding 32767 stored 32768 with no error (an INTEGER is 64-bit here,
+        /// whatever the column declares); the row then failed every read with <see cref="OverflowException"/>. From TASK-860
+        /// to TASK-890 every narrowing SET was refused, the in-range ones too.
         /// </summary>
-        public override bool StoresIntegerOverflowLoudly => false;
+        public override string NarrowedInteger(string value, Type target) => SqLiteExactFunctions.CheckedIntegerCall(value, target);
 
-        /// <inheritdoc />
+        /// <summary>TASK-890 — nothing: an INTEGER is 64-bit here, and each integer result is checked against its C# type.</summary>
+        protected override string IntegerWidening(string operand, Type from, Type to) => operand;
+
+        /// <summary>
+        /// A decimal through <see cref="SqLiteDecimal.AbsFunction"/>. TASK-890: an integer is range-checked, as C#'s
+        /// <c>Math.Abs</c> throws for the type's minimum (measured: <c>Math.Abs(x.Hits) &gt; 0</c> matched the
+        /// <see cref="int.MinValue"/> row, whose absolute value is 2147483648 in SQLite's 64 bits).
+        /// </summary>
         public override string Abs(string operand, Type type)
-            => IsDecimal(type) ? $"{SqLiteDecimal.AbsFunction}({operand})" : base.Abs(operand, type);
+            => IsDecimal(type)
+                ? $"{SqLiteDecimal.AbsFunction}({operand})"
+                : SqlConversion.IsIntegral(type)
+                    ? SqLiteExactFunctions.CheckedIntegerCall($"ABS({operand})", type)
+                    : base.Abs(operand, type);
 
         /// <inheritdoc />
         public override string Negate(string operand, Type type)

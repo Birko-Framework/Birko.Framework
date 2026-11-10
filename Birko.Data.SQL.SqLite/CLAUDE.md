@@ -124,7 +124,11 @@ and `SqLiteDecimal` (`Database/Connectors/SqLiteDecimal.cs`) registers on **ever
   the answer must not depend on the host culture. The servers' `LOWER` / `UPPER` ignore the host culture.
 - `birko_checked_int(value, min, max)` — integer arithmetic in a filter or SET, and `PropertyUpdate.Increment` of an
   integer column: fails the statement when the value leaves its C# type's range (an INTEGER is 64-bit here, so
-  `Hits + 1` at `int.MaxValue` used to be stored, and every later read of the row threw) (TASK-870)
+  `Hits + 1` at `int.MaxValue` used to be stored, and every later read of the row threw) (TASK-870). Also
+  `Math.Abs` of an integer (`Math.Abs(x.Hits)` at `int.MinValue` matched as 2147483648) and a SET narrowed to its
+  column's type (`Sh = (short)(Sh + 1)`, checked against `short`'s range; refused from TASK-860 until then) (TASK-890).
+  The error surfaces as `SqliteException` (error 1) with the overflow in its message, as each server surfaces its
+  driver's exception; it is not rewrapped (see `Birko.Data.SQL/README.md`, integer overflow)
 
 ⚠ **A connection that did not register them** — a consumer's own `SqliteConnection`, the `sqlite3` CLI, DB
 Browser — can `SELECT` a decimal column but fails on `ORDER BY` of it, and on any write to a table with an index on

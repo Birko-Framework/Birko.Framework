@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL integer arithmetic fails where checked C# would, on every provider (2026-11-10)
+[[TASK-890]]. MySQL computed `int` arithmetic in BIGINT, so overflowing filters matched rows and a SET stored the
+unwrapped value, silently; PostgreSQL and SQL Server dropped widening casts and failed `(long)x.Hits * 2` where C#
+succeeds; `Math.Abs` at the minimum answered (measured). Every provider now fails a statement exactly where checked C#
+would. A narrowing SET translates on SQLite, and a fold works on a persistent view. **Breaking:**
+`StoresIntegerOverflowLoudly` is replaced by `NarrowedInteger`.
 ### Cosmos DB: missing members read as their default, nested predicates and long null lists work (2026-11-10)
 [[TASK-899]]. A non-nullable member missing from a document failed `A == 0`, `!Del` and 32 more shapes (C# reads the
 default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused

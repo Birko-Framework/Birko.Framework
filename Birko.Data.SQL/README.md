@@ -357,6 +357,23 @@ rameter limit is
   `NotSupportedException`, since C# throws for an empty one. On SQLite an integer SET (`Hits = Hits + 1`,
   `Increment`) that leaves its C# type's range fails the statement (`birko_checked_int`) instead of storing a value
   every later read of the row throws on; the servers already failed it.
+- **Integer overflow (TASK-890), in filters and update SET values alike.** Integer arithmetic (`+ - * / %`, unary
+  minus, `Math.Abs`) is computed in the C# type of the expression, and a result outside that type's range **fails the
+  statement on every provider**: C# `checked` semantics, not C#'s default wrap, which no provider computes. A read whose
+  arithmetic overflows on any row fails as a whole, and a write writes nothing. Arithmetic that does not overflow
+  answers what C# answers.
+  - MySQL computes integers in `BIGINT`, so an `int` result is range-checked as `((x * 2^32) DIV 2^32)` (MySQL error
+    1690 when it does not fit). Before, `x.Hits * 2 / 2 == x.Hits` matched the `int.MaxValue` row, and
+    `SET Hits = Hits * 2 / 2` stored it unchanged, silently.
+  - PostgreSQL and SQL Server compute in the column's own type, so an integer widened in C# (`x.Sh * x.Sh`, `-x.Sh`,
+    `(long)x.Hits * 2`) is cast to `INTEGER` / `BIGINT`. Before, they failed with an overflow C# never has.
+  - A SET narrowed to its column's type (`Sh = (short)(Sh + 1)`) translates on every provider, SQLite included (refused
+    there from TASK-860 to TASK-890), and fails when the value does not fit.
+  - What the caller sees is the provider's own exception, as for a division by zero: PostgreSQL `PostgresException`
+    22003, SQL Server `SqlException` 8115 / 220, MySQL `MySqlException` 1690 / 1264, SQLite `SqliteException` (error 1,
+    from `birko_checked_int`, with the overflow in its message). All four are `DbException`, which is the one type to
+    catch. They are not rewrapped as `OverflowException`: that would drop each driver's error code that callers and the
+    retry filter select on, and would earn no catch `DbException` does not already give (rule 9).
 - Predicates also accept ternaries, `??`, and column arithmetic — see
   [CLAUDE.md § Filter translation](CLAUDE.md) for the full supported surface.
 

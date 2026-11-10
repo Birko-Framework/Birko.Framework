@@ -37,6 +37,12 @@ namespace Birko.Data.SQL
         /// error that named something else ("no such column: T858Orders.Amount", 42P01 "missing FROM-clause entry", and on SQL
         /// Server "'BIRKO_ROUND_TOEVEN' is not a recognized built-in function name").
         /// </para>
+        /// <para>
+        /// TASK-890: a case fold (<c>ToLower()</c>, <c>ToUpper()</c>, their invariant forms) of a plain column is the one
+        /// fragment whose column is renamed (<see cref="Conditions.Condition.CaseFold"/>): it folds the view's column through the
+        /// provider's <see cref="Conditions.SqlValueFragmentDialect.CaseFold"/>. Since TASK-870 it had been refused by name. A
+        /// fold of a computed value is still refused.
+        /// </para>
         /// </remarks>
         /// <exception cref="ArgumentException">A condition names an unqualified source column two view fields share.</exception>
         /// <exception cref="NotSupportedException">A condition computes a value over the view's source columns.</exception>
@@ -83,7 +89,15 @@ namespace Birko.Data.SQL
                 }
                 values = values.Cast<object?>().Select(v => v is string other ? ResolveViewColumn(view, other, map) : v).ToList();
             }
-            if (condition.NameFragment != null && condition.Name != null)
+            // TASK-890: a case fold of a plain column folds the view's column instead.
+            var fold = condition.CaseFold != null && condition.NameFragment != null && condition.Name == FoldedName(condition.CaseFold)
+                ? condition.CaseFold
+                : null;
+            if (fold != null)
+            {
+                RequireViewColumn(view, fold.Column, map, columns);
+            }
+            else if (condition.NameFragment != null && condition.Name != null)
             {
                 RequireViewColumn(view, condition.Name, map, columns);
             }
@@ -92,6 +106,11 @@ namespace Birko.Data.SQL
             resolved.Name = condition.Name == null ? null : ResolveViewColumn(view, condition.Name, map);
             resolved.NameFragment = null;
             resolved.FieldFragment = null;
+            resolved.CaseFold = null;
+            if (fold != null)
+            {
+                FoldColumn(resolved, new Conditions.CaseFoldOperand(ResolveViewColumn(view, fold.Column, map), fold.Upper, fold.Invariant));
+            }
             return resolved;
         }
 
