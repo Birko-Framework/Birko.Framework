@@ -22,6 +22,7 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 - `CosmosDBStore<T>` - Synchronous Cosmos DB store
 - `AsyncCosmosDBStore<T>` - Asynchronous Cosmos DB store with transactional batch support
 - `CosmosFilterRewrite` - the one filter pre-pass of both stores and the view store (TASK-896, see below)
+- `CosmosDateTimeOrder` - corrects a read sorted by a DateTime member to C#'s order, for both stores and the view store (TASK-902)
 - **A long `Contains` list (TASK-834).** The SDK writes the list into the query text, so past 524,288 characters
   (13,105 Guids, measured) Cosmos DB answers 400 SC3020.
   - **Split, by `CosmosInListChunking`:** reads, counts, and filtered updates and deletes, sync and async, in chunks of
@@ -89,7 +90,7 @@ Settings mapping from `RemoteSettings`:
 ## Filters answer null and missing members as C# does (TASK-896)
 Every filter, on every path (reads sync and async, counts, the read behind `Update(filter, …)` / `Delete(filter)`,
 aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prepare` = `SpanContains`,
-`DateTruncation`, `NullOrderingFold`, then `NullSemantics`. Add a rewrite there, never at a call site.
+`DateTruncation`, `NullOrderingFold`, `NullSemantics`, then `DateTimeKeys` (TASK-902). Add a rewrite there, never at a call site.
 - **Measured before** (emulator, vnext-preview, 2026-11-10; 93 shapes over nullable members, 2 of 10 documents
   omitting them): 53 shapes silently answered other rows than the compiled expression and 14 threw the SDK's
   `DocumentQueryException`, identically on all 7 paths.
@@ -148,6 +149,51 @@ aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prep
   `(IS_DEFINED(c.A) ? c.A : 0) = 5`), so it cannot show index use. A test the default fails keeps its plain, indexable
   rendering; the `NOT IS_DEFINED(m) OR ..` leg and a defaulted computed operand are what a real account would have to
   be measured for.
+
+## DateTime filters and sorts answer as C# (TASK-902)
+- **How a DateTime is stored.** Birko's serializer (System.Text.Json defaults) writes ISO 8601 text with as many
+  fraction digits as the value needs, none for a whole second (`…10:00:00`, `…10:00:00.5`, `…10:00:00.0000001`), then
+  `Z` for UTC, the writer's offset for local (`+01:00`, `+02:00` in summer), nothing for unspecified. It reads `Z` back
+  as UTC, an offset as the reader's local time (converted), no suffix as unspecified. The LINQ provider renders a caller's
+  value in the same form. C# compares two DateTimes by their ticks, whatever the kind; Cosmos DB compared and sorted the
+  text, so within one second the order was `"…00"`, `"…00+01:00"`, `"…00.0000001Z"`, `"…00.5Z"`, `"…00Z"`, and an
+  equality held only between equal texts (a local and a UTC time of one wall clock were unequal).
+- **Measured before** (emulator, vnext-preview, 2026-11-10; 12 documents of every kind and fraction, two omitting
+  members; `Task902DateTimeLiveTests`): 76 of 88 filter shapes answered other rows than C# on some path (reads 73,
+  counts and the aggregate WHERE 70, update and delete 76, sync and async alike; 6 of them threw `DocumentQueryException`:
+  `Equals`, `Compare`, `CompareTo`, `AddDays`). A sort answered another order on 62 of 120 sorted reads (5 sorts x 2
+  filters x 12 pages), sync and async. After: 0, and the 9 refused shapes refuse on every path.
+- **Filters (`CosmosFilterRewrite.DateTimeKeys`, the last step of `Prepare`, so store, view, counts, writes and the
+  aggregate WHERE share it).** Every comparison of a stored DateTime compares a wall-clock key: the first 19 characters
+  (the wall clock to the second, in every stored form) and the fraction, padded to 7 digits. A caller's value is keyed in
+  C# from its ticks, so its kind does not matter, as in C#. Against a value the key is preceded by a plain text range on
+  the member (`m >= "…10:00:00"` of the value's second, `m < "…10:00:01"`), which holds every row the key matches, so
+  the range index can narrow the rows (not measurable on the emulator, which reports no index metrics). Translated too:
+  member against member, a `Contains` list (a list of keys, split past the query limit like any other), `.Date`
+  against another member's `.Date`, `Equals`, `DateTime.Compare(a, b)` / `a.CompareTo(b)` against 0 (the provider threw
+  for these three). Null and missing members keep TASK-896/899's semantics.
+- **Sorts (`CosmosDateTimeOrder`).** Cosmos DB sorts only by a document path, so the server's text order is kept and
+  corrected: it is C#'s at the second, so only rows that share a second (and every earlier sort key) can be out of
+  order, and those runs are sorted in memory by ticks. On a paged read, a run that crosses the page's edge is read whole
+  (a second query: the filter AND the run's keys) and the page takes the run's rows at the positions it covered; where
+  one run covers the whole page, the rows after it are read too (at most the run's size). A sort with no DateTime key is
+  untouched. Both stores and the view store.
+- **Exact when** a value stored with an offset was written with the reader's offset, as TASK-897's aggregates and the
+  time bucket already assume: such a value reads back converted to the reader's local time.
+- **Refused by name** (`NotSupportedException` naming TASK-902, before any request; a refused write changes no row):
+  - a comparison, a list or a sort of a `DateTimeOffset` member: C# compares the instant, the stored text holds the
+    writer's offset, and the provider renders no conversion (measured: `O == o` missed the same instant written with
+    another offset, `O > o` matched an earlier one);
+  - a member of a stored DateTime (`Year`, `Hour`, `Ticks`, `TimeOfDay`, ...): the provider rendered `root["T"]["Year"]`,
+    a property of a string, and matched nothing (measured);
+  - a DateTime computed from a member (`x.T.AddDays(1)`; the provider threw `DocumentQueryException`), a `Compare` result
+    against anything but 0.
+- **Write-side option, not taken.** Writing a fixed-width form (always 7 digits and `Z`) would make plain text
+  comparisons exact and indexable for new documents, but existing documents keep their text, so the read-side key is
+  needed anyway until a migration rewrites them; and it would change what every other reader of the container sees.
+  Cosmos DB's computed properties (an indexed `cp_t` holding the key, sortable) would make both sorts and filters
+  index-served, but need a container-definition change, and the emulator accepts the definition and then answers nothing
+  for it (measured), so it cannot be tested here.
 
 ## Aggregation (TASK-876)
 - `Aggregate` / `AggregateAsync` run one native query: `SELECT … FROM root [WHERE …] [GROUP BY …]`.

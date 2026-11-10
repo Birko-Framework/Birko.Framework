@@ -583,7 +583,13 @@ public class AsyncCosmosDBStore<T>
         // TASK-834: a long IN list is read chunk by chunk, the results concatenated (the chunks are disjoint). A sort,
         // limit or offset cannot be reproduced over chunks, so such a read stays one query, refused past the ceiling.
         var sortedOrPaged = orderBy?.Fields.Count > 0 || limit.HasValue || offset.HasValue;
+        var dateTimeOrder = CosmosDateTimeOrder.Plan(orderBy, typeof(T).Name);   // TASK-902
         var chunks = PlanInList(filter, "read", sortedOrPaged, orderBy, limit, offset);
+        if (chunks == null && dateTimeOrder != null)
+        {
+            return await CosmosDateTimeOrder.ReadAsync(filter, dateTimeOrder, limit, offset,
+                async (f, l, o) => await ReadAllAsync(BuildQuery(f, orderBy, l, o), ct).ConfigureAwait(false)).ConfigureAwait(false);
+        }
         if (chunks == null) return await ReadAllAsync(BuildQuery(filter, orderBy, limit, offset), ct);
 
         var results = new List<T>();

@@ -140,7 +140,13 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         }
 
         var sortedOrPaged = orderBy?.Fields.Count > 0 || limit.HasValue || offset.HasValue;
+        var dateTimeOrder = CosmosDateTimeOrder.Plan(orderBy, "view " + typeof(TView).Name);   // TASK-902
         var chunks = PlanChunks(filter, "view read", sortedOrPaged, f => BuildProjectionSql(f, orderBy, limit, offset));
+        if (chunks == null && dateTimeOrder != null)
+        {
+            return await CosmosDateTimeOrder.ReadAsync(filter, dateTimeOrder, limit, offset,
+                async (f, l, o) => await RunAsync<TView>(BuildProjectionSql(f, orderBy, l, o), ct).ConfigureAwait(false)).ConfigureAwait(false);
+        }
         if (chunks == null)
         {
             return await RunAsync<TView>(BuildProjectionSql(filter, orderBy, limit, offset), ct).ConfigureAwait(false);
@@ -603,6 +609,10 @@ internal static class CosmosFilterTranslator
             return expected == (binary.NodeType == ExpressionType.Equal) ? predicate : $"NOT ({predicate})";
         }
 
+        // TASK-902: a comparison a pass produced (a DateTime's wall-clock key, its text range, an ordinal string ordering):
+        // its operands may be computed from a view property, and both may read the view.
+        var produced = binary.Method?.DeclaringType == typeof(CosmosFilterRewrite);
+
         var op = binary.NodeType switch
         {
             ExpressionType.Equal => "=",
@@ -614,8 +624,10 @@ internal static class CosmosFilterTranslator
             _ => throw new NotSupportedException($"Binary operator {binary.NodeType} is not supported.")
         };
 
-        var left = TranslateFieldAccess(binary.Left, mapMember);
-        var right = BindValue(binary.Right, parameters);
+        var left = produced ? TranslateOperand(binary.Left, parameters, mapMember) : TranslateFieldAccess(binary.Left, mapMember);
+        var right = produced && ParameterFinder.Uses(binary.Right)
+            ? TranslateOperand(binary.Right, parameters, mapMember)
+            : BindValue(binary.Right, parameters);
 
         return $"{left} {op} {right}";
     }
@@ -703,7 +715,10 @@ internal static class CosmosFilterTranslator
 
         if (!sourceReadsDocument && itemReadsDocument)
         {
-            var path = ViewPropertyPath(item, mapMember, "the tested value");
+            // TASK-902: a DateTime list is a list of wall-clock keys tested against the property's key.
+            var path = CosmosFilterRewrite.KeyedOperand(item) != null
+                ? TranslateOperand(item, parameters, mapMember)
+                : ViewPropertyPath(item, mapMember, "the tested value");
             var values = EvaluateValue(Birko.Data.Expressions.SpanContains.UnwrapConvert(source)!);
             if (values is not System.Collections.IEnumerable sequence || values is string)
             {
@@ -775,6 +790,56 @@ internal static class CosmosFilterTranslator
             _found = true;
             return node;
         }
+    }
+
+    /// <summary>
+    /// TASK-902: an operand of a comparison <c>CosmosFilterRewrite</c> produced: a view property (or a path under one), a
+    /// value, and the string functions a DateTime's wall-clock key is built of (<c>SUBSTRING</c>, <c>REPLACE</c>,
+    /// <c>INDEX_OF</c>, <c>CONCAT</c>, a conditional), over the property read as its stored text. Anything else is refused.
+    /// </summary>
+    private static string TranslateOperand(Expression expression, IList<KeyValuePair<string, object?>> parameters, Func<string, string>? mapMember)
+    {
+        // The key's own constants (positions, and the characters it maps) are written into the statement: they are this
+        // translator's, never a caller's, and hold nothing a literal could break out of. A caller's value is bound.
+        if (expression is ConstantExpression { Value: int position })
+        {
+            return position.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (expression is ConstantExpression { Value: string text } && text.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '+' or '-' or '.' or ':'))
+        {
+            return "\"" + text + "\"";
+        }
+        if (!ParameterFinder.Uses(expression)) return BindValue(expression, parameters);
+        if (CosmosFilterRewrite.IsDateTimeText(expression))
+        {
+            return TranslateOperand(((UnaryExpression)((UnaryExpression)expression).Operand).Operand, parameters, mapMember);
+        }
+
+        switch (expression)
+        {
+            case ConditionalExpression conditional:
+                return $"({TranslateExpression(conditional.Test, parameters, mapMember)} ? "
+                       + $"{TranslateOperand(conditional.IfTrue, parameters, mapMember)} : {TranslateOperand(conditional.IfFalse, parameters, mapMember)})";
+            case MethodCallExpression call when call.Method.DeclaringType == typeof(string):
+                var function = call.Method.Name switch
+                {
+                    nameof(string.Substring) when call.Arguments.Count == 2 => "SUBSTRING",
+                    nameof(string.Replace) when call.Arguments.Count == 2 => "REPLACE",
+                    nameof(string.IndexOf) when call.Arguments.Count == 1 => "INDEX_OF",
+                    nameof(string.Concat) when call.Object == null && call.Arguments.Count == 2 => "CONCAT",
+                    _ => null,
+                };
+                if (function == null) break;
+                var operands = (call.Object == null ? call.Arguments : call.Arguments.Prepend(call.Object))
+                    .Select(a => TranslateOperand(a, parameters, mapMember));
+                return $"{function}({string.Join(", ", operands)})";
+        }
+
+        if (Birko.Data.Expressions.SpanContains.UnwrapConvert(expression) is MemberExpression member)
+        {
+            return DocumentPath(member, mapMember);
+        }
+        throw new NotSupportedException($"A {expression.NodeType} operand of a Cosmos DB view filter is not supported. (TASK-902)");
     }
 
     private static string TranslateFieldAccess(Expression expression, Func<string, string>? mapMember)

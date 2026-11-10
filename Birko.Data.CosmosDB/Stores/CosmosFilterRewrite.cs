@@ -51,12 +51,15 @@ namespace Birko.Data.CosmosDB.Stores;
 /// (guarded under <c>!</c>); in a computed operand the member is <c>IS_DEFINED(m) ? m : default</c>.</para>
 /// <para><b>Nested predicates (TASK-899)</b> take the same rewrite, positive inside whatever the polarity outside;
 /// <c>All(p)</c>, which the provider cannot render, is <c>!Any(!p)</c>.</para>
+/// <para><b>DateTime (TASK-902)</b>: a comparison of a <see cref="DateTime"/> member compares its wall-clock key, not the
+/// stored text; see <see cref="DateTimeKeys{T}"/>.</para>
 /// </remarks>
-public static class CosmosFilterRewrite
+public static partial class CosmosFilterRewrite
 {
     /// <summary>
-    /// Every rewrite a Cosmos DB filter takes before rendering, in order. Returns <paramref name="filter"/> by reference
-    /// when none applies.
+    /// Every rewrite a Cosmos DB filter takes before rendering, in order: <c>SpanContains</c>, <c>DateTruncation</c>,
+    /// <c>NullOrderingFold</c>, <see cref="NullSemantics{T}"/>, then <see cref="DateTimeKeys{T}"/>. Returns
+    /// <paramref name="filter"/> by reference when none applies.
     /// </summary>
     /// <exception cref="NotSupportedException">The filter holds a shape no Cosmos DB rendering answers as C# does.</exception>
     public static Expression<Func<T, bool>>? Prepare<T>(Expression<Func<T, bool>>? filter)
@@ -64,7 +67,8 @@ public static class CosmosFilterRewrite
         filter = Birko.Data.Expressions.SpanContains.Rewrite(filter);
         filter = Birko.Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
         filter = Birko.Data.Expressions.NullOrderingFold.Rewrite(filter);   // TASK-867
-        return NullSemantics(filter);   // TASK-896
+        filter = NullSemantics(filter);   // TASK-896
+        return DateTimeKeys(filter);   // TASK-902
     }
 
     /// <summary>
@@ -101,7 +105,19 @@ public static class CosmosFilterRewrite
         defaultValue = null;
         if (node is not BinaryExpression { NodeType: ExpressionType.OrElse } or || or.Right is not MethodCallExpression call) return false;
         if (!TryContains(call, out _, out var item, out var elementType)) return false;
-        var target = Birko.Data.Expressions.SpanContains.UnwrapConvert(item);
+        // TASK-902: a DateTime list is a list of wall-clock keys tested against the member's key.
+        var target = KeyedOperand(item) ?? Birko.Data.Expressions.SpanContains.UnwrapConvert(item);
+        if (elementType == typeof(string) && KeyedOperand(item) is { } keyed)
+        {
+            elementType = keyed.Type;
+            if (IsNotDefinedOf(or.Left, target))
+            {
+                if (Nullable.GetUnderlyingType(elementType) != null) return false;
+                contains = call;
+                defaultValue = WallClockKeyOf(default);
+                return true;
+            }
+        }
 
         if (IsNotDefinedOf(or.Left, target))
         {
@@ -204,6 +220,8 @@ public static class CosmosFilterRewrite
 
         protected override Expression VisitUnary(UnaryExpression node)
         {
+            // TASK-902: a DateTime member read as its stored text, inside a wall-clock key an earlier pass produced.
+            if (IsDateTimeText(node)) return node;
             if (node.NodeType == ExpressionType.Not && node.Type == typeof(bool))
             {
                 return node.Update(In(Flip(_polarity), node.Operand));

@@ -77,7 +77,12 @@ public class CosmosViewTranslateValueTests
         var dt = new DateTime(2026, 6, 17, 8, 30, 0, DateTimeKind.Utc);
 
         Evaluate(dt).Should().Be(dt);
-        BoundValue(v => v.When == dt).Should().Be(dt, "the SDK serializes it, so the CLR value is what must arrive intact");
+
+        // TASK-902 (inverted, rule 56): a DateTime is compared by its wall-clock key, not by its stored text, so what is
+        // bound is the second's text range around it and its key; its kind is not part of either, as C# ignores it.
+        var parameters = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, object?>>();
+        CosmosFilterTranslator.Translate<V>(v => v.When == dt, parameters);
+        parameters.Select(p => p.Value).Should().Equal("2026-06-17T08:30:00", "2026-06-17T08:30:01", "2026-06-17T08:30:000000000");
     }
 
     [Fact]
@@ -86,7 +91,11 @@ public class CosmosViewTranslateValueTests
         var dto = new DateTimeOffset(2026, 6, 17, 8, 30, 0, TimeSpan.Zero);
 
         Evaluate(dto).Should().Be(dto);
-        BoundValue(v => v.WhenOffset == dto).Should().Be(dto);
+
+        // TASK-902 (inverted, rule 56): C# compares a DateTimeOffset's instant, Cosmos DB its stored text, which holds the
+        // writer's offset, so the comparison is refused by name before any request.
+        var refused = () => BoundValue(v => v.WhenOffset == dto);
+        refused.Should().Throw<NotSupportedException>().WithMessage("*DateTimeOffset*(TASK-902)");
     }
 
     [Fact]

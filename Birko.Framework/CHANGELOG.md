@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — RavenDB single-field aggregates run
+[[TASK-877]] (the user's decision: LINQ fallback). `Aggregate` with one GROUP BY field sent a facet query that RavenDB
+refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads
+the filtered documents and aggregates them in LINQ, as several fields already did. **Breaking:** the public
+`FacetAggregationHelper` is gone (no caller).
+
 ## 2026-11-09 — Grouped SQL views read every aggregate type
 [[TASK-887]]. A grouped view's SUM/MAX of a `long`, `short` or `double` column, and an AVG into a `double` or integer,
 threw a cast error on all four providers: the reader was chosen from the function name and a closed list of source

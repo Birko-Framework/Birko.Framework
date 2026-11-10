@@ -222,3 +222,13 @@ as C# reads it: `x.Count == 0`, `!x.IsDeleted` and `x.Status == Status.New` matc
 predicates (`x.Items.Any(i => i.Score == null)`) answer null and missing members the same way, and `All` is supported
 (as `!Any(!p)`); an aggregate whose filter holds a nested predicate is refused. A `Contains` list holding `null` or the
 default is split past the query limit like any other list.
+
+## Filters and sorts on DateTime
+
+A comparison or a sort of a `DateTime` member answers what C# answers, which compares the ticks whatever the kind
+(TASK-902). The stored text (`…10:00:00Z`, `…10:00:00.5Z`, `…10:00:00+01:00`, `…10:00:00`) is compared by a wall-clock
+key (the first 19 characters and the fraction padded to 7 digits), behind a plain text range the index can serve; a
+sort keeps the server's order and reorders the rows that share a second, reading a run that crosses a page's edge
+whole. A value stored with an offset is exact when the offset is the reader's own. Refused with
+`NotSupportedException` before any request: a comparison, list or sort of a `DateTimeOffset` member, a member of a
+stored DateTime (`x.T.Year`), and a DateTime computed from a member (`x.T.AddDays(1)`).

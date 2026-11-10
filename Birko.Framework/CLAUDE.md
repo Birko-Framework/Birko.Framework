@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB `DateTime` filters and sorts answer as C# (2026-11-10)
+[[TASK-902]]. Cosmos compared the stored ISO text, whose fraction length varies, so inside one second `…00.5Z` sorted
+before `…00Z`: 76 of 88 filter shapes and 62 of 120 sorted pages were wrong (measured), e.g. `x.T > 10:00:00Z` missed
+the 10:00:00.5 document. Comparisons now use a wall-clock key behind the plain text range (index still used), and sorts
+re-order rows that share a second. DateTimeOffset comparisons and members like `T.Year` are refused by name.
 ### SQL `OnException` subscribers run; migrations and job locks reach `OnExecute` (2026-11-10)
 [[TASK-894]]. A consumer's `OnException` subscriber was never called on any provider: each provider subscribed an
 always-throwing handler first (measured). The provider's handling is now an override that runs before every subscriber,
@@ -375,11 +380,6 @@ announced, and an `ExecuteReader` error carries its statement like any other.
 such a filter silently skipped rows and a SET stored NULL; MySQL answered NULL on reads (measured). SQLite and MySQL now
 guard the divisor so a zero fails the statement, as PostgreSQL and SQL Server already did. A `double` divided by zero
 fails too: C#'s Infinity/NaN has no SQL form.
-### RavenDB single-field aggregates run (2026-11-09)
-[[TASK-877]] (the user's decision: LINQ fallback). `Aggregate` with one GROUP BY field sent a facet query that RavenDB
-refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads
-the filtered documents and aggregates them in LINQ, as several fields already did. **Breaking:** the public
-`FacetAggregationHelper` is gone (no caller).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
