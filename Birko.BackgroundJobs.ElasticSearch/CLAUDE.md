@@ -38,7 +38,9 @@ or reads back a single job may use a search: a search sees a write only after th
 
 The candidate search is only a hint. Delivery is still at-least-once (a reclaim after the claim timeout can hand a slow
 job to a second worker), so **job handlers must be idempotent.** A store substituted for tests must override
-`UpdateIfAsync`.
+`UpdateIfAsync`. The claim's `LastAttemptAt` is stamped inside the compare-and-set, when the claim is written, never from
+the time the dequeue began: a candidate search slower than the claim timeout wrote a claim that was already stale, and
+the next dequeue reclaimed it at once (TASK-884, reproduced offline and live; TASK-879 on RavenDB).
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs

@@ -173,6 +173,45 @@ public sealed class ElasticSearchJobQueueLiveTests : IDisposable
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
     }
 
+    // ── TASK-884: the claim is stamped when it is written, not when the dequeue began (TASK-879 on RavenDB) ──
+
+    /// <summary>The real store, with a candidate search that takes longer than the claim timeout.</summary>
+    private sealed class SlowSearchStore : Birko.Data.ElasticSearch.Stores.AsyncElasticSearchStore<Birko.BackgroundJobs.ElasticSearch.Models.ElasticJobDescriptorModel>
+    {
+        protected override async Task<IEnumerable<Birko.BackgroundJobs.ElasticSearch.Models.ElasticJobDescriptorModel>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<Birko.BackgroundJobs.ElasticSearch.Models.ElasticJobDescriptorModel, bool>>? filter = null,
+            Birko.Data.Stores.OrderBy<Birko.BackgroundJobs.ElasticSearch.Models.ElasticJobDescriptorModel>? orderBy = null,
+            int? limit = null, int? offset = null, CancellationToken ct = default)
+        {
+            await Task.Delay(Task664Timeout + TimeSpan.FromMilliseconds(150), ct);
+            return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+    }
+
+    [Fact]
+    public async Task TASK_884_a_claim_behind_a_slow_candidate_search_is_not_reclaimed_at_once()
+    {
+        if (string.IsNullOrWhiteSpace(Url))
+        {
+            _output.WriteLine("SKIPPED: no live Elasticsearch. Set BIRKO_ES_URL.");
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE")))
+                throw new InvalidOperationException("BIRKO_REQUIRE_LIVE is set but BIRKO_ES_URL is not.");
+            return;
+        }
+        var store = new SlowSearchStore();
+        store.SetSettings(new Birko.Data.ElasticSearch.Stores.Settings { Location = Url, Name = _prefix + "s" + Guid.NewGuid().ToString("N")[..8] });
+        var queue = new ElasticSearchJobQueue(store, new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, Task664Timeout);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        await Refresh();
+        var claimed = await queue.DequeueAsync();
+        var afterClaim = DateTime.UtcNow;
+        claimed!.Guid.Should().Be(id);
+        claimed.LastAttemptAt.Should().BeOnOrAfter(afterClaim - Task664Timeout, "the claim is stamped when it is written, after the candidate search");
+        await Refresh();
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed, however long the search that found it took");
+        (await queue.GetAsync(id))!.AttemptCount.Should().Be(1);
+    }
+
     // TASK-175 (SH-L018): the purge counts and deletes by filter (delete_by_query), keeping what is not terminal.
     [Fact]
     public async Task TASK_175_SH_L018_purge_deletes_terminal_jobs_by_filter()

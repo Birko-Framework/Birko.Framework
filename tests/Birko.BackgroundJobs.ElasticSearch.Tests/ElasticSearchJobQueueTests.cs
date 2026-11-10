@@ -209,6 +209,33 @@ public class ElasticSearchJobQueueTests
         job.CompletedAt.Should().NotBeNull();
     }
 
+    // ── TASK-884: the claim is stamped when it is written, not when the dequeue began (TASK-879 on RavenDB) ──
+
+    /// <summary>A store whose candidate search takes longer than the claim timeout.</summary>
+    private sealed class SlowSearchElasticStore : InMemoryElasticStore<ElasticJobDescriptorModel>
+    {
+        protected override async Task<IEnumerable<ElasticJobDescriptorModel>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<ElasticJobDescriptorModel, bool>>? filter = null,
+            Birko.Data.Stores.OrderBy<ElasticJobDescriptorModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+        {
+            await Task.Delay(Task664Timeout + TimeSpan.FromMilliseconds(150), ct);
+            return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+    }
+
+    [Fact]
+    public async Task TASK_884_a_claim_behind_a_slow_candidate_search_is_not_reclaimed_at_once()
+    {
+        var queue = new ElasticSearchJobQueue(new SlowSearchElasticStore(), new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, Task664Timeout);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        var claimed = await queue.DequeueAsync();
+        var afterClaim = DateTime.UtcNow;
+        claimed!.Guid.Should().Be(id);
+        claimed.LastAttemptAt.Should().BeOnOrAfter(afterClaim - Task664Timeout, "the claim is stamped when it is written, after the candidate search");
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed, however long the search that found it took");
+        (await queue.GetAsync(id))!.AttemptCount.Should().Be(1);
+    }
+
     // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
 
     [Fact]

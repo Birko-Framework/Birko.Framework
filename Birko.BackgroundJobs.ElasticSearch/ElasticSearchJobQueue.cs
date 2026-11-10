@@ -94,7 +94,10 @@ namespace Birko.BackgroundJobs.ElasticSearch
                             m.Status = (int)JobStatus.Processing;
                             m.ClaimToken = Guid.NewGuid();
                             m.AttemptCount++;
-                            m.LastAttemptAt = now;
+                            // TASK-884 (TASK-879 on RavenDB): stamped when the claim is written. `now` was taken before
+                            // the candidate search, so a search slower than the claim timeout wrote a claim that was
+                            // already stale, and the next dequeue reclaimed it (reproduced offline and live).
+                            m.LastAttemptAt = DateTime.UtcNow;
                         },
                         cancellationToken).ConfigureAwait(false);
                     if (claimed != null) return claimed.ToDescriptor();

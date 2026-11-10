@@ -3,7 +3,7 @@ id: TASK-884
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -29,9 +29,20 @@ fast.
 
 ## Acceptance criteria
 
-- [ ] Reproduce (rule 54) with a slow candidate query (TASK-879's store-double approach), offline and live.
-- [ ] The claim is stamped when it is written, as RavenDB and Cosmos DB now do.
-- [ ] Tests, red before the fix.
+- [x] Reproduce (rule 54) with a slow candidate query (TASK-879's store-double approach), offline and live.
+      → Reproduced 2026-11-10 with a slow-search store double (claim timeout 300 ms + 150 ms), offline
+        (`InMemoryElasticStore`) and live (the real `AsyncElasticSearchStore`, ES 7.17.25): `LastAttemptAt` was 188 ms and
+        476 ms older than the claim's return, and the next `DequeueAsync` handed out the job claimed a moment before.
+      → Other backends, probed: **SQL** (`SqlJobQueue`, SQLite) and **MongoDB** (`MongoDBJobQueue`) have the same defect,
+        reproduced (TASK-900). Cosmos DB and RavenDB (TASK-879) stamp inside the conditional write; Redis stamps in one
+        atomic Lua call; InMemory, JSON and XML stamp when they write.
+- [x] The claim is stamped when it is written, as RavenDB and Cosmos DB now do.
+      → `ElasticSearchJobQueue.DequeueAsync` sets `LastAttemptAt = DateTime.UtcNow` inside the `UpdateIfAsync` lambda,
+        after the realtime GET and before the `_seq_no` / `_primary_term`-conditioned write. `staleBefore` keeps the
+        dequeue's start, which can only delay a reclaim.
+- [x] Tests, red before the fix.
+      → `TASK_884_a_claim_behind_a_slow_candidate_search_is_not_reclaimed_at_once`, offline and live: red on HEAD's
+        production, green after; the full BackgroundJobs.ElasticSearch suite live 10 runs in a row, 24/24 each.
 
 ## Out of scope
 

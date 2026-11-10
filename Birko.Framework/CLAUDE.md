@@ -296,6 +296,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Elasticsearch job queue stamps a claim when it writes it (2026-11-10)
+[[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
+fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim
+is now stamped inside the conditional write. SQL and MongoDB have the same defect ([[TASK-900]]).
 ### Cosmos DB filters answer null and missing members the way C# does (2026-11-10)
 [[TASK-896]]. 53 of 93 measured filter shapes returned other rows than C#, silently, on reads, counts, aggregates and
 writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from
