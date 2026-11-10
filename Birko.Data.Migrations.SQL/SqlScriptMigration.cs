@@ -78,6 +78,7 @@ namespace Birko.Data.Migrations.SQL
             {
                 command.Transaction = sqlContext.Transaction;
             }
+            sqlContext.Connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
     }

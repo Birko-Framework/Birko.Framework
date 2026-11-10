@@ -30,7 +30,6 @@ namespace Birko.Data.SQL.Connectors
         /// <param name="settings">The remote settings for connection.</param>
         public MySQLConnector(RemoteSettings settings) : base(settings)
         {
-            OnException += MySQLConnector_OnException;
         }
 
         /// <summary>
@@ -189,7 +188,7 @@ namespace Birko.Data.SQL.Connectors
         /// answered with <c>DoInit()</c> and a <b>return</b>, so a write against a missing table reported
         /// success. The shared <c>EnsureSchemaAndReport</c> now ensures the schema and reports the failure.
         /// </remarks>
-        private void MySQLConnector_OnException(Exception ex, string? commandText)
+        protected override void ReportCommandException(Exception ex, string? commandText)
             => EnsureSchemaAndReport(ex, commandText);
 
         /// <inheritdoc />
@@ -627,7 +626,7 @@ namespace Birko.Data.SQL.Connectors
         #region Native Bulk Operations
 
         // NOTE (CR-L185): if a bulk operation fails because the table does not yet exist, the transaction
-        // is rolled back and InitException -> MySQLConnector_OnException creates the table (DoInit) but does
+        // is rolled back and InitException -> ReportCommandException creates the table (DoInit) but does
         // NOT re-run the bulk command, so the bulk payload is silently dropped (no exception, no retry).
         // This is the inherited framework auto-init behavior shared by the other SQL dialects — the
         // single-row CRUD path tolerates it, the bulk path does not. Callers must ensure the schema exists

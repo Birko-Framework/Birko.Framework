@@ -90,6 +90,7 @@ namespace Birko.Data.Migrations.SQL.Context
             param.ParameterName = "@tableName";
             param.Value = _connector.TableExistsArgument(name);
             command.Parameters.Add(param);
+            _connector.AnnounceCommand(command);
             var result = command.ExecuteScalar();
             return Convert.ToInt64(result) > 0;
         }
@@ -221,6 +222,7 @@ namespace Birko.Data.Migrations.SQL.Context
             using var command = _connection.CreateCommand();
             command.Transaction = _transaction;
             command.CommandText = sql;
+            _connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 

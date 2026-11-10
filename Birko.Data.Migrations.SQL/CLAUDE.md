@@ -101,6 +101,15 @@ Three things carried forward:
 (TASK-249): index columns are interpolated **bare** into the statement, so caller text cannot be allowed
 through unchecked.
 
+## Statements on the runner's connection reach `OnExecute` (TASK-894)
+
+Every command this project runs on its own connection calls `connector.AnnounceCommand(command)` just before it
+executes: the migrations table's probe, create, read, insert and delete (`SqlMigrationStore`), a raw script
+(`SqlScriptMigration`), `CollectionExists` and `RenameField` (`SqlSchemaBuilder`), and the data migrator's statements.
+DDL routed through the connector announces itself. Before, none of these reached `OnExecute` (measured on all four
+providers, sync and async). A new raw command here announces the same way. `SqlMigrationContext.Raw(action)` runs
+consumer code on the raw connection and is not announced. Pinned by `Task894MigrationAnnounceTests`.
+
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Patterns

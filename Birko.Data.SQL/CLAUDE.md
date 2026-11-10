@@ -204,11 +204,33 @@ it never raises `OnExecute` itself. Before TASK-871 the reader paths passed the 
   (`COPY … FROM STDIN (FORMAT BINARY)`, `INSERT BULK [table] (columns)`), with no values: the rows travel as data. The
   base multi-row insert announces every row, and `SqlIndexManager` its own-connection statements. Before, none of them
   reached `OnExecute` except the multi-row insert's first row.
-- **Not announced, by design or not yet:** `BEGIN` / `COMMIT` / `ROLLBACK` (driver transaction calls, not commands);
+- **Statements on a connection outside the connector (TASK-894)** are announced by their sender through the public
+  `AnnounceCommand(command)`, just before it executes: `Birko.Data.Migrations.SQL` (the migrations table, raw scripts,
+  `CollectionExists`, `RenameField`, the data migrator), `Birko.Data.Migrations.TimescaleDB`'s emitters and probes,
+  `Birko.Data.SQL.View.Migrations` and `Birko.BackgroundJobs.SQL`'s lock provider. Before, none of them reached
+  `OnExecute` (measured on all four providers and TimescaleDB). A new sender that runs a command on its own connection
+  calls it too; it never builds the text itself.
+- **Not announced, by design:** `BEGIN` / `COMMIT` / `ROLLBACK` (driver transaction calls, not commands);
   SQLite's journal-mode PRAGMA (connection setup, once per connector on its own connection; announcing it attributed it
-  to whichever operation first opened a connection); statements that run on a connection outside the connector, in
-  `Birko.Data.Migrations.SQL`, `Birko.Data.Migrations.TimescaleDB`, `Birko.Data.SQL.View.Migrations` and
-  `Birko.BackgroundJobs.SQL`.
+  to whichever operation first opened a connection); `SqlMigrationContext.Raw(action)`, which hands consumer code the
+  raw connection; `Birko.Health.Data`'s `SqlHealthCheck`, which holds a connection factory and no connector (its probe
+  query is the consumer's own).
+
+### Every `OnException` subscriber runs, and none changes what the caller gets (TASK-894)
+
+`InitException` is non-virtual and never returns. It runs the provider's `ReportCommandException` override first
+(every provider: `EnsureSchemaAndReport`), so the schema ensure, `SchemaEscapes` and the annotation are done before any
+subscriber runs. Each `OnException` subscriber then receives the exception the caller will receive, in its own `try`
+(`RaiseEach`, rule 25), with a failure recorded on `SubscriberFailures` under channel `OnException`, and that same object
+is rethrown, so every filter that selects on it still matches (rule 9): the retry filter, the count's
+`IsMissingTableExceptionChain`, the unique-violation and cancellation walks, a type a host catches.
+
+- **Before:** each provider subscribed its own handler to `OnException` in its constructor, and it always throws, so a
+  consumer's subscriber never ran (measured on all four providers: failing reads, writes, bulk writes, filter updates,
+  a write to a dropped table and the count of a missing table).
+- **Breaking for subclasses:** `InitException` is no longer virtual, and a provider's handler is the
+  `ReportCommandException` override, not a subscription. A subscriber can no longer swallow a failure: on a connector
+  without a provider handler, a subscriber used to make `InitException` return (CR-M134's short-circuit flags are gone).
 
 ### A server error during a read reaches the caller (TASK-880)
 
@@ -414,7 +436,7 @@ limit emits nothing on any provider.
 
 #### A missing table on a write throws; on a read it answers empty (TASK-277)
 
-`AbstractConnector.EnsureSchemaAndReport` is the shared body of every provider's `OnException` handler: if
+`AbstractConnector.EnsureSchemaAndReport` is the shared body of every provider's `ReportCommandException` override (TASK-894): if
 the failure looks like a missing table it calls `DoInit()` (so a consumer's `OnInit` handler can ensure the
 schema for the *next* attempt) and then **always throws**.
 

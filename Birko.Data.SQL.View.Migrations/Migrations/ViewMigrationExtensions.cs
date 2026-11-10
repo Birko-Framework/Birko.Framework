@@ -1,5 +1,6 @@
 using Birko.Data.Migrations.Context;
 using Birko.Data.Migrations.SQL.Context;
+using Birko.Data.SQL.Connectors;
 using System;
 using System.Data.Common;
 using System.Threading;
@@ -32,13 +33,13 @@ namespace Birko.Data.SQL.View.Migrations
                 throw new ArgumentNullException(nameof(viewType));
             }
 
-            var (connection, transaction) = GetSqlConnection(context);
+            var (connection, transaction, connector) = GetSqlConnection(context);
             // TASK-891: the migration's connector refuses a view column its provider rejects, before any DDL.
-            var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar, ((SqlMigrationContext)context).Connector);
+            var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar, connector);
             // TASK-717: drop, then create — two commands, as SQL Server runs CREATE VIEW only as a batch of its own —
             // so a view is replaced on every provider, inside the migration's transaction.
-            ExecuteSql(connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar));
-            ExecuteSql(connection, transaction, sql);
+            ExecuteSql(connector, connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar));
+            ExecuteSql(connector, connection, transaction, sql);
         }
 
         /// <summary>
@@ -61,12 +62,12 @@ namespace Birko.Data.SQL.View.Migrations
                 throw new ArgumentNullException(nameof(viewType));
             }
 
-            var (connection, transaction) = GetSqlConnection(context);
+            var (connection, transaction, connector) = GetSqlConnection(context);
             // TASK-891 — see CreateView.
-            var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar, ((SqlMigrationContext)context).Connector);
+            var sql = ViewSqlGenerator.GenerateCreateViewSql(viewType, viewName, quoteChar, connector);
             // TASK-717: drop, then create (see CreateView).
-            await ExecuteSqlAsync(connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar), ct).ConfigureAwait(false);
-            await ExecuteSqlAsync(connection, transaction, sql, ct).ConfigureAwait(false);
+            await ExecuteSqlAsync(connector, connection, transaction, ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar), ct).ConfigureAwait(false);
+            await ExecuteSqlAsync(connector, connection, transaction, sql, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -89,8 +90,8 @@ namespace Birko.Data.SQL.View.Migrations
             }
 
             var sql = ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar);
-            var (connection, transaction) = GetSqlConnection(context);
-            ExecuteSql(connection, transaction, sql);
+            var (connection, transaction, connector) = GetSqlConnection(context);
+            ExecuteSql(connector, connection, transaction, sql);
         }
 
         /// <summary>
@@ -114,8 +115,8 @@ namespace Birko.Data.SQL.View.Migrations
             }
 
             var sql = ViewSqlGenerator.GenerateDropViewSql(viewType, viewName, quoteChar);
-            var (connection, transaction) = GetSqlConnection(context);
-            await ExecuteSqlAsync(connection, transaction, sql, ct).ConfigureAwait(false);
+            var (connection, transaction, connector) = GetSqlConnection(context);
+            await ExecuteSqlAsync(connector, connection, transaction, sql, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -137,8 +138,8 @@ namespace Birko.Data.SQL.View.Migrations
             }
 
             var sql = ViewSqlGenerator.GenerateDropViewSql(viewName, quoteChar);
-            var (connection, transaction) = GetSqlConnection(context);
-            ExecuteSql(connection, transaction, sql);
+            var (connection, transaction, connector) = GetSqlConnection(context);
+            ExecuteSql(connector, connection, transaction, sql);
         }
 
         /// <summary>
@@ -161,15 +162,15 @@ namespace Birko.Data.SQL.View.Migrations
             }
 
             var sql = ViewSqlGenerator.GenerateDropViewSql(viewName, quoteChar);
-            var (connection, transaction) = GetSqlConnection(context);
-            await ExecuteSqlAsync(connection, transaction, sql, ct).ConfigureAwait(false);
+            var (connection, transaction, connector) = GetSqlConnection(context);
+            await ExecuteSqlAsync(connector, connection, transaction, sql, ct).ConfigureAwait(false);
         }
 
-        private static (DbConnection connection, DbTransaction? transaction) GetSqlConnection(IMigrationContext context)
+        private static (DbConnection connection, DbTransaction? transaction, AbstractConnector connector) GetSqlConnection(IMigrationContext context)
         {
             if (context is SqlMigrationContext sqlContext)
             {
-                return (sqlContext.Connection, sqlContext.Transaction);
+                return (sqlContext.Connection, sqlContext.Transaction, sqlContext.Connector);
             }
 
             throw new InvalidOperationException($"Expected SqlMigrationContext but got {context.GetType().Name}.");
@@ -178,7 +179,7 @@ namespace Birko.Data.SQL.View.Migrations
         /// <summary>
         /// Executes a SQL statement synchronously against a connection.
         /// </summary>
-        private static void ExecuteSql(DbConnection connection, DbTransaction? transaction, string sql)
+        private static void ExecuteSql(AbstractConnector connector, DbConnection connection, DbTransaction? transaction, string sql)
         {
             if (string.IsNullOrWhiteSpace(sql))
             {
@@ -188,13 +189,14 @@ namespace Birko.Data.SQL.View.Migrations
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = sql;
+            connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 
         /// <summary>
         /// Executes a SQL statement asynchronously against a connection.
         /// </summary>
-        private static async Task ExecuteSqlAsync(DbConnection connection, DbTransaction? transaction, string sql, CancellationToken ct)
+        private static async Task ExecuteSqlAsync(AbstractConnector connector, DbConnection connection, DbTransaction? transaction, string sql, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(sql))
             {
@@ -204,6 +206,7 @@ namespace Birko.Data.SQL.View.Migrations
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = sql;
+            connector.AnnounceCommand(command);
             await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         }
     }

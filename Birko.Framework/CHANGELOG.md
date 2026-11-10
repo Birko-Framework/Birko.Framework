@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — Grouped SQL views read every aggregate type
+[[TASK-887]]. A grouped view's SUM/MAX of a `long`, `short` or `double` column, and an AVG into a `double` or integer,
+threw a cast error on all four providers: the reader was chosen from the function name and a closed list of source
+types, not from what the server returns. COUNT of a group with a NULL key answered 0, silently. One reading rule now
+converts the server's value exactly to the view property's type, an integer AVG renders as a fraction (SQL Server
+truncated it), and COUNT counts the key column. The SELECT and the reader share one column sequence.
+
 ## 2026-11-09 — Direct connector calls and persistent views refuse reserved column names too
 [[TASK-872]]. TASK-862's check ran only through store init. A direct `connector.Delete(type, x => x.User == …)` on a table
 Birko did not build compared the database's current user, not the column, and deleted every row, on all four providers

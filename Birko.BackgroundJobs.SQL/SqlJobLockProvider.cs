@@ -16,7 +16,7 @@ namespace Birko.BackgroundJobs.SQL
     public class SqlJobLockProvider<DB> : IJobLockProvider
         where DB : AbstractConnector
     {
-        private readonly AbstractConnectorBase _connector;
+        private readonly AbstractConnector _connector;
         private readonly PasswordSettings _settings;
         private DbConnection? _lockConnection;
         private bool _disposed;
@@ -36,7 +36,7 @@ namespace Birko.BackgroundJobs.SQL
         public SqlJobLockProvider(PasswordSettings settings)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            _connector = (AbstractConnectorBase)Data.SQL.DataBase.GetConnector<DB>(settings);
+            _connector = Data.SQL.DataBase.GetConnector<DB>(settings);
         }
 
         /// <summary>
@@ -112,6 +112,7 @@ namespace Birko.BackgroundJobs.SQL
                         {
                             // lock_timeout = 0 means "wait forever", so no wait is a single try.
                             cmd.CommandText = $"SELECT pg_try_advisory_lock({GetLockKey(lockName)})";
+                            _connector.AnnounceCommand(cmd);
                             var pg = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                             IsLocked = pg is bool b && b;
                             break;
@@ -120,6 +121,7 @@ namespace Birko.BackgroundJobs.SQL
                         cmd.CommandText = $"SET lock_timeout = {waitMs}; SELECT pg_advisory_lock({GetLockKey(lockName)}); SET lock_timeout = 0;";
                         try
                         {
+                            _connector.AnnounceCommand(cmd);
                             await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                             IsLocked = true;
                         }
@@ -135,6 +137,7 @@ namespace Birko.BackgroundJobs.SQL
                         cmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = @res, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = @to; SELECT @r;";
                         AddParam(cmd, "@res", lockName);
                         AddParam(cmd, "@to", (int)acquireTimeout.TotalMilliseconds);
+                        _connector.AnnounceCommand(cmd);
                         var ms = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                         IsLocked = ms != null && ms != DBNull.Value && Convert.ToInt32(ms) >= 0;
                         break;
@@ -144,6 +147,7 @@ namespace Birko.BackgroundJobs.SQL
                         cmd.CommandText = "SELECT GET_LOCK(@res, @to)";
                         AddParam(cmd, "@res", lockName);
                         AddParam(cmd, "@to", (int)acquireTimeout.TotalSeconds);
+                        _connector.AnnounceCommand(cmd);
                         var my = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                         IsLocked = my != null && my != DBNull.Value && Convert.ToInt64(my) == 1;
                         break;
@@ -214,6 +218,7 @@ namespace Birko.BackgroundJobs.SQL
 
                 if (!string.IsNullOrEmpty(cmd.CommandText))
                 {
+                    _connector.AnnounceCommand(cmd);
                     await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                 }
             }

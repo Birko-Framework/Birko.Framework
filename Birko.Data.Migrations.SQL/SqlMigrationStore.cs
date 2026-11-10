@@ -246,6 +246,7 @@ namespace Birko.Data.Migrations.SQL
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = $"SELECT 1 FROM {TableReference} WHERE 1 = 0";
+                _connector.AnnounceCommand(command);
                 command.ExecuteNonQuery();
                 return true;
             }
@@ -261,6 +262,7 @@ namespace Birko.Data.Migrations.SQL
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = $"SELECT 1 FROM {TableReference} WHERE 1 = 0";
+                _connector.AnnounceCommand(command);
                 await command.ExecuteNonQueryAsync(cancellationToken);
                 return true;
             }
@@ -274,6 +276,7 @@ namespace Birko.Data.Migrations.SQL
         {
             using var command = connection.CreateCommand();
             command.CommandText = CreateMigrationsTableSql();
+            _connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 
@@ -281,6 +284,7 @@ namespace Birko.Data.Migrations.SQL
         {
             using var command = connection.CreateCommand();
             command.CommandText = CreateMigrationsTableSql();
+            _connector.AnnounceCommand(command);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -413,6 +417,7 @@ namespace Birko.Data.Migrations.SQL
             using var command = connection.CreateCommand();
             command.CommandText = $"SELECT {Quote("Version")} FROM {TableReference}";
 
+            _connector.AnnounceCommand(command);
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -434,6 +439,7 @@ namespace Birko.Data.Migrations.SQL
             using var command = connection.CreateCommand();
             command.CommandText = $"SELECT {Quote("Version")} FROM {TableReference}";
 
+            _connector.AnnounceCommand(command);
             using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -461,6 +467,7 @@ namespace Birko.Data.Migrations.SQL
             AddParameter(command, "@Description", migration.Description);
             AddParameter(command, "@CreatedAt", migration.CreatedAt);
 
+            _connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 
@@ -478,6 +485,7 @@ namespace Birko.Data.Migrations.SQL
             AddParameter(command, "@Description", migration.Description);
             AddParameter(command, "@CreatedAt", migration.CreatedAt);
 
+            _connector.AnnounceCommand(command);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -489,6 +497,7 @@ namespace Birko.Data.Migrations.SQL
             command.Transaction = transaction;
             command.CommandText = $"DELETE FROM {TableReference} WHERE {Quote("Version")} = @Version;";
             AddParameter(command, "@Version", migration.Version);
+            _connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 
@@ -498,6 +507,7 @@ namespace Birko.Data.Migrations.SQL
             command.Transaction = transaction;
             command.CommandText = $"DELETE FROM {TableReference} WHERE {Quote("Version")} = @Version;";
             AddParameter(command, "@Version", migration.Version);
+            _connector.AnnounceCommand(command);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 

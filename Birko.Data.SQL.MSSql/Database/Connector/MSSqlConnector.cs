@@ -21,7 +21,6 @@ namespace Birko.Data.SQL.Connectors
     {
         public MSSqlConnector(Birko.Configuration.RemoteSettings settings) : base(settings)
         {
-            OnException += MSSqlConnector_OnException;
         }
 
         /// <remarks>
@@ -33,7 +32,7 @@ namespace Birko.Data.SQL.Connectors
         /// <see cref="IsMissingTableException"/> already tests SQL Server error <b>208</b> as well as that
         /// wording, so routing through it is both narrower and case-correct.
         /// </remarks>
-        private void MSSqlConnector_OnException(Exception ex, string? commandText)
+        protected override void ReportCommandException(Exception ex, string? commandText)
             => EnsureSchemaAndReport(ex, commandText);
 
 
@@ -824,7 +823,7 @@ namespace Birko.Data.SQL.Connectors
             // CR-L179 kept Open()/BeginTransaction() inside the try so an open failure routed through
             // InitException. Acquiring the connection is now the shared helper's job — which is what gives
             // "am I inside a boundary" a single producer — so an open failure propagates raw instead of
-            // wrapped in Exception(commandText, ex). Nothing is swallowed either way: MSSqlConnector_OnException
+            // wrapped in Exception(commandText, ex). Nothing is swallowed either way: ReportCommandException
             // rethrows for anything but "Invalid object name", which an open failure is not. It also puts the
             // bulk path in step with the framework's single-command path, whose RunCommandTransaction has
             // always opened outside its try.

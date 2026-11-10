@@ -108,6 +108,7 @@ namespace Birko.Data.Migrations.SQL.Context
             command.CommandText = sql;
             foreach (var (name, value) in parameters)
                 AddParameter(command, name, value);
+            _connector.AnnounceCommand(command);
             return Convert.ToInt64(command.ExecuteScalar());
         }
 
@@ -152,6 +153,7 @@ namespace Birko.Data.Migrations.SQL.Context
                 foreach (var (name, value) in parameters)
                     AddParameter(command, name, value);
             }
+            _connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 

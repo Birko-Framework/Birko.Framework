@@ -26,6 +26,10 @@ Found by TASK-864, TASK-866 and TASK-874 (2026-11-09): the shared StoreContract 
 refill each other's tables: duplicate keys, "Invalid object name", schema-change errors, the PostgreSQL `pg_type`
 unique violation. Test infrastructure only, but it makes parallel and CI runs flaky.
 
+Also (TASK-894, 2026-11-10): MySQL's `EscapeAnomalyDiscriminationLiveTests.TASK295_…` and
+`SchemaEnsureRollbackResidueLiveTests.A_write_to_a_missing_table_fails…` fail intermittently only when the healing
+classes run in parallel (HEAD 3/8, run alone 6/6): cross-class interference on the shared cached connector (rule 61).
+
 ## Acceptance criteria
 
 - [ ] Reproduce with two concurrent runs of one provider suite.

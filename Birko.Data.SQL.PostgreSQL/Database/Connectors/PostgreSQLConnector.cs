@@ -29,7 +29,6 @@ namespace Birko.Data.SQL.Connectors
         /// <param name="settings">The remote settings for connection.</param>
         public PostgreSQLConnector(RemoteSettings settings) : base(settings)
         {
-            OnException += PostgreSQLConnector_OnException;
         }
 
         /// <summary>
@@ -219,7 +218,7 @@ namespace Birko.Data.SQL.Connectors
         /// <b>return</b>, so the statement was discarded and reported as successful. The shared
         /// <c>EnsureSchemaAndReport</c> ensures the schema and then reports the failure.
         /// </remarks>
-        private void PostgreSQLConnector_OnException(Exception ex, string? commandText)
+        protected override void ReportCommandException(Exception ex, string? commandText)
             => EnsureSchemaAndReport(ex, commandText);
 
         /// <inheritdoc />

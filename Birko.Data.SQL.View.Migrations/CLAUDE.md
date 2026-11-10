@@ -37,6 +37,9 @@ Extension methods on `SqlMigration`:
 - ViewSqlGenerator produces static SQL strings — no database connection required at generation time
 - The quoteChar parameter ensures generated DDL is compatible with the target database provider
 - ViewMigrationExtensions are convenience wrappers that call ViewSqlGenerator internally
+- Their DDL runs on the migration's connection and is announced through the context connector's `AnnounceCommand`, so
+  `OnExecute` sees each `DROP VIEW` / `CREATE VIEW` (TASK-894; before, none was). Pinned by
+  `Task894ViewMigrationAnnounceTests`.
 
 ## Maintenance
 

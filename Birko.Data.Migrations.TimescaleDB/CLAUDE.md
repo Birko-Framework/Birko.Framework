@@ -42,6 +42,10 @@ public override void Up(IMigrationContext context)
 }
 ```
 
+The emitters and probes (`IsHypertable`, `GetChunkInterval`) run on the migration's connection and call the context
+connector's `AnnounceCommand(command)` before each statement, so `OnExecute` sees them (TASK-894; before, none was
+announced). Pinned by `Task894TimescaleMigrationAnnounceTests`.
+
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Migrations.SQL

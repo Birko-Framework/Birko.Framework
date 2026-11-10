@@ -509,8 +509,14 @@ namespace Birko.Data.SQL.Connectors
         /// or per batch, and each execution is a statement sent (TASK-875). The text is rendered only when someone is
         /// subscribed, so a bulk write without a subscriber pays nothing per row.
         /// </summary>
-        /// <remarks>Internal as well as protected: <c>SqlIndexManager</c> runs its statements on a connection of its own.</remarks>
-        protected internal void AnnounceCommand(DbCommand command)
+        /// <remarks>
+        /// Public (TASK-894): the one announce entry point for a statement sent on a connection the connector does not run,
+        /// so a subscriber sees it as it sees the connector's own. Its callers, each just before it executes the command:
+        /// <c>SqlIndexManager</c>, the SQL and TimescaleDB migrations (<c>SqlMigrationStore</c>, <c>SqlSchemaBuilder</c>,
+        /// <c>SqlDataMigrator</c>, <c>SqlScriptMigration</c>, <c>TimescaleDBMigration</c>), the view migrations and
+        /// <c>SqlJobLockProvider</c>. A subscriber's exception never reaches the caller (rule 25).
+        /// </remarks>
+        public void AnnounceCommand(DbCommand command)
         {
             if (command == null) throw new ArgumentNullException(nameof(command));
             if (OnExecute == null)
@@ -535,16 +541,48 @@ namespace Birko.Data.SQL.Connectors
             RaiseEach(handler, subscriber => ((OnExecute)subscriber)(commandText), nameof(OnExecute));
         }
 
-        public virtual void InitException(Exception ex, string? commandText)
+        /// <summary>
+        /// Reports a failed statement: the provider's <see cref="ReportCommandException"/> decides what the caller receives,
+        /// every <c>OnException</c> subscriber is told, and that exception is thrown. It never returns.
+        /// </summary>
+        /// <remarks>
+        /// TASK-894 (rule 25, rule 9). Each provider used to subscribe its own handler to <c>OnException</c> in its
+        /// constructor, and that handler always throws, so a consumer's subscriber never ran: measured on SQLite,
+        /// PostgreSQL, MySQL and SQL Server for every failing read, write, bulk write and missing-table count. The
+        /// provider's handler is now the <see cref="ReportCommandException"/> override, run first, so its bookkeeping
+        /// (schema ensure, <see cref="SchemaEscapes"/>, the annotation) is done before any subscriber runs. Each subscriber
+        /// then receives the exception the caller will receive, in its own <c>try</c>, with a failure recorded on
+        /// <see cref="SubscriberFailures"/> under channel <c>OnException</c>; a subscriber cannot replace or swallow it.
+        /// The same object is rethrown, so every filter that selects on it keeps matching: <c>ExecuteWithRetry</c>'s
+        /// <c>IsTransientException</c>/<c>IsNotAppliedException</c>, a count's <c>IsMissingTableExceptionChain</c>, the
+        /// unique-violation and cancellation walks, and a type a host catches.
+        /// <para>Before, a subscriber on a connector without a provider handler made this return, swallowing the failure;
+        /// it now always throws, so the "InitException may return" branches at its call sites are unreachable.</para>
+        /// </remarks>
+        [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+        public void InitException(Exception ex, string? commandText)
         {
-            if (OnException != null)
+            if (ex == null) throw new ArgumentNullException(nameof(ex));
+            var reported = ex;
+            try
             {
-                OnException.Invoke(ex, commandText);
+                ReportCommandException(ex, commandText);
             }
-            else
+            catch (Exception thrown)
             {
-                throw ex;
+                reported = thrown;
             }
+            RaiseEach(OnException, subscriber => ((OnException)subscriber)(reported, commandText), nameof(OnException));
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(reported).Throw();
+        }
+
+        /// <summary>
+        /// The provider's answer to a failed statement: throw what the caller should receive, or return to report
+        /// <paramref name="ex"/> as itself (the default). Every provider overrides it with <see cref="EnsureSchemaAndReport"/>.
+        /// </summary>
+        /// <remarks>Called only by <see cref="InitException"/>, before the <c>OnException</c> subscribers (TASK-894).</remarks>
+        protected virtual void ReportCommandException(Exception ex, string? commandText)
+        {
         }
 
         // TASK-286 — when this connector last completed a CREATE TABLE for a given table name.
@@ -1283,14 +1321,12 @@ namespace Birko.Data.SQL.Connectors
             using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
-                bool faulted = false;
                 try
                 {
                     createCommand?.Invoke(command);
                     AnnounceCommand(command, out commandText);
                 }
-                catch (Exception ex) { InitException(ex, commandText); faulted = true; } // CR-M134
-                if (faulted) yield break;
+                catch (Exception ex) { InitException(ex, commandText); } // never returns (TASK-894; CR-M134's flag removed, rule 53)
                 DbDataReader reader;
                 try { reader = command.ExecuteReader(); }
                 catch (Exception ex) when (missingTableIsEmpty && IsMissingTableException(ex)) { yield break; }

@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL `OnException` subscribers run; migrations and job locks reach `OnExecute` (2026-11-10)
+[[TASK-894]]. A consumer's `OnException` subscriber was never called on any provider: each provider subscribed an
+always-throwing handler first (measured). The provider's handling is now an override that runs before every subscriber,
+subscribers are contained (rule 25), and the caller still gets the same exception, so retry and missing-table filters
+match. Statements sent by migrations, view migrations, the TimescaleDB migration and the job lock provider are now
+announced. **Breaking for connector subclasses:** `InitException` is no longer virtual.
 ### Long string IN lists split; rules and view joins compare strings exactly (2026-11-10)
 [[TASK-895]] (the user's decisions). A string IN list past the parameter limit is now split like other lists, since
 TASK-873 made string IN exact. SQL rules compared strings by collation (MySQL 30, SQL Server 36 of 42 shapes wrong) and
@@ -374,12 +380,6 @@ fails too: C#'s Infinity/NaN has no SQL form.
 refuses against a collection, so it failed for every filter (measured: 72 of 88 cases). Every GROUP BY shape now reads
 the filtered documents and aggregates them in LINQ, as several fields already did. **Breaking:** the public
 `FacetAggregationHelper` is gone (no caller).
-### Grouped SQL views read every aggregate type (2026-11-09)
-[[TASK-887]]. A grouped view's SUM/MAX of a `long`, `short` or `double` column, and an AVG into a `double` or integer,
-threw a cast error on all four providers: the reader was chosen from the function name and a closed list of source
-types, not from what the server returns. COUNT of a group with a NULL key answered 0, silently. One reading rule now
-converts the server's value exactly to the view property's type, an integer AVG renders as a fraction (SQL Server
-truncated it), and COUNT counts the key column. The SELECT and the reader share one column sequence.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -19,7 +19,6 @@ namespace Birko.Data.SQL.Connectors
     {
         public SqLiteConnector(Birko.Configuration.PasswordSettings settings) : base(settings)
         {
-            OnException += SqLiteConnector_OnException;
         }
 
         /// <summary>
@@ -77,7 +76,7 @@ namespace Birko.Data.SQL.Connectors
         /// disagree about what a missing table is (TASK-211's rule).
         /// </para>
         /// </remarks>
-        private void SqLiteConnector_OnException(Exception ex, string? commandText)
+        protected override void ReportCommandException(Exception ex, string? commandText)
             => EnsureSchemaAndReport(ex, commandText);
 
         public string? Path

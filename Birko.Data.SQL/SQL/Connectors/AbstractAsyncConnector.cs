@@ -354,7 +354,6 @@ namespace Birko.Data.SQL.Connectors
             await using (var command = db.CreateCommand())
             {
                 command.Transaction = transaction;
-                bool faulted = false;
                 try
                 {
                     if (createCommand != null) await createCommand.Invoke(command);
@@ -362,14 +361,8 @@ namespace Birko.Data.SQL.Connectors
                 }
                 catch (Exception ex)
                 {
-                    // CR-M134: with an OnException handler registered InitException returns instead of
-                    // rethrowing — short-circuit rather than executing a command that failed to build.
+                    // Never returns (TASK-894): CR-M134's short-circuit flag for a returning InitException is gone (rule 53).
                     InitException(ex, commandText);
-                    faulted = true;
-                }
-                if (faulted)
-                {
-                    yield break;
                 }
                 DbDataReader reader;
                 try

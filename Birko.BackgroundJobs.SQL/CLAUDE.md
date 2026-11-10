@@ -37,6 +37,7 @@ Birko.BackgroundJobs.SQL/
 - **Status as int** — `JobStatus` enum stored as int column for SQL compatibility; model uses `int Status` property with casts
 - **Metadata as JSON** — `Dictionary<string, string>` serialized to a single TEXT column
 - **Claim stamped at the write** — the claim's `LastAttemptAt` is `DateTime.UtcNow` when the guarded UPDATE is built, never the time the dequeue began: a candidate read slower than the claim timeout wrote a claim that was already stale, and the next dequeue handed the job out again (TASK-900, reproduced on SQLite, PostgreSQL, MySQL and SQL Server; TASK-879 on RavenDB, TASK-884 on Elasticsearch). The reclaim cut-off (`staleBefore`) keeps the dequeue's start, which only delays a reclaim.
+- **Lock statements are announced** — `SqlJobLockProvider` runs its advisory-lock statements on a dedicated connection and calls the connector's `AnnounceCommand(cmd)` before each, so `OnExecute` sees the acquire and the release with their values (TASK-894; before, none was announced on PostgreSQL, MySQL or SQL Server). Pinned by `Task894LockAnnounceTests`.
 
 ## Maintenance
 

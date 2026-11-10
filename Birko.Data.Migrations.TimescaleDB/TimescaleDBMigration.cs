@@ -203,7 +203,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void CreateHypertable(IMigrationContext context, string tableName, string timeColumnName, string? chunkInterval = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildCreateHypertableSql(connector, tableName, timeColumnName, chunkInterval));
+            ExecuteScript(connector, connection, transaction, BuildCreateHypertableSql(connector, tableName, timeColumnName, chunkInterval));
         }
 
         /// <summary>
@@ -225,7 +225,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void CreateHypertableWithSpace(IMigrationContext context, string tableName, string timeColumnName, string spaceColumnName, int numberPartitions, string? chunkInterval = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildCreateHypertableWithSpaceSql(connector, tableName, timeColumnName, spaceColumnName, numberPartitions, chunkInterval));
+            ExecuteScript(connector, connection, transaction, BuildCreateHypertableWithSpaceSql(connector, tableName, timeColumnName, spaceColumnName, numberPartitions, chunkInterval));
         }
 
         /// <summary>
@@ -247,7 +247,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void AddCompressionPolicy(IMigrationContext context, string tableName, string compressAfterInterval, string orderByColumn, string? segmentByColumn = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildCompressionPolicySql(connector, tableName, compressAfterInterval, orderByColumn, segmentByColumn));
+            ExecuteScript(connector, connection, transaction, BuildCompressionPolicySql(connector, tableName, compressAfterInterval, orderByColumn, segmentByColumn));
         }
 
         /// <summary>
@@ -308,7 +308,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void AddRetentionPolicy(IMigrationContext context, string tableName, string dropAfterInterval)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildRetentionPolicySql(connector, tableName, dropAfterInterval));
+            ExecuteScript(connector, connection, transaction, BuildRetentionPolicySql(connector, tableName, dropAfterInterval));
         }
 
         /// <summary>Builds the retention-policy DDL. The table is a <c>regclass</c>; the interval is a fragment.</summary>
@@ -321,7 +321,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void RemoveCompressionPolicy(IMigrationContext context, string tableName)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildRemoveCompressionPolicySql(connector, tableName));
+            ExecuteScript(connector, connection, transaction, BuildRemoveCompressionPolicySql(connector, tableName));
         }
 
         /// <summary>Builds the compression-policy removal. The table is a <c>regclass</c>.</summary>
@@ -334,7 +334,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void RemoveRetentionPolicy(IMigrationContext context, string tableName)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildRemoveRetentionPolicySql(connector, tableName));
+            ExecuteScript(connector, connection, transaction, BuildRemoveRetentionPolicySql(connector, tableName));
         }
 
         /// <summary>Builds the retention-policy removal. The table is a <c>regclass</c>.</summary>
@@ -350,7 +350,7 @@ namespace Birko.Data.Migrations.TimescaleDB
             IEnumerable<ContinuousAggregateGrouping>? groupings = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction,
+            ExecuteScript(connector, connection, transaction,
                 BuildContinuousAggregateSql(connector, viewName, sourceTable, timeBucket, timeColumn, projections, groupings));
         }
 
@@ -496,7 +496,7 @@ namespace Birko.Data.Migrations.TimescaleDB
                     + "(pass a null startOffset to include it). To BACKFILL existing history immediately, "
                     + "run this migration with SqlMigrationSettings.UseTransaction = false.");
             }
-            ExecuteScript(connection, transaction, BuildRefreshContinuousAggregateSql(connector, viewName));
+            ExecuteScript(connector, connection, transaction, BuildRefreshContinuousAggregateSql(connector, viewName));
         }
 
         /// <summary>
@@ -554,7 +554,7 @@ namespace Birko.Data.Migrations.TimescaleDB
             string? startOffset, string endOffset, string scheduleInterval)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction,
+            ExecuteScript(connector, connection, transaction,
                 BuildContinuousAggregatePolicySql(connector, viewName, startOffset, endOffset, scheduleInterval));
         }
 
@@ -617,6 +617,7 @@ namespace Birko.Data.Migrations.TimescaleDB
                 "SELECT COUNT(*) FROM timescaledb_information.hypertables "
               + $"WHERE {CatalogueRowMatchesSql}";
             AddParameter(command, "@table", connector.QualifiedIdentifier(tableName));
+            connector.AnnounceCommand(command);
             var result = command.ExecuteScalar();
             return result != null && Convert.ToInt32(result) > 0;
         }
@@ -667,6 +668,7 @@ namespace Birko.Data.Migrations.TimescaleDB
               + "FROM timescaledb_information.dimensions "
               + $"WHERE {CatalogueRowMatchesSql} AND dimension_number = 1";
             AddParameter(command, "@table", connector.QualifiedIdentifier(tableName));
+            connector.AnnounceCommand(command);
             var result = command.ExecuteScalar();
             return result == DBNull.Value ? null : result?.ToString();
         }
@@ -716,7 +718,7 @@ namespace Birko.Data.Migrations.TimescaleDB
             throw new InvalidOperationException($"Expected SqlMigrationContext but got {context.GetType().Name}.");
         }
 
-        private static void ExecuteScript(DbConnection connection, DbTransaction? transaction, string sql)
+        private static void ExecuteScript(AbstractConnector connector, DbConnection connection, DbTransaction? transaction, string sql)
         {
             if (string.IsNullOrWhiteSpace(sql))
                 return;
@@ -724,6 +726,7 @@ namespace Birko.Data.Migrations.TimescaleDB
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = sql;
+            connector.AnnounceCommand(command);
             command.ExecuteNonQuery();
         }
 
