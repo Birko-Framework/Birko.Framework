@@ -3,7 +3,7 @@ id: TASK-900
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P2
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -29,9 +29,19 @@ TASK-884 (Elasticsearch) fixed. SQL is the backend Symbio would use.
 
 ## Acceptance criteria
 
-- [ ] Reproduce on each (rule 54), offline and live.
-- [ ] The claim is stamped right before the guarded update, as RavenDB, Cosmos DB and Elasticsearch now do.
-- [ ] Tests, red before the fix; the live suites stable over repeated runs.
+- [x] Reproduce on each (rule 54), offline and live.
+      → Reproduced 2026-11-10 with a slow candidate-read store double (300 ms timeout + 150 ms): the claim's
+        `LastAttemptAt` came back 500–730 ms older than the claim (SQLite and MongoDB offline; MongoDB, SQLite, PostgreSQL,
+        MySQL, SQL Server live), and on every target the next `DequeueAsync` handed out the job claimed a moment before.
+- [x] The claim is stamped right before the guarded update, as RavenDB, Cosmos DB and Elasticsearch now do.
+      → Both queues' claim update sets `LastAttemptAt = DateTime.UtcNow` (TASK-879 / TASK-884 shape); `staleBefore`
+        keeps the dequeue's start; TASK-575's single-reclaim guard is unaffected.
+- [x] Tests, red before the fix; the live suites stable over repeated runs.
+      → `Task900ClaimStampTests<DB>` (SQLite offline, PostgreSQL/MySQL/SQL Server live, unique queue per test) and
+        MongoDB offline + live `TASK_900_…` tests: red on HEAD (SQL 4/4, Mongo 2/2), green after. Live 10 consecutive runs:
+        BackgroundJobs.MongoDB 23/23, BackgroundJobs.SQL 65/65 each.
+      → Consumers: Symbio's `SqlJobQueue` (PostgreSQL, SQL Server, SQLite) and BardStudio use the default 30-minute claim
+        timeout, so the defect only fired on a read slower than that; `LastAttemptAt` is now the true claim time.
 
 ## Out of scope
 

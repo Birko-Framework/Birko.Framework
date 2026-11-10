@@ -137,7 +137,11 @@ namespace Birko.BackgroundJobs.MongoDB
                         .Set(j => j.Status, processingStatus)
                         .Set(j => j.ClaimToken, claimToken)
                         .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
-                        .Set(j => j.LastAttemptAt, now),
+                        // TASK-900 (TASK-879 on RavenDB, TASK-884 on Elasticsearch): stamped when the claim is written.
+                        // `now` was taken before the candidate read, so a read slower than the claim timeout wrote a claim
+                        // that was already stale, and the next dequeue handed the job out again (reproduced offline and
+                        // live). staleBefore keeps the dequeue's start, which only delays a reclaim.
+                        .Set(j => j.LastAttemptAt, DateTime.UtcNow),
                     ct: cancellationToken
                 ).ConfigureAwait(false);
 

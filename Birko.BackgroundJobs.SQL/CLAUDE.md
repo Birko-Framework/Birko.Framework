@@ -36,6 +36,7 @@ Birko.BackgroundJobs.SQL/
 - **Store exposed publicly** — `SqlJobQueue.Store` property allows external transaction context (`SetTransactionContext`) and SqlUnitOfWork integration
 - **Status as int** — `JobStatus` enum stored as int column for SQL compatibility; model uses `int Status` property with casts
 - **Metadata as JSON** — `Dictionary<string, string>` serialized to a single TEXT column
+- **Claim stamped at the write** — the claim's `LastAttemptAt` is `DateTime.UtcNow` when the guarded UPDATE is built, never the time the dequeue began: a candidate read slower than the claim timeout wrote a claim that was already stale, and the next dequeue handed the job out again (TASK-900, reproduced on SQLite, PostgreSQL, MySQL and SQL Server; TASK-879 on RavenDB, TASK-884 on Elasticsearch). The reclaim cut-off (`staleBefore`) keeps the dequeue's start, which only delays a reclaim.
 
 ## Maintenance
 

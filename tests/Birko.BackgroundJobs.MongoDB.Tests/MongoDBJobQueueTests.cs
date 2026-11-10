@@ -204,6 +204,33 @@ public class MongoDBJobQueueTests
         job.CompletedAt.Should().NotBeNull();
     }
 
+    // ── TASK-900: the claim is stamped when it is written, not when the dequeue began (TASK-879, TASK-884) ──
+
+    /// <summary>A store whose candidate read takes longer than the claim timeout.</summary>
+    private sealed class SlowCandidateReadMongoStore : InMemoryMongoStore<MongoJobDescriptorModel>
+    {
+        protected override async Task<IEnumerable<MongoJobDescriptorModel>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<MongoJobDescriptorModel, bool>>? filter = null,
+            Birko.Data.Stores.OrderBy<MongoJobDescriptorModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+        {
+            await Task.Delay(Task664Timeout + TimeSpan.FromMilliseconds(150), ct);
+            return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+    }
+
+    [Fact]
+    public async Task TASK_900_a_claim_behind_a_slow_candidate_read_is_not_reclaimed_at_once()
+    {
+        var queue = new MongoDBJobQueue(new SlowCandidateReadMongoStore(), new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, Task664Timeout);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        var claimed = await queue.DequeueAsync();
+        var afterClaim = DateTime.UtcNow;
+        claimed!.Guid.Should().Be(id);
+        claimed.LastAttemptAt.Should().BeOnOrAfter(afterClaim - Task664Timeout, "the claim is stamped when it is written, after the candidate read");
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed, however long the read that found it took");
+        (await queue.GetAsync(id))!.AttemptCount.Should().Be(1);
+    }
+
     // ── TASK-175 (SH-L013): a Delay on an enqueued descriptor is honoured, not dropped ──
 
     [Fact]

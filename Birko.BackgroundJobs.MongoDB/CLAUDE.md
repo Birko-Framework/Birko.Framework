@@ -31,7 +31,10 @@ MongoDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncMongoDBS
 `DequeueAsync` claims a job with a conditional update guarded on the still-eligible status plus a
 `ClaimToken` re-read verification (CR-M020). MongoDB applies the `$set` per document atomically, so
 only one racing worker's filter matches after the first flips the status; the losers move on to the
-next candidate. Job handlers should still be idempotent as defence in depth.
+next candidate. Job handlers should still be idempotent as defence in depth. The claim's `LastAttemptAt` is
+stamped when the claim is written, never from the time the dequeue began: a candidate read slower than the claim timeout
+wrote a claim that was already stale, and the next dequeue handed the job out again (TASK-900, reproduced offline and
+live; TASK-879 on RavenDB, TASK-884 on Elasticsearch).
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs

@@ -296,6 +296,10 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL and MongoDB job queues stamp a claim when they write it (2026-11-10)
+[[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
+candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job
+out again (reproduced on SQLite, PostgreSQL, MySQL, SQL Server and MongoDB). Symbio's 30-minute default made it rare.
 ### A SQL view read over a missing view throws; table-name overloads refuse reserved columns (2026-11-10)
 [[TASK-891]]. A view read over a view or source table that did not exist answered 0 rows on all four providers while
 its count threw (rule 26, measured): the reader's missing-table swallow, meant for tables a store heals, applied to
@@ -372,11 +376,6 @@ now resolves the table through one checking funnel, and persistent view DDL and 
   division (`/ 3m`, a column) is refused by name on the servers, in filters and SET. **Breaking.**
 - **SET:** `.Date` works on SQLite (was silently wrong) and SQL Server (failed). `Replace` follows C#: a null new value
   removes, an empty old value throws, SQL Server compares case-sensitively.
-### A SQL Server read reports a server error instead of returning no rows (2026-11-09)
-[[TASK-880]]. A read whose filter failed on the server (divide by zero, overflow, a SUM overflow in a grouped view)
-returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on
-`HasRows == false` and never read the error. They now read until the end, so the error reaches the caller (rule 26).
-PostgreSQL, MySQL and SQLite already threw. Found on the way: grouped views over one table fail ([[TASK-887]], P1).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

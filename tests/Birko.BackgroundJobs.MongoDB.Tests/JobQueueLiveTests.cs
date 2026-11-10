@@ -136,6 +136,37 @@ public class JobQueueLiveTests(ITestOutputHelper output)
         (await queue.GetAsync(id))!.AttemptCount.Should().Be(2);
     }
 
+    // ── TASK-900: the claim is stamped when it is written, not when the dequeue began (TASK-879, TASK-884) ──
+
+    /// <summary>The real store, with a candidate read that takes longer than the claim timeout.</summary>
+    private sealed class SlowCandidateReadStore : Birko.Data.MongoDB.Stores.AsyncMongoDBStore<Birko.BackgroundJobs.MongoDB.Models.MongoJobDescriptorModel>
+    {
+        protected override async Task<System.Collections.Generic.IEnumerable<Birko.BackgroundJobs.MongoDB.Models.MongoJobDescriptorModel>> ReadCoreAsync(
+            System.Linq.Expressions.Expression<Func<Birko.BackgroundJobs.MongoDB.Models.MongoJobDescriptorModel, bool>>? filter = null,
+            Birko.Data.Stores.OrderBy<Birko.BackgroundJobs.MongoDB.Models.MongoJobDescriptorModel>? orderBy = null,
+            int? limit = null, int? offset = null, System.Threading.CancellationToken ct = default)
+        {
+            await Task.Delay(Task664Timeout + TimeSpan.FromMilliseconds(150), ct);
+            return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+    }
+
+    [Fact]
+    public async Task TASK_900_a_claim_behind_a_slow_candidate_read_is_not_reclaimed_at_once()
+    {
+        if (Queue() is null) return;
+        var store = new SlowCandidateReadStore();
+        store.SetSettings(new Birko.Data.MongoDB.Stores.Settings(Environment.GetEnvironmentVariable("BIRKO_MONGO_HOST")!, "birko_jobs_" + Guid.NewGuid().ToString("N")));
+        var queue = new MongoDBJobQueue(store, new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.Zero, UseExponentialBackoff = false }, Task664Timeout);
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t" });
+        var claimed = await queue.DequeueAsync();
+        var afterClaim = DateTime.UtcNow;
+        claimed!.Guid.Should().Be(id);
+        claimed.LastAttemptAt.Should().BeOnOrAfter(afterClaim - Task664Timeout, "the claim is stamped when it is written, after the candidate read");
+        (await queue.DequeueAsync()).Should().BeNull("a job claimed just now is not reclaimed, however long the read that found it took");
+        (await queue.GetAsync(id))!.AttemptCount.Should().Be(1);
+    }
+
     // TASK-175 (SH-L018): the purge counts and deletes by filter on the server, keeping what is not terminal.
     [Fact]
     public async Task TASK_175_SH_L018_purge_deletes_terminal_jobs_by_filter()

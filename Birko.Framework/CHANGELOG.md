@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — A SQL Server read reports a server error instead of returning no rows
+[[TASK-880]]. A read whose filter failed on the server (divide by zero, overflow, a SUM overflow in a grouped view)
+returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on
+`HasRows == false` and never read the error. They now read until the end, so the error reaches the caller (rule 26).
+PostgreSQL, MySQL and SQLite already threw. Found on the way: grouped views over one table fail ([[TASK-887]], P1).
+
 ## 2026-11-09 — Elasticsearch store aggregates answer what LINQ answers
 [[TASK-878]]. 93 of 99 measured aggregate shapes were wrong, mostly silently: property names were sent verbatim and ES
 answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
