@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB: missing members read as their default, nested predicates and long null lists work (2026-11-10)
+[[TASK-899]]. A non-nullable member missing from a document failed `A == 0`, `!Del` and 32 more shapes (C# reads the
+default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused
+(measured). Each now matches C#. View aggregates got the store's decimal and DateTime rules; a view decimal AVG and a
+sort by a DateTime group key are refused by name. Found: `DateTime` filters compare stored text ([[TASK-902]], P1).
 ### SQL and MongoDB job queues stamp a claim when they write it (2026-11-10)
 [[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
 candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job
@@ -368,14 +373,6 @@ truncated it), and COUNT counts the key column. The SELECT and the reader share 
 Birko did not build compared the database's current user, not the column, and deleted every row, on all four providers
 (measured). A persistent view's own column named `User` read the function the same way. Every typed connector entry point
 now resolves the table through one checking funnel, and persistent view DDL and reads check their columns.
-### SQL translation leftovers: SQLite folds and overflow, exact decimal division, `.Date` and `Replace` in SET (2026-11-09)
-[[TASK-870]]. Measured against C# on all four providers, and fixed:
-- **SQLite:** `ToLower` / `ToUpper` folded ASCII only; they now run C#'s fold. `SET Hits = Hits + 1` past `int.MaxValue`
-  stored silently and broke every later read of the row; integer arithmetic now fails on overflow.
-- **Decimal `/`:** a constant divisor like `2m`, `4m`, `2.5m` becomes an exact product everywhere; any other decimal
-  division (`/ 3m`, a column) is refused by name on the servers, in filters and SET. **Breaking.**
-- **SET:** `.Date` works on SQLite (was silently wrong) and SQL Server (failed). `Replace` follows C#: a null new value
-  removes, an empty old value throws, SQL Server compares case-sensitively.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

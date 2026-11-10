@@ -107,8 +107,10 @@ internal static class CosmosInListChunking
         }
 
         var target = big.OrderByDescending(l => l.EstimatedLength).ThenByDescending(l => l.Values.Count).First();
+        var leadingChunk = true;
         Expression<Func<T, bool>> Build(IEnumerable<object?> values)
-            => Expression.Lambda<Func<T, bool>>(new NodeReplacer(target.Node, target.WithValues(values)).Visit(filter.Body)!, filter.Parameters);
+            => Expression.Lambda<Func<T, bool>>(
+                new NodeReplacer(target.Replaced, target.WithValues(values, leadingChunk)).Visit(filter.Body)!, filter.Parameters);
 
         // The rest of the query, estimated from one value's rendering; the measurement of each chunk is what decides.
         var first = target.Values[0];
@@ -141,6 +143,7 @@ internal static class CosmosInListChunking
             if (length <= budget || (values.Count == 1 && length <= maxQueryTextLength))
             {
                 chunks.Add(chunk);
+                leadingChunk = false;
                 return;
             }
             if (values.Count > 1)
@@ -210,16 +213,28 @@ internal static class CosmosInListChunking
     /// <summary>One <c>list.Contains(item)</c> in the filter, with its distinct values and why it cannot be split.</summary>
     private sealed class InList
     {
-        public InList(MethodCallExpression node, Expression item, Type elementType, List<object?> values, string? reason)
+        public InList(MethodCallExpression node, Expression item, Type elementType, List<object?> values, string? reason,
+            BinaryExpression? absentOrIn = null)
         {
             Node = node;
             Item = item;
             ElementType = elementType;
             Values = values;
             Reason = reason;
+            AbsentOrIn = absentOrIn;
         }
 
         public MethodCallExpression Node { get; }
+
+        /// <summary>
+        /// TASK-899: the <c>absent OR IN</c> the null semantics made of this list (<c>CosmosFilterRewrite.TryAbsentOrIn</c>),
+        /// or <c>null</c>. Its absent leg goes with the leading chunk only: no stored value of the list matches a null or
+        /// missing member, so the chunks stay disjoint.
+        /// </summary>
+        public BinaryExpression? AbsentOrIn { get; }
+
+        /// <summary>The node a chunk replaces: the <c>absent OR IN</c>, or the IN itself.</summary>
+        public Expression Replaced => AbsentOrIn ?? (Expression)Node;
         public Expression Item { get; }
         public Type ElementType { get; }
         public List<object?> Values { get; }
@@ -238,14 +253,18 @@ internal static class CosmosInListChunking
         public static int Cost(object? value)
             => (value == null ? 4 : System.Text.Json.JsonSerializer.Serialize(value, value.GetType()).Length) + 2;
 
-        /// <summary><c>new List&lt;E&gt;(values).Contains(item)</c>: the List spelling the Cosmos provider renders as IN.</summary>
-        public Expression WithValues(IEnumerable<object?> values)
+        /// <summary>
+        /// <c>new List&lt;E&gt;(values).Contains(item)</c>: the List spelling the Cosmos provider renders as IN; for the
+        /// leading chunk of an <c>absent OR IN</c>, with the absent leg in front.
+        /// </summary>
+        public Expression WithValues(IEnumerable<object?> values, bool leadingChunk)
         {
             var listType = typeof(List<>).MakeGenericType(ElementType);
             var list = (IList)Activator.CreateInstance(listType)!;
             foreach (var v in values) list.Add(v);
             var contains = listType.GetMethod(nameof(List<object>.Contains), new[] { ElementType })!;
-            return Expression.Call(Expression.Constant(list, listType), contains, Item);
+            Expression chunk = Expression.Call(Expression.Constant(list, listType), contains, Item);
+            return AbsentOrIn != null && leadingChunk ? Expression.OrElse(AbsentOrIn.Left, chunk) : chunk;
         }
     }
 
@@ -287,6 +306,31 @@ internal static class CosmosInListChunking
             finally { _ancestors.Pop(); }
         }
 
+        protected override Expression VisitBinary(BinaryExpression node)
+        {
+            // TASK-899: `absent OR IN(list)`, a plain AND conjunct, splits like the IN itself; its absent leg goes with the
+            // leading chunk. A stored default must be in that chunk: re-preparing a chunk (a chunked write does) adds the
+            // leg to the chunk holding the default, so it is moved to the front.
+            if (_conjuncts.Contains(node)
+                && CosmosFilterRewrite.TryAbsentOrIn(node, out var contains, out var defaultValue)
+                && TryMatch(contains, out var source, out var item, out var elementType))
+            {
+                var values = DistinctValues(source);
+                if (defaultValue != null)
+                {
+                    var at = values.FindIndex(v => Equals(v, defaultValue));
+                    if (at > 0)
+                    {
+                        values.RemoveAt(at);
+                        values.Insert(0, defaultValue);
+                    }
+                }
+                _found.Add(new InList(contains, item, elementType, values, ReasonFor(contains, elementType, absentOrIn: true), node));
+                return node;
+            }
+            return base.VisitBinary(node);
+        }
+
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
             if (TryMatch(node, out var source, out var item, out var elementType))
@@ -323,11 +367,11 @@ internal static class CosmosInListChunking
             return !ParameterFinder.Uses(source) && ParameterFinder.Uses(item);
         }
 
-        private string? ReasonFor(MethodCallExpression node, Type elementType)
+        private string? ReasonFor(MethodCallExpression node, Type elementType, bool absentOrIn = false)
         {
             if (elementType != typeof(string) && !elementType.IsValueType)
                 return $"its values are of type {elementType.Name}, not a scalar value type or a string";
-            if (_conjuncts.Contains(node))
+            if (absentOrIn || _conjuncts.Contains(node))
                 return null;
 
             // _ancestors holds the node itself on top; the next one is its parent.

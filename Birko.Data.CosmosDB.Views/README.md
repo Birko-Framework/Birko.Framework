@@ -6,7 +6,7 @@ Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](.
 
 - **CosmosViewStore\<TView\>** — Implements `IViewStore<TView>`. Non-aggregate views SELECT each source field under its view property's name, with WHERE/ORDER BY/OFFSET LIMIT mapped to the source fields. Aggregate views use Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`. Aggregate SQL built via shared `CosmosAggregationHelper`. Uses `OrderByHelper.ApplyTo()` for dynamic ordering. Joins and Persistent mode are refused: Cosmos DB has no cross-document joins and no stored views.
 - **CosmosViewManager** — Implements `IViewManager`. `EnsureAsync` refuses a Persistent definition or a join and otherwise creates nothing. `DropAsync` never deletes a container and `ExistsAsync` is always false: no container is a view. `RefreshAsync` is a no-op (views are computed on-the-fly).
-- **CosmosFilterTranslator** — Translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses. Supports binary comparisons, logical AND/OR, NOT, and string Contains. Null and missing members answer as C# does through the store's shared pre-pass (`CosmosFilterRewrite.Prepare`, TASK-896): `HasValue`, `== null`, `!=`, negated comparisons, `string.IsNullOrEmpty`, ordinal `CompareOrdinal`; culture string comparisons and `IsNullOrWhiteSpace` are refused.
+- **CosmosFilterTranslator** — Translates `Expression<Func<T, bool>>` filters into Cosmos SQL WHERE clauses. Supports binary comparisons, logical AND/OR, NOT, and string Contains. Null and missing members answer as C# does through the store's shared pre-pass (`CosmosFilterRewrite.Prepare`, TASK-896): `HasValue`, `== null`, `!=`, negated comparisons, `string.IsNullOrEmpty`, ordinal `CompareOrdinal`; culture string comparisons and `IsNullOrWhiteSpace` are refused. A non-nullable member a document omits reads as its default (TASK-899).
 
 ## Query Translation
 
@@ -15,7 +15,8 @@ Azure Cosmos DB (NoSQL API) platform implementation for the [Birko.Data.Views](.
 | From | Container |
 | Select (no agg) | `SELECT c["Source"] AS ViewProp` |
 | GroupBy + Aggregates | Cosmos SQL `GROUP BY` (via CosmosAggregationHelper) |
-| Count/Sum/Avg/Min/Max | Cosmos SQL aggregate functions |
+| Count/Sum/Avg/Min/Max | Cosmos SQL aggregate functions; a decimal Sum is read to 15 significant digits as the store's, a decimal Avg is refused (TASK-899) |
+| GroupBy a DateTime | Grouped on the wall clock, as the store aggregate; sorting by that key is refused (TASK-899) |
 | OrderBy | `OrderByHelper.ApplyTo()` |
 | Joins | Refused (`NotSupportedException`) |
 | Persistent | Refused (no stored views) |

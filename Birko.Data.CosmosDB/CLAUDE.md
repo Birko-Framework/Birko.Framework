@@ -113,9 +113,41 @@ aggregates) and in the view store, takes ONE pre-pass: `CosmosFilterRewrite.Prep
   sorts after U+FFFF, measured), two members compared, a computed member, a result compared with anything but 0.
 - **After:** 0 of the 91 translated shapes differ, on every path; the 12 refused shapes refuse on every path and a
   refused write changes no row (`Task896NullSemanticsLiveTests`).
-- **Not covered:** a NON-nullable member missing from a document (C# reads the default, Cosmos DB undefined), and
-  nested lambdas (`Any` / `All` predicates), left to the provider. The rewritten tree is never compiled; a second pass
-  (a chunked write prepares each chunk again) only repeats guards.
+- The rewritten tree is never compiled; a second pass (a chunked write prepares each chunk again) only repeats guards,
+  and leaves the `IS_DEFINED` / `IS_NULL` markers and a defaulted read it produced alone.
+
+## Missing non-nullable members, nested predicates, lists holding null (TASK-899)
+- **A non-nullable member a document omits** (written before the member existed) is the type's default to every
+  reader and undefined to Cosmos DB. Measured on the emulator (vnext-preview, 2026-11-10; 44 shapes, 2 of 7 documents
+  omitting `int`, `bool`, enum, `DateTime`, `decimal`, `double`, `long` members): 34 answered other rows, identically on
+  all 7 paths (`x.A == 0`, `x.A != 5`, `!(x.A > 3)`, `!x.Del`, `x.Del == false`, `x.E == New`, `ids.Contains(x.A)` with 0,
+  `x.A > x.Score`, `x.A + 1 == 1` all skipped those documents). Now (`IsDefaultable`: a value-type member read along
+  members of document classes from a lambda parameter, not `Nullable.Value`, not a struct's or string's member):
+  - against a value, `m op v` where the default passes it is `NOT IS_DEFINED(m) OR m op v`; where it fails, it keeps its
+    rendering (and its index), guarded with `IS_DEFINED(m)` under `!`. A `Contains` of `m` likewise. A bare `bool`
+    member under `!` is `IS_DEFINED(m) AND m`.
+  - in anything computed (`m + 1`, `m > x.Other`, a conditional) the member is `IS_DEFINED(m) ? m : default`.
+  - Not covered: a member stored as JSON `null` on a non-nullable type, which no reader can read; a missing parent
+    object (`x.Sub.A` without `Sub`), where C# throws.
+- **Nested predicates** (`Any`, `Where`, `Count`, `First`, … over an array) take the same rewrite, their body positive
+  whatever the polarity outside (an element whose test is undefined is simply not kept, C#'s false). **`All(p)` is
+  `!Any(!p)`**: the provider has no `All` and threw `DocumentQueryException` on every path. Measured before: 23 of 30
+  shapes wrong on reads, counts and writes: 10 `All` shapes threw, 13 `Any` / `Count` / `Where` shapes answered other rows
+  (`Any(i => i.S == null)`, `Any(i => !(i.Score > 5))`, `Any(i => i.N == 0)` skipped null and missing members). After: 0 on reads, counts, update and delete. **An aggregate whose filter holds one is refused by
+  name** (TASK-876's message): the provider renders a nested predicate as a `JOIN (SELECT VALUE EXISTS(...))`, not a
+  plain `WHERE` the aggregation can be placed behind.
+- **A list holding `null`, or a non-nullable member's default, splits past the limit.** TASK-896 rendered it
+  `absent OR IN (..)`, which the planner refused past 524,288 characters as "under an OR" (measured: 30,000 names with
+  a null, 100,000 ints with 0). `CosmosFilterRewrite.TryAbsentOrIn` recognises the shape it produced, and
+  `CosmosInListChunking` splits the IN with the absent leg in ONE chunk: no stored value of the list matches a null or
+  missing member, so the chunks stay disjoint. For a default, the chunk holding the default carries it (re-preparing a
+  chunk, as a chunked write does, adds the leg to that chunk). Negated (`!list.Contains(..)` with null) it is still
+  refused past the limit. `Task899AbsentLegChunkingLiveTests`.
+- **Query cost of `IS_DEFINED` / `IS_NULL`: unmeasured.** The emulator charges 1 RU per page whatever the query and
+  returns no index metrics (`PopulateIndexMetrics`; measured 2026-11-10 on 4,000 documents, also for
+  `(IS_DEFINED(c.A) ? c.A : 0) = 5`), so it cannot show index use. A test the default fails keeps its plain, indexable
+  rendering; the `NOT IS_DEFINED(m) OR ..` leg and a defaulted computed operand are what a real account would have to
+  be measured for.
 
 ## Aggregation (TASK-876)
 - `Aggregate` / `AggregateAsync` run one native query: `SELECT … FROM root [WHERE …] [GROUP BY …]`.

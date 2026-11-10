@@ -296,7 +296,33 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             results.AddRange(response);
         }
 
+        RoundDecimalSums(results);
         return results;
+    }
+
+    /// <summary>
+    /// TASK-899: a decimal SUM as the store aggregate answers it (TASK-897): Cosmos DB adds in double, and the container's
+    /// serializer read that double into the view property, so 0.1 + 0.2 read 0.30000000000000004 (measured on the
+    /// emulator, vnext-preview, 2026-11-10). It is now the double to 15 significant digits, <c>(decimal)(double)x</c>, the
+    /// conversion the store applies, so 0.1 + 0.2 is 0.3. Exact while the sum and its addends hold at most 15 significant
+    /// digits; past that it is Cosmos DB's double, rounded. Sorting by an aggregate is refused (TASK-848), so rounding after
+    /// the read changes no order and no page.
+    /// </summary>
+    private void RoundDecimalSums(List<TView> rows)
+    {
+        foreach (var aggregate in _definition.Aggregates)
+        {
+            if (aggregate.Function != AggregateFunction.Sum || aggregate.SourceProperty == null) continue;
+            var source = aggregate.SourceType.GetProperty(aggregate.SourceProperty);
+            if (source == null || (Nullable.GetUnderlyingType(source.PropertyType) ?? source.PropertyType) != typeof(decimal)) continue;
+            var target = typeof(TView).GetProperty(aggregate.ViewProperty);
+            if (target == null || !target.CanWrite
+                || (Nullable.GetUnderlyingType(target.PropertyType) ?? target.PropertyType) != typeof(decimal)) continue;
+            foreach (var row in rows)
+            {
+                if (target.GetValue(row) is decimal sum) target.SetValue(row, (decimal)(double)sum);
+            }
+        }
     }
 
     private async Task<long> CountAggregateAsync(
@@ -318,12 +344,18 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     {
         var parameters = new List<KeyValuePair<string, object?>>();
         // Build SELECT ... FROM c and GROUP BY parts separately via shared helper
+        // TASK-899: a DateTime group key is grouped on its wall clock, as the store aggregate groups it.
         var groupByFields = _definition.GroupBy
+            .Where(g => !IsDateTimeGroup(g))
             .Select(g => (g.PropertyName, FindViewPropertyForGroupBy(g)));
+        var dateTimeGroups = _definition.GroupBy
+            .Where(IsDateTimeGroup)
+            .Select(g => (g.PropertyName, FindViewPropertyForGroupBy(g)))
+            .ToList();
         var aggregateDefs = _definition.Aggregates
             .Select(a => (a.Function, a.SourceProperty, a.ViewProperty, AggregateMemberType(a)))
             .ToList();
-        var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs);
+        var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs, dateTimeGroups);
 
         var sb = new StringBuilder(selectFromSql);
 
@@ -354,14 +386,31 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     /// <c>…10:00:00.5Z</c> answered the half second as its MIN; a SUM of a string read the view property's default. The
     /// view's result is read by the container's serializer into the view property's type, so the store's type conversion
     /// does not apply here.
+    /// TASK-899: a decimal AVG is refused by name. Cosmos DB averages in double (1, 0, 0 read 0.3333333333333333 where C# has
+    /// 28 digits, measured), and the exact answer, a decimal SUM divided by the count as the store aggregate divides it,
+    /// needs both read from the response, where a view reads only its own properties through the container's serializer.
     /// </remarks>
     private static Type? AggregateMemberType(AggregateClause aggregate)
     {
         if (aggregate.Function == AggregateFunction.Count || aggregate.SourceProperty == null) return null;
         var member = aggregate.SourceType.GetProperty(aggregate.SourceProperty);
         if (member == null) return null;
-        CosmosAggregationHelper.ResultType(aggregate.Function, member, typeof(TView).Name);
+        var resultType = CosmosAggregationHelper.ResultType(aggregate.Function, member, typeof(TView).Name);
+        if (aggregate.Function == AggregateFunction.Avg && resultType == typeof(decimal))
+        {
+            throw new NotSupportedException(
+                $"Cosmos DB view {typeof(TView).Name} refused: Avg of {member.DeclaringType?.Name}.{member.Name}, a Decimal. "
+                + "Cosmos DB averages in double, so the answer would not be C#'s decimal average. Select its Sum and a Count "
+                + "and divide them in the caller. (TASK-899)");
+        }
         return member.PropertyType;
+    }
+
+    /// <summary>TASK-899: the group-by member is a <see cref="DateTime"/>, grouped on its wall clock.</summary>
+    private static bool IsDateTimeGroup(GroupByClause groupBy)
+    {
+        var member = groupBy.SourceType.GetProperty(groupBy.PropertyName);
+        return member != null && (Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType) == typeof(DateTime);
     }
 
     private static QueryDefinition Bind(string sql, List<KeyValuePair<string, object?>> parameters)
@@ -426,6 +475,18 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             throw new NotSupportedException(
                 $"Cosmos DB cannot sort a grouped view by an aggregate: '{typeof(TView).Name}.{viewProperty}' is one. "
                 + "Sort by a group key, or read the groups and sort them in the caller. (TASK-848)");
+        }
+
+        // TASK-899: a DateTime group is grouped on an expression (its wall clock), and Cosmos DB orders only by a document
+        // path: measured on the emulator (vnext-preview, 2026-11-10), ORDER BY the expression is 2206 ("could not be mapped
+        // to a document path"), ORDER BY the field SC2103 (not a group key). Ordering by the stored text, as before, put
+        // ...10:00:00.5Z before ...10:00:00Z and grouped a UTC, a local and an unspecified time apart.
+        if (Grouped && _definition.GroupBy.Any(g => IsDateTimeGroup(g) && FindViewPropertyForGroupBy(g) == viewProperty))
+        {
+            throw new NotSupportedException(
+                $"Cosmos DB cannot sort a grouped view by a DateTime group key: '{typeof(TView).Name}.{viewProperty}' is grouped "
+                + "on its wall clock, an expression, and Cosmos DB sorts only by a document path. Sort by another group key, "
+                + "or read the groups and sort them in the caller. (TASK-899)");
         }
 
         // Group key / passthrough field — order by the source field the GROUP BY uses, bracket-quoted (TASK-844: a

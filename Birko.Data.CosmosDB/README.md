@@ -216,3 +216,9 @@ A filter answers what the C# expression answers, also for a member that is null 
 Refused with `NotSupportedException` before any request: culture or ignore-case comparisons (`string.Compare(a, b)`,
 `CompareTo`), `string.IsNullOrWhiteSpace`, and an ordinal comparison against a value holding a character at or above
 U+D800.
+
+A non-nullable member missing from a stored document (one written before the member existed) is read as its default,
+as C# reads it: `x.Count == 0`, `!x.IsDeleted` and `x.Status == Status.New` match such a document (TASK-899). Nested
+predicates (`x.Items.Any(i => i.Score == null)`) answer null and missing members the same way, and `All` is supported
+(as `!Any(!p)`); an aggregate whose filter holds a nested predicate is refused. A `Contains` list holding `null` or the
+default is split past the query limit like any other list.

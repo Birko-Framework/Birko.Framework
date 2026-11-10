@@ -45,8 +45,12 @@ namespace Birko.Data.CosmosDB.Stores;
 /// <para>Every refusal is a <see cref="NotSupportedException"/> before any request. The rewritten tree is for the
 /// renderers; it is never compiled. A second pass over its output (a chunked write prepares each chunk again) leaves the
 /// ordinal comparisons it produced alone and only repeats guards, which changes no row.</para>
-/// <para>Not covered: a non-nullable member missing from a document (C# reads it as the type's default; Cosmos DB as
-/// undefined), and nested lambdas (<c>Any</c> / <c>All</c> predicates), which are left to the provider.</para>
+/// <para><b>A non-nullable member a document omits (TASK-899)</b> is the type's default to C#, undefined to Cosmos DB:
+/// measured, 34 of 44 shapes skipped such documents (<c>x.A == 0</c>, <c>!x.Del</c>, <c>x.E == New</c>, a list holding 0).
+/// Against a value, a test its default passes is <c>NOT IS_DEFINED(m) OR test</c>, one it fails keeps its rendering
+/// (guarded under <c>!</c>); in a computed operand the member is <c>IS_DEFINED(m) ? m : default</c>.</para>
+/// <para><b>Nested predicates (TASK-899)</b> take the same rewrite, positive inside whatever the polarity outside;
+/// <c>All(p)</c>, which the provider cannot render, is <c>!Any(!p)</c>.</para>
 /// </remarks>
 public static class CosmosFilterRewrite
 {
@@ -80,6 +84,47 @@ public static class CosmosFilterRewrite
 
     /// <summary>True when <paramref name="call"/> is Cosmos DB's <c>IS_NULL</c> marker this rewrite emits.</summary>
     internal static bool IsNullCall(MethodCallExpression call) => call.Method == IsNullMethod;
+
+    /// <summary>
+    /// TASK-899: <paramref name="node"/> is the <c>absent OR list.Contains(x)</c> this rewrite makes of a list holding null
+    /// (<c>NOT IS_DEFINED(x) OR IS_NULL(x)</c>, the list without its null) or of a list holding a non-nullable member's
+    /// default (<c>NOT IS_DEFINED(x)</c>, the list whole). No stored value in the list matches a document whose member
+    /// is null or missing, so the IN can be split with the absent leg in one chunk only (<c>CosmosInListChunking</c>).
+    /// </summary>
+    /// <param name="node">The node to test.</param>
+    /// <param name="contains">The <c>Contains</c> on the right.</param>
+    /// <param name="defaultValue">For the non-nullable form, the list's element default (the chunk holding it carries the
+    /// leg, since preparing that chunk again adds the leg to it); otherwise <c>null</c>.</param>
+    internal static bool TryAbsentOrIn(Expression node, out MethodCallExpression contains, out object? defaultValue)
+    {
+        contains = null!;
+        defaultValue = null;
+        if (node is not BinaryExpression { NodeType: ExpressionType.OrElse } or || or.Right is not MethodCallExpression call) return false;
+        if (!TryContains(call, out _, out var item, out var elementType)) return false;
+        var target = Birko.Data.Expressions.SpanContains.UnwrapConvert(item);
+
+        if (IsNotDefinedOf(or.Left, target))
+        {
+            if (!elementType.IsValueType || Nullable.GetUnderlyingType(elementType) != null) return false;
+            contains = call;
+            defaultValue = Activator.CreateInstance(elementType);
+            return true;
+        }
+        if (or.Left is BinaryExpression { NodeType: ExpressionType.OrElse } absent
+            && IsNotDefinedOf(absent.Left, target)
+            && absent.Right is MethodCallExpression isNull && IsNullCall(isNull)
+            && ReferenceEquals(Birko.Data.Expressions.SpanContains.UnwrapConvert(isNull.Arguments[0]), target))
+        {
+            contains = call;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool IsNotDefinedOf(Expression test, Expression? target)
+        => test is UnaryExpression { NodeType: ExpressionType.Not, Operand: MethodCallExpression isDefined }
+           && IsDefinedCall(isDefined)
+           && ReferenceEquals(Birko.Data.Expressions.SpanContains.UnwrapConvert(isDefined.Arguments[0]), target);
 
     private static readonly MethodInfo IsDefinedMethod =
         typeof(CosmosLinqExtensions).GetMethod(nameof(CosmosLinqExtensions.IsDefined), new[] { typeof(object) })!;
@@ -137,9 +182,10 @@ public static class CosmosFilterRewrite
             if (node == null) return null;
             switch (node)
             {
-                case LambdaExpression:
-                    // A nested predicate (Any, All) is the provider's own subquery; it is not rewritten.
-                    return node;
+                case LambdaExpression lambda:
+                    // TASK-899: a nested lambda is rewritten like the filter. A predicate is handled in VisitMethodCall;
+                    // any other lambda (a selector) is an operand.
+                    return Body(lambda, Exact(lambda.Body));
                 case BinaryExpression:
                 case UnaryExpression:
                 case MethodCallExpression:
@@ -166,7 +212,11 @@ public static class CosmosFilterRewrite
         }
 
         protected override Expression VisitConditional(ConditionalExpression node)
-            => node.Update(Exact(node.Test), Visit(node.IfTrue)!, Visit(node.IfFalse)!);
+        {
+            // TASK-899: a missing member read as its default, produced by an earlier pass.
+            if (node.Test is MethodCallExpression test && IsDefinedCall(test)) return node;
+            return node.Update(Exact(node.Test), Visit(node.IfTrue)!, Visit(node.IfFalse)!);
+        }
 
         protected override Expression VisitMember(MemberExpression node)
         {
@@ -175,8 +225,21 @@ public static class CosmosFilterRewrite
             {
                 return Present(Exact(node.Expression));
             }
+
+            // TASK-899: a non-nullable member missing from the document is its default to C#, undefined to Cosmos DB. A
+            // comparison or a Contains of one is handled where it is made; here it is a bool predicate or an operand.
+            if (IsDefaultable(node, out var member))
+            {
+                if (node.Type == typeof(bool) && _polarity == Polarity.Positive) return node;   // missing: C#'s false
+                if (node.Type == typeof(bool) && _polarity == Polarity.Negative) return Expression.AndAlso(Defined(member), node);
+                return Defaulted(node);
+            }
             return node.Expression == null ? node : node.Update(Exact(node.Expression));
         }
+
+        /// <summary><paramref name="lambda"/> with <paramref name="body"/>, or itself when the body did not change.</summary>
+        private static LambdaExpression Body(LambdaExpression lambda, Expression body)
+            => ReferenceEquals(body, lambda.Body) ? lambda : Expression.Lambda(lambda.Type, body, lambda.Name, lambda.TailCall, lambda.Parameters);
 
         protected override Expression VisitBinary(BinaryExpression node)
         {
@@ -204,6 +267,28 @@ public static class CosmosFilterRewrite
         protected override Expression VisitMethodCall(MethodCallExpression node)
         {
             var method = node.Method;
+
+            // A marker an earlier pass produced (a chunked write prepares each chunk again): its operand is the member.
+            if (IsDefinedCall(node) || IsNullCall(node)) return node;
+
+            // TASK-899: nested predicates. The provider has no All (it threw DocumentQueryException), and C#'s All(p) is
+            // !Any(!p), so it is rewritten to that and the negated predicate is guarded like any other negation. A
+            // predicate (Any, Where, Count, First, ...) keeps the elements it is true of, so its body is positive whatever
+            // the polarity outside: an element whose comparison is undefined is not kept, which is C#'s false.
+            if (method.DeclaringType == typeof(Enumerable) && node.Arguments.Count == 2
+                && node.Arguments[1] is LambdaExpression predicate && predicate.ReturnType == typeof(bool))
+            {
+                if (method.Name == nameof(Enumerable.All))
+                {
+                    var any = EnumerableAny.MakeGenericMethod(method.GetGenericArguments()[0]);
+                    var negated = Expression.Lambda(predicate.Type, Expression.Not(predicate.Body), predicate.Parameters);
+                    return Visit(Expression.Not(Expression.Call(any, node.Arguments[0], negated)))!;
+                }
+                if (PredicateMethods.Contains(method.Name))
+                {
+                    return node.Update(null, new[] { Exact(node.Arguments[0]), Body(predicate, In(Polarity.Positive, predicate.Body)) });
+                }
+            }
 
             if (method.Name == nameof(Nullable<int>.GetValueOrDefault) && node.Object != null
                 && Nullable.GetUnderlyingType(node.Object.Type) != null && Reads(node.Object))
@@ -242,6 +327,12 @@ public static class CosmosFilterRewrite
                 return Contains(node, source, item, elementType);
             }
 
+            // TASK-899: a list tested against a non-nullable member a document may omit: C# tests its default.
+            if (TryContains(node, out _, out var tested, out _) && IsDefaultable(tested, out var testedMember))
+            {
+                return MissingAsDefault(node, testedMember, node);
+            }
+
             return node.Update(node.Object == null ? null : Exact(node.Object), node.Arguments.Select(Exact));
         }
 
@@ -271,8 +362,9 @@ public static class CosmosFilterRewrite
 
             if (TryStringCompare(node, out var compared)) return compared;
 
-            var a = Exact(node.Left);
-            var b = Exact(node.Right);
+            // TASK-899: a non-nullable member is kept as it is, so a missing one can be answered below.
+            var a = IsDefaultable(node.Left, out _) ? node.Left : Exact(node.Left);
+            var b = IsDefaultable(node.Right, out _) ? node.Right : Exact(node.Right);
             var op = node.NodeType;
 
             // The document side on the left: the view translator renders `field op value` only.
@@ -286,6 +378,23 @@ public static class CosmosFilterRewrite
                 return Rebuild(node, op, a, b);
             }
 
+            // TASK-899: against a value, a missing member answers what its default answers; against another member,
+            // each side is read as its default where it is missing.
+            if (Reads(b))
+            {
+                a = Defaulted(a);
+                b = Defaulted(b);
+            }
+            else if (IsDefaultable(a, out var missing))
+            {
+                return MissingAsDefault(Rebuild(node, op, a, b), missing, CompareValues(node, op, a, b));
+            }
+            return CompareValues(node, op, a, b);
+        }
+
+        /// <summary>A comparison of a document operand <paramref name="a"/> with <paramref name="b"/>, null as C# reads it.</summary>
+        private Expression CompareValues(BinaryExpression node, ExpressionType op, Expression a, Expression b)
+        {
             var aNullable = MayBeNull(a);
             var bNullable = MayBeNull(b);
 
@@ -325,6 +434,20 @@ public static class CosmosFilterRewrite
                     Guard(equal, a, true, b, true));
             }
             return polarity == Polarity.Positive ? equal : Guard(equal, a, aNullable, b, bNullable);
+        }
+
+        /// <summary>
+        /// TASK-899: <paramref name="rendered"/>, the test of <paramref name="member"/> against a value, answered for a
+        /// document that omits the member as <paramref name="condition"/> answers for the member's default: where the
+        /// default passes, <c>NOT IS_DEFINED(m) OR test</c>; where it fails, the test, guarded with <c>IS_DEFINED(m)</c>
+        /// where an undefined test would change the answer. A plain test keeps its rendering, and its index.
+        /// </summary>
+        private Expression MissingAsDefault(Expression condition, MemberExpression member, Expression rendered)
+        {
+            if (rendered is ConstantExpression) return rendered;
+            var atDefault = new Replacer(member, DefaultOf(member.Type)).Visit(condition)!;
+            if (Evaluate(atDefault) is true) return Expression.OrElse(Expression.Not(Defined(member)), rendered);
+            return MustGuard ? Expression.AndAlso(Defined(member), rendered) : rendered;
         }
 
         private static Expression Guard(Expression comparison, Expression a, bool aNullable, Expression b, bool bNullable)
@@ -547,6 +670,73 @@ public static class CosmosFilterRewrite
     {
         var target = Box(operand);
         return Expression.OrElse(Expression.Not(Expression.Call(IsDefinedMethod, target)), Expression.Call(IsNullMethod, target));
+    }
+
+    /// <summary>TASK-899: <c>IS_DEFINED(m)</c>: the document holds the member (a non-nullable one is never stored null).</summary>
+    private static Expression Defined(MemberExpression member) => Expression.Call(IsDefinedMethod, Box(member));
+
+    private static ConstantExpression DefaultOf(Type type) => Expression.Constant(Activator.CreateInstance(type), type);
+
+    /// <summary>
+    /// TASK-899: <paramref name="operand"/> with its non-nullable member read as <c>IS_DEFINED(m) ? m : default</c>, the
+    /// value C# reads for a member the document omits; any other operand unchanged.
+    /// </summary>
+    private static Expression Defaulted(Expression operand)
+    {
+        if (!IsDefaultable(operand, out var member)) return operand;
+        var read = Expression.Condition(Defined(member), member, DefaultOf(member.Type), member.Type);
+        return new Replacer(member, read).Visit(operand)!;
+    }
+
+    /// <summary>
+    /// TASK-899: <paramref name="operand"/> (through a conversion) is a member of a non-nullable value type, read off a
+    /// document object along a chain of members from a lambda parameter: one a stored document can omit, which C# then reads
+    /// as the type's default. <c>Nullable&lt;T&gt;.Value</c>, a struct's member (<c>DateTime.Year</c>) and a string's or a
+    /// collection's member are not document fields; a captured variable does not read the document.
+    /// </summary>
+    private static bool IsDefaultable(Expression operand, out MemberExpression member)
+    {
+        member = null!;
+        if (Birko.Data.Expressions.SpanContains.UnwrapConvert(operand) is not MemberExpression m || m.Expression == null) return false;
+        if (!m.Type.IsValueType || Nullable.GetUnderlyingType(m.Type) != null) return false;
+        Expression? current = m;
+        while (current is MemberExpression link)
+        {
+            var owner = link.Expression?.Type;
+            if (owner == null || !owner.IsClass || owner == typeof(string) || typeof(IEnumerable).IsAssignableFrom(owner)) return false;
+            current = link.Expression;
+        }
+        if (current is not ParameterExpression) return false;
+        member = m;
+        return true;
+    }
+
+    /// <summary>The Enumerable methods whose lambda is a predicate that keeps the elements it is true of (TASK-899).</summary>
+    private static readonly HashSet<string> PredicateMethods = new(StringComparer.Ordinal)
+    {
+        nameof(Enumerable.Any), nameof(Enumerable.Where), nameof(Enumerable.Count), nameof(Enumerable.LongCount),
+        nameof(Enumerable.First), nameof(Enumerable.FirstOrDefault), nameof(Enumerable.Single),
+        nameof(Enumerable.SingleOrDefault), nameof(Enumerable.Last), nameof(Enumerable.LastOrDefault),
+    };
+
+    private static readonly MethodInfo EnumerableAny = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(m => m.Name == nameof(Enumerable.Any) && m.GetParameters().Length == 2);
+
+    /// <summary>Replaces one node, by reference.</summary>
+    private sealed class Replacer : ExpressionVisitor
+    {
+        private readonly Expression _target;
+        private readonly Expression _replacement;
+
+        public Replacer(Expression target, Expression replacement)
+        {
+            _target = target;
+            _replacement = replacement;
+        }
+
+        public override Expression? Visit(Expression? node)
+            => ReferenceEquals(node, _target) ? _replacement : base.Visit(node);
     }
 
     private static Expression Box(Expression operand)

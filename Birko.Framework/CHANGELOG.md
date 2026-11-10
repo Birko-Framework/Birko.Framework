@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — SQL translation leftovers: SQLite folds and overflow, exact decimal division, `.Date` and `Replace` in SET
+[[TASK-870]]. Measured against C# on all four providers, and fixed:
+- **SQLite:** `ToLower` / `ToUpper` folded ASCII only; they now run C#'s fold. `SET Hits = Hits + 1` past `int.MaxValue`
+  stored silently and broke every later read of the row; integer arithmetic now fails on overflow.
+- **Decimal `/`:** a constant divisor like `2m`, `4m`, `2.5m` becomes an exact product everywhere; any other decimal
+  division (`/ 3m`, a column) is refused by name on the servers, in filters and SET. **Breaking.**
+- **SET:** `.Date` works on SQLite (was silently wrong) and SQL Server (failed). `Replace` follows C#: a null new value
+  removes, an empty old value throws, SQL Server compares case-sensitively.
+
 ## 2026-11-09 — A SQL Server read reports a server error instead of returning no rows
 [[TASK-880]]. A read whose filter failed on the server (divide by zero, overflow, a SUM overflow in a grouped view)
 returned 0 rows on SQL Server while the count threw (measured on all read paths). The reader loops stopped on

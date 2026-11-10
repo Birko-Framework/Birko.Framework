@@ -76,6 +76,17 @@ namespace Birko.Data.CosmosDB.Aggregation
         internal static string WallClockKey(string x) => WallClockKey(x, withSuffix: true);
 
         /// <summary>
+        /// TASK-897, TASK-899: a DateTime group key, for the store aggregate and the grouped view alike. C# groups two
+        /// DateTimes by their ticks, whatever their kind; Cosmos DB groups the stored text, so a UTC, a local and an
+        /// unspecified time of one wall clock were three groups (measured on both). The group is the wall clock
+        /// (<see cref="WallClockKey(string)"/> without the suffix), and its key the group's least stored value, so it reads
+        /// back as a DateTime with a kind.
+        /// </summary>
+        /// <returns>The expression to select under the key's name, and the one to group on.</returns>
+        internal static (string Select, string GroupBy) DateTimeGroupKey(string column)
+            => ($"MIN({NonNull(WallClockKey(column), column)})", WallClockKey(column, withSuffix: false));
+
+        /// <summary>
         /// <see cref="WallClockKey(string)"/>, without the suffix when <paramref name="withSuffix"/> is false: the wall clock
         /// alone, which a DateTime group is grouped on (TASK-897).
         /// </summary>
@@ -178,7 +189,28 @@ namespace Birko.Data.CosmosDB.Aggregation
         internal static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates)
-            => BuildAggregateSqlParts(groupByFields, aggregates, "c", Array.Empty<(string, string)>(), Array.Empty<string>());
+            => BuildAggregateSqlParts(groupByFields, aggregates, Array.Empty<(string, string)>());
+
+        /// <summary>
+        /// <see cref="BuildAggregateSqlParts(IEnumerable{ValueTuple{string, string}}, IEnumerable{ValueTuple{AggregateFunction, string, string, Type}})"/>
+        /// with <paramref name="dateTimeGroups"/> grouped on the wall clock (<see cref="DateTimeGroupKey"/>, TASK-899), the
+        /// view store's.
+        /// </summary>
+        internal static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
+            IEnumerable<(string FieldName, string Alias)> groupByFields,
+            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates,
+            IReadOnlyList<(string FieldName, string Alias)> dateTimeGroups)
+        {
+            var extraColumns = new List<(string Expression, string Alias)>();
+            var extraGroupBy = new List<string>();
+            foreach (var (fieldName, alias) in dateTimeGroups)
+            {
+                var (select, groupBy) = DateTimeGroupKey(FieldRef(fieldName));
+                extraColumns.Add((select, alias));
+                extraGroupBy.Add(groupBy);
+            }
+            return BuildAggregateSqlParts(groupByFields, aggregates, "c", extraColumns, extraGroupBy);
+        }
 
         /// <summary>
         /// The SELECT and GROUP BY parts over the container named <paramref name="source"/>: <c>FROM source</c>, and every
@@ -378,9 +410,9 @@ namespace Birko.Data.CosmosDB.Aggregation
             var dateGroups = groups.Where(g => g.Type == typeof(DateTime)).ToList();
             foreach (var (name, member, _) in dateGroups)
             {
-                var column = FieldRef(member.Name, LinqRoot);
-                extraColumns.Add(($"MIN({NonNull(WallClockKey(column), column)})", name));
-                extraGroupBy.Add(WallClockKey(column, withSuffix: false));
+                var (select, groupBy) = DateTimeGroupKey(FieldRef(member.Name, LinqRoot));
+                extraColumns.Add((select, name));
+                extraGroupBy.Add(groupBy);
             }
 
             var (selectFromSql, groupBySql) = BuildAggregateSqlParts(
