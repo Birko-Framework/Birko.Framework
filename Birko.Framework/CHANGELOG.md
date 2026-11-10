@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-09 — Cosmos DB `Aggregate` applies its filter
+[[TASK-876]]. `Aggregate` / `AggregateAsync` ignored the filter and aggregated the whole container, silently (measured:
+22 of 22 filtered cases wrong; `A > 3` counted 6 rows, not 3). The filter now goes through the reads' own translator,
+null-ordering fold included; a shape it cannot place is refused by name. **Breaking:** the public
+`CosmosAggregationHelper.BuildAggregateSql<T>` is gone. Nullable SUM/MIN are still wrong ([[TASK-885]]).
+
+## 2026-11-09 — RavenDB job queue stamps a claim when it writes it
+[[TASK-879]]. `RavenDBJobQueue` stamped a claim with the time its dequeue started, before the candidate query. Under
+load the query outran a short claim timeout, so a fresh claim looked abandoned and was reclaimed at once (measured: the
+TASK-664 live test failed 2 of 3 suite runs). The claim is now stamped inside the conditional write. Elasticsearch has
+the same shape ([[TASK-884]]).
+
 ## 2026-11-09 — A SQL rule answers NULL the way C# does
 [[TASK-864]]. `RuleConditionConverter` built conditions without TASK-859's NULL handling: 53 of 117 rule shapes on NULL
 rows returned different rows than the compiled rule, on all four providers (measured). Negated and NotIn rules lost the

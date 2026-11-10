@@ -79,8 +79,7 @@ public class Task885AggregateLiveTests
         })
         .Concat(new[]
         {
-            new AggregateField(AggregateFunction.Min, "S", "minS"),
-            new AggregateField(AggregateFunction.Max, "S", "maxS"),
+            // A MIN/MAX of a string is refused since TASK-897 (code-point order, where C#'s is the culture's).
             new AggregateField(AggregateFunction.Min, "TN", "minTN"),
             new AggregateField(AggregateFunction.Max, "TN", "maxTN"),
             new AggregateField(AggregateFunction.Count, "A", "cnt"),
@@ -160,10 +159,8 @@ public class Task885AggregateLiveTests
         if (expected == null || actual == null) return expected == null && actual == null;
         if (expected is DateTime e)
         {
-            // MIN / MAX of a DateTime comes back as its stored text (a recorded type gap, not this task's): the instant is
-            // compared.
-            if (actual is DateTime a) return e.Ticks == a.Ticks;
-            return actual is string s && DateTime.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime() == e.ToUniversalTime();
+            // TASK-897: a MIN / MAX of a DateTime is a DateTime (it was its stored text). Compared as C# compares it.
+            return actual is DateTime a && e.Ticks == a.Ticks;
         }
         if (expected is string es) return actual is string acs && es == acs;
         return Math.Abs(Convert.ToDouble(expected, CultureInfo.InvariantCulture) - Convert.ToDouble(actual, CultureInfo.InvariantCulture)) < 1e-9;

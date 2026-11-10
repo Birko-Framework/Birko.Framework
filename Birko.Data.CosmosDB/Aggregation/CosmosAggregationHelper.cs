@@ -3,6 +3,7 @@ using Microsoft.Azure.Cosmos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 
 namespace Birko.Data.CosmosDB.Aggregation
@@ -29,21 +30,129 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// SUM answers 0, the others undefined; the store aggregate makes that SUM null (<see cref="CosmosAggregatePlan"/>).
         /// </remarks>
         public static string BuildFunctionSql(AggregateFunction function, string? fieldExpression)
+            => BuildFunctionSql(function, fieldExpression, null);
+
+        /// <summary>
+        /// <see cref="BuildFunctionSql(AggregateFunction, string?)"/> over a member of <paramref name="memberType"/>: a MIN
+        /// or MAX of a <see cref="DateTime"/> compares <see cref="WallClockKey"/>, not the stored text (TASK-897).
+        /// </summary>
+        internal static string BuildFunctionSql(AggregateFunction function, string? fieldExpression, Type? memberType)
         {
+            var argument = fieldExpression;
+            if (function is AggregateFunction.Min or AggregateFunction.Max && fieldExpression != null && memberType != null
+                && (Nullable.GetUnderlyingType(memberType) ?? memberType) == typeof(DateTime))
+            {
+                argument = WallClockKey(fieldExpression);
+            }
+
             return function switch
             {
                 AggregateFunction.Count => "COUNT(1)",
-                AggregateFunction.Sum => $"SUM({NonNull(fieldExpression)})",
-                AggregateFunction.Avg => $"AVG({NonNull(fieldExpression)})",
-                AggregateFunction.Min => $"MIN({NonNull(fieldExpression)})",
-                AggregateFunction.Max => $"MAX({NonNull(fieldExpression)})",
+                AggregateFunction.Sum => $"SUM({NonNull(argument, fieldExpression)})",
+                AggregateFunction.Avg => $"AVG({NonNull(argument, fieldExpression)})",
+                AggregateFunction.Min => $"MIN({NonNull(argument, fieldExpression)})",
+                AggregateFunction.Max => $"MAX({NonNull(argument, fieldExpression)})",
                 _ => throw new NotSupportedException($"Aggregate function {function} is not supported")
             };
         }
 
+        /// <summary>
+        /// TASK-897: a stored <see cref="DateTime"/> as text that orders as C# orders the value read back, and reads back
+        /// as that value: <c>yyyy-MM-ddTHH:mm:ss.fffffff</c> and the stored suffix (<c>Z</c>, an offset, or none).
+        /// </summary>
+        /// <remarks>
+        /// <para>A DateTime is stored as ISO 8601 text with as many fraction digits as it needs, so MIN/MAX of the text put
+        /// <c>"…10:00:00.5Z"</c> before <c>"…10:00:00Z"</c> (<c>.</c> sorts before <c>Z</c>; measured on the emulator,
+        /// vnext-preview, 2026-11-10, on the store and on a grouped view). The fraction is padded to seven digits.</para>
+        /// <para>C# compares two DateTimes by their ticks whatever their kind, and a value stored with an offset reads back as
+        /// the reader's local time, so the order is the stored wall clock, as the time bucket's
+        /// (<see cref="CosmosAggregatePlan"/>) is; it is exact when the stored offset is the reader's, the case the time
+        /// bucket assumes too. Cosmos DB's date functions are not used: they convert an offset to UTC, and answer nothing
+        /// before 1601-01-01 (measured), where this key is plain text and orders 1500 before 1600.</para>
+        /// <para>An aggregate cannot be wrapped in a function (<c>SUBSTRING(MIN(..), ..)</c> is a 400, "Compositions of
+        /// aggregates and other expressions are not allowed"), so the key is the value itself: it parses back to the stored
+        /// DateTime, kind included.</para>
+        /// </remarks>
+        internal static string WallClockKey(string x) => WallClockKey(x, withSuffix: true);
+
+        /// <summary>
+        /// <see cref="WallClockKey(string)"/>, without the suffix when <paramref name="withSuffix"/> is false: the wall clock
+        /// alone, which a DateTime group is grouped on (TASK-897).
+        /// </summary>
+        private static string WallClockKey(string x, bool withSuffix)
+        {
+            var suffixLength = $"(ENDSWITH({x}, \"Z\") ? 1 : (SUBSTRING({x}, LENGTH({x}) - 6, 1) IN (\"+\", \"-\") ? 6 : 0))";
+            var fraction = $"(SUBSTRING({x}, 19, 1) = \".\" ? SUBSTRING({x}, 20, LENGTH({x}) - 20 - {suffixLength}) : \"\")";
+            var suffix = withSuffix ? $", RIGHT({x}, {suffixLength})" : "";
+            return $"CONCAT(LEFT({x}, 19), \".\", LEFT(CONCAT({fraction}, \"0000000\"), 7){suffix})";
+        }
+
+        /// <summary>
+        /// TASK-897: the type an aggregate of <paramref name="member"/> answers in, as the in-memory aggregation answers it
+        /// (<see cref="AggregateMath.ResultType"/>), or a refusal before any request. A SUM or AVG of a non-numeric member is
+        /// refused with LINQ's own exception and message; a MIN or MAX of a member Cosmos DB does not order as C# does, by
+        /// name.
+        /// </summary>
+        /// <remarks>
+        /// A MIN/MAX is answered for a number, an enum (stored as its number), a bool, a Guid (its text is lowercase hex in
+        /// field order, the order <see cref="Guid.CompareTo(Guid)"/> uses) and a DateTime (<see cref="WallClockKey"/>).
+        /// A string is refused: Cosmos DB orders by code point, C# by culture (measured: <c>MIN</c> is <c>"B"</c> where C#
+        /// answers <c>"a"</c>), the rule TASK-896 applies to a culture comparison in a filter. Any other type
+        /// (<c>DateTimeOffset</c>, <c>TimeSpan</c>, <c>char</c>, an object) is refused too: its stored text does not order as
+        /// the value.
+        /// </remarks>
+        /// <param name="function">The aggregate.</param>
+        /// <param name="member">The member it reads.</param>
+        /// <param name="owner">What is aggregated, for the message: the store's model or the view.</param>
+        internal static Type ResultType(AggregateFunction function, PropertyInfo member, string owner)
+        {
+            var type = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
+            if (function is not (AggregateFunction.Min or AggregateFunction.Max)) return AggregateMath.ResultType(function, type);
+            if (IsNumeric(type) || type.IsEnum || type == typeof(bool) || type == typeof(Guid) || type == typeof(DateTime)) return type;
+            throw new NotSupportedException(
+                $"Cosmos DB aggregate of {owner} refused: Min/Max of {member.DeclaringType?.Name}.{member.Name}, a {type.Name}, "
+                + "is not ordered by Cosmos DB as C# orders it"
+                + (type == typeof(string) ? " (Cosmos DB compares strings by code point, C# by culture)" : "")
+                + ". Read the rows and aggregate them in the caller. (TASK-897)");
+        }
+
+        /// <summary>
+        /// TASK-897: the property an aggregate name means, found as the in-memory aggregation finds it: a public instance
+        /// property, in any case, with its exception and message. The one lookup of every store aggregate name: group-by
+        /// field, aggregate source, time column. The query names it by the property's own name.
+        /// </summary>
+        internal static PropertyInfo ResolveMember(Type type, string name, string role)
+            => type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+               ?? throw new ArgumentException($"Aggregate {role} '{name}' is not a property of {type.Name}.", nameof(name));
+
+        /// <summary>
+        /// TASK-897: a group-by member's type, refused where Cosmos DB does not group as C# does: a group is a JSON value,
+        /// so a scalar (a number, an enum, a bool, a string, a Guid, a DateTime) groups as its value, an object or a list
+        /// as its content, where C# groups an object by reference.
+        /// </summary>
+        internal static Type GroupKeyType(PropertyInfo member, string owner)
+        {
+            var type = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
+            if (IsNumeric(type) || type.IsEnum || type == typeof(bool) || type == typeof(string) || type == typeof(Guid) || type == typeof(DateTime))
+                return type;
+            throw new NotSupportedException(
+                $"Cosmos DB aggregate of {owner} refused: group-by field {member.DeclaringType?.Name}.{member.Name} is a {type.Name}, "
+                + "which Cosmos DB does not group as C# does. Group by a scalar member. (TASK-897)");
+        }
+
+        /// <summary>The numeric types <see cref="AggregateMath"/> sums: every integral type, float, double and decimal.</summary>
+        private static bool IsNumeric(Type type)
+            => !type.IsEnum && Type.GetTypeCode(type) is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16
+                   or TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64 or TypeCode.Single
+                   or TypeCode.Double or TypeCode.Decimal;
+
         /// <summary>TASK-885: the field's value, or undefined where it is null, so an aggregate skips it as C# does.</summary>
         internal static string NonNull(string? fieldExpression)
-            => $"IS_NULL({fieldExpression}) ? undefined : {fieldExpression}";
+            => NonNull(fieldExpression, fieldExpression);
+
+        /// <summary><paramref name="argument"/>, or undefined where the field it is computed from is null.</summary>
+        private static string NonNull(string? argument, string? fieldExpression)
+            => $"IS_NULL({fieldExpression}) ? undefined : {argument}";
 
         /// <summary>TASK-885: how many of the group's values of the field are not null (a missing field is not counted).</summary>
         internal static string NonNullCount(string fieldExpression) => $"COUNT({NonNull(fieldExpression)})";
@@ -59,6 +168,16 @@ namespace Birko.Data.CosmosDB.Aggregation
         public static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates)
+            => BuildAggregateSqlParts(groupByFields, aggregates.Select(a => (a.Function, a.SourceProperty, a.Alias, (Type?)null)));
+
+        /// <summary>
+        /// <see cref="BuildAggregateSqlParts(IEnumerable{ValueTuple{string, string}}, IEnumerable{ValueTuple{AggregateFunction, string, string}})"/>
+        /// with each source member's type, so a MIN/MAX of a DateTime compares <see cref="WallClockKey"/> (TASK-897). The view
+        /// store's.
+        /// </summary>
+        internal static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
+            IEnumerable<(string FieldName, string Alias)> groupByFields,
+            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates)
             => BuildAggregateSqlParts(groupByFields, aggregates, "c", Array.Empty<(string, string)>(), Array.Empty<string>());
 
         /// <summary>
@@ -68,7 +187,7 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// </summary>
         private static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
             IEnumerable<(string FieldName, string Alias)> groupByFields,
-            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias)> aggregates,
+            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates,
             string source,
             IReadOnlyList<(string Expression, string Alias)> extraColumns,
             IReadOnlyList<string> extraGroupBy)
@@ -81,10 +200,10 @@ namespace Birko.Data.CosmosDB.Aggregation
                 selectParts.Add($"{FieldRef(fieldName, source)} AS {Alias(alias)}");
             }
 
-            foreach (var (function, sourceProperty, alias) in aggregates)
+            foreach (var (function, sourceProperty, alias, memberType) in aggregates)
             {
                 var fieldExpr = function == AggregateFunction.Count ? null : FieldRef(sourceProperty, source);
-                selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {Alias(alias)}");
+                selectParts.Add($"{BuildFunctionSql(function, fieldExpr, memberType)} AS {Alias(alias)}");
             }
 
             foreach (var (expression, alias) in extraColumns)
@@ -176,29 +295,69 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// in-memory aggregation does (Cosmos DB answers 0); a time bucket is grouped on as
         /// <see cref="CosmosAggregatePlan"/> describes. Those columns are read and removed by
         /// <see cref="CosmosAggregatePlan.Read"/>.</para>
+        /// <para>TASK-897: every name is resolved by <see cref="ResolveMember"/> and each aggregate typed by
+        /// <see cref="ResultType"/>; a decimal AVG is a hidden SUM and COUNT, a DateTime MIN/MAX and group compare
+        /// <see cref="WallClockKey(string)"/>.</para>
         /// </remarks>
         /// <param name="query">The aggregation. Its filter is not read here; <paramref name="filtered"/> carries it.</param>
         /// <param name="filtered">The store's rendering of the rewritten filter, or <c>null</c> for no filter.</param>
-        /// <exception cref="NotSupportedException">The rendering is not a plain WHERE over the container, or the time bucket
-        /// cannot be answered as the in-memory aggregation answers it.</exception>
-        /// <exception cref="ArgumentException">The time bucket is incomplete, does not parse, or names no property.</exception>
+        /// <exception cref="NotSupportedException">The rendering is not a plain WHERE over the container, the time bucket
+        /// cannot be answered as the in-memory aggregation answers it, a SUM/AVG is of a non-numeric member (LINQ's
+        /// message), or a MIN/MAX or group key is of a type Cosmos DB does not order or group as C# does.</exception>
+        /// <exception cref="ArgumentException">A name is no property, or the time bucket is incomplete or does not parse.</exception>
         internal static CosmosAggregatePlan BuildAggregateQuery<T>(AggregateQuery<T> query, QueryDefinition? filtered)
             where T : Data.Models.AbstractModel
         {
+            // TASK-897: every name is resolved as the in-memory aggregation resolves it, in its order: the group-by fields,
+            // the time column, the aggregate sources. The query names each member by its own name; a result keeps the
+            // name as the caller wrote it, as in memory.
+            var owner = typeof(T).Name;
+            var groups = query.GroupByFields
+                .Select(name => (Name: name, Member: ResolveMember(typeof(T), name, "group-by field")))
+                .Select(g => (g.Name, g.Member, Type: GroupKeyType(g.Member, owner)))
+                .ToList();
             var bucket = CosmosAggregatePlan.ResolveTimeBucket<T>(query.TimeColumn, query.TimeBucketInterval);
 
             var used = new HashSet<string>(query.GroupByFields, StringComparer.Ordinal);
             used.UnionWith(query.Aggregates.Select(a => a.ResolvedAlias));
             used.Add(CosmosAggregatePlan.BucketAlias);
 
+            var selected = new List<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)>();
+            var metrics = new List<CosmosAggregatePlan.Metric>();
             var extraColumns = new List<(string Expression, string Alias)>();
             var extraGroupBy = new List<string>();
-            var sumCounts = new List<(string Alias, string CountAlias)>();
-            foreach (var aggregate in query.Aggregates.Where(a => a.Function == AggregateFunction.Sum))
+            foreach (var aggregate in query.Aggregates)
             {
-                var countAlias = HiddenAlias(used);
-                extraColumns.Add((NonNullCount(FieldRef(aggregate.SourcePropertyName, LinqRoot)), countAlias));
-                sumCounts.Add((aggregate.ResolvedAlias, countAlias));
+                var alias = aggregate.ResolvedAlias;
+                if (aggregate.Function == AggregateFunction.Count)
+                {
+                    selected.Add((AggregateFunction.Count, null, alias, null));
+                    metrics.Add(new CosmosAggregatePlan.Metric(alias, AggregateFunction.Count, typeof(int), null, null));
+                    continue;
+                }
+
+                var member = ResolveMember(typeof(T), aggregate.SourcePropertyName, "aggregate source");
+                var resultType = ResultType(aggregate.Function, member, owner);
+                var field = FieldRef(member.Name, LinqRoot);
+                if (aggregate.Function == AggregateFunction.Avg && resultType == typeof(decimal))
+                {
+                    // Cosmos DB averages in double (1/3 reads 0.333333333333333); C# divides the decimal SUM by the count.
+                    var sumAlias = HiddenAlias(used);
+                    var countOf = HiddenAlias(used);
+                    extraColumns.Add(($"SUM({NonNull(field)})", sumAlias));
+                    extraColumns.Add((NonNullCount(field), countOf));
+                    metrics.Add(new CosmosAggregatePlan.Metric(alias, AggregateFunction.Avg, resultType, countOf, sumAlias));
+                    continue;
+                }
+
+                selected.Add((aggregate.Function, member.Name, alias, member.PropertyType));
+                string? countAlias = null;
+                if (aggregate.Function == AggregateFunction.Sum)
+                {
+                    countAlias = HiddenAlias(used);
+                    extraColumns.Add((NonNullCount(field), countAlias));
+                }
+                metrics.Add(new CosmosAggregatePlan.Metric(alias, aggregate.Function, resultType, countAlias, null));
             }
 
             string? timeCountAlias = null;
@@ -213,9 +372,20 @@ namespace Birko.Data.CosmosDB.Aggregation
                 extraColumns.Add((NonNullCount(column), timeCountAlias));
             }
 
+            // TASK-897: C# groups two DateTimes by their ticks, whatever their kind; Cosmos DB groups the stored text, so a
+            // local and an unspecified time of one wall clock were two groups (measured). A DateTime member is
+            // grouped on its wall clock, and its key is the group's least stored value, so it reads back with a kind.
+            var dateGroups = groups.Where(g => g.Type == typeof(DateTime)).ToList();
+            foreach (var (name, member, _) in dateGroups)
+            {
+                var column = FieldRef(member.Name, LinqRoot);
+                extraColumns.Add(($"MIN({NonNull(WallClockKey(column), column)})", name));
+                extraGroupBy.Add(WallClockKey(column, withSuffix: false));
+            }
+
             var (selectFromSql, groupBySql) = BuildAggregateSqlParts(
-                query.GroupByFields.Select(f => (f, f)),
-                query.Aggregates.Select(a => (a.Function, (string?)a.SourcePropertyName, a.ResolvedAlias)),
+                groups.Where(g => g.Type != typeof(DateTime)).Select(g => (g.Member.Name, g.Name)),
+                selected,
                 LinqRoot,
                 extraColumns,
                 extraGroupBy);
@@ -232,10 +402,9 @@ namespace Birko.Data.CosmosDB.Aggregation
 
             return new CosmosAggregatePlan(
                 definition,
-                typeof(T).Name,
-                query.GroupByFields,
-                query.Aggregates.Select(a => a.ResolvedAlias).ToList(),
-                sumCounts,
+                owner,
+                groups.Select(g => (g.Name, g.Type)).ToList(),
+                metrics,
                 bucket == null ? null : (bucket.Value.Member, timeCountAlias!));
         }
 

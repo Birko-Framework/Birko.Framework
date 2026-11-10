@@ -30,6 +30,10 @@ Found by TASK-896 (2026-11-10):
 - **A `Contains` list holding null** is now `null OR IN(..)`, which cannot be chunked, so past ~13k values it is refused
   rather than split.
 - **Nested lambdas** (`Any` / `All` predicates) with nullable members were not measured.
+- **View-store aggregates** (TASK-897, measured): decimal SUM/AVG are read through the serializer's double (0.1 + 0.2 =
+  0.30000000000000004; 1/3 with 16 digits), and a DateTime GROUP BY groups the stored text, so a local and an
+  unspecified time with equal ticks are two groups (C#: one). The store fixed both; the view needs a post-processing
+  pass or a refusal, and the grouping change touches `ResolveOrderKey`.
 - Query cost / index use of `IS_DEFINED` / `IS_NULL` was not measured on a real account.
 
 ## Acceptance criteria

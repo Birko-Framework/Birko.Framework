@@ -2,7 +2,6 @@ using Birko.Data.Stores;
 using Microsoft.Azure.Cosmos;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Text.Json;
 
 namespace Birko.Data.CosmosDB.Aggregation
@@ -41,57 +40,69 @@ namespace Birko.Data.CosmosDB.Aggregation
         internal const string BucketAlias = "bucket_time";
 
         private readonly string _typeName;
-        private readonly IReadOnlyList<string> _groupFields;
-        private readonly IReadOnlyList<string> _aggregateAliases;
-        private readonly IReadOnlyList<(string Alias, string CountAlias)> _sumCounts;
+        private readonly IReadOnlyList<(string Name, Type Type)> _groups;
+        private readonly IReadOnlyList<Metric> _metrics;
         private readonly (string Column, string CountAlias)? _bucket;
+
+        /// <summary>
+        /// TASK-897: one aggregate of the query, and how its answer is read: <paramref name="ResultType"/> is the type the
+        /// in-memory aggregation answers in (<see cref="AggregateMath.ResultType"/>). <paramref name="CountAlias"/> is the
+        /// hidden count of the values a SUM (or a decimal AVG) saw; <paramref name="SumAlias"/> the hidden SUM a decimal AVG
+        /// is divided from, in which case <paramref name="Alias"/> itself is not selected.
+        /// </summary>
+        internal sealed record Metric(string Alias, AggregateFunction Function, Type ResultType, string? CountAlias, string? SumAlias);
 
         internal CosmosAggregatePlan(
             QueryDefinition query,
             string typeName,
-            IReadOnlyList<string> groupFields,
-            IReadOnlyList<string> aggregateAliases,
-            IReadOnlyList<(string Alias, string CountAlias)> sumCounts,
+            IReadOnlyList<(string Name, Type Type)> groups,
+            IReadOnlyList<Metric> metrics,
             (string Column, string CountAlias)? bucket)
         {
             Query = query;
             _typeName = typeName;
-            _groupFields = groupFields;
-            _aggregateAliases = aggregateAliases;
-            _sumCounts = sumCounts;
+            _groups = groups;
+            _metrics = metrics;
             _bucket = bucket;
         }
 
         /// <summary>The query to send.</summary>
         internal QueryDefinition Query { get; }
 
-        /// <summary>One answered row, its helper columns read and removed.</summary>
+        /// <summary>
+        /// The serializer options a stored document is read with (<see cref="Serialization.CosmosGuidIdSerializer"/>'s
+        /// default), so a group key or a MIN/MAX reads back as the same member of a read does.
+        /// </summary>
+        private static readonly JsonSerializerOptions ReadOptions = new();
+
+        /// <summary>One answered row, in the in-memory aggregation's names and types; the helper columns are not in it.</summary>
+        /// <remarks>
+        /// TASK-897: Cosmos DB answers JSON numbers and text, which used to be returned as they parsed: a <c>long</c> or a
+        /// <c>double</c> for every number, a Guid or a DateTime as its text. A group key and a MIN/MAX are now read as their
+        /// member is read (the same JSON, the same options); a COUNT is an <c>int</c>; a SUM or AVG, which Cosmos DB computes
+        /// in double, is converted to <see cref="Metric.ResultType"/>, checked, so an <c>int</c> SUM past
+        /// <see cref="int.MaxValue"/> throws <see cref="OverflowException"/> as LINQ's does. A decimal SUM is the double to 15
+        /// significant digits (<c>0.1 + 0.2</c> is <c>0.3</c>); a decimal AVG is that SUM divided by the count in decimal.
+        /// </remarks>
         /// <exception cref="NotSupportedException">A bucket held a time Cosmos DB cannot bucket (before 1601-01-01).</exception>
         internal AggregateResult Read(JsonElement doc)
         {
-            var row = CosmosAggregationHelper.ParseJsonResult(doc);
+            var row = new Dictionary<string, object?>();
 
-            foreach (var field in _groupFields)
+            foreach (var (name, type) in _groups)
             {
-                if (!row.ContainsKey(field)) row[field] = null;
+                row[name] = Member(doc, name, type);
             }
 
-            foreach (var alias in _aggregateAliases)
+            foreach (var metric in _metrics)
             {
-                if (!row.ContainsKey(alias)) row[alias] = null;
-            }
-
-            foreach (var (alias, countAlias) in _sumCounts)
-            {
-                if (CountOf(row, countAlias) == 0) row[alias] = null;
-                row.Remove(countAlias);
+                row[metric.Alias] = Value(doc, metric);
             }
 
             if (_bucket is { } bucket)
             {
-                var nonNullTimes = CountOf(row, bucket.CountAlias);
-                row.Remove(bucket.CountAlias);
-                row.TryGetValue(BucketAlias, out var milliseconds);
+                var nonNullTimes = CountOf(doc, bucket.CountAlias);
+                var milliseconds = Property(doc, BucketAlias);
                 if (milliseconds == null && nonNullTimes > 0)
                 {
                     throw new NotSupportedException(
@@ -101,22 +112,65 @@ namespace Birko.Data.CosmosDB.Aggregation
                         + "answered as the null bucket. Filter them out, or aggregate the rows of a read. (TASK-885)");
                 }
 
-                row[BucketAlias] = milliseconds == null ? null : FromEpochMilliseconds(milliseconds);
+                row[BucketAlias] = milliseconds == null ? null : FromEpochMilliseconds(milliseconds.Value.GetDouble());
             }
 
             return new AggregateResult(row);
         }
 
-        private static long CountOf(Dictionary<string, object?> row, string alias)
-            => row.TryGetValue(alias, out var value) && value != null
-                ? Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture)
-                : 0;
-
-        private static DateTime FromEpochMilliseconds(object milliseconds)
+        private static object? Value(JsonElement doc, Metric metric)
         {
-            var ms = Convert.ToDouble(milliseconds, System.Globalization.CultureInfo.InvariantCulture);
-            return new DateTime(DateTime.UnixEpoch.Ticks + checked((long)Math.Round(ms) * TimeSpan.TicksPerMillisecond), DateTimeKind.Unspecified);
+            switch (metric.Function)
+            {
+                case AggregateFunction.Count:
+                    return checked((int)CountOf(doc, metric.Alias));
+                case AggregateFunction.Min:
+                case AggregateFunction.Max:
+                    return Member(doc, metric.Alias, metric.ResultType);
+                case AggregateFunction.Avg when metric.SumAlias != null:
+                    var count = CountOf(doc, metric.CountAlias!);
+                    var sum = Property(doc, metric.SumAlias);
+                    return count == 0 || sum == null ? null : (decimal)Number(sum.Value, typeof(decimal)) / count;
+                case AggregateFunction.Sum when CountOf(doc, metric.CountAlias!) == 0:
+                    // Cosmos DB sums no value to 0; LINQ to null (TASK-885).
+                    return null;
+                default:
+                    var value = Property(doc, metric.Alias);
+                    return value == null ? null : Number(value.Value, metric.ResultType);
+            }
         }
+
+        /// <summary>A number Cosmos DB computed (in double) as <paramref name="type"/>, checked.</summary>
+        private static object Number(JsonElement value, Type type)
+        {
+            if (type == typeof(int)) return value.TryGetInt64(out var i) ? checked((int)i) : checked((int)value.GetDouble());
+            if (type == typeof(long)) return value.TryGetInt64(out var l) ? l : checked((long)value.GetDouble());
+            if (type == typeof(decimal)) return value.TryGetInt64(out var m) ? (decimal)m : (decimal)value.GetDouble();
+            if (type == typeof(float)) return (float)value.GetDouble();
+            if (type == typeof(double)) return value.GetDouble();
+            throw new NotSupportedException($"An aggregate of type {type.Name} is not read from a number.");
+        }
+
+        /// <summary>A column read as a member of <paramref name="type"/> is read; null where the column is null or absent.</summary>
+        private static object? Member(JsonElement doc, string alias, Type type)
+        {
+            var value = Property(doc, alias);
+            return value == null ? null : value.Value.Deserialize(type, ReadOptions);
+        }
+
+        /// <summary>The column, or null where it is null or absent (undefined: a missing field, an aggregate of nothing).</summary>
+        private static JsonElement? Property(JsonElement doc, string alias)
+            => doc.TryGetProperty(alias, out var value) && value.ValueKind != JsonValueKind.Null ? value : null;
+
+        private static long CountOf(JsonElement doc, string alias)
+        {
+            var value = Property(doc, alias);
+            if (value == null) return 0;
+            return value.Value.TryGetInt64(out var count) ? count : checked((long)value.Value.GetDouble());
+        }
+
+        private static DateTime FromEpochMilliseconds(double ms)
+            => new DateTime(DateTime.UnixEpoch.Ticks + checked((long)Math.Round(ms) * TimeSpan.TicksPerMillisecond), DateTimeKind.Unspecified);
 
         /// <summary>
         /// The time bucket of a query, refused where Cosmos DB cannot answer it as the in-memory aggregation does: the
@@ -133,9 +187,8 @@ namespace Birko.Data.CosmosDB.Aggregation
             if (span <= TimeSpan.Zero)
                 throw new ArgumentException($"Time bucket interval '{interval}' is not a positive interval.", nameof(interval));
 
-            // The in-memory lookup: a public instance property, any case. The query names it as it is stored, by its own name.
-            var member = typeof(T).GetProperty(column, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                         ?? throw new ArgumentException($"Aggregate time column '{column}' is not a property of {typeof(T).Name}.", nameof(column));
+            // The in-memory lookup (TASK-897: the one every aggregate name takes). The query names it by its own name.
+            var member = CosmosAggregationHelper.ResolveMember(typeof(T), column, "time column");
             var memberType = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
             if (memberType != typeof(DateTime))
                 throw new NotSupportedException(

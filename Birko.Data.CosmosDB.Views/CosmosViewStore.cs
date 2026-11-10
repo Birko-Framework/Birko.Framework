@@ -321,7 +321,8 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         var groupByFields = _definition.GroupBy
             .Select(g => (g.PropertyName, FindViewPropertyForGroupBy(g)));
         var aggregateDefs = _definition.Aggregates
-            .Select(a => (a.Function, a.SourceProperty, a.ViewProperty));
+            .Select(a => (a.Function, a.SourceProperty, a.ViewProperty, AggregateMemberType(a)))
+            .ToList();
         var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs);
 
         var sb = new StringBuilder(selectFromSql);
@@ -339,6 +340,28 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         AppendOrderAndPage(sb, orderBy, limit, offset);
 
         return Bind(sb.ToString(), parameters);
+    }
+
+    /// <summary>
+    /// TASK-897: the source member's type of an aggregate, so a MIN/MAX of a DateTime compares its wall-clock key
+    /// (<c>CosmosAggregationHelper.WallClockKey</c>), or a refusal before any request, the store aggregate's own
+    /// (<c>CosmosAggregationHelper.ResultType</c>): a SUM/AVG of a non-numeric member with LINQ's exception and message, a
+    /// MIN/MAX of a string (Cosmos DB orders by code point, C# by culture) or of another type whose text does not order as
+    /// its value, by name.
+    /// </summary>
+    /// <remarks>
+    /// Measured before (vnext-preview, 2026-11-10): MIN/MAX compared the stored text, so a group holding <c>…10:00:00Z</c> and
+    /// <c>…10:00:00.5Z</c> answered the half second as its MIN; a SUM of a string read the view property's default. The
+    /// view's result is read by the container's serializer into the view property's type, so the store's type conversion
+    /// does not apply here.
+    /// </remarks>
+    private static Type? AggregateMemberType(AggregateClause aggregate)
+    {
+        if (aggregate.Function == AggregateFunction.Count || aggregate.SourceProperty == null) return null;
+        var member = aggregate.SourceType.GetProperty(aggregate.SourceProperty);
+        if (member == null) return null;
+        CosmosAggregationHelper.ResultType(aggregate.Function, member, typeof(TView).Name);
+        return member.PropertyType;
     }
 
     private static QueryDefinition Bind(string sql, List<KeyValuePair<string, object?>> parameters)

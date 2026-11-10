@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB aggregates answer in LINQ's types and names (2026-11-10)
+[[TASK-897]]. All 15 measured store shapes differed from `AggregateHelper`: numbers came back as long/double, Guid and
+DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
+string SUM ran. Names now resolve in any case, results convert to LINQ's types, DateTime MIN/MAX compare the stored wall
+clock, and what Cosmos cannot answer exactly is refused by name. **Breaking:** result types (COUNT is `int`).
 ### Elasticsearch job queue stamps a claim when it writes it (2026-11-10)
 [[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
 fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim
@@ -371,16 +376,6 @@ PostgreSQL, MySQL and SQLite already threw. Found on the way: grouped views over
 answers an unmapped field with nothing, grouped metrics were never sent (NEST drops sub-aggregations on the explicit
 container form), and Count counted a field's values, not rows. Names now resolve through the sort lookup, one composite
 aggregation pages through every group, and unsupported shapes are refused by name. No consumer used it.
-### Cosmos DB `Aggregate` applies its filter (2026-11-09)
-[[TASK-876]]. `Aggregate` / `AggregateAsync` ignored the filter and aggregated the whole container, silently (measured:
-22 of 22 filtered cases wrong; `A > 3` counted 6 rows, not 3). The filter now goes through the reads' own translator,
-null-ordering fold included; a shape it cannot place is refused by name. **Breaking:** the public
-`CosmosAggregationHelper.BuildAggregateSql<T>` is gone. Nullable SUM/MIN are still wrong ([[TASK-885]]).
-### RavenDB job queue stamps a claim when it writes it (2026-11-09)
-[[TASK-879]]. `RavenDBJobQueue` stamped a claim with the time its dequeue started, before the candidate query. Under
-load the query outran a short claim timeout, so a fresh claim looked abandoned and was reclaimed at once (measured: the
-TASK-664 live test failed 2 of 3 suite runs). The claim is now stamped inside the conditional write. Elasticsearch has
-the same shape ([[TASK-884]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

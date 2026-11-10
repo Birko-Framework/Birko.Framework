@@ -158,11 +158,40 @@ The oracle is `AggregateHelper.LinqAggregate` over the documents as read back. M
     answered as the null bucket.
 - **Recorded, not decided (TASK-886):** an ungrouped aggregate over no rows is one row (count 0, every other aggregate
   null; SUM was 0). In memory there is no row.
-- **Not fixed here:**
-  - Result types are what the JSON holds (long/double; MIN/MAX of a DateTime is its stored text). LINQ answers the
-    member's type.
-  - Group and aggregate names are sent verbatim (case-sensitive), where LINQ matches any case.
-  - Sum/Avg of a non-numeric member is not refused.
+- Result types, DateTime MIN/MAX and names: TASK-897, below.
+
+## Aggregation answers in LINQ's types and names (TASK-897)
+Oracle as above, compared strictly (same CLR type, same value). Measured on the emulator (vnext-preview, 2026-11-10),
+15 shapes (12 group keys of every member type, names in other cases) x sync/async: all 15 differed; 0 after
+(`Task897AggregateTypesLiveTests`).
+- **Types.** Every number came back as the JSON parsed (`long` / `double`), a Guid and a DateTime as text, an enum as a
+  number. Now `CosmosAggregatePlan.Read` answers the type `AggregateMath.ResultType` names (the in-memory aggregation's):
+  - a group key and a MIN/MAX are read as the member is read (`JsonElement.Deserialize` with the store serializer's
+    default options);
+  - COUNT is an `int`; SUM/AVG (computed by Cosmos DB in double) are converted checked, so an `int` SUM past
+    `int.MaxValue` throws `OverflowException` as LINQ's does;
+  - **decimal:** a SUM is the double to 15 significant digits (`0.1 + 0.2` reads `0.3`; it read `0.30000000000000004`). An
+    AVG is a hidden SUM and non-null COUNT divided in C# decimal (Cosmos DB's AVG read 1/3 as 0.3333333333333333). A sum
+    whose exact value needs more than 15 significant digits is not exact: Cosmos DB adds in double.
+- **DateTime MIN/MAX** compared the stored text, so `"…00.5Z"` sorted before `"…00Z"` (MIN of a group holding both was the
+  half second). It now compares `CosmosAggregationHelper.WallClockKey`: the stored wall clock, its fraction padded to 7
+  digits, then the stored suffix. It parses back to the stored value, kind included.
+  - Not `DateTimeAdd` / `DateTimeToTicks`: they convert an offset to UTC, answer nothing before 1601-01-01, and the
+    ticks are a double (not exact). An aggregate cannot be wrapped (`SUBSTRING(MIN(..))` is a 400), so the key is the value.
+  - The order is C#'s (ticks, whatever the kind) when a stored offset is the reader's own, as the time bucket assumes.
+- **A DateTime group** was one group per stored text: a local and an unspecified time with equal ticks were two groups,
+  one in C#. It is now grouped on the wall clock without the suffix, and the key is the group's least `WallClockKey`.
+- **Names.** Group, aggregate and time-column names are resolved as LINQ resolves them (public instance property, any
+  case, its `ArgumentException`) by one lookup, `CosmosAggregationHelper.ResolveMember`, and sent as the property's name.
+  The result keeps the caller's spelling. Before, `grp` read no field: every row fell into the null group, every SUM null.
+- **Refused before any request:**
+  - SUM/AVG of a non-numeric member, with LINQ's own `NotSupportedException` and message (`Sum is not defined for String.`);
+  - MIN/MAX of a string, by name: Cosmos DB orders by code point, C# by culture (`MIN` is `"B"` where C# says `"a"`,
+    measured). Also any other non-scalar or text-ordered type (`DateTimeOffset`, `TimeSpan`, `char`, objects). A Guid is
+    answered: its stored lowercase hex orders as `Guid.CompareTo`;
+  - a group key that is not a number, enum, bool, string, Guid or DateTime.
+- **Breaking:** result types change (a caller reading `(long)row.Values["n"]` now gets an `int`); string MIN/MAX and
+  non-scalar group keys throw.
 
 ## Conditional update (TASK-661)
 - `AsyncCosmosDBStore.UpdateIfAsync(guid, condition, update)` is a compare-and-set on one item: read with its ETag, apply
