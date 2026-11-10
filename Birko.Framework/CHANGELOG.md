@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Cosmos DB aggregates skip nulls and apply the time bucket
+[[TASK-885]]. SUM/AVG/MIN over a member holding a null returned undefined or null where LINQ skips the nulls, in stores
+and grouped views, and `TimeBucketInterval` was ignored (measured: 24 of 26 cases wrong). Aggregates now skip nulls, a
+SUM of no values is null as in LINQ, and the time bucket is grouped in wall-clock time or refused by name. Found on the
+way: Cosmos store reads match every row for `x.Score.HasValue` ([[TASK-896]], P1).
+
+## 2026-11-10 — `RuleEvaluator` answers NULL the way C# does
+[[TASK-881]]. In memory, a rule ordered NULL below every value (`Score LessThan 5` matched NULL rows), never matched NULL
+from an `In` list and matched every row for `GreaterThan null`: 21 of TASK-864's 117 shapes differed from the compiled
+rule and from SQL (measured). One comparison now returns no answer on NULL, so a rule gives one result in memory, as an
+expression and in SQL. Symbio's IoT rules use non-null values and are unchanged.
+
 ## 2026-11-09 — SQL string `==` and IN are exact on every provider — BREAKING
 [[TASK-873]] (the user's decision: the default is exact). MySQL and SQL Server compared strings by collation: 97 and 113
 of 134 shapes differed from C# (case, MySQL accents, `ß` = `ss`, SQL Server ignoring trailing spaces; measured).

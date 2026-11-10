@@ -34,10 +34,21 @@ namespace Birko.Data.SQL.Conditions
         /// <c>int?</c> does: for a view since TASK-892, and for the store's <c>Aggregate</c> since TASK-886 (the user's
         /// decision: one answer on every provider), which used to keep NULL through a <c>sumOfNoValuesIsZero</c> flag.
         /// </remarks>
+        /// <param name="function">The aggregate.</param>
+        /// <param name="operand">The qualified column, or null for <c>COUNT(*)</c>.</param>
+        /// <param name="source">The CLR type of the column's values.</param>
+        /// <param name="result">The CLR type the answer is read into.</param>
+        /// <param name="stringComparison">
+        /// TASK-907: the order a <c>MIN</c> / <c>MAX</c> of a string column is taken in (<see cref="AggregateQuery{T}.StringComparison"/>;
+        /// a view's is always <see cref="StringComparison.Ordinal"/>). Ordinal renders <see cref="OrdinalStringExtreme"/>; any
+        /// other order is refused by name, since no provider takes a collation that is C#'s culture order.
+        /// </param>
         /// <exception cref="NotSupportedException">
-        /// An <c>AVG</c> this provider cannot compute as C# does (<see cref="Average"/> answered null), on a provider's dialect.
+        /// An <c>AVG</c> this provider cannot compute as C# does (<see cref="Average"/> answered null), or a string <c>MIN</c> /
+        /// <c>MAX</c> in an order other than Ordinal, on a provider's dialect.
         /// </exception>
-        public string Aggregate(AggregateFunction function, string? operand, Type? source, Type result)
+        public string Aggregate(AggregateFunction function, string? operand, Type? source, Type result,
+            StringComparison stringComparison = StringComparison.Ordinal)
         {
             if (function == AggregateFunction.Count)
             {
@@ -59,9 +70,10 @@ namespace Birko.Data.SQL.Conditions
                     if (ReferenceEquals(this, Portable)) return $"AVG({operand})";
                     throw new NotSupportedException(NoExactAverage(operand, underlying, result));
                 case AggregateFunction.Min:
-                    return AggregateResult($"MIN({operand})", function, underlying, result);
                 case AggregateFunction.Max:
-                    return AggregateResult($"MAX({operand})", function, underlying, result);
+                    var name = function == AggregateFunction.Min ? "MIN" : "MAX";
+                    if (underlying == typeof(string)) return StringExtreme(function, name, operand, stringComparison);
+                    return AggregateResult($"{name}({operand})", function, underlying, result);
                 default:
                     throw new NotSupportedException($"Aggregate function {function} is not supported.");
             }
@@ -109,6 +121,30 @@ namespace Birko.Data.SQL.Conditions
         /// as a number.
         /// </summary>
         protected virtual string AggregateResult(string sql, AggregateFunction function, Type source, Type result) => sql;
+
+        /// <summary>
+        /// TASK-907: a string <c>MIN</c> / <c>MAX</c> in <paramref name="comparison"/>'s order. <see cref="Portable"/> (the
+        /// migration generator, a message) renders the plain form, which follows the column's collation, as it renders a plain
+        /// <c>=</c> for an ordinal join (TASK-895); a provider renders Ordinal or refuses.
+        /// </summary>
+        private string StringExtreme(AggregateFunction function, string name, string operand, StringComparison comparison)
+        {
+            if (ReferenceEquals(this, Portable)) return $"{name}({operand})";
+            if (comparison != StringComparison.Ordinal)
+                throw AggregateMath.StringOrderNotSupported("SQL aggregate", function, operand, comparison);
+            return OrdinalStringExtreme(name, operand)
+                ?? throw AggregateMath.StringOrderNotSupported("SQL aggregate", function, operand, comparison, null);
+        }
+
+        /// <summary>
+        /// TASK-907: <c>MIN</c> or <c>MAX</c> (<paramref name="function"/>) of a string column in Ordinal order, UTF-16 code
+        /// unit by code unit with no padding, answering the column's own value; or null where this provider has no such form.
+        /// Measured before: every server took it in the column's collation (PostgreSQL's and MySQL's default put
+        /// <c>"apple"</c> below <c>"Banana"</c>, SQL Server's tied <c>"a"</c> and <c>"a "</c> and answered either), and a
+        /// byte order (SQLite's <c>BINARY</c>, PostgreSQL's <c>"C"</c>, MySQL's <c>utf8mb4_0900_bin</c>) is code-point
+        /// order, which puts a character above U+FFFF above U+E000–U+FFFF where UTF-16 puts it below.
+        /// </summary>
+        protected virtual string? OrdinalStringExtreme(string function, string operand) => null;
 
         private static bool IsDecimal(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal);
 

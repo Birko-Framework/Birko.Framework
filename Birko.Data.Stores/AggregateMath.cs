@@ -111,13 +111,21 @@ namespace Birko.Data.Stores
         /// <summary>
         /// Resolves an aggregate function over a set of boxed values.
         /// Count returns group.Count() directly (values ignored).
-        /// Min/Max use Comparer.Default.
+        /// Min/Max compare by <see cref="ValueComparer"/>: a string in <paramref name="stringComparison"/>'s order, any other
+        /// value by <see cref="Comparer{T}.Default"/>.
         /// </summary>
+        /// <remarks>
+        /// TASK-907: a string Min / Max used <see cref="Comparer{T}.Default"/>, which is the current culture's order, so the
+        /// answer depended on the machine (sk-SK: <c>"apple"</c> below <c>"Banana"</c>) and no store answered it. It is
+        /// <see cref="StringComparison.Ordinal"/> unless the query asks for another order
+        /// (<see cref="AggregateQuery{T}.StringComparison"/>).
+        /// </remarks>
         public static object? ComputeAggregate(
             AggregateFunction function,
             List<object?> values,
             Type propertyType,
-            int groupCount)
+            int groupCount,
+            StringComparison stringComparison = StringComparison.Ordinal)
         {
             if (function == AggregateFunction.Count) return groupCount;
 
@@ -126,10 +134,65 @@ namespace Birko.Data.Stores
             {
                 AggregateFunction.Sum => ComputeSum(nonNull, propertyType),
                 AggregateFunction.Avg => ComputeAvg(nonNull, propertyType),
-                AggregateFunction.Min => nonNull.Count > 0 ? nonNull.Min() : null,
-                AggregateFunction.Max => nonNull.Count > 0 ? nonNull.Max() : null,
+                AggregateFunction.Min => nonNull.Count > 0 ? nonNull.Min(ValueComparer(stringComparison)) : null,
+                AggregateFunction.Max => nonNull.Count > 0 ? nonNull.Max(ValueComparer(stringComparison)) : null,
                 _ => null
             };
+        }
+
+        /// <summary>
+        /// TASK-907: the order a Min / Max takes its values in: two strings in <paramref name="stringComparison"/>'s order
+        /// (<see cref="StringComparer.FromComparison"/>), anything else by <see cref="Comparer{T}.Default"/>.
+        /// </summary>
+        public static IComparer<object?> ValueComparer(StringComparison stringComparison)
+            => new ExtremeComparer(StringComparer.FromComparison(stringComparison));
+
+        /// <summary>
+        /// TASK-907: the refusal of a provider that cannot take a Min / Max of a string in <paramref name="comparison"/>'s
+        /// order. The one producer of its text, so every provider names the comparison and the member the same way.
+        /// </summary>
+        /// <param name="provider">What refuses, for the message: e.g. <c>"MongoDB aggregate of Order"</c>.</param>
+        /// <param name="function">The Min or Max.</param>
+        /// <param name="member">The string member, e.g. <c>Order.Name</c>.</param>
+        /// <param name="comparison">The order the query asked for.</param>
+        /// <param name="supported">The order this provider does take, for the message; null where it takes none exactly.</param>
+        public static NotSupportedException StringOrderNotSupported(
+            string provider, AggregateFunction function, string member, StringComparison comparison, string? supported = "Ordinal")
+            => new($"{provider} refused: {function} of the string {member} in {comparison} order. "
+                   + (supported == null
+                       ? "This provider has no string Min / Max in an exact order. "
+                       : $"This provider takes a string Min / Max only in {supported} order. ")
+                   + "It does not answer in the database's own order: read the rows and aggregate them in memory"
+                   + (supported == null ? "" : $", or aggregate in {supported} order")
+                   + ". (TASK-907)");
+
+        /// <summary>
+        /// TASK-907: the refusal of a provider that orders strings by code point, for a group whose values hold both a
+        /// character above U+FFFF and one in U+E000–U+FFFF: the one case where code-point order and Ordinal (UTF-16 code
+        /// units, which put the surrogate pair D800–DFFF below U+E000) disagree. Any other group is answered exactly.
+        /// </summary>
+        /// <param name="provider">What refuses, for the message.</param>
+        /// <param name="function">The Min or Max.</param>
+        /// <param name="member">The string member or view property.</param>
+        public static NotSupportedException MixedAstralNotSupported(string provider, AggregateFunction function, string member)
+            => new($"{provider} refused: {function} of the string {member} over a group holding both a character above U+FFFF "
+                   + "and one in U+E000–U+FFFF. This provider orders strings by code point, which puts the first above the "
+                   + "second where Ordinal (UTF-16) puts it below, and it does not answer in its own order. Read the rows and "
+                   + "aggregate them in memory. (TASK-907)");
+
+        /// <summary>TASK-907: a regular expression character class of U+E000–U+FFFF, written with the characters themselves, so PCRE (MongoDB), Lucene (Elasticsearch) and Cosmos DB read it alike.</summary>
+        public const string HighBmpCharacters = "[\uE000-\uFFFF]";
+
+        /// <summary>TASK-907: a regular expression character class of U+10000–U+10FFFF, written with the characters themselves (a surrogate pair each in C#, one code point in UTF-8).</summary>
+        public const string AstralCharacters = "[\U00010000-\U0010FFFF]";
+
+        private sealed class ExtremeComparer : IComparer<object?>
+        {
+            private readonly StringComparer _strings;
+            public ExtremeComparer(StringComparer strings) => _strings = strings;
+
+            public int Compare(object? x, object? y)
+                => x is string a && y is string b ? _strings.Compare(a, b) : Comparer<object?>.Default.Compare(x, y);
         }
 
         /// <summary>

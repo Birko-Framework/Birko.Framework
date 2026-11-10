@@ -475,6 +475,7 @@ namespace Birko.Data.MongoDB.Stores
         /// </summary>
         public IReadOnlyList<Data.Stores.AggregateResult> Aggregate(Data.Stores.AggregateQuery<T> query)
         {
+            query.ThrowIfStringOrderNotOrdinal($"MongoDB aggregate of {typeof(T).Name}");   // TASK-907: before any data
             if (Collection == null) return Array.Empty<Data.Stores.AggregateResult>();
 
             var pipeline = Aggregate();

@@ -116,7 +116,9 @@ var query = new AggregateQuery<Order>
     ],
     TimeBucketInterval = "1 hour",   // optional time bucketing
     TimeColumn = "CreatedAt",
-    Limit = 10
+    Limit = 10,
+    // StringComparison = StringComparison.Ordinal (the default): the order of a string Min / Max.
+    // Another order is answered in memory and refused by name by a provider that cannot sort that way.
 };
 
 IReadOnlyList<AggregateResult> results = await store.AggregateAsync(query);

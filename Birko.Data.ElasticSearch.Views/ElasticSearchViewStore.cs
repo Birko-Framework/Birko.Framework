@@ -249,6 +249,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         // an ungrouped view. It was a value_count on _id, which Elasticsearch 8 refuses by default (measured on 7.17 with
         // indices.id_field_data.enabled false: every Count view failed with a 400).
         var rowCounts = new List<string>();
+        var stringExtremes = new List<(string Name, string ViewProperty, bool ChecksSkipped)>();
         for (int i = 0; i < _definition.Aggregates.Count; i++)
         {
             var aggregate = _definition.Aggregates[i];
@@ -260,6 +261,14 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 continue;
             }
             var field = aggregate.SourceProperty != null ? StoredField(aggregate.SourceProperty, exact: true) : null;
+            if (field != null && IsStringExtreme(aggregate))
+            {
+                // TASK-907: Ordinal, as the store's Aggregate by default; a min aggregation over a keyword was a 400.
+                var text = field.EndsWith(".keyword", StringComparison.Ordinal) ? StoredField(aggregate.SourceProperty!, exact: false) : null;
+                StoreAggregationHelper.AddStringExtreme(metricAggregations, aggregate.Function, name, field, text);
+                stringExtremes.Add((name, aggregate.ViewProperty, text != null));
+                continue;
+            }
             metricAggregations.Add(name, StoreAggregationHelper.BuildSingleMetricAggregation(aggregate.Function, name, field));
             metricNames.Add((name, aggregate.Function));
         }
@@ -269,6 +278,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             var response = await SearchAsync(new SearchRequest(_indexName) { Size = 0, Query = filterQuery, TrackTotalHits = true, Aggregations = metricAggregations }, ct).ConfigureAwait(false);
             var row = new TView();
             SetMetrics(row, WithRowCounts(StoreAggregationHelper.ExtractMetricValues(response.Aggregations, metricNames), rowCounts, response.Total));
+            SetStringExtremes(row, response.Aggregations, stringExtremes);
             return new List<TView> { row };
         }
 
@@ -316,6 +326,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                     }
                 }
                 SetMetrics(row, WithRowCounts(StoreAggregationHelper.ExtractMetricValues(bucket, metricNames), rowCounts, bucket.DocCount ?? 0));
+                SetStringExtremes(row, bucket, stringExtremes);
                 rows.Add(row);
             }
 
@@ -344,6 +355,22 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
     {
         foreach (var name in names) values[name] = rows;
         return values;
+    }
+
+    /// <summary>TASK-907: whether an aggregate is the Min / Max of a string member of the document.</summary>
+    private bool IsStringExtreme(AggregateClause aggregate)
+        => aggregate.Function is AggregateFunction.Min or AggregateFunction.Max && aggregate.SourceProperty != null
+           && _documentType.GetProperty(aggregate.SourceProperty, BindingFlags.Public | BindingFlags.Instance)?.PropertyType == typeof(string);
+
+    private void SetStringExtremes(TView row, AggregateDictionary source, List<(string Name, string ViewProperty, bool ChecksSkipped)> extremes)
+    {
+        foreach (var (name, viewProperty, checksSkipped) in extremes)
+        {
+            var aggregate = _definition.Aggregates.First(a => a.ViewProperty == viewProperty);
+            SetPropertyValue(row, viewProperty,
+                StoreAggregationHelper.ReadStringExtreme(source, name, checksSkipped, $"View '{typeof(TView).Name}' property '{viewProperty}'",
+                    aggregate.Function, $"{aggregate.SourceType.Name}.{aggregate.SourceProperty}"));
+        }
     }
 
     private void SetMetrics(TView row, Dictionary<string, double?> values)

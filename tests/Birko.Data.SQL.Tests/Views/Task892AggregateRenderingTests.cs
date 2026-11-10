@@ -59,7 +59,24 @@ namespace Birko.Data.SQL.Tests.Views
         {
             Provider.Aggregate(AggregateFunction.Count, null, null, typeof(int)).Should().Be("COUNT(*)");
             Provider.Aggregate(AggregateFunction.Count, "T.Guid", typeof(Guid), typeof(long)).Should().Be("COUNT(T.Guid)");
-            Provider.Aggregate(AggregateFunction.Min, "Name", typeof(string), typeof(string)).Should().Be("MIN(Name)");
+            Provider.Aggregate(AggregateFunction.Min, "Score", typeof(int), typeof(int)).Should().Be("MIN(Score)");
+        }
+
+        /// <summary>
+        /// TASK-907: a string MIN / MAX is taken in Ordinal order through the provider's <c>OrdinalStringExtreme</c>; a dialect
+        /// without one refuses it by name rather than answering in the column's collation. The portable form (the migration
+        /// generator, a message) renders it as written.
+        /// </summary>
+        [Fact]
+        public void A_string_min_or_max_without_an_ordinal_form_is_refused_by_name()
+        {
+            var act = () => Provider.Aggregate(AggregateFunction.Min, "Name", typeof(string), typeof(string));
+            act.Should().Throw<NotSupportedException>().WithMessage("*Min of the string Name in Ordinal order*TASK-907*");
+
+            var culture = () => Provider.Aggregate(AggregateFunction.Max, "Name", typeof(string), typeof(string), StringComparison.CurrentCulture);
+            culture.Should().Throw<NotSupportedException>().WithMessage("*Max of the string Name in CurrentCulture order*");
+
+            SqlValueFragmentDialect.Portable.Aggregate(AggregateFunction.Min, "Name", typeof(string), typeof(string)).Should().Be("MIN(Name)");
         }
 
         [Theory]

@@ -102,24 +102,33 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// <remarks>
         /// A MIN/MAX is answered for a number, an enum (stored as its number), a bool, a Guid (its text is lowercase hex in
         /// field order, the order <see cref="Guid.CompareTo(Guid)"/> uses) and a DateTime (<see cref="WallClockKey"/>).
-        /// A string is refused: Cosmos DB orders by code point, C# by culture (measured: <c>MIN</c> is <c>"B"</c> where C#
-        /// answers <c>"a"</c>), the rule TASK-896 applies to a culture comparison in a filter. Any other type
-        /// (<c>DateTimeOffset</c>, <c>TimeSpan</c>, <c>char</c>, an object) is refused too: its stored text does not order as
-        /// the value.
+        /// TASK-907: a string is answered in <see cref="StringComparison.Ordinal"/> order, the query's default (the user's
+        /// decision, 2026-11-10): Cosmos DB compares strings by code point (measured: <c>"Banana"</c> below <c>"apple"</c>,
+        /// <c>"a"</c> below <c>"a "</c>, <c>"ss"</c> below <c>"ß"</c>), which is Ordinal but for a character above U+FFFF
+        /// against one in U+E000–U+FFFF, a group holding both is refused by name. It was refused, as C#'s order was the culture's. Another comparison
+        /// is refused by name. Any other type (<c>DateTimeOffset</c>, <c>TimeSpan</c>, <c>char</c>, an object) is refused:
+        /// its stored text does not order as the value.
         /// </remarks>
         /// <param name="function">The aggregate.</param>
         /// <param name="member">The member it reads.</param>
         /// <param name="owner">What is aggregated, for the message: the store's model or the view.</param>
-        internal static Type ResultType(AggregateFunction function, PropertyInfo member, string owner)
+        /// <param name="stringComparison">The order of a string MIN/MAX (<see cref="AggregateQuery{T}.StringComparison"/>; a
+        /// view's is Ordinal).</param>
+        internal static Type ResultType(AggregateFunction function, PropertyInfo member, string owner,
+            StringComparison stringComparison = StringComparison.Ordinal)
         {
             var type = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
             if (function is not (AggregateFunction.Min or AggregateFunction.Max)) return AggregateMath.ResultType(function, type);
             if (IsNumeric(type) || type.IsEnum || type == typeof(bool) || type == typeof(Guid) || type == typeof(DateTime)) return type;
+            if (type == typeof(string))
+            {
+                if (stringComparison == StringComparison.Ordinal) return type;
+                throw AggregateMath.StringOrderNotSupported($"Cosmos DB aggregate of {owner}", function,
+                    $"{member.DeclaringType?.Name}.{member.Name}", stringComparison);
+            }
             throw new NotSupportedException(
                 $"Cosmos DB aggregate of {owner} refused: Min/Max of {member.DeclaringType?.Name}.{member.Name}, a {type.Name}, "
-                + "is not ordered by Cosmos DB as C# orders it"
-                + (type == typeof(string) ? " (Cosmos DB compares strings by code point, C# by culture)" : "")
-                + ". Read the rows and aggregate them in the caller. (TASK-897)");
+                + "is not ordered by Cosmos DB as C# orders it. Read the rows and aggregate them in the caller. (TASK-897)");
         }
 
         /// <summary>
@@ -144,6 +153,24 @@ namespace Birko.Data.CosmosDB.Aggregation
             throw new NotSupportedException(
                 $"Cosmos DB aggregate of {owner} refused: group-by field {member.DeclaringType?.Name}.{member.Name} is a {type.Name}, "
                 + "which Cosmos DB does not group as C# does. Group by a scalar member. (TASK-897)");
+        }
+
+        /// <summary>
+        /// TASK-907: the two check columns of a string MIN/MAX of <paramref name="field"/>: how many of the group's values hold
+        /// a character in U+E000–U+FFFF, and how many one above U+FFFF. Cosmos DB orders strings by code point, which is
+        /// Ordinal but for a group holding both (UTF-16 puts the surrogate pair first), so such a group is refused by name
+        /// (<see cref="AggregateMath.MixedAstralNotSupported"/>) and every other group is answered. The one producer for the
+        /// store and the view.
+        /// </summary>
+        internal static (string HighBmp, string Astral) StringOrderChecks(string field)
+            => (Matches(field, AggregateMath.HighBmpCharacters), Matches(field, AggregateMath.AstralCharacters));
+
+        private static string Matches(string field, string pattern)
+        {
+            // The pattern as a string literal with its non-ASCII characters escaped (\uXXXX, UTF-16 units, a surrogate
+            // pair for an astral character), as JSON reads it.
+            var literal = string.Concat(pattern.Select(ch => ch < 0x20 || ch > 0x7E ? $"\\u{(int)ch:X4}" : ch.ToString()));
+            return $"COUNT((IS_STRING({field}) AND RegexMatch({field}, \"{literal}\")) ? 1 : undefined)";
         }
 
         /// <summary>The numeric types <see cref="AggregateMath"/> sums: every integral type, float, double and decimal.</summary>
@@ -195,8 +222,16 @@ namespace Birko.Data.CosmosDB.Aggregation
             IEnumerable<(string FieldName, string Alias)> groupByFields,
             IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates,
             IReadOnlyList<(string FieldName, string Alias)> dateTimeGroups)
+            => BuildAggregateSqlParts(groupByFields, aggregates, dateTimeGroups, Array.Empty<(string, string)>());
+
+        /// <summary>As above, with <paramref name="moreColumns"/> selected after the aggregates (TASK-907: a view's checks).</summary>
+        internal static (string SelectFromSql, string? GroupBySql) BuildAggregateSqlParts(
+            IEnumerable<(string FieldName, string Alias)> groupByFields,
+            IEnumerable<(AggregateFunction Function, string? SourceProperty, string Alias, Type? MemberType)> aggregates,
+            IReadOnlyList<(string FieldName, string Alias)> dateTimeGroups,
+            IReadOnlyList<(string Expression, string Alias)> moreColumns)
         {
-            var extraColumns = new List<(string Expression, string Alias)>();
+            var extraColumns = new List<(string Expression, string Alias)>(moreColumns);
             var extraGroupBy = new List<string>();
             foreach (var (fieldName, alias) in dateTimeGroups)
             {
@@ -340,6 +375,7 @@ namespace Birko.Data.CosmosDB.Aggregation
             // name as the caller wrote it, as in memory.
             // TASK-886: nothing to select was a 400 (SC1001, syntax error near FROM).
             query.ThrowIfNothingToAggregate();
+            query.ThrowIfStringOrderNotOrdinal($"Cosmos DB aggregate of {typeof(T).Name}");   // TASK-907
             var owner = typeof(T).Name;
             var groups = query.GroupByFields
                 .Select(name => (Name: name, Member: ResolveMember(typeof(T), name, "group-by field")))
@@ -366,7 +402,7 @@ namespace Birko.Data.CosmosDB.Aggregation
                 }
 
                 var member = ResolveMember(typeof(T), aggregate.SourcePropertyName, "aggregate source");
-                var resultType = ResultType(aggregate.Function, member, owner);
+                var resultType = ResultType(aggregate.Function, member, owner, query.StringComparison);
                 var field = FieldRef(member.Name, LinqRoot);
                 if (aggregate.Function == AggregateFunction.Avg && resultType == typeof(decimal))
                 {
@@ -381,6 +417,17 @@ namespace Birko.Data.CosmosDB.Aggregation
 
                 // TASK-886: a SUM over no value is 0, as Cosmos DB answers it; the hidden count that made it null is gone.
                 selected.Add((aggregate.Function, member.Name, alias, member.PropertyType));
+                if (resultType == typeof(string))
+                {
+                    // TASK-907: a group Cosmos DB's code-point order answers otherwise than Ordinal is refused when read.
+                    var (highBmp, astral) = StringOrderChecks(field);
+                    var highBmpAlias = HiddenAlias(used);
+                    var astralAlias = HiddenAlias(used);
+                    extraColumns.Add((highBmp, highBmpAlias));
+                    extraColumns.Add((astral, astralAlias));
+                    metrics.Add(new CosmosAggregatePlan.Metric(alias, aggregate.Function, resultType, null, null, highBmpAlias, astralAlias, $"{typeof(T).Name}.{member.Name}"));
+                    continue;
+                }
                 metrics.Add(new CosmosAggregatePlan.Metric(alias, aggregate.Function, resultType, null, null));
             }
 

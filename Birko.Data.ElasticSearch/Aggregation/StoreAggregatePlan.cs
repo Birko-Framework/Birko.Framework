@@ -28,8 +28,15 @@ namespace Birko.Data.ElasticSearch.Aggregation
     /// a sum of no values is 0, as Elasticsearch answers it (TASK-886; TASK-878 had made it null); keys and metrics come back
     /// as the member's type; every page of groups is read; an ungrouped query over no rows answers one row (Count 0, Sum 0,
     /// the others null), a grouped one no rows (TASK-886, the user's decision; TASK-878 had answered no rows for both); and a
-    /// query with nothing to aggregate is refused (it answered one empty row). What cannot match is refused by name: a metric over a string or a Guid,
+    /// query with nothing to aggregate is refused (it answered one empty row). What cannot match is refused by name: a metric over a Guid,
     /// a group on a <c>[Text]</c> or non-scalar member, a time bucket not aligned as LINQ aligns it.
+    /// </para>
+    /// <para>
+    /// TASK-907: a Min / Max of a string is answered in <see cref="StringComparison.Ordinal"/> order, the query's default
+    /// (<see cref="AggregateQuery{T}.StringComparison"/>): the first <c>terms</c> bucket of its keyword ordered by key, which
+    /// Elasticsearch orders by UTF-8 bytes, code-point order: Ordinal but for a character above U+FFFF against one in
+    /// U+E000–U+FFFF, a group holding both is refused by name. It was refused. Another comparison is refused by name. A value its keyword sub-field
+    /// skipped (past <c>ignore_above</c>) fails the read, as it does for a group key, rather than being left out.
     /// </para>
     /// </remarks>
     internal sealed class StoreAggregatePlan
@@ -84,7 +91,14 @@ namespace Birko.Data.ElasticSearch.Aggregation
                 }
 
                 var member = ElasticSearch.ResolveMember(typeof(T), aggregate.SourcePropertyName, "Aggregate source");
-                var type = RequireMetricType(member, aggregate.Function);
+                var type = RequireMetricType(member, aggregate.Function, query.StringComparison);
+                if (type == typeof(string))
+                {
+                    var keyword = ElasticSearch.ExactFieldName(member, member.PropertyType, null)!;
+                    var text = keyword.EndsWith(".keyword", StringComparison.Ordinal) ? ElasticSearch.StoredFieldName(member, null) : null;
+                    plan._metrics.Add(new Metric(aggregate.ResolvedAlias, aggregate.Function, type, keyword, "m" + Index(i), text));
+                    continue;
+                }
                 var field = ElasticSearch.StoredFieldName(member, null)!;
                 plan._metrics.Add(new Metric(aggregate.ResolvedAlias, aggregate.Function, type, field, "m" + Index(i)));
             }
@@ -202,6 +216,11 @@ namespace Birko.Data.ElasticSearch.Aggregation
             foreach (var metric in _metrics)
             {
                 if (metric.Function == AggregateFunction.Count) continue;
+                if (metric.Type == typeof(string))
+                {
+                    StoreAggregationHelper.AddStringExtreme(dict, metric.Function, metric.Name!, metric.Field!, metric.TextField);
+                    continue;
+                }
                 dict.Add(metric.Name!, StoreAggregationHelper.BuildSingleMetricAggregation(metric.Function, metric.Name!, metric.Field));
             }
             return dict;
@@ -217,6 +236,9 @@ namespace Birko.Data.ElasticSearch.Aggregation
                     // TASK-886: Elasticsearch sums no values to 0, which is now the answer everywhere.
                     AggregateFunction.Sum => ConvertMetric(source.Sum(metric.Name!)?.Value ?? 0, metric),
                     AggregateFunction.Avg => ConvertMetric(source.Average(metric.Name!)?.Value, metric),
+                    AggregateFunction.Min or AggregateFunction.Max when metric.Type == typeof(string)
+                        => StoreAggregationHelper.ReadStringExtreme(source, metric.Name!, metric.TextField != null, $"Aggregate {metric.Function} '{metric.Alias}'",
+                            metric.Function, metric.Alias),
                     AggregateFunction.Min => ConvertMetric(source.Min(metric.Name!)?.Value, metric),
                     AggregateFunction.Max => ConvertMetric(source.Max(metric.Name!)?.Value, metric),
                     _ => throw new NotSupportedException($"Aggregate function {metric.Function} is not supported.")
@@ -260,12 +282,19 @@ namespace Birko.Data.ElasticSearch.Aggregation
                 $"Cannot {use} {member.DeclaringType?.Name}.{member.Name}: a {type.Name} is not a single value Elasticsearch can aggregate.");
         }
 
-        private static Type RequireMetricType(PropertyInfo member, AggregateFunction function)
+        private static Type RequireMetricType(PropertyInfo member, AggregateFunction function, StringComparison stringComparison)
         {
             var type = Nullable.GetUnderlyingType(member.PropertyType) ?? member.PropertyType;
+            if (type == typeof(string) && function is AggregateFunction.Min or AggregateFunction.Max)
+            {
+                // TASK-907: a keyword orders by UTF-8 bytes, which is Ordinal (a group mixing U+E000–U+FFFF with an astral character is refused when read); no other order.
+                if (stringComparison == StringComparison.Ordinal) return type;
+                throw AggregateMath.StringOrderNotSupported($"Elasticsearch aggregate of {member.DeclaringType?.Name}", function,
+                    $"{member.DeclaringType?.Name}.{member.Name}", stringComparison);
+            }
             var allowed = function is AggregateFunction.Sum or AggregateFunction.Avg
                 ? IsNumeric(type)
-                // A string or Guid is ordered by culture or by field in C#, by bytes in a keyword: refused, not reordered.
+                // A Guid is ordered by field in C#, by bytes in a keyword: refused, not reordered.
                 : IsNumeric(type) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(bool) || type.IsEnum;
             if (allowed) return type;
             throw new NotSupportedException(
@@ -329,7 +358,7 @@ namespace Birko.Data.ElasticSearch.Aggregation
         private sealed record GroupKey(string Name, string Source, string Field, Type Type, string? TextField, string TextCheck);
 
         /// <summary>A metric: <paramref name="Name"/> is its aggregation (null for Count, read from the doc count).</summary>
-        private sealed record Metric(string Alias, AggregateFunction Function, Type? Type, string? Field, string? Name);
+        private sealed record Metric(string Alias, AggregateFunction Function, Type? Type, string? Field, string? Name, string? TextField = null);
 
         private sealed record TimeBucket(string Field, Nest.Time Interval);
     }

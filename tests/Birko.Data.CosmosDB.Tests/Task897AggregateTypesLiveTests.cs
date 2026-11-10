@@ -342,7 +342,10 @@ public class Task897AggregateTypesLiveTests
                 Q(AggregateFunction.Min, "Nope"),
                 new AggregateQuery<Row> { GroupByFields = new[] { "Nope" }, Aggregates = new[] { new AggregateField(AggregateFunction.Count, "A", "n") } },
             };
-            var cosmosRefused = new[] { Q(AggregateFunction.Min, "S"), Q(AggregateFunction.Max, "s") };
+            // TASK-907: a string MIN/MAX is answered in Ordinal order (Cosmos DB's code-point order); another order is refused.
+            var cosmosRefused = new[] { Q(AggregateFunction.Min, "S"), Q(AggregateFunction.Max, "s") }
+                .Select(q => new AggregateQuery<Row> { Aggregates = q.Aggregates, StringComparison = StringComparison.CurrentCulture })
+                .ToArray();
 
             var before = handler.Count;
             foreach (var query in linqRefused)
@@ -356,7 +359,7 @@ public class Task897AggregateTypesLiveTests
             foreach (var query in cosmosRefused)
             {
                 (await FluentActions.Invoking(() => store.AggregateAsync(query)).Should().ThrowAsync<NotSupportedException>())
-                    .WithMessage("Cosmos DB aggregate of Row refused: Min/Max of Row.S, a String,*TASK-897*");
+                    .WithMessage("Cosmos DB aggregate of Row refused: M?? of the string Row.S in CurrentCulture order*TASK-907*");
                 FluentActions.Invoking(() => sync.Aggregate(query)).Should().Throw<NotSupportedException>();
             }
             handler.Count.Should().Be(before, "each refusal is decided before any request");
@@ -368,11 +371,12 @@ public class Task897AggregateTypesLiveTests
     }
 
     /// <summary>
-    /// The measurement behind the string refusal: Cosmos DB's MIN of a string is ordinal ("B" before "a"), LINQ's is the
-    /// culture's ("a" before "B"). Asked of the server directly, since the store now refuses it.
+    /// The measurement behind the string refusal: Cosmos DB's MIN of a string is ordinal ("B" before "a"), LINQ's was the
+    /// culture's ("a" before "B"). TASK-907 (inverted, rule 56): the in-memory aggregation is Ordinal by default, so it now
+    /// agrees with the server, and the store answers it; the culture's order is still LINQ's when the query asks for it.
     /// </summary>
     [Fact]
-    public async Task Cosmos_orders_strings_by_code_point_where_LINQ_orders_by_culture()
+    public async Task Cosmos_orders_strings_by_code_point_as_the_Ordinal_default_does()
     {
         var conn = ResolveConnection();
         if (conn == null) return;
@@ -384,7 +388,14 @@ public class Task897AggregateTypesLiveTests
             await store.CreateAsync(Seed());
             var all = (await store.ReadAsync(x => true)).ToList();
             var linq = AggregateHelper.LinqAggregate(all, new AggregateQuery<Row> { Aggregates = new[] { new AggregateField(AggregateFunction.Min, "S", "m") } });
-            linq[0].Values["m"].Should().Be("a");
+            linq[0].Values["m"].Should().Be("B");
+            AggregateHelper.LinqAggregate(all, new AggregateQuery<Row>
+            {
+                Aggregates = new[] { new AggregateField(AggregateFunction.Min, "S", "m") },
+                StringComparison = StringComparison.InvariantCulture,
+            })[0].Values["m"].Should().Be("a");
+            (await store.AggregateAsync(new AggregateQuery<Row> { Aggregates = new[] { new AggregateField(AggregateFunction.Min, "S", "m") } }))
+                .Single().Values["m"].Should().Be("B");
 
             using var iterator = store.Container!.GetItemQueryIterator<System.Text.Json.JsonElement>(
                 new QueryDefinition("SELECT MIN(c[\"S\"]) AS m FROM c WHERE NOT IS_NULL(c[\"S\"])"));
@@ -447,7 +458,6 @@ public class Task897AggregateQueryTests
     [InlineData(AggregateFunction.Avg, "B", typeof(NotSupportedException), "Avg is not defined for Boolean.")]
     [InlineData(AggregateFunction.Sum, "E", typeof(NotSupportedException), "Sum is not defined for Level.")]
     [InlineData(AggregateFunction.Avg, "TN", typeof(NotSupportedException), "Avg is not defined for DateTime.")]
-    [InlineData(AggregateFunction.Min, "S", typeof(NotSupportedException), "Cosmos DB aggregate of Row refused: Min/Max of Row.S, a String,*TASK-897*")]
     [InlineData(AggregateFunction.Max, "nope", typeof(ArgumentException), "Aggregate aggregate source 'nope' is not a property of Row.*")]
     public void What_LINQ_or_Cosmos_cannot_answer_is_refused_by_name(AggregateFunction function, string member, Type exception, string message)
     {

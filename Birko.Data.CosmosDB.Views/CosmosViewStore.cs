@@ -301,6 +301,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             var response = await iterator.ReadNextAsync(ct).ConfigureAwait(false);
             results.AddRange(response);
         }
+        await ThrowIfStringOrderUnsoundAsync(queryDef, ct).ConfigureAwait(false);
 
         RoundDecimalSums(results);
         return results;
@@ -330,6 +331,41 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             }
         }
     }
+
+    /// <summary>
+    /// TASK-907: a view's string MIN/MAX is Ordinal, which Cosmos DB's code-point order answers but for a group holding both
+    /// a character above U+FFFF and one in U+E000–U+FFFF. The view's statement selects two check columns per string
+    /// MIN/MAX (<see cref="CosmosAggregationHelper.StringOrderChecks"/>), which the view type does not read; the same
+    /// statement is read again for them, so the rows checked are the rows answered, and such a group is refused by name.
+    /// </summary>
+    private async Task ThrowIfStringOrderUnsoundAsync(QueryDefinition queryDef, CancellationToken ct)
+    {
+        var checks = StringExtremeChecks();
+        if (checks.Count == 0) return;
+        foreach (var row in await RunAsync<Dictionary<string, object?>>(queryDef, ct).ConfigureAwait(false))
+        {
+            foreach (var (aggregate, highBmp, astral) in checks)
+            {
+                if (Positive(row, highBmp) && Positive(row, astral))
+                {
+                    throw AggregateMath.MixedAstralNotSupported($"Cosmos DB view {typeof(TView).Name}", aggregate.Function,
+                        $"{aggregate.SourceType.Name}.{aggregate.SourceProperty}");
+                }
+            }
+        }
+    }
+
+    private static bool Positive(Dictionary<string, object?> row, string alias)
+        => row.TryGetValue(alias, out var value) && value != null
+           && Convert.ToInt64(value is System.Text.Json.JsonElement e ? e.GetDouble() : value, System.Globalization.CultureInfo.InvariantCulture) > 0;
+
+    /// <summary>TASK-907: each string MIN/MAX of the view, with the aliases of its two check columns.</summary>
+    private List<(AggregateClause Aggregate, string HighBmp, string Astral)> StringExtremeChecks()
+        => _definition.Aggregates
+            .Where(a => a.Function is AggregateFunction.Min or AggregateFunction.Max && a.SourceProperty != null
+                        && a.SourceType.GetProperty(a.SourceProperty)?.PropertyType == typeof(string))
+            .Select(a => (a, "__birko907b_" + a.ViewProperty, "__birko907a_" + a.ViewProperty))
+            .ToList();
 
     private async Task<long> CountAggregateAsync(
         Expression<Func<TView, bool>>? filter,
@@ -361,7 +397,14 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         var aggregateDefs = _definition.Aggregates
             .Select(a => (a.Function, a.SourceProperty, a.ViewProperty, AggregateMemberType(a)))
             .ToList();
-        var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs, dateTimeGroups);
+        var checkColumns = new List<(string Expression, string Alias)>();
+        foreach (var (aggregate, highBmpAlias, astralAlias) in StringExtremeChecks())
+        {
+            var (highBmp, astral) = CosmosAggregationHelper.StringOrderChecks(CosmosAggregationHelper.FieldRef(aggregate.SourceProperty));
+            checkColumns.Add((highBmp, highBmpAlias));
+            checkColumns.Add((astral, astralAlias));
+        }
+        var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs, dateTimeGroups, checkColumns);
 
         var sb = new StringBuilder(selectFromSql);
 
@@ -384,8 +427,8 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     /// TASK-897: the source member's type of an aggregate, so a MIN/MAX of a DateTime compares its wall-clock key
     /// (<c>CosmosAggregationHelper.WallClockKey</c>), or a refusal before any request, the store aggregate's own
     /// (<c>CosmosAggregationHelper.ResultType</c>): a SUM/AVG of a non-numeric member with LINQ's exception and message, a
-    /// MIN/MAX of a string (Cosmos DB orders by code point, C# by culture) or of another type whose text does not order as
-    /// its value, by name.
+    /// MIN/MAX of a type whose text does not order as its value, by name. A string MIN/MAX is Ordinal (TASK-907), Cosmos DB's
+    /// code-point order.
     /// </summary>
     /// <remarks>
     /// Measured before (vnext-preview, 2026-11-10): MIN/MAX compared the stored text, so a group holding <c>…10:00:00Z</c> and

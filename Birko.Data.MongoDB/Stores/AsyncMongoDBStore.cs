@@ -628,6 +628,7 @@ namespace Birko.Data.MongoDB.Stores
             AggregateQuery<T> query,
             CancellationToken ct = default)
         {
+            query.ThrowIfStringOrderNotOrdinal($"MongoDB aggregate of {typeof(T).Name}");   // TASK-907: before any data
             if (Collection == null) return Array.Empty<AggregateResult>();
 
             var pipeline = Aggregate();

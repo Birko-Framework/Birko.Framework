@@ -591,6 +591,7 @@ public class CosmosDBStore<T>
     public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
     {
         if (query == null) throw new ArgumentNullException(nameof(query));
+        query.ThrowIfStringOrderNotOrdinal($"Cosmos DB aggregate of {typeof(T).Name}");   // TASK-907: before any data
         EnsureInitialized();
         if (_container == null) return Array.Empty<AggregateResult>();
 

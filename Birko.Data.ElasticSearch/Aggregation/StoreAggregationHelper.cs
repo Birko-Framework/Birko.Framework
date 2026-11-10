@@ -14,6 +14,69 @@ namespace Birko.Data.ElasticSearch.Aggregation
     public static class StoreAggregationHelper
     {
         /// <summary>
+        /// TASK-907: adds the Min / Max of a string to <paramref name="aggregations"/>: the first <c>terms</c> bucket of its
+        /// <paramref name="keyword"/>, ordered by key ascending for a Min, descending for a Max. A document without a value
+        /// has no bucket, so a null is skipped as LINQ skips it. A keyword orders by its UTF-8 bytes, code-point order: C#'s
+        /// Ordinal but for a group holding both a character above U+FFFF and one in U+E000–U+FFFF, which two <c>regexp</c>
+        /// filters find and <see cref="ReadStringExtreme"/> refuses by name. Where the keyword is the
+        /// <c>.keyword</c> sub-field of <paramref name="textField"/>, a filter counts the documents it skipped (past
+        /// <c>ignore_above</c>), which <see cref="ReadStringExtreme"/> refuses. The one producer for the store and the view.
+        /// </summary>
+        public static void AddStringExtreme(AggregationDictionary aggregations, AggregateFunction function, string name, string keyword, string? textField)
+        {
+            aggregations.Add(name, new TermsAggregation(name)
+            {
+                Field = keyword,
+                Size = 1,
+                Order = new List<TermsOrder> { function == AggregateFunction.Min ? TermsOrder.KeyAscending : TermsOrder.KeyDescending },
+            });
+            foreach (var (check, pattern) in new[] { (HighBmpCheck(name), AggregateMath.HighBmpCharacters), (AstralCheck(name), AggregateMath.AstralCharacters) })
+            {
+                aggregations.Add(check, new FilterAggregation(check)
+                {
+                    Filter = new RegexpQuery { Field = keyword, Value = ".*" + pattern + ".*" },
+                });
+            }
+            if (textField == null) return;
+            aggregations.Add(SkippedCheck(name), new FilterAggregation(SkippedCheck(name))
+            {
+                Filter = new BoolQuery
+                {
+                    Must = new QueryContainer[] { new ExistsQuery { Field = textField } },
+                    MustNot = new QueryContainer[] { new ExistsQuery { Field = keyword } },
+                },
+            });
+        }
+
+        /// <summary>
+        /// TASK-907: the Min / Max <see cref="AddStringExtreme"/> asked for, or null over no value.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">A value has no keyword (it is past <c>ignore_above</c>), so it would be
+        /// left out, as a group key over such a value is refused (TASK-878).</exception>
+        /// <exception cref="NotSupportedException">The group holds both a character above U+FFFF and one in U+E000–U+FFFF.</exception>
+        public static string? ReadStringExtreme(AggregateDictionary source, string name, bool checksSkipped, string describe,
+            AggregateFunction function, string member)
+        {
+            if ((source.Filter(HighBmpCheck(name))?.DocCount ?? 0) > 0 && (source.Filter(AstralCheck(name))?.DocCount ?? 0) > 0)
+            {
+                throw AggregateMath.MixedAstralNotSupported($"Elasticsearch: {describe}", function, member);
+            }
+            if (checksSkipped && (source.Filter(SkippedCheck(name))?.DocCount ?? 0) > 0)
+            {
+                throw new InvalidOperationException(
+                    $"{describe} has values longer than its keyword sub-field indexes (ignore_above), which Elasticsearch would "
+                    + "leave out. Map it with [Keyword] to take its Min / Max. (TASK-907)");
+            }
+            return source.Terms(name)?.Buckets.FirstOrDefault()?.Key;
+        }
+
+        private static string SkippedCheck(string name) => name + "s";
+
+        private static string HighBmpCheck(string name) => name + "b";
+
+        private static string AstralCheck(string name) => name + "a";
+
+        /// <summary>
         /// Builds a single metric aggregation container for the given function and field.
         /// Shared by store-level and view-level aggregation. A Count of a field counts its non-null values (SQL's
         /// <c>COUNT(col)</c>); a Count of the rows is the document count, never an aggregation here (TASK-886: it was a

@@ -126,7 +126,7 @@ namespace Birko.Data.Stores
 
                     var values = group.Select(item => prop.GetValue(item)).ToList();
 
-                    row[agg.ResolvedAlias] = AggregateMath.ComputeAggregate(agg.Function, values, prop.PropertyType, group.Count);
+                    row[agg.ResolvedAlias] = AggregateMath.ComputeAggregate(agg.Function, values, prop.PropertyType, group.Count, query.StringComparison);
                 }
 
                 results.Add(new AggregateResult(row));

@@ -68,6 +68,7 @@ namespace Birko.Data.MongoDB.Aggregation
             where T : Data.Models.AbstractModel
         {
             query.ThrowIfNothingToAggregate();
+            query.ThrowIfStringOrderNotOrdinal(Owner<T>());
             var groupId = new BsonDocument();
             var projection = new BsonDocument { { "_id", 0 } };
             for (var i = 0; i < query.GroupByFields.Count; i++)
@@ -85,11 +86,28 @@ namespace Birko.Data.MongoDB.Aggregation
             }
 
             var groupDoc = new BsonDocument { { "_id", groupId } };
-            foreach (var agg in query.Aggregates)
+            for (var i = 0; i < query.Aggregates.Count; i++)
             {
-                var source = agg.Function == AggregateFunction.Count ? null : Member<T>(agg.SourcePropertyName, "aggregate source").ElementName;
-                groupDoc[agg.ResolvedAlias] = BuildAccumulatorExpression(agg.Function, source);
+                var agg = query.Aggregates[i];
                 projection[agg.ResolvedAlias] = 1;
+                if (agg.Function == AggregateFunction.Count)
+                {
+                    groupDoc[agg.ResolvedAlias] = BuildAccumulatorExpression(agg.Function, null);
+                    continue;
+                }
+                var member = Member<T>(agg.SourcePropertyName, "aggregate source");
+                if (agg.Function is not (AggregateFunction.Min or AggregateFunction.Max))
+                {
+                    groupDoc[agg.ResolvedAlias] = BuildAccumulatorExpression(agg.Function, member.ElementName);
+                    continue;
+                }
+                var (extreme, checks) = ExtremeAccumulators(agg.Function, member, Owner<T>(), $"{typeof(T).Name}.{agg.SourcePropertyName}");
+                groupDoc[agg.ResolvedAlias] = extreme;
+                foreach (var (suffix, accumulator) in checks)
+                {
+                    groupDoc[CheckName(CheckOwner(i), suffix)] = accumulator;
+                    projection[CheckName(CheckOwner(i), suffix)] = 1;
+                }
             }
 
             return (groupDoc, projection);
@@ -97,6 +115,147 @@ namespace Birko.Data.MongoDB.Aggregation
 
         /// <summary>The result key of the time bucket, as in memory.</summary>
         private const string AggregateBucketAlias = "bucket_time";
+
+        private static string Owner<T>() => $"MongoDB aggregate of {typeof(T).Name}";
+
+        private static string CheckOwner(int aggregateIndex) => "a" + aggregateIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// TASK-907: the <c>$min</c> / <c>$max</c> of a member, in the order <see cref="AggregateHelper"/> takes it, and the
+        /// hidden accumulators that check the group answers it exactly (named by <c>suffix</c>, read by
+        /// <see cref="ThrowIfUnsound"/>).
+        /// </summary>
+        /// <remarks>
+        /// <para>A string is compared by MongoDB byte by byte (its simple collation), code-point order, which is Ordinal
+        /// (measured: <c>"Banana"</c> below <c>"apple"</c>, <c>"a"</c> below <c>"a "</c>, <c>"ss"</c> below <c>"ß"</c>) but for
+        /// a group holding both a character above U+FFFF and one in U+E000–U+FFFF, where UTF-16 puts the surrogate pair first.
+        /// Two flags (<c>$regexMatch</c>) find such a group, which is refused by name; every other group is answered.
+        /// Another comparison than Ordinal is refused before any request (<see cref="AggregateQuery{T}.ThrowIfStringOrderNotOrdinal"/>).</para>
+        /// <para>An enum stored as its name (<c>[BsonRepresentation(BsonType.String)]</c>) was compared by its name (measured:
+        /// the Min of <c>Zero</c> and <c>High</c> was <c>High</c>); C# compares an enum by its value. The extreme is taken over
+        /// the value: a name is looked up in the enum's names, a number (a document written before the representation
+        /// changed, which the driver reads as the value) is taken as it is; a number was skipped (measured: the Max of 30 and
+        /// <c>"Low"</c> was <c>Low</c>). A name the enum does not have fails the read, as reading its document does. A [Flags]
+        /// enum stored as text is refused: a combination is stored as <c>"Read, Write"</c>, which no list of names orders.</para>
+        /// </remarks>
+        private static (BsonValue Extreme, List<(string Suffix, BsonValue Accumulator)> Checks) ExtremeAccumulators(
+            AggregateFunction function, (string ElementName, IBsonSerializer Serializer, Type Type) member, string owner, string memberName)
+        {
+            var type = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+            var field = "$" + member.ElementName;
+            if (type == typeof(string)) return (BuildAccumulatorExpression(function, member.ElementName), StringOrderChecks(field));
+
+            var names = TextEnumNames(member.Serializer, member.Type, owner, function, memberName);
+            if (names == null) return (BuildAccumulatorExpression(function, member.ElementName), new());
+
+            var isText = new BsonDocument("$eq", new BsonArray { new BsonDocument("$type", field), "string" });
+            var position = new BsonDocument("$indexOfArray", new BsonArray { new BsonArray(names), field });
+            var unknown = new BsonDocument("$eq", new BsonArray { position, -1 });
+            var values = new BsonArray(names.Select(n => (BsonValue)new BsonInt64(Convert.ToInt64(Enum.Parse(type, n), System.Globalization.CultureInfo.InvariantCulture))));
+            var key = new BsonDocument("$cond", new BsonArray
+            {
+                isText,
+                new BsonDocument("$cond", new BsonArray { unknown, BsonNull.Value, new BsonDocument("$arrayElemAt", new BsonArray { values, position }) }),
+                new BsonDocument("$cond", new BsonArray { new BsonDocument("$isNumber", field), field, BsonNull.Value }),
+            });
+            var unknownFlag = new BsonDocument("$max", new BsonDocument("$cond", new BsonArray
+            {
+                isText, new BsonDocument("$cond", new BsonArray { unknown, 1, 0 }), 0,
+            }));
+            return (new BsonDocument(GetMongoOperator(function), key), new() { (UnknownName, unknownFlag) });
+        }
+
+        private const string HiddenPrefix = "__birko907_";
+        private const string HighBmp = "bmp";
+        private const string Astral = "astral";
+        private const string UnknownName = "unknown";
+
+        /// <summary>TASK-907: the name of a hidden check accumulator of the aggregate (or view property) <paramref name="owner"/>.</summary>
+        public static string CheckName(string owner, string suffix) => HiddenPrefix + owner + "_" + suffix;
+
+        /// <summary>
+        /// TASK-907: the two flags of a string Min / Max: whether the group holds a character in U+E000–U+FFFF, and one above
+        /// U+FFFF. The one producer for the store and the view.
+        /// </summary>
+        public static List<(string Suffix, BsonValue Accumulator)> StringOrderChecks(string field)
+        {
+            BsonValue Flag(string pattern) => new BsonDocument("$max", new BsonDocument("$cond", new BsonArray
+            {
+                new BsonDocument("$eq", new BsonArray { new BsonDocument("$type", field), "string" }),
+                new BsonDocument("$cond", new BsonArray
+                {
+                    new BsonDocument("$regexMatch", new BsonDocument { { "input", field }, { "regex", pattern } }), 1, 0,
+                }),
+                0,
+            }));
+            return new() { (HighBmp, Flag(AggregateMath.HighBmpCharacters)), (Astral, Flag(AggregateMath.AstralCharacters)) };
+        }
+
+        /// <summary>
+        /// TASK-907: refuses a result document whose checks say its Min / Max of <paramref name="owner"/> is not the one C#
+        /// takes (a mixed group: <see cref="AggregateMath.MixedAstralNotSupported"/>; a name the enum does not have), and
+        /// removes the checks from it.
+        /// </summary>
+        public static void ThrowIfUnsound(BsonDocument doc, string owner, AggregateFunction function, string provider, string memberName)
+        {
+            bool Set(string suffix) => doc.TryGetValue(CheckName(owner, suffix), out var v) && v.IsNumeric && v.ToInt64() > 0;
+            var mixed = Set(HighBmp) && Set(Astral);
+            var unknown = Set(UnknownName);
+            foreach (var suffix in new[] { HighBmp, Astral, UnknownName }) doc.Remove(CheckName(owner, suffix));
+            if (mixed) throw AggregateMath.MixedAstralNotSupported(provider, function, memberName);
+            if (unknown)
+            {
+                throw new InvalidOperationException(
+                    $"A stored value of {memberName} is not a name of its enum, so its {function} cannot be taken by value; a read "
+                    + "of its document fails the same way. (TASK-907)");
+            }
+        }
+
+        /// <summary>
+        /// TASK-907: the names of the enum <paramref name="serializer"/> stores as text; null for any other member.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The enum is a [Flags] enum, or a <c>ulong</c> one, stored as text.</exception>
+        private static string[]? TextEnumNames(IBsonSerializer serializer, Type type, string owner, AggregateFunction function, string memberName)
+        {
+            var enumType = Nullable.GetUnderlyingType(type) ?? type;
+            if (!enumType.IsEnum) return null;
+            if (Nullable.GetUnderlyingType(type) != null && serializer is IChildSerializerConfigurable nullable) serializer = nullable.ChildSerializer;
+            if (serializer is not IRepresentationConfigurable { Representation: BsonType.String }) return null;
+            if (enumType.IsDefined(typeof(FlagsAttribute), false) || Enum.GetUnderlyingType(enumType) == typeof(ulong))
+            {
+                throw new NotSupportedException(
+                    $"{owner} refused: {function} of {memberName}, a [Flags] or ulong enum {enumType.Name} stored as text. A "
+                    + "combination is stored as its names joined (\"Read, Write\"), which MongoDB cannot order by value as C# does. "
+                    + "Store it as a number, or read the rows and aggregate them in memory. (TASK-907)");
+            }
+            return Enum.GetNames(enumType);
+        }
+
+        /// <summary>TASK-907: an enum Min / Max as the extreme answered it: the value, a number.</summary>
+        private static object? EnumOfValue(BsonValue value, Type type)
+        {
+            if (value.IsBsonNull || value.IsBsonUndefined) return null;
+            return Enum.ToObject(Nullable.GetUnderlyingType(type) ?? type, value.ToInt64());
+        }
+
+        /// <summary>
+        /// TASK-907: refuses a view's Min / Max that MongoDB would take in another order than C#: one of an enum stored as
+        /// text, which a view's <c>$min</c> compares by name. A view's string extreme is Ordinal, as the store's is by default.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The member is an enum stored as text.</exception>
+        public static void ThrowIfViewExtremeUnordered(Type sourceType, string? property, AggregateFunction function, string owner)
+        {
+            if (function is not (AggregateFunction.Min or AggregateFunction.Max) || property == null) return;
+            var member = sourceType.GetProperty(property, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (member == null) return;
+            var memberMap = BsonClassMap.LookupClassMap(sourceType).AllMemberMaps.FirstOrDefault(m => m.MemberName == member.Name);
+            if (memberMap == null) return;
+            var memberName = $"{sourceType.Name}.{member.Name}";
+            if (TextEnumNames(memberMap.GetSerializer(), member.PropertyType, owner, function, memberName) == null) return;
+            throw new NotSupportedException(
+                $"{owner} refused: {function} of {memberName}, an enum stored as text, which a MongoDB view would order by name; "
+                + "C# orders an enum by its value. Store it as a number, or use the store's Aggregate. (TASK-907)");
+        }
 
         /// <summary>
         /// TASK-906: the property <paramref name="name"/> names, looked up as <see cref="AggregateHelper"/> looks it up, and
@@ -276,6 +435,12 @@ namespace Birko.Data.MongoDB.Aggregation
             var rows = new List<AggregateResult>(bsonResults.Count);
             foreach (var doc in bsonResults)
             {
+                for (var i = 0; i < query.Aggregates.Count; i++)
+                {
+                    var aggregate = query.Aggregates[i];
+                    if (aggregate.Function is not (AggregateFunction.Min or AggregateFunction.Max)) continue;
+                    ThrowIfUnsound(doc, CheckOwner(i), aggregate.Function, Owner<T>(), $"{typeof(T).Name}.{aggregate.SourcePropertyName}");
+                }
                 var row = new Dictionary<string, object?>();
                 foreach (var element in doc.Elements)
                 {
@@ -294,7 +459,12 @@ namespace Birko.Data.MongoDB.Aggregation
         {
             if (aggregate.Function == AggregateFunction.Count) return value => ToNumberOrNull(value, typeof(int));
             var (_, serializer, type) = Member<T>(aggregate.SourcePropertyName, "aggregate source");
-            if (aggregate.Function is AggregateFunction.Min or AggregateFunction.Max) return value => Deserialize(value, serializer);
+            if (aggregate.Function is AggregateFunction.Min or AggregateFunction.Max)
+            {
+                var memberName = $"{typeof(T).Name}.{aggregate.SourcePropertyName}";
+                if (TextEnumNames(serializer, type, Owner<T>(), aggregate.Function, memberName) != null) return value => EnumOfValue(value, type);
+                return value => Deserialize(value, serializer);
+            }
             var resultType = AggregateMath.ResultType(aggregate.Function, type);
             return value => ToNumberOrNull(value, resultType);
         }

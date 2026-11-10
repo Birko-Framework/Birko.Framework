@@ -65,6 +65,16 @@ namespace Birko.Data.Stores
         public int? Offset { get; init; }
 
         /// <summary>
+        /// TASK-907 (the user's decision, 2026-11-10): the order a <see cref="AggregateFunction.Min"/> or
+        /// <see cref="AggregateFunction.Max"/> of a <see cref="string"/> member is taken in. <see cref="System.StringComparison.Ordinal"/>
+        /// by default, so <c>"Banana"</c> is below <c>"apple"</c> on every machine and in every culture, as TASK-873's exact
+        /// string equality is. The in-memory aggregation honours every comparison; a provider that cannot take a Min or Max
+        /// of a string in this order refuses the query by name (<see cref="NotSupportedException"/>), never answering in the
+        /// database's own order. It orders nothing else: not a non-string member, not the result rows.
+        /// </summary>
+        public StringComparison StringComparison { get; init; } = StringComparison.Ordinal;
+
+        /// <summary>
         /// Whether the rows are grouped: by a group-by field or by a time bucket. An ungrouped query answers ONE row, also
         /// over no rows (TASK-886); a grouped one answers a row per group, so none over no rows.
         /// </summary>
@@ -86,6 +96,26 @@ namespace Birko.Data.Stores
                 + "no time bucket. Read the rows with Read instead. (TASK-886)", "query");
         }
 
+        /// <summary>
+        /// TASK-907: refuses, before anything is read, a query whose string Min / Max asks for another order than
+        /// <see cref="System.StringComparison.Ordinal"/>, on a provider that takes only Ordinal. Called first by every native
+        /// provider, so the refusal does not depend on the data (an empty store, a missing collection).
+        /// </summary>
+        /// <param name="provider">What refuses, for the message: e.g. <c>"MongoDB aggregate of Order"</c>.</param>
+        /// <exception cref="NotSupportedException">A string Min / Max in another order than Ordinal.</exception>
+        public void ThrowIfStringOrderNotOrdinal(string provider)
+        {
+            if (StringComparison == StringComparison.Ordinal) return;
+            foreach (var aggregate in Aggregates)
+            {
+                if (aggregate.Function is not (AggregateFunction.Min or AggregateFunction.Max)) continue;
+                var member = typeof(T).GetProperty(aggregate.SourcePropertyName,
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+                if (member?.PropertyType != typeof(string)) continue;
+                throw AggregateMath.StringOrderNotSupported(provider, aggregate.Function, $"{typeof(T).Name}.{member.Name}", StringComparison);
+            }
+        }
+
         /// <summary>This query with <paramref name="filter"/> in place of <see cref="Filter"/> (a scoping decorator's, TASK-631).</summary>
         public AggregateQuery<T> WithFilter(Expression<Func<T, bool>>? filter) => new()
         {
@@ -97,6 +127,7 @@ namespace Birko.Data.Stores
             OrderBy = OrderBy,
             Limit = Limit,
             Offset = Offset,
+            StringComparison = StringComparison,
         };
     }
 }

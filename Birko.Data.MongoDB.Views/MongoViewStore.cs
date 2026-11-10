@@ -177,8 +177,14 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         return await collections.AnyAsync(ct).ConfigureAwait(false);
     }
 
-    private static TView DeserializeView(BsonDocument doc)
+    private TView DeserializeView(BsonDocument doc)
     {
+        // TASK-907: a row whose string Min / Max MongoDB answered in code-point order where Ordinal differs is refused.
+        foreach (var aggregate in _definition.Aggregates.Where(MongoViewTranslator.IsStringExtreme))
+        {
+            Aggregation.StoreAggregationHelper.ThrowIfUnsound(doc, MongoViewTranslator.CheckOwner(aggregate), aggregate.Function,
+                $"MongoDB view {_definition.Name ?? typeof(TView).Name}", $"{aggregate.SourceType.Name}.{aggregate.SourceProperty}");
+        }
         return BsonSerializer.Deserialize<TView>(doc);
     }
 }

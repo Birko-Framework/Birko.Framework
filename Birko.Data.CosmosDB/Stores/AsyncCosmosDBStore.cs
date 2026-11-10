@@ -849,6 +849,7 @@ public class AsyncCosmosDBStore<T>
         CancellationToken ct = default)
     {
         if (query == null) throw new ArgumentNullException(nameof(query));
+        query.ThrowIfStringOrderNotOrdinal($"Cosmos DB aggregate of {typeof(T).Name}");   // TASK-907: before any data
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
         if (_container == null) return Array.Empty<AggregateResult>();
 

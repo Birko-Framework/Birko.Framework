@@ -306,11 +306,24 @@ public static class RavenViewTranslator
     /// nullable member answer. The index's <c>g.Min</c> compared a null too: the MIN of {3, null} was null (measured), and a
     /// group whose values mixed nulls with numbers could fail to reduce at all. A reduce result is reduced again, so its own
     /// null is skipped the same way.
+    /// <para>
+    /// TASK-907: a string is taken in Ordinal order (UTF-16 code units), as the store's <c>Aggregate</c> takes it by default
+    /// (the user's decision, 2026-11-10), through <see cref="string.CompareOrdinal(string, string)"/>. The index's own
+    /// <c>Min</c> / <c>Max</c> compares the stored UTF-8 bytes, code-point order (measured: U+FF5E below U+1F600, where
+    /// UTF-16 puts the surrogate pair first).
+    /// </para>
     /// </summary>
     private static string NonNullExtreme(AggregateClause agg)
     {
         var function = agg.Function == AggregateFunction.Min ? "Min" : "Max";
         var value = $"x.{agg.ViewProperty}";
+        var source = agg.SourceProperty == null ? null : agg.SourceType.GetProperty(agg.SourceProperty)?.PropertyType;
+        if (source == typeof(string))
+        {
+            var keeps = agg.Function == AggregateFunction.Min ? "<=" : ">=";
+            return $"g.Any(x => {value} != null) ? g.Where(x => {value} != null).Select(x => (string){value})"
+                   + $".Aggregate((a, b) => string.CompareOrdinal(a, b) {keeps} 0 ? a : b) : null";
+        }
         return $"g.Any(x => {value} != null) ? g.Where(x => {value} != null).{function}(x => {value}) : null";
     }
 

@@ -2093,7 +2093,7 @@ namespace Birko.Data.SQL.Connectors
                     continue;
                 }
 
-                var sql = dialect.Aggregate(agg.Function, field.Name, source, result);
+                var sql = dialect.Aggregate(agg.Function, field.Name, source, result, query.StringComparison);   // TASK-907
                 fields[idx++] = $"{sql} AS {QuoteIdentifier(alias)}";
                 orderable[alias] = QuoteIdentifier(alias);
                 if (!Birko.Data.SQL.Fields.AggregateValue.IsNumeric(result))

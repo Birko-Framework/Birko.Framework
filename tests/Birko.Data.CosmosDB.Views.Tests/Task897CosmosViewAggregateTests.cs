@@ -13,7 +13,7 @@ namespace Birko.Data.CosmosDB.Views.Tests;
 
 /// <summary>
 /// TASK-897, live against the Cosmos emulator: a grouped view's MIN/MAX of a DateTime answers the C# MIN/MAX over the
-/// same rows, and a MIN/MAX of a string is refused by name before any request.
+/// same rows, and a MIN/MAX of a string is Ordinal (TASK-907; it was refused by name before any request).
 /// </summary>
 /// <remarks>
 /// Measured before the fix (vnext-preview, 2026-11-10): MIN/MAX compared the stored text, so <c>"…10:00:00.5Z"</c> was
@@ -139,19 +139,15 @@ public sealed class Task897CosmosViewAggregateTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A MIN/MAX of a string is refused by name before any request: Cosmos DB orders strings by code point, C# by culture
-    /// (measured on the store, <c>Task897AggregateTypesLiveTests</c>). A SUM/AVG of one never reaches the store: the
-    /// builder refuses a non-numeric SUM/AVG view property.
+    /// TASK-907 (inverted, rule 56): a MIN/MAX of a string is Ordinal, the store aggregate's default (the user's decision,
+    /// 2026-11-10), which is Cosmos DB's code-point order for these values (<c>"B"</c> below <c>"a"</c>). It was refused by
+    /// name before any request while C#'s order was the culture's. A SUM/AVG of one never reaches the store: the builder
+    /// refuses a non-numeric SUM/AVG view property.
     /// </summary>
     [Fact]
-    public async Task A_MIN_of_a_string_is_refused_before_any_request()
+    public async Task A_MIN_or_MAX_of_a_string_is_Ordinal()
     {
-        if (_rows == null || _client == null || _db == null) return;
-        var handler = new CountingHandler();
-        var options = new CosmosClientOptions { ConnectionMode = ConnectionMode.Gateway };
-        options.CustomHandlers.Add(handler);
-        using var client = new CosmosClient(Environment.GetEnvironmentVariable("BIRKO_COSMOS_CONNECTION"), options);
-        var rows = client.GetContainer(_db.Id, _rows.Id);
+        if (_rows == null) return;
 
         ViewDefinition Of(AggregateFunction function) => new ViewDefinitionBuilder<Text>()
             .From<Row>()
@@ -162,14 +158,18 @@ public sealed class Task897CosmosViewAggregateTests : IAsyncLifetime
 
         FluentActions.Invoking(() => Of(AggregateFunction.Sum)).Should().Throw<InvalidOperationException>().WithMessage("*requires a numeric*");
 
-        var before = handler.Count;
         foreach (var function in new[] { AggregateFunction.Min, AggregateFunction.Max })
         {
-            var store = new CosmosViewStore<Text>(rows, Of(function));
-            (await FluentActions.Invoking(() => store.QueryAsync()).Should().ThrowAsync<NotSupportedException>())
-                .WithMessage("Cosmos DB aggregate of Text refused: Min/Max of Row.S, a String,*TASK-897*");
-            await FluentActions.Invoking(() => store.CountAsync()).Should().ThrowAsync<NotSupportedException>();
+            var got = (await new CosmosViewStore<Text>(_rows, Of(function)).QueryAsync())
+                .OrderBy(v => v.Grp, StringComparer.Ordinal).Select(v => $"{v.Grp}={v.X ?? "null"}").ToList();
+            var expected = _source.GroupBy(r => r.Grp).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g =>
+            {
+                var values = g.Select(r => r.S).Where(s => s != null).ToList();
+                var x = values.Count == 0 ? null
+                    : function == AggregateFunction.Min ? values.Min(StringComparer.Ordinal) : values.Max(StringComparer.Ordinal);
+                return $"{g.Key}={x ?? "null"}";
+            }).ToList();
+            got.Should().Equal(expected, function.ToString());
         }
-        handler.Count.Should().Be(before, "each refusal is decided before any request");
     }
 }

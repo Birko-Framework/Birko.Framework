@@ -216,7 +216,8 @@ public sealed class Task878AggregateLiveTests : IClassFixture<Task878AggregateFi
 
     /// <summary>
     /// What LINQ computes and Elasticsearch cannot: a sum or average of a string is refused by LINQ too; a min or max of a
-    /// string LINQ orders by culture, a keyword by bytes; a group-by on a [Text] member has no exact form.
+    /// string in an order other than Ordinal (TASK-907: Ordinal, the default, is answered from the keyword); a group-by on a
+    /// [Text] member has no exact form.
     /// </summary>
     [Theory]
     [InlineData("Bucket", AggregateFunction.Min, false)]
@@ -227,7 +228,11 @@ public sealed class Task878AggregateLiveTests : IClassFixture<Task878AggregateFi
     public void A_metric_over_a_string_is_refused_by_name(string source, AggregateFunction function, bool async)
     {
         if (!_live.Ready()) return;
-        var query = new AggregateQuery<AggDoc> { Aggregates = new[] { new AggregateField(function, source) } };
+        var query = new AggregateQuery<AggDoc>
+        {
+            Aggregates = new[] { new AggregateField(function, source) },
+            StringComparison = StringComparison.CurrentCulture,
+        };
 
         var act = () => Run(query, async);
 

@@ -71,6 +71,11 @@ public static class MongoViewTranslator
                 .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)))
                 .ToList();
 
+            foreach (var agg in definition.Aggregates)
+            {
+                Aggregation.StoreAggregationHelper.ThrowIfViewExtremeUnordered(agg.SourceType, agg.SourceProperty, agg.Function,
+                    $"MongoDB view {definition.Name ?? definition.ViewType.Name}");
+            }
             var accumulators = definition.Aggregates
                 .Select(agg => (
                     agg.ViewProperty,
@@ -81,6 +86,16 @@ public static class MongoViewTranslator
 
             var groupDoc = Aggregation.StoreAggregationHelper.BuildGroupStageFromPaths(
                 groupByPaths, groupByPaths, accumulators);
+
+            // TASK-907: a string Min / Max carries the two flags that find a group MongoDB's code-point order answers
+            // otherwise than Ordinal; MongoViewStore refuses such a row by name and drops the flags.
+            foreach (var agg in definition.Aggregates.Where(IsStringExtreme))
+            {
+                foreach (var (suffix, accumulator) in Aggregation.StoreAggregationHelper.StringOrderChecks("$" + ResolveFieldPath(agg.SourceType, agg.SourceProperty!, definition)))
+                {
+                    groupDoc.Add(Aggregation.StoreAggregationHelper.CheckName(CheckOwner(agg), suffix), accumulator);
+                }
+            }
 
             if (definition.HasGroupBy)
             {
@@ -129,6 +144,13 @@ public static class MongoViewTranslator
             // Aggregate fields are already at root after $group
             project.Add(agg.ViewProperty, 1);
         }
+        foreach (var agg in definition.Aggregates.Where(IsStringExtreme))
+        {
+            foreach (var (suffix, _) in Aggregation.StoreAggregationHelper.StringOrderChecks("$x"))
+            {
+                project.Add(Aggregation.StoreAggregationHelper.CheckName(CheckOwner(agg), suffix), 1);
+            }
+        }
 
         if (project.ElementCount > 1) // more than just _id:0
         {
@@ -137,6 +159,14 @@ public static class MongoViewTranslator
 
         return stages;
     }
+
+    /// <summary>TASK-907: whether an aggregate is a Min / Max of a string source member.</summary>
+    internal static bool IsStringExtreme(AggregateClause aggregate)
+        => aggregate.Function is AggregateFunction.Min or AggregateFunction.Max && aggregate.SourceProperty != null
+           && aggregate.SourceType.GetProperty(aggregate.SourceProperty)?.PropertyType == typeof(string);
+
+    /// <summary>TASK-907: the owner name of a view aggregate's hidden checks.</summary>
+    internal static string CheckOwner(AggregateClause aggregate) => "v_" + aggregate.ViewProperty;
 
     /// <summary>
     /// Returns the MongoDB collection name for a type (uses type name by convention).

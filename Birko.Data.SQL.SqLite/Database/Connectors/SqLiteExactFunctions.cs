@@ -39,6 +39,12 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         public const string DivisorFunction = "birko_divisor";
 
+        /// <summary>
+        /// TASK-907 — <c>COLLATE birko_ordinal</c>: C#'s <see cref="string.CompareOrdinal(string, string)"/>, UTF-16 code unit
+        /// order, for a string <c>MIN</c> / <c>MAX</c> taken in Ordinal order. SQLite's <c>BINARY</c> is code-point order.
+        /// </summary>
+        public const string OrdinalCollation = "birko_ordinal";
+
         public static void Register(SqliteConnection connection)
         {
             if (connection == null) throw new ArgumentNullException(nameof(connection));
@@ -47,6 +53,7 @@ namespace Birko.Data.SQL.Connectors
                 isDeterministic: true);
             connection.CreateFunction<object?, long, long, object?>(CheckedIntegerFunction, Checked, isDeterministic: true);
             connection.CreateFunction<object?, object?>(DivisorFunction, NonZero, isDeterministic: true);
+            connection.CreateCollation(OrdinalCollation, string.CompareOrdinal);
         }
 
         /// <summary><c>birko_divisor(divisor)</c>, the SQL of <see cref="DivisorFunction"/>.</summary>

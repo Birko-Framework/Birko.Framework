@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Aggregate string MIN/MAX are ordinal on every provider (2026-11-10)
+[[TASK-907]] (the user's decision). String MIN/MAX followed each database's collation and the in-memory oracle the
+machine's culture: 22–30 of 32 cases differed per provider (measured; `apple` vs `Banana`, ß = ss, `a` = `a `). New
+`AggregateQuery.StringComparison`, default `Ordinal`, answered exactly by every provider (Elasticsearch and Cosmos no
+longer refuse); any other order works in memory and is refused by name elsewhere. MongoDB enums stored as text now take
+MIN/MAX by value. Migration-generated SQL views render through the connector's dialect.
 ### Cosmos DB `TimeSpan` filters answer as C#; one DateTime key producer (2026-11-10)
 [[TASK-905]]. Cosmos compared a TimeSpan's stored text (`"1.02:03:04"` < `"23:00:00"`, `"-00:00:01"` < `"-00:00:02"`),
 so 60–68 of 124 filter shapes per path answered other rows than C# (measured). Orderings now compare the sign and a
@@ -369,16 +375,6 @@ PostgreSQL named the group key `kind` so every grouped key read null, SQL Server
 decimals as REAL, and result types were the driver's. Store and view aggregates now render through one dialect hook and
 read through one conversion; a store decimal AVG divides in C#. **Breaking:** a view's decimal AVG is refused on the
 servers, and a view SUM over only NULLs is 0 (the store's stays NULL; decision in [[TASK-886]]).
-### Cosmos DB aggregates skip nulls and apply the time bucket (2026-11-10)
-[[TASK-885]]. SUM/AVG/MIN over a member holding a null returned undefined or null where LINQ skips the nulls, in stores
-and grouped views, and `TimeBucketInterval` was ignored (measured: 24 of 26 cases wrong). Aggregates now skip nulls, a
-SUM of no values is null as in LINQ, and the time bucket is grouped in wall-clock time or refused by name. Found on the
-way: Cosmos store reads match every row for `x.Score.HasValue` ([[TASK-896]], P1).
-### `RuleEvaluator` answers NULL the way C# does (2026-11-10)
-[[TASK-881]]. In memory, a rule ordered NULL below every value (`Score LessThan 5` matched NULL rows), never matched NULL
-from an `In` list and matched every row for `GreaterThan null`: 21 of TASK-864's 117 shapes differed from the compiled
-rule and from SQL (measured). One comparison now returns no answer on NULL, so a rule gives one result in memory, as an
-expression and in SQL. Symbio's IoT rules use non-null values and are unchanged.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

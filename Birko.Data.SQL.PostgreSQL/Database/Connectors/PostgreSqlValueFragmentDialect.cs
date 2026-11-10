@@ -48,5 +48,18 @@ namespace Birko.Data.SQL.Connectors
         /// value is left as it is.
         /// </summary>
         protected override string? OrdinalText(string operand, bool bothFromRow) => $"({operand})::text COLLATE \"C\"";
+
+        /// <summary>
+        /// TASK-907 — the extreme of a key under <c>COLLATE "C"</c>, unwrapped: the key is the text with U+10FFFF put before
+        /// each character in U+E000–U+FFFF. <c>"C"</c> is byte order, which on a UTF8 database is code-point order; UTF-16,
+        /// and so C#'s Ordinal, puts a character above U+FFFF (a surrogate pair, D800–DFFF) below U+E000–U+FFFF, and the
+        /// prefix moves those above every character that follows them. Measured: the default collation answered
+        /// <c>"apple"</c> below <c>"Banana"</c>; <c>"C"</c> alone answered U+FF5E below U+1F600. U+10FFFF itself, a
+        /// noncharacter, is dropped from the answer and is not ordered as C# orders it: the one known edge, kept documented
+        /// (the user's decision).
+        /// </summary>
+        protected override string? OrdinalStringExtreme(string function, string operand)
+            => $"replace({function}(regexp_replace(({operand})::text, '[' || chr(57344) || '-' || chr(65535) || ']', "
+               + $"chr(1114111) || E'\\\\&', 'g') COLLATE \"C\"), chr(1114111), '')";
     }
 }

@@ -33,9 +33,14 @@ namespace Birko.Data.SQL.View.Migrations
         /// <c>ViewMigrationExtensions</c> always passes the migration's connector. Without one nothing is checked: the
         /// columns are emitted bare, so on PostgreSQL and SQLite a column named <c>User</c> or <c>CURRENT_DATE</c> is
         /// created and every bare read of it returns the function's value (measured).
+        /// TASK-907: the view's aggregates and string join keys are rendered by the connector's dialect, as its own view DDL
+        /// renders them, so a string MIN / MAX is Ordinal (measured before: the portable form's plain <c>MIN</c> answered in
+        /// the column's collation, <c>apple</c> below <c>Banana</c> on PostgreSQL). Without a connector, a string MIN / MAX
+        /// has no exact form and is refused by name.
         /// </param>
         /// <returns>The CREATE VIEW SQL statement.</returns>
-        /// <exception cref="NotSupportedException">A view column name is one <paramref name="connector"/>'s provider rejects.</exception>
+        /// <exception cref="NotSupportedException">A view column name is one <paramref name="connector"/>'s provider rejects, or
+        /// a string MIN / MAX is asked for without a connector.</exception>
         public static string GenerateCreateViewSql(Type viewType, string? viewName = null, char quoteChar = DefaultQuoteChar, AbstractConnector? connector = null)
         {
             if (viewType == null)
@@ -70,8 +75,24 @@ namespace Birko.Data.SQL.View.Migrations
                     + "it. Create the view through the connector's CreateView instead.");
             }
             connector?.RequireUsableViewColumnNames(view);
-            var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar));
+            if (connector == null) RequireNoStringExtreme(view, name!);
+            var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar), dialect: connector?.RenderDialect);
             return "CREATE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
+        }
+
+        /// <summary>
+        /// TASK-907: refuses a string MIN / MAX in a view generated without a provider: only a provider's dialect takes it in
+        /// Ordinal order, and the plain form would answer in the column's collation.
+        /// </summary>
+        private static void RequireNoStringExtreme(Tables.View view, string name)
+        {
+            foreach (var field in view.GetTableFields().OfType<Fields.FunctionField>())
+            {
+                if (field.Name is not ("MIN" or "MAX") || field.SourceType != typeof(string)) continue;
+                throw Birko.Data.Stores.AggregateMath.StringOrderNotSupported($"View '{name}' generated without a connector",
+                    field.Name == "MIN" ? Birko.Data.Stores.AggregateFunction.Min : Birko.Data.Stores.AggregateFunction.Max,
+                    $"{field.Property?.DeclaringType?.Name}.{field.Property?.Name}", StringComparison.Ordinal, null);
+            }
         }
 
         /// <summary>

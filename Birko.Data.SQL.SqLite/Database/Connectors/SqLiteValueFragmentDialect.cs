@@ -152,6 +152,14 @@ namespace Birko.Data.SQL.Connectors
         protected override string? OrdinalText(string operand, bool bothFromRow) => $"({operand}) COLLATE BINARY";
 
         /// <summary>
+        /// TASK-907 — the extreme under <see cref="SqLiteExactFunctions.OrdinalCollation"/>, C#'s own
+        /// <see cref="string.CompareOrdinal(string, string)"/>. SQLite's <c>BINARY</c> compares UTF-8 bytes, which is code-point
+        /// order (measured: U+FF5E below U+1F600, where UTF-16 puts the surrogate pair first).
+        /// </summary>
+        protected override string? OrdinalStringExtreme(string function, string operand)
+            => $"{function}(({operand}) COLLATE {SqLiteExactFunctions.OrdinalCollation})";
+
+        /// <summary>
         /// TASK-892 — a decimal SUM in C#'s decimal, through <see cref="SqLiteDecimal.SumAggregate"/>. SQLite's <c>SUM</c> reads
         /// the TEXT as a REAL (measured: 1234567890123.456789 + 0.000001 + 1 summed to 1234567890124.46).
         /// </summary>

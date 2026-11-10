@@ -108,5 +108,15 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         protected override string? OrdinalText(string operand, bool bothFromRow)
             => $"CONVERT({operand} USING utf8mb4) COLLATE utf8mb4_0900_bin";
+
+        /// <summary>
+        /// TASK-907 — the extreme of the value's UTF-16 bytes, read back as text: <c>CAST(CONVERT(operand USING utf16) AS
+        /// BINARY)</c> is big-endian UTF-16, and a binary string compares byte by byte with no padding, which is UTF-16 code
+        /// unit order, C#'s Ordinal. Measured: the default collation answered <c>"apple"</c> below <c>"Banana"</c>;
+        /// <c>utf8mb4_0900_bin</c> (code-point order) answered U+FF5E below U+1F600, where UTF-16 puts the surrogate pair first;
+        /// <c>utf8mb4_bin</c> is PAD SPACE and ties <c>"a"</c> with <c>"a "</c>.
+        /// </summary>
+        protected override string? OrdinalStringExtreme(string function, string operand)
+            => $"CONVERT(CONVERT({function}(CAST(CONVERT({operand} USING utf16) AS BINARY)) USING utf16) USING utf8mb4)";
     }
 }

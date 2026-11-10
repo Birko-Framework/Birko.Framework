@@ -50,7 +50,10 @@ namespace Birko.Data.CosmosDB.Aggregation
         /// hidden count of the values a decimal AVG saw; <paramref name="SumAlias"/> the hidden SUM a decimal AVG
         /// is divided from, in which case <paramref name="Alias"/> itself is not selected.
         /// </summary>
-        internal sealed record Metric(string Alias, AggregateFunction Function, Type ResultType, string? CountAlias, string? SumAlias);
+        /// <remarks>TASK-907: a string MIN/MAX carries the aliases of its two check columns
+        /// (<see cref="CosmosAggregationHelper.StringOrderChecks"/>) and the member's name for the refusal.</remarks>
+        internal sealed record Metric(string Alias, AggregateFunction Function, Type ResultType, string? CountAlias, string? SumAlias,
+            string? HighBmpAlias = null, string? AstralAlias = null, string? Member = null);
 
         internal CosmosAggregatePlan(
             QueryDefinition query,
@@ -126,6 +129,10 @@ namespace Birko.Data.CosmosDB.Aggregation
                     return checked((int)CountOf(doc, metric.Alias));
                 case AggregateFunction.Min:
                 case AggregateFunction.Max:
+                    if (metric.HighBmpAlias != null && CountOf(doc, metric.HighBmpAlias) > 0 && CountOf(doc, metric.AstralAlias!) > 0)
+                    {
+                        throw AggregateMath.MixedAstralNotSupported("Cosmos DB aggregate", metric.Function, metric.Member ?? metric.Alias);
+                    }
                     return Member(doc, metric.Alias, metric.ResultType);
                 case AggregateFunction.Avg when metric.SumAlias != null:
                     var count = CountOf(doc, metric.CountAlias!);
