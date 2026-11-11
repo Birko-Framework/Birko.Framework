@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Cosmos DB filters answer null and missing members the way C# does
+[[TASK-896]]. 53 of 93 measured filter shapes returned other rows than C#, silently, on reads, counts, aggregates and
+writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from
+the JSON failed `== null` and `!=`. One pre-pass shared by store and view now renders "has a value" and "null"
+explicitly. **Breaking:** culture string comparisons and `IsNullOrWhiteSpace` are refused by name.
+
 ## 2026-11-10 — SQL store aggregates answer what LINQ answers
 [[TASK-892]]. The store `Aggregate` differed from `AggregateHelper` on 54–106 of 164 cases per provider (measured):
 PostgreSQL named the group key `kind` so every grouped key read null, SQL Server truncated integral AVG, SQLite summed

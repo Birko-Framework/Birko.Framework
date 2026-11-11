@@ -2020,6 +2020,12 @@ namespace Birko.Data.SQL.Connectors
         /// <see cref="Conditions.SqlValueFragmentDialect.OrdinalOrderTerms"/>, so the rows are in Ordinal order, NULL first, before
         /// the server pages them; another <see cref="Birko.Data.Stores.AggregateQuery{T}.StringComparison"/> is refused by name.
         /// </para>
+        /// <para>
+        /// TASK-911: a string group-by field is grouped by <see cref="Conditions.SqlValueFragmentDialect.OrdinalGroupTerms"/> (the
+        /// column and its exact form), so the groups are exactly <c>AggregateHelper</c>'s whatever the column's collation
+        /// merges (measured before: SQL Server grouped 16 distinct keys into 12, MySQL into 14), and each group answers its own
+        /// key text. <c>groupFields</c> is keyed by its own position, no longer by the SELECT ordinal.
+        /// </para>
         /// </remarks>
         protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields, Func<DbDataReader, Birko.Data.Stores.AggregateResult> read) BuildAggregateQueryParts<T>(
             Type type,
@@ -2045,11 +2051,18 @@ namespace Birko.Data.SQL.Connectors
                 var field = ResolveAggregateField(allFields, groupBy, "group-by field");
                 var sqlName = field.Name;
                 fields[idx] = sqlName;
-                groupFields[idx] = sqlName;
                 orderable[groupBy] = sqlName;
                 orderable[sqlName] = sqlName;
                 if (field.Property.PropertyType == typeof(string))
+                {
                     stringOrder[sqlName] = (sqlName, $"group-by field '{groupBy}'");
+                    // TASK-911: grouped into exactly C#'s groups, by the column and its exact form.
+                    foreach (var term in dialect.OrdinalGroupTerms(sqlName)) groupFields[groupFields.Count] = term;
+                }
+                else
+                {
+                    groupFields[groupFields.Count] = sqlName;
+                }
                 var ordinal = idx;
                 var readKey = ColumnValueReader(field);
                 readers.Add((reader, row) => row[groupBy] = readKey(reader, ordinal));
@@ -2067,7 +2080,7 @@ namespace Birko.Data.SQL.Connectors
                     throw new ArgumentException($"Time bucket interval '{query.TimeBucketInterval}' is not a positive interval.", nameof(query));
                 var timeCol = ResolveSqlName(allFields, query.TimeColumn, "time column");
                 fields[idx] = $"{TimeBucketExpression(interval, timeCol)} AS bucket_time";
-                groupFields[idx] = "bucket_time";
+                groupFields[groupFields.Count] = "bucket_time";
                 orderable["bucket_time"] = "bucket_time";
                 var ordinal = idx;
                 readers.Add((reader, row) => row["bucket_time"] = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal));

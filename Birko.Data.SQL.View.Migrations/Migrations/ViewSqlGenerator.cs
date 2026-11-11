@@ -36,11 +36,12 @@ namespace Birko.Data.SQL.View.Migrations
         /// TASK-907: the view's aggregates and string join keys are rendered by the connector's dialect, as its own view DDL
         /// renders them, so a string MIN / MAX is Ordinal (measured before: the portable form's plain <c>MIN</c> answered in
         /// the column's collation, <c>apple</c> below <c>Banana</c> on PostgreSQL). Without a connector, a string MIN / MAX
-        /// has no exact form and is refused by name.
+        /// has no exact form and is refused by name. TASK-911: so is a string group key, whose exact GROUP BY only a provider's
+        /// dialect renders.
         /// </param>
         /// <returns>The CREATE VIEW SQL statement.</returns>
         /// <exception cref="NotSupportedException">A view column name is one <paramref name="connector"/>'s provider rejects, or
-        /// a string MIN / MAX is asked for without a connector.</exception>
+        /// a string MIN / MAX or a string group key is asked for without a connector.</exception>
         public static string GenerateCreateViewSql(Type viewType, string? viewName = null, char quoteChar = DefaultQuoteChar, AbstractConnector? connector = null)
         {
             if (viewType == null)
@@ -75,7 +76,11 @@ namespace Birko.Data.SQL.View.Migrations
                     + "it. Create the view through the connector's CreateView instead.");
             }
             connector?.RequireUsableViewColumnNames(view);
-            if (connector == null) RequireNoStringExtreme(view, name!);
+            if (connector == null)
+            {
+                RequireNoStringExtreme(view, name!);
+                RequireNoStringGroupKey(view, name!);
+            }
             var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar), dialect: connector?.RenderDialect);
             return "CREATE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
         }
@@ -93,6 +98,23 @@ namespace Birko.Data.SQL.View.Migrations
                     field.Name == "MIN" ? Birko.Data.Stores.AggregateFunction.Min : Birko.Data.Stores.AggregateFunction.Max,
                     $"{field.Property?.DeclaringType?.Name}.{field.Property?.Name}", StringComparison.Ordinal, null);
             }
+        }
+
+        /// <summary>
+        /// TASK-911: refuses an aggregating view grouped by a string column, generated without a provider: only a provider's
+        /// dialect groups it exactly (<see cref="Tables.View.GetGroupByFields"/>), and the plain <c>GROUP BY</c> would merge the
+        /// keys the column's collation calls equal (measured: SQL Server and MySQL merged <c>Zebra</c> with <c>zebra</c>).
+        /// </summary>
+        private static void RequireNoStringGroupKey(Tables.View view, string name)
+        {
+            if (!view.HasAggregateFields()) return;
+            var key = view.GetTableFields(notAggregate: true).FirstOrDefault(Tables.View.IsStringGroupKey);
+            if (key == null) return;
+            throw new NotSupportedException(
+                $"View '{name}' generated without a connector refused: it groups by the string "
+                + $"{key.Property?.DeclaringType?.Name}.{key.Property?.Name}, and without a provider the GROUP BY follows the column's "
+                + "collation, which can merge keys C# keeps apart (case, a trailing space, ß and ss). Pass the migration's connector, "
+                + "which groups exactly. (TASK-911)");
         }
 
         /// <summary>

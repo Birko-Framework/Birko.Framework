@@ -21,7 +21,10 @@ Static class for generating DDL strings from view attributes:
   `ViewMigrationExtensions.CreateView(Async)` always pass the migration context's connector. Measured live before:
   PostgreSQL and SQLite created a view column named `User` / `CURRENT_DATE`, holding the stored value, and every bare
   read of it returned the function (a filter on the function's value matched every row); MySQL and SQL Server failed
-  with a syntax error. Without a connector nothing is checked.
+  with a syntax error. Without a connector nothing is checked. TASK-911: the GROUP BY is rendered through the connector's
+  dialect (a string key with its exact form, `View.GetGroupByFields`); without a connector an aggregating view grouped
+  by a string is refused by name, as a string MIN / MAX is (TASK-907), since the plain GROUP BY follows the column's
+  collation.
 - `quoteChar` parameter — a single `char` (default `"`) applied **symmetrically** on both sides of an identifier. Supports ANSI/PostgreSQL (`"`) and MySQL (`` ` ``) symmetric quoting only. **Asymmetric bracket quoting (SQL Server `[ ]`) and T-SQL `CREATE OR ALTER VIEW` are out of scope** — use `Birko.Data.SQL.MSSql.View` for SQL Server view DDL.
 
 ### ViewMigrationExtensions

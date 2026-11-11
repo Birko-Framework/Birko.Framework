@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL GROUP BY on a string makes the groups C# makes (2026-11-11)
+[[TASK-911]]. SQL Server and MySQL grouped strings by collation, silently merging keys C# keeps apart (`Zebra`/`zebra`,
+`ß`/`ss`, `"a "`/`"a"`; 20 keys became 13 and 14, counts and sums added across them; measured), in store aggregates and
+SQL views. GROUP BY now adds the exact form of each string key on every SQL provider, so each group returns its own text.
+Cost: an indexed SQL Server key went from ~20 to ~170 ms on 100k rows. **Breaking:** the migrations `ViewSqlGenerator`
+refuses a string-grouped aggregating view without a connector.
 ### Aggregate rows ordered by a string are ordinal on every provider (2026-11-11)
 [[TASK-909]] (the user's decision). Ordering aggregate results by a string group key or string MIN/MAX followed the
 machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong per provider (measured; `apple` before
@@ -370,11 +376,6 @@ clock, and what Cosmos cannot answer exactly is refused by name. **Breaking:** r
 [[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
 fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim
 is now stamped inside the conditional write. SQL and MongoDB have the same defect ([[TASK-900]]).
-### Cosmos DB filters answer null and missing members the way C# does (2026-11-10)
-[[TASK-896]]. 53 of 93 measured filter shapes returned other rows than C#, silently, on reads, counts, aggregates and
-writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from
-the JSON failed `== null` and `!=`. One pre-pass shared by store and view now renders "has a value" and "null"
-explicitly. **Breaking:** culture string comparisons and `IsNullOrWhiteSpace` are refused by name.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -86,7 +86,7 @@ public class ViewSqlGeneratorTests
     public void GenerateCreateViewSql_CustomerOrderView_IsAPlainCreate()
     {
         // TASK-717: a plain CREATE VIEW, which every provider runs; it was CREATE OR REPLACE VIEW.
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView), connector: new PortableConnector());
 
         sql.Should().StartWith("CREATE VIEW ");
         sql.Should().Contain(" AS ");
@@ -96,7 +96,7 @@ public class ViewSqlGeneratorTests
     [Fact]
     public void GenerateCreateViewSql_CustomerOrderView_ContainsJoin()
     {
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView), connector: new PortableConnector());
 
         sql.Should().Contain("JOIN");
     }
@@ -104,7 +104,7 @@ public class ViewSqlGeneratorTests
     [Fact]
     public void GenerateCreateViewSql_WithExplicitName_UsesProvidedName()
     {
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView), "vw_customer_orders");
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView), "vw_customer_orders", connector: new PortableConnector());
 
         sql.Should().Contain("\"vw_customer_orders\"");
     }
@@ -133,11 +133,39 @@ public class ViewSqlGeneratorTests
         view.Should().NotBeNull();
 
         static string Quote(string id) => "\"" + id.Replace("\"", "\"\"") + "\"";
-        var expectedBody = ViewSelectSqlBuilder.BuildViewSelectSql(view!, Quote);
+        var connector = new PortableConnector();
+        var expectedBody = ViewSelectSqlBuilder.BuildViewSelectSql(view!, Quote, dialect: connector.RenderDialect);
         var name = ViewSqlGenerator.GetViewName(typeof(CustomerOrderView));
 
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView), connector: connector);
 
         sql.Should().Be("CREATE VIEW " + Quote(name) + " AS " + expectedBody);
+    }
+
+    /// <summary>
+    /// TASK-911 (rule 56, inverting what the tests above asserted connector-less): a view grouped by a string, generated
+    /// without a connector, is refused by name. The generator knows no provider, so its GROUP BY would follow the column's
+    /// collation and could merge keys C# keeps apart; with a connector it groups exactly.
+    /// </summary>
+    [Fact]
+    public void GenerateCreateViewSql_WithoutConnector_RefusesAStringGroupKey()
+    {
+        var act = () => ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
+
+        act.Should().Throw<NotSupportedException>().WithMessage("*CustomerOrderView.CustomerName*TASK-911*");
+    }
+
+    /// <summary>
+    /// A connector of no provider (the portable dialect): enough for the generator's connector-only checks, rendering what
+    /// the connector-less generator rendered before TASK-911.
+    /// </summary>
+    private sealed class PortableConnector : AbstractConnector
+    {
+        public PortableConnector() : base(new Birko.Configuration.PasswordSettings()) { }
+
+        public override System.Data.Common.DbConnection CreateConnection(Birko.Configuration.PasswordSettings settings)
+            => throw new NotSupportedException();
+        public override string ConvertType(System.Data.DbType type, Birko.Data.SQL.Fields.AbstractField field) => "TEXT";
+        public override string FieldDefinition(Birko.Data.SQL.Fields.AbstractField field) => field.Name + " TEXT";
     }
 }

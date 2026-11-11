@@ -20,7 +20,7 @@ namespace Birko.Data.SQL.Connectors
             // TASK-151 (SH-M401): a view with no join (a single source) is a plain SELECT from its table. It threw
             // ArgumentNullException("Join"), so the minimal documented view could not be queried at all.
             // TASK-892: the aggregates are rendered for this provider, as the store's Aggregate renders them.
-            return CreateSelectCommand(command, ViewFromTables(view), view.GetSelectFields(dialect: FragmentDialect), view.Join, conditions, view.HasAggregateFields() ? view.GetSelectFields(true) : null, orderFields, limit, offset);
+            return CreateSelectCommand(command, ViewFromTables(view), view.GetSelectFields(dialect: FragmentDialect), view.Join, conditions, view.HasAggregateFields() ? view.GetGroupByFields(dialect: FragmentDialect) : null, orderFields, limit, offset);
         }
 
         /// <summary>
@@ -54,7 +54,7 @@ namespace Birko.Data.SQL.Connectors
             // The inner SELECT projects a constant, grouped as the view is: the view's own column list can repeat a
             // name (two joined tables' Guid), which SQL Server refuses in a derived table. One row per view row: per
             // group for a grouped view, a single row for an aggregate over everything, one per joined row otherwise.
-            var groupFields = view.HasAggregateFields() ? view.GetSelectFields(true) : null;
+            var groupFields = view.HasAggregateFields() ? view.GetGroupByFields(dialect: FragmentDialect) : null;
             var wholeTableAggregate = view.HasAggregateFields() && (groupFields == null || groupFields.Count == 0);
             var fields = new Dictionary<int, string> { [0] = wholeTableAggregate ? "COUNT(*) AS birko_one" : "1 AS birko_one" };
             command = CreateSelectCommand(command, ViewFromTables(view), fields, view.Join, conditions,

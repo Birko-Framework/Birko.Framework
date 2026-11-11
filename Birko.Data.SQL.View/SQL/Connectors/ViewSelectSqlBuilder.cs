@@ -157,10 +157,10 @@ namespace Birko.Data.SQL.Connectors
                 i++;
             }
 
-            // GROUP BY for aggregate views
+            // GROUP BY for aggregate views; TASK-911: a string column with its exact form, so the groups are C#'s.
             if (view.HasAggregateFields())
             {
-                var groupFields = view.GetSelectFields(true, quoteTable: quoteIdentifier);
+                var groupFields = view.GetGroupByFields(quoteIdentifier, dialect);
                 if (groupFields != null && groupFields.Any())
                 {
                     sql += " GROUP BY " + string.Join(", ", groupFields.Values);

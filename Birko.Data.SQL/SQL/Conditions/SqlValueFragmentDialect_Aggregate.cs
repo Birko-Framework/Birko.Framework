@@ -183,6 +183,39 @@ namespace Birko.Data.SQL.Conditions
         /// <summary>TASK-909: whether this provider orders NULL below every value when ascending (and above when descending), as C# does.</summary>
         protected virtual bool NullsOrderFirst => true;
 
+        /// <summary>
+        /// TASK-911: the <c>GROUP BY</c> terms that group rows by a string <paramref name="operand"/> (a column) into exactly the
+        /// groups C# makes (Ordinal: UTF-16 code units, no case or accent folding, no expansion, no padding): the operand itself,
+        /// then its exact form, <see cref="OrdinalText"/> with both sides read from the row, the one producer of the exact
+        /// equality TASK-873's <c>==</c> renders by. The one producer for the store's <c>Aggregate</c> and a view's GROUP BY.
+        /// <see cref="Portable"/> (and any dialect without an exact form) renders the operand alone, which follows the column's
+        /// collation, as it renders a plain <c>=</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Measured before (20 keys that are distinct in C#, default collations, store and views alike): SQL Server made 13
+        /// groups (case twins, <c>"a "</c> with <c>"a"</c>, <c>""</c> with <c>" "</c>, U+E000 and U+1F600, <c>ß</c> with
+        /// <c>ss</c>, a precomposed with a decomposed <c>é</c>), MySQL 14 (case twins, a space with U+00A0, <c>K</c> with the
+        /// Kelvin sign, <c>ß</c> with <c>ss</c>, the two <c>é</c>); PostgreSQL merged case twins under a non-deterministic
+        /// collation on the column. Counts and sums were added across the merged keys, and the key returned was one twin's
+        /// text.
+        /// </para>
+        /// <para>
+        /// <b>Why the operand stays in the GROUP BY.</b> Rows with the same exact form hold the same text, so adding the exact
+        /// form splits exactly the groups the collation merged and nothing else; and the operand itself stays a grouping
+        /// column, so the <c>SELECT</c> list, a view's column and a TASK-909 <c>ORDER BY</c> over it stay legal on every
+        /// provider, and each group answers its own text, which every row of it holds. The exact form, not
+        /// <see cref="OrdinalOrderKey"/>: grouping asks only for equality, both are exact so they make the same groups, and the
+        /// order key is the costlier expression (a per-row <c>regexp_replace</c> on PostgreSQL).
+        /// </para>
+        /// </remarks>
+        /// <param name="operand">The string column the rows are grouped by.</param>
+        public System.Collections.Generic.IReadOnlyList<string> OrdinalGroupTerms(string operand)
+        {
+            var exact = OrdinalText(operand, bothFromRow: true);
+            return exact == null ? new[] { operand } : new[] { operand, exact };
+        }
+
         private static bool IsDecimal(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal);
 
         private static string NoExactAverage(string operand, Type source, Type result)

@@ -381,23 +381,13 @@ public abstract class AggregateStringOrderContract<T> where T : AbstractModel, n
     /// reverses), <c>ß</c> against <c>ss</c> and <c>st</c>, the empty string, a character above U+FFFF against U+E000 and
     /// U+FF5E (UTF-16 puts its surrogate pair below them, code-point order above), and null (below every value, as the
     /// oracle orders it).
+    /// The rows ordered by the group key use every value as a key: TASK-909 left out the keys a GROUP BY merged (SQL Server
+    /// grouped <c>Zebra</c> with <c>zebra</c>, <c>"a "</c> with <c>"a"</c>, <c>ß</c> with <c>ss</c>, U+E000 and U+1F600 with
+    /// <c>""</c>; MySQL <c>Zebra</c> with <c>zebra</c>, <c>ß</c> with <c>ss</c>); TASK-911 groups exactly, so they are back.
     /// </summary>
     private static readonly string?[] RowOrderValues =
     {
         "apple", "Banana", "éclair", "zebra", "Zebra", "a", "a ", "a\t", "ß", "ss", "st", "", "\U0001F600", "\uFF5E", "\uE000", null,
-    };
-
-    /// <summary>
-    /// The group keys a row order by the key itself is measured over: <see cref="RowOrderValues"/> without the values a
-    /// server's GROUP BY merges with another (measured, TASK-909: SQL Server's default collation groups <c>Zebra</c> with
-    /// <c>zebra</c>, <c>"a "</c> with <c>"a"</c>, <c>ß</c> with <c>ss</c>, and U+E000 and U+1F600 with <c>""</c>; MySQL's groups
-    /// <c>Zebra</c> with <c>zebra</c> and <c>ß</c> with <c>ss</c>), so that the order is what is measured. Still
-    /// discriminating: case, accents, a tab, <c>ß</c> against <c>st</c>, U+1F600 against U+FF5E, null (the empty string and a
-    /// trailing space are measured by the <c>Min</c> order, which no GROUP BY merges).
-    /// </summary>
-    private static readonly string?[] RowOrderKeyValues =
-    {
-        "apple", "Banana", "éclair", "zebra", "a", "a\t", "ß", "st", "\U0001F600", "\uFF5E", null,
     };
 
     /// <summary>The pages each row order is read in: all, the first four, a page from the middle, the last four.</summary>
@@ -444,7 +434,7 @@ public abstract class AggregateStringOrderContract<T> where T : AbstractModel, n
         // (a null Kind is a group of its own, as in LINQ).
         var byKey = key == "Kind";
         var rows = byKey
-            ? RowOrderKeyValues.Select((v, i) => (Kind: v!, Name: (string?)"x", N: i)).ToList()
+            ? RowOrderValues.Select((v, i) => (Kind: v!, Name: (string?)"x", N: i)).ToList()
             : RowOrderValues.Select((v, i) => (Kind: $"g{i:00}", Name: v, N: i)).ToList();
         var (offset, limit) = RowOrderWindows[window];
         if (offset < 0) offset = rows.Count + offset;
@@ -570,5 +560,111 @@ public abstract class AggregateStringOrderContract<T> where T : AbstractModel, n
             (CompareRowKeys(got[i - 1], got[i], comparison) * (descending ? -1 : 1)).Should().BeLessThanOrEqualTo(0,
                 $"{RenderValue(got[i - 1])} is before {RenderValue(got[i])}: {because}");
         }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // TASK-911 — the GROUPS: a query grouped by a string makes exactly the groups C# makes (Ordinal: object.Equals on the
+    // key tuple), each answering its own key text, whatever the database's collation would merge.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Group keys that are distinct in C# and that some collation merges: case (<c>apple</c> / <c>APPLE</c>, <c>Zebra</c> /
+    /// <c>zebra</c>), a trailing space and a tab (<c>"a"</c>, <c>"a "</c>, <c>"a\t"</c>), the empty string against a space, a
+    /// no-break space against a space, <c>ß</c> against <c>ss</c>, a precomposed against a decomposed <c>é</c>, the Kelvin sign
+    /// against <c>K</c>, U+E000 and U+1F600 (which SQL Server's default collation weighs as nothing, so as <c>""</c>), U+FF5E,
+    /// and null. Measured before (TASK-909): SQL Server grouped 16 such keys into 12, MySQL into 14.
+    /// </summary>
+    private static readonly string?[] GroupKeyValues =
+    {
+        "apple", "APPLE", "Zebra", "zebra", "a", "a ", "a\t", "", " ", " ", "ß", "ss", "café", "café", "K", "K",
+        "", "\U0001F600", "～", null,
+    };
+
+    /// <summary>
+    /// The rows grouped: key <c>i</c> holds <c>i % 3 + 1</c> rows; each row's <c>Name</c> is a case twin of the others
+    /// (<c>x</c>, <c>X</c>, <c>x</c>), so grouping by <c>Name</c> too splits a group by case; <c>N</c> is 1 or 2, so grouping
+    /// by <c>N</c> too splits it by a number.
+    /// </summary>
+    private static List<(string Kind, string? Name, int N)> GroupRows()
+    {
+        var rows = new List<(string Kind, string? Name, int N)>();
+        for (var i = 0; i < GroupKeyValues.Length; i++)
+        {
+            for (var j = 0; j <= i % 3; j++) rows.Add((GroupKeyValues[i]!, j % 2 == 0 ? "x" : "X", j % 2 + 1));
+        }
+        return rows;
+    }
+
+    public static IEnumerable<object[]> GroupCases
+        => from shape in new[] { "Kind", "Kind+Name", "Name+Kind", "Kind+N", "N+Kind", "Kind ordered paged", "Kind desc paged" }
+           from mode in new[] { "sync", "async" }
+           select new object[] { shape, mode };
+
+    private static AggregateQuery<T> GroupQuery(string shape) => shape switch
+    {
+        "Kind+Name" => GroupQuery(new[] { "Kind", "Name" }),
+        "Name+Kind" => GroupQuery(new[] { "Name", "Kind" }),
+        "Kind+N" => GroupQuery(new[] { "Kind", "N" }),
+        "N+Kind" => GroupQuery(new[] { "N", "Kind" }),
+        "Kind ordered paged" => GroupQuery(new[] { "Kind" }, new Dictionary<string, bool> { ["Kind"] = false }, 3, 9),
+        "Kind desc paged" => GroupQuery(new[] { "Kind" }, new Dictionary<string, bool> { ["Kind"] = true }, 2, 7),
+        _ => GroupQuery(new[] { "Kind" }),
+    };
+
+    private static AggregateQuery<T> GroupQuery(string[] keys, Dictionary<string, bool>? orderBy = null, int? offset = null, int? limit = null)
+        => new()
+        {
+            GroupByFields = keys,
+            Aggregates = new[]
+            {
+                new AggregateField(AggregateFunction.Count, "N", "count"),
+                new AggregateField(AggregateFunction.Sum, "N", "sum"),
+                new AggregateField(AggregateFunction.Min, "Name", "min"),
+                new AggregateField(AggregateFunction.Max, "Name", "max"),
+            },
+            OrderBy = orderBy,
+            Offset = offset,
+            Limit = limit,
+        };
+
+    /// <summary>One group as text: every key (escaped, so a twin is visible), then count, sum, min and max with their types.</summary>
+    private static string RenderGroup(AggregateResult row, IReadOnlyList<string> keys)
+        => string.Join("; ", keys.Select(k => $"{k}={RenderValue(row.GetValue<object>(k))}"))
+           + $"; count={RenderValue(row.GetValue<object>("count"))}; sum={RenderValue(row.GetValue<object>("sum"))}"
+           + $"; min={RenderValue(row.GetValue<object>("min"))}; max={RenderValue(row.GetValue<object>("max"))}";
+
+    /// <summary>
+    /// Grouped by a string (alone, with a second string, with a number, in either position, and ordered and paged by the
+    /// key): exactly the oracle's groups, each with its own key text, count, sum, Min and Max. An unordered query is compared
+    /// as a set; an ordered one in order (TASK-909: Ordinal, null first ascending).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(GroupCases))]
+    public async Task Contract_Grouping_by_a_string_makes_exactly_the_groups_CSharp_makes(string shape, string mode)
+    {
+        if (!Ready()) return;
+        var rows = GroupRows();
+        var query = GroupQuery(shape);
+        var ordered = query.OrderBy != null;
+        var keys = query.GroupByFields;
+
+        var expected = AggregateHelper.LinqAggregate(rows.Select(ToRow).ToList(), query).Select(r => RenderGroup(r, keys)).ToList();
+        if (!ordered) expected.Sort(StringComparer.Ordinal);
+
+        Exception? thrown = null;
+        var got = new List<string>();
+        try
+        {
+            got = (await RunRows(mode, rows, query)).Select(r => RenderGroup(r, keys)).ToList();
+            if (!ordered) got.Sort(StringComparer.Ordinal);
+        }
+        catch (Exception ex) { thrown = ex; }
+
+        var missing = expected.Except(got).ToList();
+        var extra = got.Except(expected).ToList();
+        var because = $"{mode} grouped by {shape}: {got.Count} groups where C# makes {expected.Count}; missing [{string.Join(" | ", missing)}]; "
+                      + $"extra [{string.Join(" | ", extra)}]; thrown {thrown?.GetType().Name}: {thrown?.Message}";
+        thrown.Should().BeNull(because);
+        got.Should().Equal(expected, because);
     }
 }

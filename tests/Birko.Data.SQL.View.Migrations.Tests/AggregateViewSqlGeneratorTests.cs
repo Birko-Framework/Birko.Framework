@@ -59,10 +59,25 @@ public class AggregateViewSqlGeneratorTests
         public decimal TotalTax { get; set; }
     }
 
+    /// <summary>
+    /// TASK-911: a view grouped by a string is generated through a provider's connector (without one it is refused by name,
+    /// <c>Task911MigrationViewWithoutConnectorTests</c>). SQLite's connector opens nothing until a statement runs.
+    /// </summary>
+    private static readonly Birko.Data.SQL.Connectors.SqLiteConnector Connector =
+        new(new Birko.Data.SQL.SqLite.Stores.SqLiteSettings(System.IO.Path.GetTempPath(), "birko-agg-generator-unused.db"));
+
+    [Fact]
+    public void GenerateCreateViewSql_groups_a_string_key_exactly_through_the_connector()
+    {
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView), connector: Connector);
+
+        sql.Should().EndWith("GROUP BY \"AggCustomers\".Name, (\"AggCustomers\".Name) COLLATE BINARY");
+    }
+
     [Fact]
     public void GenerateCreateViewSql_gives_each_aggregate_exactly_one_alias()
     {
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView));
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView), connector: Connector);
 
         var projection = sql.Substring(
             sql.IndexOf(" AS SELECT ", StringComparison.Ordinal) + " AS SELECT ".Length,
@@ -82,7 +97,7 @@ public class AggregateViewSqlGeneratorTests
         var view = DataBase.LoadView(typeof(AggTotalsView));
         view.Should().NotBeNull();
 
-        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView));
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView), connector: Connector);
 
         // Asserted against the metadata, not against literals: the alias and the persistent read have to
         // name the same column or the view is created and then cannot be queried.
@@ -101,7 +116,7 @@ public class AggregateViewSqlGeneratorTests
         var view = DataBase.LoadView(typeof(AggTotalsView));
 
         view!.GetPersistentViewSelectFields().Values.Should().Contain(new[] { "TotalSpent", "TotalTax" });
-        ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView))
-            .Split(',').Count(x => x.Contains("SUM(", StringComparison.Ordinal)).Should().Be(2);
+        ViewSqlGenerator.GenerateCreateViewSql(typeof(AggTotalsView), connector: Connector)
+            .Split(',').Count(x => x.Contains("SUM(", StringComparison.OrdinalIgnoreCase)).Should().Be(2, "SQLite sums a decimal with birko_decimal_sum (TASK-892)");
     }
 }

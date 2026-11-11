@@ -28,9 +28,9 @@ namespace Birko.Data.SQL.Views.Tests;
 /// (TASK-907): it has no comparison to ask for.
 /// <para>
 /// The keys discriminate case, accents, a tab, <c>ß</c> against <c>st</c>, U+1F600 against U+FF5E (UTF-16
-/// puts the surrogate pair below it, code-point order above) and null; the <c>MIN</c>s add a trailing space, <c>Zebra</c>,
-/// <c>ss</c>, U+E000 and the empty string, which SQL Server's or MySQL's GROUP BY would merge with another key
-/// (a separate defect). Measured before: see the task file.
+/// puts the surrogate pair below it, code-point order above), null, and also a trailing space, <c>Zebra</c>, <c>ss</c>,
+/// U+E000 and the empty string, which SQL Server's or MySQL's GROUP BY merged with another key until TASK-911 (the keys
+/// were left out until then). Measured before: see the task file.
 /// </para>
 /// </summary>
 [Collection("T907")]
@@ -66,8 +66,7 @@ public abstract class Task909ViewRowOrderTestsBase : IAsyncLifetime
     {
         var values = new[] { "apple", "Banana", "éclair", "zebra", "Zebra", "a", "a ", "a\t", "ß", "ss", "st", "", Astral, HighBmp, PrivateUse, null };
         for (var i = 0; i < values.Length; i++) yield return ($"g{i:00}", values[i]);
-        var keys = new[] { "apple", "Banana", "éclair", "zebra", "a", "a\t", "ß", "st", Astral, HighBmp, null };
-        foreach (var key in keys) yield return (key, key);
+        foreach (var key in values) yield return (key, key);
     }
 
     private PasswordSettings? _settings;

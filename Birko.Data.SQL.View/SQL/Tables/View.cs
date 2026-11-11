@@ -187,6 +187,28 @@ namespace Birko.Data.SQL.Tables
             => Number(Columns(notAggregate).Select(c => Table.SelectExpression(c, true, aggregateAlias, quoteTable, dialect)));
 
         /// <summary>
+        /// TASK-911: the view's <c>GROUP BY</c> terms: every non-aggregate column, as <see cref="GetSelectFields"/> names it with
+        /// <c>notAggregate</c>, and after a string column its exact form, through
+        /// <see cref="Conditions.SqlValueFragmentDialect.OrdinalGroupTerms"/>, so the view's groups are exactly C#'s (Ordinal)
+        /// whatever the column's collation merges. The one producer for the on-the-fly SELECT, its count and the persistent
+        /// DDL (<c>ViewSelectSqlBuilder</c>, which the migration generator shares). A null <paramref name="dialect"/> renders
+        /// the columns alone. Measured before: SQL Server and MySQL merged case twins and <c>ß</c> with <c>ss</c>, and SQL
+        /// Server a trailing space and U+E000 / U+1F600 with <c>""</c>, on the fly and persistent.
+        /// </summary>
+        public IDictionary<int, string> GetGroupByFields(Func<string, string>? quoteTable = null, Conditions.SqlValueFragmentDialect? dialect = null)
+            => Number(Columns(notAggregate: true).SelectMany(c =>
+            {
+                var column = Table.SelectExpression(c, true, true, quoteTable, dialect);
+                return dialect != null && IsStringGroupKey(c.Value) ? dialect.OrdinalGroupTerms(column) : (IEnumerable<string>)new[] { column };
+            }));
+
+        /// <summary>
+        /// TASK-911: whether a view column is grouped as a string, so exactly: its view property holds a string, as TASK-909
+        /// decides a string row key.
+        /// </summary>
+        internal static bool IsStringGroupKey(AbstractField field) => field.Property?.PropertyType == typeof(string);
+
+        /// <summary>
         /// The fields in SELECT order; a row reader reads field <c>i</c> at ordinal <c>i</c>. It enumerates the same
         /// <see cref="Columns"/> as <see cref="GetSelectFields"/> and <see cref="GetPersistentViewSelectFields"/>.
         /// </summary>

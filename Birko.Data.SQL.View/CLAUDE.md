@@ -89,7 +89,12 @@ SQL view generation framework for creating database views from entity attributes
 ### Tables
 - `View.cs` — View metadata model (tables, joins, fields, aggregate detection). `GetSelectFields`,
   `GetPersistentViewSelectFields` and `GetTableFields` (the row reader's ordinals) all enumerate one `Columns` sequence,
-  so a reader's ordinal is the SELECT's position by construction (TASK-887)
+  so a reader's ordinal is the SELECT's position by construction (TASK-887). TASK-911: `GetGroupByFields(quoteTable, dialect)`
+  is the one producer of a view's GROUP BY (the on-the-fly SELECT, its count, `ViewSelectSqlBuilder` and so the
+  migration generator): every non-aggregate column, and after a string one (`IsStringGroupKey`: its view property is a
+  `string`) its exact form through `SqlValueFragmentDialect.OrdinalGroupTerms`, so the groups are C#'s whatever the
+  collation merges (measured before: SQL Server and MySQL merged case twins and `ß` / `ss`, on the fly and persistent;
+  see `Birko.Data.SQL` § String GROUP BY). Tests: `Birko.Data.SQL.Views.Tests/Task911ViewGroupTests`
 
 ## Creating a View
 

@@ -830,6 +830,33 @@ calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Regi
   matches a `CHAR(4)` holding `ab  `, which C# does not. The framework never creates `CHAR(n)` columns (strings are
   `VARCHAR` / `TEXT`); a hand-made `CHAR(n)` column compares as its trimmed text.
 
+#### String GROUP BY makes C#'s groups (TASK-911)
+
+- **What:** grouping by a string column makes exactly the groups `AggregateHelper` (C#'s `object.Equals`, Ordinal)
+  makes, in the store's `Aggregate` and in every aggregating view (on the fly, its count, the persistent DDL, the
+  migration generator with a connector). Measured before (default collations, 20 keys distinct in C#): SQL Server made
+  13 groups (case twins, `"a "` with `"a"`, `""` with `" "`, U+E000 and U+1F600, `ß` with `ss`, `é` with `e` + U+0301),
+  MySQL 14 (case twins, `" "` with U+00A0, `K` with U+212A, `ß` with `ss`, `é` with `e` + U+0301), in the store and in
+  views alike; SQLite and PostgreSQL 20, but PostgreSQL merged case twins under a non-deterministic collation on the
+  column. Counts and sums were added across the merged keys, and the key read back was one twin's text.
+- **How:** one producer, `SqlValueFragmentDialect.OrdinalGroupTerms(column)`: the column, then its exact form
+  (TASK-873's `OrdinalText` with both sides from the row: SQL Server `(CAST(col AS NVARCHAR(MAX)) + N'|') COLLATE
+  Latin1_General_100_BIN2`, MySQL `CONVERT(col USING utf8mb4) COLLATE utf8mb4_0900_bin`, PostgreSQL `(col)::text COLLATE
+  "C"`, SQLite `(col) COLLATE BINARY`). The column stays in the GROUP BY, so the SELECT list, view columns and TASK-909's
+  ORDER BY stay legal, and each group answers its own text (every row of it holds that text). The store calls it in
+  `BuildAggregateQueryParts` (`groupFields` is keyed by its own position now); views call it through
+  `View.GetGroupByFields` (see `Birko.Data.SQL.View`). `Portable` renders the column alone, and the migration generator
+  without a connector refuses a string group key by name.
+- **Cost (measured, 100,000 rows, 500 keys):** an indexed key lost its ordered index stream aggregate: SQL Server
+  17–20 ms → 158–183 ms (hash aggregate over the `NVARCHAR(MAX)` key; `(col + N'|')` without the cast would be 45–58 ms
+  but can merge a 4000-character value, TASK-873), MySQL 28–39 ms → 78–87 ms (temporary table). An unindexed key (the
+  default `NVARCHAR(MAX)` / `LONGTEXT` column) costs the same as before: SQL Server 108–363 ms → ~210 ms, MySQL
+  150–172 ms → 141–145 ms. PostgreSQL 19–23 ms → 30 ms (HashAggregate on both keys).
+- Tests: `tests/Shared/StoreContract/AggregateStringOrderContract.cs` (`Contract_Grouping_by_a_string_…`, 20 twin keys;
+  the TASK-909 row-order keys it had to avoid are restored), `Birko.Data.SQL.Views.Tests/Task911ViewGroupTests`,
+  `Birko.Data.SQL.View.Migrations.Tests/Task911MigrationViewGroupTests`,
+  `Birko.Data.TimescaleDB.Tests/Task911TimeBucketStringGroupLiveTests`.
+
 #### Enum parameter values bind as their underlying integer
 
 Enums persist as `INTEGER` (`IntegerField`), but a boxed enum reaching a provider parameter was left to that
