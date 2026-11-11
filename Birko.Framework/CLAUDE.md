@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL view probe answers "missing"; type-keyed bulk writes refuse reserved columns (2026-11-11)
+[[TASK-901]]. Without the provider View package (how every consumer runs), `ViewExists` threw on a missing view, so Auto
+mode failed instead of reading on the fly, and answered `false` when the database was unreachable; the connector's
+type-keyed `BulkUpdate` / `BulkDelete` with a key column named like `User` rewrote or deleted every row (measured, all
+four providers). The probe now answers missing and reports real errors; the bulk paths run TASK-872's check; Auto mode
+forgets a view a read reports dropped. Found: [[TASK-917]] (base `CREATE OR REPLACE VIEW` fails on SQLite and SQL Server).
 ### Rules give one answer for null, `Like` and enum/Guid values, wherever they run (2026-11-11)
 [[TASK-882]] (the user's decisions). A rule comparing a non-nullable column with null, a `Like`, or an enum/Guid value
 given as text answered differently in memory, compiled and in SQL (up to 331 of 693 measured cases per provider). All
@@ -371,12 +377,6 @@ sort by a DateTime group key are refused by name. Found: `DateTime` filters comp
 [[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
 candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job
 out again (reproduced on SQLite, PostgreSQL, MySQL, SQL Server and MongoDB). Symbio's 30-minute default made it rare.
-### A SQL view read over a missing view throws; table-name overloads refuse reserved columns (2026-11-10)
-[[TASK-891]]. A view read over a view or source table that did not exist answered 0 rows on all four providers while
-its count threw (rule 26, measured): the reader's missing-table swallow, meant for tables a store heals, applied to
-views, which nothing heals. Only table reads keep it now. The migrations view generator and the connector's `Table` /
-table-name overloads now run TASK-872's reserved-column check; before, they read the database function or rewrote
-every row.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

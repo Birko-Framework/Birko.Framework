@@ -110,7 +110,7 @@ public abstract class Task891MissingViewReadTestsBase : IAsyncLifetime
     /// Every read and count of <paramref name="mode"/>'s view, sync and async, against a relation that is missing: each one
     /// reports it as a missing table, the way the count does.
     /// </summary>
-    private async Task EveryReadReportsWhatTheCountReports(string scenario, PortableMode mode)
+    private async Task EveryReadReportsWhatTheCountReports(string scenario, PortableMode mode, Func<Task>? beforeEach = null)
     {
         var connector = _connector!;
         var store = new SqlViewStore<T891VView>(connector, Definition(mode));
@@ -129,6 +129,7 @@ public abstract class Task891MissingViewReadTestsBase : IAsyncLifetime
         var failures = new List<string>();
         foreach (var (name, call) in calls)
         {
+            if (beforeEach != null) await beforeEach();
             var (outcome, error) = await Outcome(call);
             Output.WriteLine($"MEASURE {Provider} | {scenario} | {name} | {outcome}");
             if (error == null || !connector.IsMissingTableExceptionChain(error))
@@ -144,18 +145,30 @@ public abstract class Task891MissingViewReadTestsBase : IAsyncLifetime
         await EveryReadReportsWhatTheCountReports("persistent view never created", PortableMode.Persistent);
     }
 
+    /// <summary>
+    /// TASK-901 inverted part of this (rule 56): the read that meets the dropped view still reports it, but it also makes
+    /// Auto mode forget the view, so the read after it falls back on the fly (pinned in <c>ViewProbeContract</c>). Each call
+    /// is therefore measured right after the view was seen and dropped, not one after another.
+    /// </summary>
     [Fact]
-    public async Task A_view_dropped_after_Auto_mode_saw_it_is_reported_by_every_read()
+    public async Task A_view_dropped_after_Auto_mode_saw_it_is_reported_by_the_read_that_meets_it()
     {
         if (_connector == null) return;
-        await new SqlViewManager(_connector).EnsureAsync(Definition(PortableMode.Auto));
-        var store = new SqlViewStore<T891VView>(_connector, Definition(PortableMode.Auto));
-        (await store.QueryAsync()).Should().HaveCount(2, "the view exists and Auto mode remembers it");
+        var connector = _connector;
+        async Task SeeThenDrop()
+        {
+            await new SqlViewManager(connector).EnsureAsync(Definition(PortableMode.Auto));
+            var store = new SqlViewStore<T891VView>(connector, Definition(PortableMode.Auto));
+            (await store.QueryAsync()).Should().HaveCount(2, "the view exists and Auto mode remembers it");
 
-        // Dropped outside this connector, so its existence cache still says the view is there.
-        _connector.DoCommand(c => c.CommandText = "DROP VIEW " + _connector.QuoteIdentifier(ViewName), c => c.ExecuteNonQuery());
+            // Dropped outside this connector, so its existence cache still says the view is there.
+            connector.DoCommand(c => c.CommandText = "DROP VIEW " + connector.QuoteIdentifier(ViewName), c => c.ExecuteNonQuery());
+        }
 
-        await EveryReadReportsWhatTheCountReports("Auto view dropped after it was seen", PortableMode.Auto);
+        await EveryReadReportsWhatTheCountReports("Auto view dropped after it was seen", PortableMode.Auto, SeeThenDrop);
+
+        var next = new SqlViewStore<T891VView>(connector, Definition(PortableMode.Auto));
+        (await next.CountAsync()).Should().Be(2, "the read that reported the view made Auto mode probe again, and it reads on the fly");
     }
 
     [Fact]

@@ -56,8 +56,26 @@ SQL view generation framework for creating database views from entity attributes
 - **A missing view is reported by a read, not answered empty (TASK-891).** `Select(Tables.View, …)` and its async twin
   run the reader with `missingTableIsEmpty: false`: a persistent view that does not exist, or an on-the-fly view over a
   missing source table, throws through `InitException` as the view count does (rule 26). Measured live before: every
-  read answered 0 rows while the count threw, on all four providers. Auto mode caches a positive existence probe, so a
-  view dropped outside the connector keeps being read (and now reported) until `InvalidateViewExistsCache`.
+  read answered 0 rows while the count threw, on all four providers.
+- **Auto mode forgets a view a read finds missing (TASK-901).** Auto mode caches a positive existence probe on the
+  connector (a fact about the database, keyed by view name, so it belongs there; rules 36/62 are about per-caller state).
+  A persistent read or count that reports the view itself missing (`ForgetViewIfReportedMissing`, an exception filter that
+  never catches, wrapped round the iterators by `ForgettingViewIfMissing`) drops that entry: the read that met the
+  missing view still throws (TASK-891) and the next one probes again and reads on the fly. Only an error naming the view
+  forgets it (rule 13; a name the provider's wording hides errs toward forgetting); a missing source table does not.
+  Measured before on all four providers: every later read failed until `InvalidateViewExistsCache`. Not done, the user's
+  call: falling back inside the failing read (a failed statement aborts a PostgreSQL boundary, so it could only fall
+  back outside one).
+- **The base probe answers "missing" and throws everything else (TASK-901).** `ViewExists` / `ViewExistsAsync` without
+  the provider's View package (the composition every consumer in the tree uses) read `ViewProbeSql`
+  (`SELECT COUNT(*) FROM (SELECT 1 AS probe FROM v WHERE 1=0) probe`) through the reader with `missingTableIsEmpty: true`:
+  a row means the relation exists, the reader's missing-table filter means it does not, and any other error is reported
+  as itself. Before (TASK-717's `catch (DbException)`), measured on all four providers: a missing view reached the catch
+  rewrapped by `EnsureSchemaAndReport` as a bare `Exception`, so the probe threw (an Auto read failed instead of reading
+  on the fly, `CreateViewIfNotExists` failed), while a wrong password answered `false` (rule 26). A "missing" answer is
+  no failure: no `OnException` subscriber, no `OnInit` (both fired once per probe before). Still true: the base probe
+  answers `true` for a same-named TABLE, and the base `CreateView` renders `CREATE OR REPLACE VIEW`, which SQLite and
+  SQL Server reject, so a persistent view cannot be created on those two without the provider's View package.
 - `AbstractConnector_CreateView.cs` — Sync: `CreateView`, `DropView`, `RecreateView`, `ViewExists`, `CreateViewIfNotExists`, `CreateViews`, `DropViews`
 - `AbstractAsyncConnector_CreateView.cs` — Async equivalents: `CreateViewAsync`, `DropViewAsync`, `RecreateViewAsync`, `ViewExistsAsync`, `CreateViewIfNotExistsAsync`, `CreateViewsAsync`, `DropViewsAsync`
 

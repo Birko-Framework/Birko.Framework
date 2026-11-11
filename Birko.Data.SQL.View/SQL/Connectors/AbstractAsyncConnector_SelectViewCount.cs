@@ -34,7 +34,9 @@ namespace Birko.Data.SQL.Connectors
                 // TASK-724: no name test — see the sync twin (rule 53: an unreachable fallback, removed).
                 if (usePersistent)
                 {
-                    count += await SelectCountPersistentViewAsync(view.Name!, chunk, ct).ConfigureAwait(false);
+                    // TASK-901 — see the sync twin.
+                    try { count += await SelectCountPersistentViewAsync(view.Name!, chunk, ct).ConfigureAwait(false); }
+                    catch (Exception ex) when (ForgetViewIfReportedMissing(view, ex)) { throw; } // the filter never catches
                     continue;
                 }
 

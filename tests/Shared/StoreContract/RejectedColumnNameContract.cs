@@ -552,4 +552,151 @@ public abstract class RejectedColumnNameContract
 
         string.Join(" | ", failures).Should().BeEmpty($"every Table and table-name overload refuses {ValueFunctionColumn} by name before any SQL on {ProviderName}");
     }
+
+    /// <summary>
+    /// TASK-901 — the providers' type-keyed bulk writes (<c>BulkInsert</c> / <c>BulkUpdate</c> / <c>BulkDelete</c>, sync and
+    /// async), reached directly on the connector, refuse an entity whose column the provider rejects, by name, before any SQL
+    /// is sent, and write nothing: they resolve the entity through <c>LoadUsableTable</c>, as every typed overload does
+    /// (TASK-872). Two tables: <c>T872DirectRows</c>, whose rejected columns are written (SET, INSERT column list) and whose
+    /// key is <c>Guid</c>, and <c>T901KeyRows</c>, whose rejected column is the primary key, so the bulk WHERE names it bare
+    /// and compares the provider's value function with itself.
+    /// <para>The failure message lists each call's outcome.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_bulk_write_by_type_refuses_a_rejected_column_and_writes_nothing()
+    {
+        if (!Ready()) return;
+        var connector = ConnectorOf(NewStore<RejectedValueRow>());
+        object? value = null;
+        connector.DoCommand(c => c.CommandText = "SELECT " + ValueFunctionColumn, c => value = c.ExecuteScalar());
+        var functionValue = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+
+        // The key entity whose primary key column is this provider's value function; its key is the function's value, so
+        // the bare WHERE matches every row, where C# matches neither stored key ("a", "b").
+        var keyType = ValueFunctionColumn switch
+        {
+            "User" => typeof(T901UserKeyRow),
+            "CURRENT_USER" => typeof(T901CurrentUserKeyRow),
+            _ => typeof(T901CurrentDateKeyRow),
+        };
+        var keyRow = Activator.CreateInstance(keyType)!;
+        keyType.GetProperty("Key")!.SetValue(keyRow, functionValue);
+        keyType.GetProperty("Amount")!.SetValue(keyRow, 9);
+        ((AbstractModel)keyRow).Guid = Guid.NewGuid();
+
+        var direct = new object[] { new T872DirectRow { Guid = Guid.NewGuid(), User = "z", CURRENT_DATE = "z", CURRENT_USER = "z", Amount = 9 } };
+        var keyed = new[] { keyRow };
+
+        var plan = new List<(string Name, string Table, Action Rebuild, Func<Task> Call)>();
+        foreach (var (table, type, models, rebuild) in new (string, Type, object[], Action)[]
+        {
+            ("T872DirectRows", typeof(T872DirectRow), direct, RebuildDirectTable),
+            ("T901KeyRows", keyType, keyed, RebuildKeyTable),
+        })
+        {
+            foreach (var method in new[] { "BulkInsert", "BulkUpdate", "BulkDelete" })
+            {
+                plan.Add(($"{method}({table})", table, rebuild, () => InvokeBulk(connector, method, type, models, async: false)));
+                plan.Add(($"{method}Async({table})", table, rebuild, () => InvokeBulk(connector, method + "Async", type, models, async: true)));
+            }
+        }
+
+        var failures = new List<string>();
+        try
+        {
+            foreach (var (call, table, rebuild, run) in plan)
+            {
+                rebuild();
+                Exception? error = null;
+                var sent = await CommandsNaming(connector, table, async () =>
+                {
+                    try { await run(); }
+                    catch (Exception ex) { error = ex; }
+                });
+                long rows = -1, untouched = -1;
+                var identifier = connector.TableIdentifier(table);
+                connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + identifier, c => rows = Convert.ToInt64(c.ExecuteScalar()));
+                connector.DoCommand(c => c.CommandText = "SELECT COUNT(*) FROM " + identifier + " WHERE Amount IN (1, 2)", c => untouched = Convert.ToInt64(c.ExecuteScalar()));
+                var outcome = error == null
+                    ? $"ran; {rows} rows, {untouched} untouched"
+                    : $"{error.GetType().Name}: {error.Message.Split('\n')[0]}; {rows} rows, {untouched} untouched";
+                var refused = error is NotSupportedException
+                    && error.Message.Contains($"\"{ValueFunctionColumn}\"") && error.Message.Contains(ProviderName);
+                if (!refused || sent.Count > 0 || rows != 2 || untouched != 2)
+                    failures.Add($"{call}: {outcome}" + (sent.Count > 0 ? $"; sent {sent.Count} statement(s)" : string.Empty));
+            }
+        }
+        finally
+        {
+            await NewStore<T872DirectSibling>().DestroyAsync();
+            await NewStore<T901KeySibling>().DestroyAsync();
+        }
+
+        string.Join(" | ", failures).Should().BeEmpty($"every type-keyed bulk write refuses {ValueFunctionColumn} by name before any SQL on {ProviderName}");
+    }
+
+    /// <summary>Builds <c>T901KeyRows</c> with keys "a" and "b" under a harmless name, then renames the key column.</summary>
+    private void RebuildKeyTable()
+    {
+        var sibling = NewStore<T901KeySibling>();
+        sibling.DestroyAsync().GetAwaiter().GetResult();
+        sibling.CreateAsync(new T901KeySibling { Key = "a", Amount = 1 }).GetAwaiter().GetResult();
+        sibling.CreateAsync(new T901KeySibling { Key = "b", Amount = 2 }).GetAwaiter().GetResult();
+        var connector = ConnectorOf(sibling);
+        connector.DoCommand(c => c.CommandText = RenameToRejectedSql(connector, "T901KeyRows", "Zq901k", ValueFunctionColumn), c => c.ExecuteNonQuery());
+    }
+
+    /// <summary>Calls the provider connector's own bulk method, which is not on <see cref="AbstractConnector"/>.</summary>
+    private static async Task InvokeBulk(AbstractConnector connector, string method, Type type, object[] models, bool async)
+    {
+        var parameters = async
+            ? new[] { typeof(Type), typeof(IEnumerable<object>), typeof(System.Threading.CancellationToken) }
+            : new[] { typeof(Type), typeof(IEnumerable<object>) };
+        var args = async
+            ? new object[] { type, models, System.Threading.CancellationToken.None }
+            : new object[] { type, models };
+        var info = connector.GetType().GetMethod(method, parameters)
+                   ?? throw new InvalidOperationException($"{connector.GetType().Name} has no {method}");
+        try
+        {
+            var result = info.Invoke(connector, args);
+            if (result is Task task) await task;
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException != null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+        }
+    }
+}
+
+/// <summary>TASK-901: builds <c>T901KeyRows</c> with a harmless key column name, which the test renames.</summary>
+[Table("T901KeyRows")]
+public class T901KeySibling : AbstractModel
+{
+    [PrimaryField, MaxLengthField(64), NamedField("Zq901k")] public string? Key { get; set; }
+    public int Amount { get; set; }
+}
+
+/// <summary>TASK-901: the key entity a direct bulk call reads that renamed table with (PostgreSQL, SQL Server).</summary>
+[Table("T901KeyRows")]
+public class T901UserKeyRow : AbstractModel
+{
+    [PrimaryField, MaxLengthField(64), NamedField("User")] public string? Key { get; set; }
+    public int Amount { get; set; }
+}
+
+/// <summary>TASK-901: as <see cref="T901UserKeyRow"/>, for MySQL.</summary>
+[Table("T901KeyRows")]
+public class T901CurrentUserKeyRow : AbstractModel
+{
+    [PrimaryField, MaxLengthField(64), NamedField("CURRENT_USER")] public string? Key { get; set; }
+    public int Amount { get; set; }
+}
+
+/// <summary>TASK-901: as <see cref="T901UserKeyRow"/>, for SQLite.</summary>
+[Table("T901KeyRows")]
+public class T901CurrentDateKeyRow : AbstractModel
+{
+    [PrimaryField, MaxLengthField(64), NamedField("CURRENT_DATE")] public string? Key { get; set; }
+    public int Amount { get; set; }
 }

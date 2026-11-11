@@ -46,10 +46,11 @@ namespace Birko.Data.SQL.Connectors
             {
                 if (usePersistent)
                 {
-                    await foreach (var items in RunReaderCommandAsync(
+                    // TASK-901 — see the sync twin.
+                    await foreach (var items in ForgettingViewIfMissing(view, RunReaderCommandAsync(
                         (command) => { CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset); return Task.CompletedTask; },
                         (reader) => Task.FromResult<IEnumerable<object>>(new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }),
-                        ct, missingTableIsEmpty: false).ConfigureAwait(false))
+                        ct, missingTableIsEmpty: false)).ConfigureAwait(false))
                     {
                         yield return items?.FirstOrDefault()!;
                     }

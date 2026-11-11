@@ -30,11 +30,11 @@ namespace Birko.Data.SQL.Connectors
 
             var viewName = view.Name!;
 
-            // CR-M149: only cache a definitive positive result. ViewExists swallows every exception and
-            // returns false, so a transient failure (connection blip, lock timeout) is indistinguishable
-            // from "view absent" — caching that false would poison Auto mode permanently (the view is
-            // never used again until ClearViewExistsCache) and also hide a view created after the first
-            // probe. A false is therefore re-checked on the next query; only a true is memoized.
+            // CR-M149: only cache a definitive positive result. A false is re-checked on the next query, so a view
+            // created after the first probe is found. (CR-M149's other reason, a probe that answered false for a
+            // transient failure, is gone: since TASK-901 every probe throws on anything but a missing relation.)
+            // A cached true is forgotten when a persistent read reports the view missing (TASK-901,
+            // ForgetViewIfReportedMissing), so a view dropped outside the connector costs one failing read.
             if (_viewExistsCache.TryGetValue(viewName!, out var cached))
             {
                 return UsableIfPersistent(view, cached);
@@ -231,6 +231,74 @@ namespace Birko.Data.SQL.Connectors
 
             _viewExistsCache.TryRemove(viewName, out _);
         }
+
+        /// <summary>
+        /// The base view-existence probe (TASK-901): one row when <paramref name="viewName"/> names a relation, a
+        /// missing-relation error when it does not. <c>WHERE 1=0</c> reads no row of the view; the outer <c>COUNT(*)</c>
+        /// makes the answer a row, so the reader's missing-table filter is what tells the two apart.
+        /// </summary>
+        protected string ViewProbeSql(string viewName)
+            => "SELECT COUNT(*) FROM (SELECT 1 AS probe FROM " + QuoteIdentifier(viewName) + " WHERE 1=0) probe";
+
+        /// <summary>
+        /// Forgets Auto mode's cached "the view exists" when a persistent read of <paramref name="view"/> reports it missing,
+        /// so the next read probes again and reads on the fly (TASK-901). Returns false, so it sits in an exception filter
+        /// without catching: the read that met the missing view still reports it (TASK-891).
+        /// </summary>
+        /// <remarks>
+        /// The cache holds a fact about the database, keyed by view name, so it rightly lives on the connector (unlike the
+        /// per-caller state rules 36 and 62 keep off it); what it lacked was a way to learn the fact had changed. Measured on
+        /// SQLite and live PostgreSQL, MySQL and SQL Server: a view dropped outside the connector failed every later read
+        /// until <c>InvalidateViewExistsCache</c>. Only an error naming this view forgets it (rule 13), or one whose name the
+        /// provider's wording does not let us read, erring toward one extra probe; a missing source table does not.
+        /// Persistent mode caches nothing, so only Auto mode is touched.
+        /// </remarks>
+        protected bool ForgetViewIfReportedMissing(Tables.View view, Exception ex)
+        {
+            if (view.QueryMode != ViewQueryMode.Auto || string.IsNullOrEmpty(view.Name) || !IsMissingTableExceptionChain(ex))
+            {
+                return false;
+            }
+
+            var missing = MissingTableNameChain(ex);
+            if (missing == null || string.Equals(missing, view.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                _viewExistsCache.TryRemove(view.Name!, out _);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// <paramref name="rows"/>, read through <see cref="ForgetViewIfReportedMissing"/>: a persistent read is an iterator,
+        /// and an iterator cannot yield from a <c>try</c> that has a <c>catch</c>, so each step is taken here.
+        /// </summary>
+        protected IEnumerable<T> ForgettingViewIfMissing<T>(Tables.View view, IEnumerable<T> rows)
+        {
+            using var rowEnumerator = rows.GetEnumerator();
+            while (true)
+            {
+                bool more;
+                try { more = rowEnumerator.MoveNext(); }
+                catch (Exception ex) when (ForgetViewIfReportedMissing(view, ex)) { throw; } // the filter never catches
+                if (!more) yield break;
+                yield return rowEnumerator.Current;
+            }
+        }
+
+        /// <summary>The async twin of <see cref="ForgettingViewIfMissing{T}(Tables.View, IEnumerable{T})"/>.</summary>
+        protected async IAsyncEnumerable<T> ForgettingViewIfMissing<T>(Tables.View view, IAsyncEnumerable<T> rows)
+        {
+            await using var rowEnumerator = rows.GetAsyncEnumerator();
+            while (true)
+            {
+                bool more;
+                try { more = await rowEnumerator.MoveNextAsync().ConfigureAwait(false); }
+                catch (Exception ex) when (ForgetViewIfReportedMissing(view, ex)) { throw; } // the filter never catches
+                if (!more) yield break;
+                yield return rowEnumerator.Current;
+            }
+        }
+
         /// <summary>
         /// Builds the CREATE VIEW SQL statement.
         /// Override in database-specific connectors for syntax differences.

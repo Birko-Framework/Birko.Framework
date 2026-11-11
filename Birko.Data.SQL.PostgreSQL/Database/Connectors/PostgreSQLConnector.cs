@@ -605,9 +605,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return;
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return;
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             var fields = table.Fields.Select(f => f.Value).Where(f => !f.IsAutoincrement).ToList();
             if (!fields.Any())
@@ -681,9 +680,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return;
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return;
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             var fields = table.Fields.Select(f => f.Value).Where(f => !f.IsAutoincrement).ToList();
             if (!fields.Any())
@@ -742,9 +740,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return Array.Empty<object>();
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return Array.Empty<object>();
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
             // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
@@ -824,9 +821,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return Array.Empty<object>();
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return Array.Empty<object>();
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
             // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
@@ -906,9 +902,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return;
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return;
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
             // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,
@@ -964,9 +959,8 @@ namespace Birko.Data.SQL.Connectors
             if (models == null || !models.Any())
                 return;
 
-            var table = DataBase.LoadTable(type);
-            if (table == null)
-                return;
+            // TASK-901: refuses a rejected column name before any SQL, as every typed overload (TASK-872); never null (rule 53).
+            var table = LoadUsableTable(type);
 
             // TASK-555: the ONE primary-key lookup (DataBase.GetPrimaryFields falls back to Guid when no
             // [PrimaryField] is declared — the common AbstractModel case). table.GetPrimaryFields() has no fallback,

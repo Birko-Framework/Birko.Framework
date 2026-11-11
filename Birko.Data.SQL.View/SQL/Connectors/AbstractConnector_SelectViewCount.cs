@@ -48,7 +48,9 @@ namespace Birko.Data.SQL.Connectors
                 // already resolved to the persistent view's columns (rule 53: removed, not kept).
                 if (usePersistent)
                 {
-                    count += SelectCountPersistentView(view.Name!, chunk);
+                    // TASK-901: a count that finds the view missing makes Auto mode probe again next time.
+                    try { count += SelectCountPersistentView(view.Name!, chunk); }
+                    catch (Exception ex) when (ForgetViewIfReportedMissing(view, ex)) { throw; } // the filter never catches
                     continue;
                 }
 

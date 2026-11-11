@@ -111,9 +111,10 @@ namespace Birko.Data.SQL.Connectors
             {
                 if (usePersistent)
                 {
-                    foreach (var items in RunReaderCommand((command) => {
+                    // TASK-901: a read that finds the view missing makes Auto mode probe again next time.
+                    foreach (var items in ForgettingViewIfMissing(view, RunReaderCommand((command) => {
                         command = CreatePersistentViewSelectCommand(command, view, chunk, orderFields, limit, offset);
-                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }, missingTableIsEmpty: false))
+                    }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }, missingTableIsEmpty: false)))
                     {
                         yield return items?.FirstOrDefault()!;
                     }

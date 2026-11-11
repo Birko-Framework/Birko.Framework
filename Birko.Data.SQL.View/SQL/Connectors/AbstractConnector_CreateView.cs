@@ -118,30 +118,27 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Checks if a SQL VIEW exists in the database.
-        /// Override in database-specific connectors for optimal implementation.
+        /// Checks if a SQL VIEW exists in the database: false when the relation is missing, and any other failure is
+        /// thrown. The provider View packages override this with a catalogue lookup; this probe runs without them.
         /// </summary>
+        /// <remarks>
+        /// TASK-901. The probe used to run through the command path and catch <see cref="System.Data.Common.DbException"/>
+        /// (TASK-717), and both halves were wrong, measured on SQLite and live PostgreSQL, MySQL and SQL Server: a missing
+        /// view reaches that catch rewrapped by <c>EnsureSchemaAndReport</c> as a bare <see cref="Exception"/>, so the
+        /// probe threw (rule 9: an Auto read failed instead of reading on the fly), while a database it could not reach
+        /// raises a <see cref="System.Data.Common.DbException"/> before that funnel and answered "no such view" (rule 26).
+        /// It now reads <see cref="AbstractConnectorBase.ViewProbeSql"/> through the reader, whose missing-table filter is
+        /// the one thing it swallows, before the failure funnel: a missing view is an answer, so no <c>OnException</c>
+        /// subscriber is told and <c>OnInit</c> is not raised (both were, once per probe); anything else is reported as itself.
+        /// </remarks>
         public virtual bool ViewExists(string viewName)
         {
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            try
-            {
-                DoCommand((command) =>
-                {
-                    command.CommandText = "SELECT 1 FROM " + QuoteIdentifier(viewName) + " WHERE 1=0";
-                }, (command) =>
-                {
-                    command.ExecuteNonQuery();
-                });
-                return true;
-            }
-            catch (System.Data.Common.DbException)
-            {
-                // TASK-717: only the probe being refused means "no such view"; anything else (a lost connection,
-                // a timeout) is not an answer, and used to be read as one.
-                return false;
-            }
+            return RunReaderCommand(
+                command => command.CommandText = ViewProbeSql(viewName),
+                reader => new object[] { true },
+                missingTableIsEmpty: true).Any();
         }
 
         /// <summary>

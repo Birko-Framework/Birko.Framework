@@ -122,31 +122,22 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Checks if a SQL VIEW exists in the database.
-        /// Override in database-specific connectors for optimal implementation.
+        /// Checks if a SQL VIEW exists in the database: false when the relation is missing, and any other failure (a
+        /// cancelled token included, TASK-717) is thrown. The provider View packages override this with a catalogue lookup.
         /// </summary>
+        /// <remarks>TASK-901: the async twin of <see cref="AbstractConnector.ViewExists"/>; see it for why it reads.</remarks>
         public virtual async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            try
+            await foreach (var _ in RunReaderCommandAsync(
+                command => { command.CommandText = ViewProbeSql(viewName); return Task.CompletedTask; },
+                reader => Task.FromResult<IEnumerable<object>>(new object[] { true }),
+                ct, missingTableIsEmpty: true).ConfigureAwait(false))
             {
-                await DoCommandAsync(async (command) =>
-                {
-                    command.CommandText = "SELECT 1 FROM " + QuoteIdentifier(viewName) + " WHERE 1=0";
-                    await Task.CompletedTask;
-                }, async (command) =>
-                {
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }, false, ct).ConfigureAwait(false);
                 return true;
             }
-            catch (System.Data.Common.DbException)
-            {
-                // TASK-717: only the probe being refused means "no such view". A cancelled token answered false
-                // (measured); it now throws. PostgreSQL and SQL Server override this with a catalog lookup.
-                return false;
-            }
+            return false;
         }
 
         /// <summary>

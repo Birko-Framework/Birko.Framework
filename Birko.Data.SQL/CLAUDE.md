@@ -122,9 +122,16 @@ entity, table and provider, **before any SQL is sent**. The caller maps the prop
   qualifier). Both not virtual; `InsertAsync(string, …)` stopped being virtual (rule 12; no override existed). Measured
   live before: `Delete(DataBase.LoadTable(t), filter)` deleted 2 of 2 rows and every `Update(table or name, …)`
   rewrote 2 of 2 on all four providers. A name qualified by another table and a value fragment pass.
-- **Not covered:** schema operations (`DropTable`, `AlterTableDrop`, `EnsureColumns`, drift and repair) name no
-  column in a WHERE. The providers' own `BulkInsert` / `BulkUpdate` / `BulkDelete(Type, …)` resolve with
-  `DataBase.LoadTable`, not the funnel; not measured, their WHERE names only `Guid` (left for its own task).
+- **The providers' type-keyed bulk writes (TASK-901):** `BulkInsert` / `BulkUpdate` / `BulkDelete(Type, …)`, sync and
+  async, on PostgreSQL, MySQL, SQL Server and SQLite, resolve through `LoadUsableTable` too (they had `DataBase.LoadTable`
+  and a null test it can never need, rule 53). A store reaches them after its init checked the entity; a direct call did
+  not. Measured live before, on all four providers: with the primary key column named `User` / `CURRENT_USER` /
+  `CURRENT_DATE`, the bulk WHERE compared the function with itself, so `BulkUpdate` rewrote 2 of 2 rows and `BulkDelete`
+  deleted 2 of 2 (C# matches none), silently; a rejected written column failed on the server (PostgreSQL every write,
+  MySQL and SQL Server the update) or ran (the SQLite, MySQL and SQL Server inserts). Pinned by
+  `RejectedColumnNameContract.A_bulk_write_by_type_refuses_a_rejected_column_and_writes_nothing`.
+- **Not covered:** schema operations (`DropTable`, `AlterTableDrop`, `EnsureColumns`, drift and repair) and TimescaleDB's
+  `CreateHypertable(Type, …)` name no column in a WHERE, and keep `DataBase.LoadTable`.
 - **Persistent SQL views:** see `Birko.Data.SQL.View/CLAUDE.md` (`RequireUsableViewColumnNames`, TASK-872).
 - `Every_refused_name_is_rejected_by_the_server` (shared `RejectedColumnNameContract`) re-measures each list live.
   Re-run it when a supported server version moves.

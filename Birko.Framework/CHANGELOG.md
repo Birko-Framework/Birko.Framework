@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — A SQL view read over a missing view throws; table-name overloads refuse reserved columns
+[[TASK-891]]. A view read over a view or source table that did not exist answered 0 rows on all four providers while
+its count threw (rule 26, measured): the reader's missing-table swallow, meant for tables a store heals, applied to
+views, which nothing heals. Only table reads keep it now. The migrations view generator and the connector's `Table` /
+table-name overloads now run TASK-872's reserved-column check; before, they read the database function or rewrote
+every row.
+
 ## 2026-11-10 — Cosmos DB aggregates answer in LINQ's types and names
 [[TASK-897]]. All 15 measured store shapes differed from `AggregateHelper`: numbers came back as long/double, Guid and
 DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
