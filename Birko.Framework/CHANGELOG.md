@@ -4,6 +4,11 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Elasticsearch job queue stamps a claim when it writes it
+[[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
+fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim
+is now stamped inside the conditional write. SQL and MongoDB have the same defect ([[TASK-900]]).
+
 ## 2026-11-10 — Cosmos DB filters answer null and missing members the way C# does
 [[TASK-896]]. 53 of 93 measured filter shapes returned other rows than C#, silently, on reads, counts, aggregates and
 writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from

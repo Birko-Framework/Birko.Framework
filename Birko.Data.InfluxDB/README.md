@@ -44,6 +44,25 @@ var point = PointData.Measurement("temperature")
     .Timestamp(DateTime.UtcNow, WritePrecision.Ms);
 ```
 
+### Request timeout
+
+`Settings.RequestTimeout` (`TimeSpan?`) bounds every HTTP request a store or repository makes: a read, the read under an
+aggregate, a write. Leave it `null` for the InfluxDB client's default of **10 seconds**, or for the `timeout` the
+`Location` carries (`http://host:8086?timeout=60000`, in milliseconds). Setting both is refused when the store is
+configured; zero, a negative value and anything over ~49.7 days are refused when set (`Timeout.InfiniteTimeSpan` means
+no timeout).
+
+```csharp
+var settings = new Settings("http://localhost:8086", "my-bucket", "your-token", "my-org")
+{
+    RequestTimeout = TimeSpan.FromMinutes(2),
+};
+```
+
+Large reads need it: every entity is its own series (each point carries its `Guid` as a tag), so reading ~100k points
+takes 45–50 s on InfluxDB 2 (measured) and fails at the 10 s default — an aggregate too, since it reads every row. A
+change of the point layout is TASK-910.
+
 ### Flux Query
 
 ```

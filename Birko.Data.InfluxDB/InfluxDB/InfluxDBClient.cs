@@ -26,9 +26,8 @@ namespace Birko.Data.InfluxDB
         {
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
-            Client = new global::InfluxDB.Client.InfluxDBClient(
-                settings.GetConnectionString(),
-                settings.Token);
+            // TASK-908: one producer of the client's options, so RequestTimeout reaches every store and repository.
+            Client = new global::InfluxDB.Client.InfluxDBClient(settings.GetClientOptions());
         }
 
         /// <summary>

@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### InfluxDB request timeout is a setting (2026-11-11)
+[[TASK-908]] (the user's decision). Every InfluxDB read or aggregate over ~100k points failed at the client's fixed 10 s
+timeout (measured: 10.05 s); reading 100k points takes ~50 s because each entity is its own series ([[TASK-910]]). New
+`Settings.RequestTimeout` (default: the URL's `timeout`, else 10 s; the consumer's value wins), applied at one funnel;
+a value that breaks the client, or one set alongside a URL timeout, is refused.
 ### SQL GROUP BY on a string makes the groups C# makes (2026-11-11)
 [[TASK-911]]. SQL Server and MySQL grouped strings by collation, silently merging keys C# keeps apart (`Zebra`/`zebra`,
 `ß`/`ss`, `"a "`/`"a"`; 20 keys became 13 and 14, counts and sums added across them; measured), in store aggregates and
@@ -372,10 +377,6 @@ every row.
 DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
 string SUM ran. Names now resolve in any case, results convert to LINQ's types, DateTime MIN/MAX compare the stored wall
 clock, and what Cosmos cannot answer exactly is refused by name. **Breaking:** result types (COUNT is `int`).
-### Elasticsearch job queue stamps a claim when it writes it (2026-11-10)
-[[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
-fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim
-is now stamped inside the conditional write. SQL and MongoDB have the same defect ([[TASK-900]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

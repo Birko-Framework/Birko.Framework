@@ -114,6 +114,26 @@ for one aggregate without a filter is gone: measured on InfluxDB 2 it answered o
 stored point, a Count of field points, no grouping by a field, buckets of the write time, no row over nothing, decimals
 summed as double). Pinned by `Task906InfluxAggregateLiveTests`.
 
+## Request timeout and the series-per-point cost (TASK-908)
+
+`Settings.RequestTimeout` (`TimeSpan?`, default `null`) is applied in `Settings.GetClientOptions()`, the one producer of the
+client's options; `InfluxDB/InfluxDBClient.cs` builds every store's client from it (repositories wrap a store, and
+`InfluxDbUnitOfWork.FromStore` reuses the store's client; a UnitOfWork built from a caller's own client uses that client's
+options). `null` leaves the client library's default of 10 s (`InfluxDBClientOptions`, measured in 5.1.0), or the
+`timeout` query value of `Location` — that door existed before and still works. Setting both is refused at
+`GetClientOptions()` rather than picking one (rule 38's shape). The setter refuses zero (the client cancels every request
+at once), negatives and values over 4,294,967,294 ms (the client's `CancelAfter` limit; each request would fail);
+`Timeout.InfiniteTimeSpan` is accepted (measured to wait). `GetClientOptions()` reads `GetConnectionString()` before
+`Token`, as the client always did — Symbio.Affiliate derives its 1.x `user:password` token in that override.
+
+The default stays 10 s: a longer one would only delay every failure for consumers whose requests are small. Measured
+2026-11-11 (InfluxDB 2, live container, 10 groups): 100k points seed in ~3–4 s; a read fails at the default after
+10.0 s with `TaskCanceledException` (both read and aggregate); with a 3 min timeout the read takes ~50 s and the
+aggregate ~40 s; 10k points read in ~3.8 s. The cost is the layout: each point carries its `Guid` as a tag, so every
+entity is its own series, and a server-side Flux aggregate is no faster (TASK-907). Changing the layout and re-measuring
+native Flux is TASK-910. Pinned by `Task908RequestTimeoutTests` (offline, including a silent server on the wire) and
+`Task908InfluxReadTimeoutLiveTests` (the 100k case needs `BIRKO_INFLUX_HEAVY`).
+
 ## Flux Query Language
 
 InfluxDB uses Flux for queries:

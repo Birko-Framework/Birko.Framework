@@ -3,7 +3,7 @@ id: TASK-908
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -36,8 +36,26 @@ here.
 
 ## Acceptance criteria
 
-- [ ] The user's decision on native Flux recorded.
-- [ ] The read timeout over ~100k points reproduced (rule 54) and fixed or documented; the series-per-point cost decided.
+- [x] The user's decision on native Flux recorded.
+      → Native Flux moved to TASK-910 (re-measured after the point-layout change), filed at the user's request
+        2026-11-11; not built here.
+- [x] The read timeout over ~100k points reproduced (rule 54) and fixed or documented; the series-per-point cost decided.
+      → Reproduced 2026-11-11 live (InfluxDB.Client 5.1.0, 100k points): `ReadAsync()` failed after 10,052 ms and
+        `AggregateAsync` after 10,016 ms with a raw `TaskCanceledException` (→ `IOException` → `SocketException 995`); the
+        library default is 10 s, overridable by `?timeout=` in the URL (honoured: 700 ms failed at 787 ms).
+      → New `Settings.RequestTimeout` (`TimeSpan?`, default null = the URL's timeout, else the library's 10 s, kept on
+        purpose); the setter refuses zero, negatives and > 4,294,967,294 ms (each measured to break the client);
+        `InfiniteTimeSpan` accepted; setting it while the URL carries a `timeout` is refused when the client is built.
+        One funnel `Settings.GetClientOptions()` builds every store client (repositories and `InfluxDbUnitOfWork.FromStore`
+        reuse it); `GetConnectionString()` still runs before `Token` is read (Symbio.Affiliate derives its token there);
+        `LoadFrom` copies it. With 3 minutes: 100k read 49.9 s, aggregate 40.4 s. Series-per-point cost documented in
+        `Birko.Data.InfluxDB/CLAUDE.md` and README (→ TASK-910).
+      → `Task908RequestTimeoutTests` (20 offline, incl. a never-answering local server: sync and async give up at 500 ms)
+        and `Task908InfluxReadTimeoutLiveTests` (2 live; 100k behind `BIRKO_INFLUX_HEAVY`). Red with the old client
+        wiring: 6 of 22; green 22/22. Live: InfluxDB 88, InfluxDB.ViewModel 5, Migrations.InfluxDB 46 on the working tree
+        and on a staged HEAD + patch snapshot. Consumers: Symbio.Affiliate builds the client as before (default null).
+      → **Found, filed:** TASK-914 (a timeout surfaces as the caller's cancellation and is never retried; `LoadFrom` drops
+        `RetryPolicy`).
 
 ## Out of scope
 
