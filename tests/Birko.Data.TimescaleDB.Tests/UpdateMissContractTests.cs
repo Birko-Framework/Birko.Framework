@@ -31,7 +31,7 @@ internal sealed class TimescaleDBLive
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_TS_PORT"), out var p) ? p : 5432;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_TS_USER") ?? "postgres";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_TS_PASSWORD") ?? "postgres";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_TS_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("TS");
 
     public TimescaleDBLive(ITestOutputHelper output) => _output = output;
 

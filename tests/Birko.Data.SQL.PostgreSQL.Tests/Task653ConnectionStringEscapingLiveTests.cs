@@ -21,7 +21,7 @@ public class Task653ConnectionStringEscapingLiveTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("PG");
 
     private readonly ITestOutputHelper _output;
     public Task653ConnectionStringEscapingLiveTests(ITestOutputHelper output) => _output = output;

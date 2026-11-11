@@ -131,7 +131,7 @@ public sealed class PostgreSqlTask152LiveTests : Task152SqlLiveTestsBase
 {
     public PostgreSqlTask152LiveTests(ITestOutputHelper output) : base(output) { }
     private static PostgreSqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };
@@ -147,15 +147,17 @@ public sealed class MySqlTask152LiveTests : Task152SqlLiveTestsBase
 {
     public MySqlTask152LiveTests(ITestOutputHelper output) : base(output) { }
     private static MySqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MYSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306 };
     protected override string? HostVariable => "BIRKO_MYSQL_HOST";
     protected override AbstractConnector Connector() => DataBase.GetConnector<MySQLConnector>(Settings());
     protected override DbConnection OpenRaw() { var c = new MySqlConnection(Settings().GetConnectionString()); c.Open(); return c; }
-    protected override string? CreateElsewhereSql => $"CREATE DATABASE IF NOT EXISTS t152other; CREATE TABLE t152other.`{Table}` (`Id` INT)";
-    protected override string? DropElsewhereSql => $"DROP TABLE IF EXISTS t152other.`{Table}`";
+    // A MySQL schema is a server-wide database, so the second one carries the run tag (TASK-883).
+    private static string Elsewhere => LiveDatabase.RunName("MYSQL", "t152other");
+    protected override string? CreateElsewhereSql => $"CREATE DATABASE IF NOT EXISTS {Elsewhere}; CREATE TABLE {Elsewhere}.`{Table}` (`Id` INT)";
+    protected override string? DropElsewhereSql => $"DROP TABLE IF EXISTS {Elsewhere}.`{Table}`";
     protected override string Quote(string identifier) => "`" + identifier + "`";
 }
 
@@ -163,7 +165,7 @@ public sealed class MSSqlTask152LiveTests : Task152SqlLiveTestsBase
 {
     public MSSqlTask152LiveTests(ITestOutputHelper output) : base(output) { }
     private static MSSqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MSSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

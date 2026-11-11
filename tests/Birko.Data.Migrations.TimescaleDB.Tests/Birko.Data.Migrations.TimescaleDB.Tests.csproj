@@ -42,4 +42,6 @@
   <Import Project="..\..\Birko.Data.TimescaleDB\Birko.Data.TimescaleDB.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Migrations.TimescaleDB\Birko.Data.Migrations.TimescaleDB.projitems" Label="Shared" />
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

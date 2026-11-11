@@ -55,7 +55,7 @@ public class IndexOverUnlengthedStringLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MSSQL");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;

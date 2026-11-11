@@ -346,7 +346,7 @@ public sealed class PostgreSqlTask272SchemaLiveTests : Task272SchemaLiveTestsBas
     protected override string? HostVariable => "BIRKO_PG_HOST";
     protected override bool HasSchemas => true;
     private static PostgreSqlSettings Pg(string? schema) => new(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432, Schema = schema };
@@ -365,7 +365,7 @@ public sealed class MySqlTask272SchemaLiveTests : Task272SchemaLiveTestsBase<MyS
     protected override string? HostVariable => "BIRKO_MYSQL_HOST";
     protected override bool HasSchemas => false;
     private static MySqlSettings My(string? schema) => new(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MYSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306, Schema = schema };
@@ -385,7 +385,7 @@ public sealed class MSSqlTask272SchemaLiveTests : Task272SchemaLiveTestsBase<MSS
     protected override bool HasSchemas => true;
     protected override bool PersistentViewsHere => false;
     private static MSSqlSettings Ms(string? schema) => new(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MSSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

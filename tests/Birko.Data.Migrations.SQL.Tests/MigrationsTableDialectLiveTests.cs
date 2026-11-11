@@ -121,7 +121,7 @@ public class PostgreSqlMigrationsTableDialectTests : MigrationsTableDialectTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("PG");
 
     private static PostgreSqlSettings Settings() => new(Host!, Database, User, Password) { Port = Port };
 
@@ -230,7 +230,7 @@ public class MySqlMigrationsTableDialectTests : MigrationsTableDialectTestsBase
     // one class inventing its own default and producing 65 unrelated "Access denied" failures.
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
 
     private static MySqlSettings Settings() => new(Host!, Database, User, Password) { Port = Port };
 
@@ -285,7 +285,7 @@ public class MsSqlMigrationsTableDialectTests : MigrationsTableDialectTestsBase
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MSSQL");
 
     private static MSSqlSettings Settings() => new(Host!, Database, User, Password, Port) { TrustServerCertificate = true };
 

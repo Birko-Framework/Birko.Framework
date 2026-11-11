@@ -30,7 +30,9 @@ public class EscapeAnomalyDiscriminationLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    // A database, so a connector, of its own: a sibling class healing on the shared connector would otherwise make
+    // the write this class expects to fail succeed (TASK-883; LiveDatabase.Dedicated says why).
+    private static string Database => LiveDatabase.Dedicated("MSSQL", "escape");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _out;

@@ -194,19 +194,19 @@ internal static class Task873Connectors
         => new SqLiteConnector(new SqLiteSettings(Path.GetDirectoryName(path)!, Path.GetFileName(path)));
 
     public static AbstractConnector PostgreSql() => new PostgreSQLConnector(new PostgreSqlSettings(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 });
 
     public static AbstractConnector MySql() => new MySQLConnector(new MySqlSettings(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MYSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306 });
 
     public static AbstractConnector MSSql() => new MSSqlConnector(new MSSqlSettings(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MSSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

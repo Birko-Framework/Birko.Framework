@@ -23,7 +23,7 @@ public class FluentPrecisionLiveTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
     private static MySqlSettings Settings() => new(Host!, Database, User, Password, Port);
 
     private readonly ITestOutputHelper _output;

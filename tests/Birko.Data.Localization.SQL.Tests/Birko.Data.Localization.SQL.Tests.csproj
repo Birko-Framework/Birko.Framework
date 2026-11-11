@@ -45,4 +45,6 @@
   <Import Project="..\..\Birko.Data.Localization\Birko.Data.Localization.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Localization.SQL\Birko.Data.Localization.SQL.projitems" Label="Shared" />
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

@@ -49,4 +49,6 @@
     <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
   </ItemGroup>
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

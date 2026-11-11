@@ -47,7 +47,7 @@ public class Task272SchemaHypertableLiveTests : IDisposable
     }
 
     private static TimescaleDBSettings Settings()
-        => new(Host!, Environment.GetEnvironmentVariable("BIRKO_TS_DB") ?? "birkoview",
+        => new(Host!, LiveDatabase.Name("TS"),
             Environment.GetEnvironmentVariable("BIRKO_TS_USER") ?? "postgres",
             Environment.GetEnvironmentVariable("BIRKO_TS_PASSWORD") ?? "postgres", Port, "Ts", "1 day");
 

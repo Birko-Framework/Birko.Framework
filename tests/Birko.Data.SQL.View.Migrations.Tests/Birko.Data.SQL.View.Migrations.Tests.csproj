@@ -45,4 +45,6 @@
   <Import Project="..\..\Birko.Data.Migrations\Birko.Data.Migrations.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.Migrations.SQL\Birko.Data.Migrations.SQL.projitems" Label="Shared" />
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

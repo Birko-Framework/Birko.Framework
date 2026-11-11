@@ -29,7 +29,7 @@ internal sealed class MySQLLive
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
 
     public MySQLLive(ITestOutputHelper output) => _output = output;
 

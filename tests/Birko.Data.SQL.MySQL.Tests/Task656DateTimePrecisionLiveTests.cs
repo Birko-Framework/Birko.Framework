@@ -26,7 +26,7 @@ public class Task656DateTimePrecisionLiveTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
 
     private readonly ITestOutputHelper _output;
     public Task656DateTimePrecisionLiveTests(ITestOutputHelper output) => _output = output;

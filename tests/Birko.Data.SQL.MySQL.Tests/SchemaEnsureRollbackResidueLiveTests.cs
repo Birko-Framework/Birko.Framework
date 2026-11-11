@@ -39,7 +39,9 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    // A database, so a connector, of its own: a sibling class healing on the shared connector would otherwise make
+    // the write this class expects to fail succeed (TASK-883; LiveDatabase.Dedicated says why).
+    private static string Database => LiveDatabase.Dedicated("MYSQL", "residue");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;

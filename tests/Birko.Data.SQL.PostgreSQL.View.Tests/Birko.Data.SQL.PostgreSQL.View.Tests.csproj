@@ -41,4 +41,6 @@
   <Import Project="..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.PostgreSQL.View\Birko.Data.SQL.PostgreSQL.View.projitems" Label="Shared" />
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

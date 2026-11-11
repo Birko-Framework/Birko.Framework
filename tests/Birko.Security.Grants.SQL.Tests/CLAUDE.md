@@ -44,3 +44,14 @@ Birko.Security.Grants.SQL.Tests/
   - removing the Email index fails the index test;
   - removing `IsUnique()` from `TokenHash` fails the uniqueness test;
   - a row seeded into only one store fails every affected parity lookup.
+
+## Live database (TASK-883)
+
+- A live test never connects to `BIRKO_{PG,MYSQL,MSSQL,TS}_DB` (default `birkoview`) itself: it asks
+  `LiveDatabase.Name("PG" | "MYSQL" | "MSSQL" | "TS")` (`tests/Shared/TestSupport/LiveDatabase.cs`, brought in by the
+  `LiveDatabase.props` import in the csproj). That creates `{db}_{run tag}` on first use, and `LiveTestFramework` drops
+  it after the assembly's last test — so two runs against one server never share a table, view or index name, however
+  fixed (`[Table("…")]` included). A run killed before its teardown is swept by the next run after 6 hours.
+- A database a test creates beside it (another MySQL schema, another collation or time zone) takes its name from
+  `LiveDatabase.RunName(prefix, base)`, so it carries the tag and is dropped with the run. A class that must not share
+  the cached connector with its siblings uses `LiveDatabase.Dedicated(prefix, suffix)`. Never hard-code a database name.

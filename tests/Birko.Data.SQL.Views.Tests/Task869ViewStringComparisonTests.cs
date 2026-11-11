@@ -172,7 +172,7 @@ public sealed class PostgreSqlTask869ViewStringComparisonTests : Task869ViewStri
     public PostgreSqlTask869ViewStringComparisonTests(ITestOutputHelper output) : base(output) { }
     protected override string? HostVariable => "BIRKO_PG_HOST";
     protected override AbstractConnector Connector() => new PostgreSQLConnector(new PostgreSqlSettings(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 });
@@ -183,7 +183,7 @@ public sealed class MySqlTask869ViewStringComparisonTests : Task869ViewStringCom
     public MySqlTask869ViewStringComparisonTests(ITestOutputHelper output) : base(output) { }
     protected override string? HostVariable => "BIRKO_MYSQL_HOST";
     protected override AbstractConnector Connector() => new MySQLConnector(new MySqlSettings(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MYSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306 });
@@ -194,7 +194,7 @@ public sealed class MSSqlTask869ViewStringComparisonTests : Task869ViewStringCom
     public MSSqlTask869ViewStringComparisonTests(ITestOutputHelper output) : base(output) { }
     protected override string? HostVariable => "BIRKO_MSSQL_HOST";
     protected override AbstractConnector Connector() => new MSSqlConnector(new MSSqlSettings(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MSSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

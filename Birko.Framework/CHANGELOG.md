@@ -4,6 +4,11 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — SQL and MongoDB job queues stamp a claim when they write it
+[[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
+candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job
+out again (reproduced on SQLite, PostgreSQL, MySQL, SQL Server and MongoDB). Symbio's 30-minute default made it rare.
+
 ## 2026-11-10 — A SQL view read over a missing view throws; table-name overloads refuse reserved columns
 [[TASK-891]]. A view read over a view or source table that did not exist answered 0 rows on all four providers while
 its count threw (rule 26, measured): the reader's missing-table swallow, meant for tables a store heals, applied to

@@ -51,7 +51,7 @@ public class UtcFieldFallbackLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;
@@ -95,6 +95,28 @@ public class UtcFieldFallbackLiveTests : IDisposable
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         return cmd.ExecuteScalar()?.ToString() ?? "<null>";
+    }
+
+    /// <summary>
+    /// <c>SET GLOBAL time_zone</c> is SERVER state, which a database of its own per run (TASK-883) cannot isolate: two
+    /// concurrent runs against one server interleave set / reset, and one run's reset to <c>SYSTEM</c> lands inside the
+    /// other's window (measured: "Expected @@session.time_zone to be +05:30, but SYSTEM", 1 of 4 concurrent runs).
+    /// A server-wide named lock, held on an unpooled connection from before the change until after the reset, makes
+    /// the windows take turns; disposing the connection releases it, and a killed run's lock dies with its session.
+    /// </summary>
+    private static MySqlConnection HoldGlobalTimeZone()
+    {
+        var builder = new MySqlConnectionStringBuilder(Settings().GetConnectionString()) { Pooling = false };
+        var conn = new MySqlConnection(builder.ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT GET_LOCK('birko-tests-global-time-zone', 300)";
+        if (Convert.ToInt32(cmd.ExecuteScalar()) != 1)
+        {
+            conn.Dispose();
+            throw new TimeoutException("Another test run held the global time_zone lock for 5 minutes.");
+        }
+        return conn;
     }
 
     private static void FreshTable()
@@ -221,6 +243,7 @@ public class UtcFieldFallbackLiveTests : IDisposable
         if (!RequireServer()) return;
         FreshTable();
 
+        using var timeZoneLock = HoldGlobalTimeZone();
         Exec("SET GLOBAL time_zone = '+05:30'");
         try
         {
@@ -252,6 +275,7 @@ public class UtcFieldFallbackLiveTests : IDisposable
         if (!RequireServer()) return;
         FreshTable();
 
+        using var timeZoneLock = HoldGlobalTimeZone();
         Exec("SET GLOBAL time_zone = '+05:30'");
         try
         {

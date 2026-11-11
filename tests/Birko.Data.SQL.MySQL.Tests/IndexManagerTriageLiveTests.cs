@@ -23,7 +23,7 @@ public class IndexManagerTriageLiveTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;
@@ -87,10 +87,11 @@ public class IndexManagerTriageLiveTests
     {
         if (!RequireServer()) return;
         var manager = new Birko.Data.SQL.MySQL.IndexManagement.MySqlIndexManager(Created());
-        Exec("CREATE DATABASE IF NOT EXISTS birko_other");
-        Exec("DROP TABLE IF EXISTS birko_other.`MyIdxDir`");
-        Exec("CREATE TABLE birko_other.`MyIdxDir` (x int)");
-        Exec("CREATE INDEX `IX_MyIdxDir_OtherOnly` ON birko_other.`MyIdxDir` (x)");
+        var other = LiveDatabase.RunName("MYSQL", "birko_other");
+        Exec($"CREATE DATABASE IF NOT EXISTS {other}");
+        Exec($"DROP TABLE IF EXISTS {other}.`MyIdxDir`");
+        Exec($"CREATE TABLE {other}.`MyIdxDir` (x int)");
+        Exec($"CREATE INDEX `IX_MyIdxDir_OtherOnly` ON {other}.`MyIdxDir` (x)");
         (await manager.ExistsAsync("IX_MyIdxDir_OtherOnly", "MyIdxDir")).Should().BeFalse();
         (await manager.ExistsAsync("IX_MyIdxDir_E", "MyIdxDir")).Should().BeTrue();
         (await manager.ListAsync("MyIdxDir")).Select(i => i.Name).Should().NotContain("IX_MyIdxDir_OtherOnly");

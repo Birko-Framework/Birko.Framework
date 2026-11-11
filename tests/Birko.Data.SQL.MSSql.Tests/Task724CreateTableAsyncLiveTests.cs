@@ -39,7 +39,7 @@ public sealed class Task724CreateTableAsyncLiveTests
             return;
         }
         var connector = new MSSqlConnector(new MSSqlSettings(host,
-            Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+            LiveDatabase.Name("MSSQL"),
             Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
             Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
             int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

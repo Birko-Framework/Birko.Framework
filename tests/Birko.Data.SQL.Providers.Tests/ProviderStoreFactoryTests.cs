@@ -256,7 +256,7 @@ public class ProviderStoreFactoryTests
             int.TryParse(Environment.GetEnvironmentVariable($"BIRKO_{prefix}_PORT"), out var port) ? port : defaultPort,
             Environment.GetEnvironmentVariable($"BIRKO_{prefix}_USER") ?? defaultUser,
             Environment.GetEnvironmentVariable($"BIRKO_{prefix}_PASSWORD") ?? defaultPassword,
-            Environment.GetEnvironmentVariable($"BIRKO_{prefix}_DB") ?? "birkoview");
+            LiveDatabase.Name(prefix));
     }
 
     /// <summary>

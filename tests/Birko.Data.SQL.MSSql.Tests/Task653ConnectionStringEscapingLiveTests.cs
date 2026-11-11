@@ -20,7 +20,7 @@ public class Task653ConnectionStringEscapingLiveTests
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MSSQL");
 
     private readonly ITestOutputHelper _output;
     public Task653ConnectionStringEscapingLiveTests(ITestOutputHelper output) => _output = output;

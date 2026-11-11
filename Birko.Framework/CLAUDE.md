@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Live SQL test runs get their own database (2026-11-11)
+[[TASK-883]]. Two concurrent runs of a live SQL suite against one server failed ~1570 of 2602 tests each (shared fixed
+table names; measured), and MySQL classes that drop tables raw failed 3 of 8 runs through the shared cached connector.
+Each test process now creates and drops its own database (`tests/Shared/TestSupport/LiveDatabase.cs`, one producer);
+interfering classes take a dedicated one. Concurrent pairs pass on PostgreSQL, MySQL, SQL Server and TimescaleDB.
 ### SQL view probe answers "missing"; type-keyed bulk writes refuse reserved columns (2026-11-11)
 [[TASK-901]]. Without the provider View package (how every consumer runs), `ViewExists` threw on a missing view, so Auto
 mode failed instead of reading on the fly, and answered `false` when the database was unreachable; the connector's
@@ -373,10 +378,6 @@ would. A narrowing SET translates on SQLite, and a fold works on a persistent vi
 default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused
 (measured). Each now matches C#. View aggregates got the store's decimal and DateTime rules; a view decimal AVG and a
 sort by a DateTime group key are refused by name. Found: `DateTime` filters compare stored text ([[TASK-902]], P1).
-### SQL and MongoDB job queues stamp a claim when they write it (2026-11-10)
-[[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
-candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job
-out again (reproduced on SQLite, PostgreSQL, MySQL, SQL Server and MongoDB). Symbio's 30-minute default made it rare.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

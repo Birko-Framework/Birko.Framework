@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    TASK-883: a live SQL test project imports this, and nothing else, to run in a database of its own per test process.
+    It links LiveDatabase.cs (the one producer of the database name) and registers LiveTestFramework, whose Dispose drops
+    this run's databases once every test in the assembly has finished. A ProcessExit handler cannot do that job: measured,
+    vstest kills the testhost a moment after the session ends, before an exit handler's DROP DATABASE returns.
+  -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)LiveDatabase.cs" Link="Shared\LiveDatabase.cs" />
+    <AssemblyAttribute Include="Xunit.TestFrameworkAttribute">
+      <_Parameter1>Birko.Tests.Shared.LiveTestFramework</_Parameter1>
+      <_Parameter2>$(AssemblyName)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

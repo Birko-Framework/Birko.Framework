@@ -64,7 +64,7 @@ public class UtcDateTimeBindingLiveTests : IDisposable
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("PG");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;
@@ -283,7 +283,7 @@ public class UtcDateTimeBindingLiveTests : IDisposable
     {
         if (!RequireServer()) return;
 
-        var tzDatabase = "birko_tz_task256";
+        var tzDatabase = LiveDatabase.RunName("PG", "birko_tz_task256");
         Exec($"DROP DATABASE IF EXISTS {tzDatabase} WITH (FORCE)", Database);
         Exec($"CREATE DATABASE {tzDatabase}", Database);
         try
@@ -347,7 +347,7 @@ public class UtcDateTimeBindingLiveTests : IDisposable
     {
         if (!RequireServer()) return;
 
-        var tzDatabase = "birko_tz_task256_upd";
+        var tzDatabase = LiveDatabase.RunName("PG", "birko_tz_task256_upd");
         Exec($"DROP DATABASE IF EXISTS {tzDatabase} WITH (FORCE)", Database);
         Exec($"CREATE DATABASE {tzDatabase}", Database);
         try

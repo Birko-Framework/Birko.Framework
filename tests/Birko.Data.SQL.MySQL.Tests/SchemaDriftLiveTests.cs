@@ -33,7 +33,7 @@ public class SchemaDriftLiveTests
     private static int Port => uint.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? (int)p : 3306;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root";
-    private static string Database => Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview";
+    private static string Database => LiveDatabase.Name("MYSQL");
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     private readonly ITestOutputHelper _output;
@@ -240,11 +240,12 @@ public class SchemaDriftLiveTests
         Exec($"DROP TABLE IF EXISTS `{DriftedTable}`");
         Exec($"CREATE TABLE `{DriftedTable}` (`Guid` char(36) PRIMARY KEY, `Money` decimal(18,2) NOT NULL)");
 
-        Exec("CREATE DATABASE IF NOT EXISTS birkodrift_other");
+        var other = LiveDatabase.RunName("MYSQL", "birkodrift_other");
+        Exec($"CREATE DATABASE IF NOT EXISTS {other}");
         try
         {
-            Exec($"DROP TABLE IF EXISTS birkodrift_other.`{DriftedTable}`");
-            Exec($"CREATE TABLE birkodrift_other.`{DriftedTable}` (`Guid` char(36), `Money` decimal(18,0), `Extra` text)");
+            Exec($"DROP TABLE IF EXISTS {other}.`{DriftedTable}`");
+            Exec($"CREATE TABLE {other}.`{DriftedTable}` (`Guid` char(36), `Money` decimal(18,0), `Extra` text)");
 
             var report = new MySQLConnector(Settings()).DetectDrift(typeof(DriftedRow));
             foreach (var d in report.Drifts) _output.WriteLine(d.ToString());
@@ -254,7 +255,7 @@ public class SchemaDriftLiveTests
         }
         finally
         {
-            Exec("DROP DATABASE IF EXISTS birkodrift_other");
+            Exec($"DROP DATABASE IF EXISTS {other}");
         }
     }
 

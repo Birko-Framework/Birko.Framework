@@ -20,13 +20,13 @@ namespace Birko.Data.SQL.MSSql.Tests;
 public class SchemaDriftCollationLiveTests
 {
     private const string CaseTable = "MsDriftCase";
-    private const string CsDatabase = "birko611cs";
+    private static string CsDatabase => LiveDatabase.RunName("MSSQL", "birko611cs");
 
     private static string? Host => Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST");
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433;
     private static string User => Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa";
     private static string Password => Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd";
-    private static string DefaultDatabase => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    private static string DefaultDatabase => LiveDatabase.Name("MSSQL");
 
     private readonly ITestOutputHelper _output;
     public SchemaDriftCollationLiveTests(ITestOutputHelper output) => _output = output;

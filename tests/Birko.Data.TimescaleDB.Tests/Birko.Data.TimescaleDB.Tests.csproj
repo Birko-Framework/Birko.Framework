@@ -49,4 +49,6 @@
     <Compile Include="..\Shared\StoreContract\DelegateContract.cs" Link="Shared\DelegateContract.cs" />
   </ItemGroup>
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

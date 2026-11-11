@@ -35,7 +35,7 @@ public sealed class Task175LockProviderLiveTests(ITestOutputHelper output)
             return null;
         }
         return new PostgreSqlSettings(host,
-            Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+            LiveDatabase.Name("PG"),
             Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
             Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
         { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };

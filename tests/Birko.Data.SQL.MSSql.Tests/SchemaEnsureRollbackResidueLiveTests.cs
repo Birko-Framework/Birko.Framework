@@ -40,7 +40,7 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
     private static bool RequireLive => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_REQUIRE_LIVE"));
 
     /// <summary>The database every other class in this suite uses, and which this one deliberately avoids.</summary>
-    internal static string SharedDatabase => Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview";
+    internal static string SharedDatabase => LiveDatabase.Name("MSSQL");
 
     /// <summary>
     /// TASK-276 — this class gets a database of its own, and therefore a <b>connector</b> of its own.

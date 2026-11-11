@@ -28,7 +28,7 @@ public sealed class Task722IntrospectionTransactionLiveTests : IDisposable
     public Task722IntrospectionTransactionLiveTests(ITestOutputHelper output) => _output = output;
 
     private static TimescaleDBSettings Settings()
-        => new(Host!, Environment.GetEnvironmentVariable("BIRKO_TS_DB") ?? "birkoview",
+        => new(Host!, LiveDatabase.Name("TS"),
             Environment.GetEnvironmentVariable("BIRKO_TS_USER") ?? "postgres",
             Environment.GetEnvironmentVariable("BIRKO_TS_PASSWORD") ?? "postgres", Port, "ts", "1 day");
 

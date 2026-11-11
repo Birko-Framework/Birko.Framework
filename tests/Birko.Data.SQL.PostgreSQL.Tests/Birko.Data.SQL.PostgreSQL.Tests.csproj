@@ -64,4 +64,6 @@
     <Compile Include="..\Shared\StoreContract\StringEqualityLeftoversContract.cs" Link="Shared\StringEqualityLeftoversContract.cs" />
   </ItemGroup>
 
+  <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
+
 </Project>

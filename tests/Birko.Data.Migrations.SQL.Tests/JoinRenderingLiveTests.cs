@@ -179,7 +179,7 @@ public sealed class PostgreSqlJoinRenderingLiveTests : JoinRenderingLiveTestsBas
 {
     public PostgreSqlJoinRenderingLiveTests(ITestOutputHelper output) : base(output) { }
     private static PostgreSqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };
@@ -192,7 +192,7 @@ public sealed class MySqlJoinRenderingLiveTests : JoinRenderingLiveTestsBase
 {
     public MySqlJoinRenderingLiveTests(ITestOutputHelper output) : base(output) { }
     private static MySqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MYSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MYSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_USER") ?? "root",
         Environment.GetEnvironmentVariable("BIRKO_MYSQL_PASSWORD") ?? "root")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306 };
@@ -205,7 +205,7 @@ public sealed class MSSqlJoinRenderingLiveTests : JoinRenderingLiveTestsBase
 {
     public MSSqlJoinRenderingLiveTests(ITestOutputHelper output) : base(output) { }
     private static MSSqlSettings Settings() => new(Environment.GetEnvironmentVariable("BIRKO_MSSQL_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_MSSQL_DB") ?? "birkoview",
+        LiveDatabase.Name("MSSQL"),
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_USER") ?? "sa",
         Environment.GetEnvironmentVariable("BIRKO_MSSQL_PASSWORD") ?? "Birko!Passw0rd",
         int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MSSQL_PORT"), out var p) ? p : 1433)

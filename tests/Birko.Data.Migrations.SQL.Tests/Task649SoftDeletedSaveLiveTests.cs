@@ -87,7 +87,7 @@ public sealed class PostgreSqlTask649SoftDeletedSaveLiveTests : Task649SoftDelet
     public PostgreSqlTask649SoftDeletedSaveLiveTests(ITestOutputHelper output) : base(output) { }
     protected override string? HostVariable => "BIRKO_PG_HOST";
     protected override Birko.Configuration.Settings Settings() => new PostgreSqlSettings(Environment.GetEnvironmentVariable("BIRKO_PG_HOST")!,
-        Environment.GetEnvironmentVariable("BIRKO_PG_DB") ?? "birkoview",
+        LiveDatabase.Name("PG"),
         Environment.GetEnvironmentVariable("BIRKO_PG_USER") ?? "postgres",
         Environment.GetEnvironmentVariable("BIRKO_PG_PASSWORD") ?? "postgres")
     { Port = int.TryParse(Environment.GetEnvironmentVariable("BIRKO_PG_PORT"), out var p) ? p : 5432 };
