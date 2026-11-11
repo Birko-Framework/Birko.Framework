@@ -31,7 +31,8 @@ every point is its own series and the pivot dominates. Native Flux would not be 
 10 s timeout should change.
 
 **Decided by the user (2026-11-11):** the read timeout becomes configurable on the InfluxDB settings (the consumer's
-value wins); reproduce the 100k-point failure first and document the series-per-point cost. Native Flux: pending.
+value wins); reproduce the 100k-point failure first and document the series-per-point cost. Native Flux: re-measured after the point-layout change in TASK-910 (filed at the user's request); not built
+here.
 
 ## Acceptance criteria
 
