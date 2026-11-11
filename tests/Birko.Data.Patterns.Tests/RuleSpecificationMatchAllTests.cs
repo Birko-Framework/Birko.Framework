@@ -95,13 +95,15 @@ public class RuleSpecificationMatchAllTests
     }
 
     [Fact]
-    public void Like_with_an_interior_wildcard_matches_nothing_rather_than_guessing()
+    public void Like_with_an_interior_wildcard_is_refused_rather_than_guessing()
     {
-        // "a%a" has no single string-method equivalent. Unevaluable — and the point of this test is the
-        // NEGATED form below, which must not become match-all.
-        Matches(new Rule(nameof(Widget.Name), ComparisonOperator.Like, "a%a")).Should().Be(0);
-        Matches(new Rule(nameof(Widget.Name), ComparisonOperator.Like, "a%a") { IsNegated = true })
-            .Should().Be(0, "a degraded leaf stays match-none under negation");
+        // "a%a" has no single string-method equivalent. TASK-882 (rule 56, inverted): it matched nothing in both
+        // polarities while the SQL rule matched the literal; every runner refuses it by name, so it never becomes
+        // match-all under negation either.
+        var plain = () => Matches(new Rule(nameof(Widget.Name), ComparisonOperator.Like, "a%a"));
+        plain.Should().Throw<NotSupportedException>();
+        var negated = () => Matches(new Rule(nameof(Widget.Name), ComparisonOperator.Like, "a%a") { IsNegated = true });
+        negated.Should().Throw<NotSupportedException>();
     }
 
     // ── SH-H043 / SH-H044 — a non-string member reaching Expression.Not ─────────────────────────

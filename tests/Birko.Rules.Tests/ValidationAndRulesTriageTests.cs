@@ -54,16 +54,19 @@ public class ValidationAndRulesTriageTests
     }
 
     [Fact]
-    public void SH_M362_an_interior_wildcard_matches_nothing_in_both_engines_negated_or_not()
+    public void SH_M362_an_interior_wildcard_is_refused_by_both_engines_negated_or_not()
     {
+        // TASK-882 (rule 56, inverted): both engines matched nothing here while SQL matched the literal A%B. No runner has
+        // one answer for it, so each refuses it by name; neither guesses, as SH-M362 asked.
         var row = new Row { Name = "A%B" };
         var rule = new Rule("Name", ComparisonOperator.Like, "A%B");
         var negated = new Rule("Name", ComparisonOperator.Like, "A%B") { IsNegated = true };
 
-        Match(rule, row).Should().BeFalse("the literal A%B is not what a pattern means");
-        Store(rule, row).Should().BeFalse();
-        Match(negated, row).Should().BeFalse();
-        Store(negated, row).Should().BeFalse();
+        foreach (var r in new[] { rule, negated })
+        {
+            ((Action)(() => Match(r, row))).Should().Throw<NotSupportedException>().WithMessage("*'Name'*interior*");
+            ((Action)(() => Store(r, row))).Should().Throw<NotSupportedException>().WithMessage("*'Name'*interior*");
+        }
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace Birko.Rules;
@@ -15,6 +16,10 @@ internal static class ComparisonHelper
     /// </summary>
     public static bool Compare(object? actual, ComparisonOperator op, object? expected, object? upperExpected = null)
     {
+        // TASK-882: the rule's value as a value of the member's type, as the compiled rule reads it; none means no answer.
+        if (!TryAlignOperands(actual, op, ref expected, ref upperExpected))
+            return false;
+
         return op switch
         {
             ComparisonOperator.IsNull => actual is null,
@@ -79,28 +84,83 @@ internal static class ComparisonHelper
     /// </summary>
     /// <remarks>
     /// TASK-156: also false for what the rule-to-LINQ translator degrades, so a NEGATED rule does not invert "cannot be
-    /// evaluated" into match-all in memory while the store matches nothing: a null needle, a null set, and a
-    /// <c>Like</c> pattern with an interior <c>%</c>.
+    /// evaluated" into match-all in memory while the store matches nothing: a null needle and a null set.
+    /// TASK-882: also false for a value with no form for the member's type (<see cref="TryAlignOperands"/>), which the
+    /// compiled rule degrades the same way. A <c>Like</c> pattern with an interior <c>%</c> never gets here:
+    /// <see cref="RuleEvaluator"/> refuses it by name first (<see cref="RuleLikePattern"/>).
     /// </remarks>
-    public static bool CanEvaluate(object? actual, ComparisonOperator op, object? expected = null) => op switch
+    public static bool CanEvaluate(object? actual, ComparisonOperator op, object? expected = null, object? upperExpected = null) => op switch
     {
         ComparisonOperator.Contains
             or ComparisonOperator.NotContains
             or ComparisonOperator.StartsWith
             or ComparisonOperator.EndsWith => IsStringMember(actual) && expected is not null,
-        ComparisonOperator.Like => IsStringMember(actual) && IsSupportedLikePattern(expected),
-        ComparisonOperator.In or ComparisonOperator.NotIn => expected is not null,
-        _ => true
+        ComparisonOperator.Like => IsStringMember(actual) && RuleLikePattern.Parse(expected, string.Empty) is not null,
+        ComparisonOperator.In or ComparisonOperator.NotIn => expected is not null && TryAlignOperands(actual, op, ref expected, ref upperExpected),
+        _ => TryAlignOperands(actual, op, ref expected, ref upperExpected)
     };
 
     /// <summary>
-    /// A <c>Like</c> pattern this engine and the translator both read: <c>%</c> only at the start and/or the end. An
-    /// interior <c>%</c> has no string-method form, so neither engine guesses (SH-M362); <c>_</c> is a literal in both.
+    /// TASK-882 — rewrites the rule's value(s) into the type of <paramref name="actual"/> through
+    /// <see cref="RuleValueConverter"/>, the producer the compiled rule and the SQL rule read values through, for the
+    /// comparison operators. False when a value has no such form (an unknown enum name, text that is no Guid or number):
+    /// no answer, which <see cref="CanEvaluate"/> keeps from being negated into a match.
     /// </summary>
-    private static bool IsSupportedLikePattern(object? expected)
+    /// <remarks>
+    /// <para>
+    /// Before (measured): an enum compared with a number was unequal (<c>State Equal 1</c> matched nothing, where the
+    /// compiled rule and SQL match <c>Active</c>), an enum against its name ordered as text (<c>Closed</c> before
+    /// <c>Pending</c>), a <c>DateTime</c> against text compared the host culture's rendering, a Guid only in its "D" text form,
+    /// and a value that is no number (<c>Amount NotEqual "abc"</c>) matched every row where the compiled rule matches none.
+    /// </para>
+    /// <para>
+    /// Applied only where the member's value is typed beyond what this engine already compares: an enum, a Guid, a date, or
+    /// any non-string value against text. Two numbers keep their exact / double promotion (SH-M360, SH-M294). This engine
+    /// sees values, not declared types, so a NULL member has no type to align to and answers as before.
+    /// </para>
+    /// </remarks>
+    private static bool TryAlignOperands(object? actual, ComparisonOperator op, ref object? expected, ref object? upperExpected)
     {
-        var pattern = expected?.ToString();
-        return !string.IsNullOrEmpty(pattern) && !pattern!.Trim('%').Contains('%');
+        switch (op)
+        {
+            case ComparisonOperator.Equal
+                or ComparisonOperator.NotEqual
+                or ComparisonOperator.GreaterThan
+                or ComparisonOperator.GreaterThanOrEqual
+                or ComparisonOperator.LessThan
+                or ComparisonOperator.LessThanOrEqual:
+                return TryAlign(actual, expected, out expected);
+            case ComparisonOperator.Between:
+                return TryAlign(actual, expected, out expected) && TryAlign(actual, upperExpected, out upperExpected);
+            case ComparisonOperator.In or ComparisonOperator.NotIn:
+                if (expected is not IEnumerable set || expected is string)
+                    return TryAlign(actual, expected, out expected);
+                var aligned = new List<object?>();
+                foreach (var item in set)
+                {
+                    if (!TryAlign(actual, item, out var one))
+                        return false;
+                    aligned.Add(one);
+                }
+                expected = aligned;
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private static bool TryAlign(object? actual, object? expected, out object? aligned)
+    {
+        aligned = expected;
+        if (actual is null || expected is null || actual is string)
+            return true;
+        var type = actual.GetType();
+        if (type.IsInstanceOfType(expected))
+            return true;
+        var typed = type.IsEnum || type == typeof(Guid) || type == typeof(DateTime) || type == typeof(DateTimeOffset);
+        if (!typed && expected is not string)
+            return true;
+        return RuleValueConverter.TryConvert(expected, type, out aligned);
     }
 
     private static bool AreEqual(object? a, object? b)
@@ -198,21 +258,9 @@ internal static class ComparisonHelper
 
     private static bool LikeString(object? actual, object? expected)
     {
-        // % at the start and/or the end only, as the translator reads it (TASK-156). A lone "%" is "any value": it used
-        // to slice pattern[1..^1] on a length-1 string and throw (SH-M359). An interior % matches nothing (SH-M362).
-        if (actual is null || !IsSupportedLikePattern(expected)) return false;
-        var pattern = expected!.ToString()!;
-        var value = actual.ToString()!;
-        var starts = pattern.StartsWith('%');
-        var ends = pattern.EndsWith('%');
-        var core = pattern.Trim('%');
-        if (starts && ends)
-            return value.Contains(core, StringComparison.OrdinalIgnoreCase);
-        if (starts)
-            return value.EndsWith(core, StringComparison.OrdinalIgnoreCase);
-        if (ends)
-            return value.StartsWith(core, StringComparison.OrdinalIgnoreCase);
-        return string.Equals(value, pattern, StringComparison.OrdinalIgnoreCase);
+        // TASK-882: RuleLikePattern, the one parser of a Like pattern (TASK-156's anchors; a lone "%" is "any value", SH-M359).
+        if (actual is null || RuleLikePattern.Parse(expected, string.Empty) is not { } pattern) return false;
+        return pattern.IsMatch(actual.ToString());
     }
 
     /// <summary>

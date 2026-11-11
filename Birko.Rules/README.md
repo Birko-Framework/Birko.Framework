@@ -13,6 +13,9 @@ Data-driven rule engine for the Birko Framework. Define business rules as compos
 - **Negation support** — any rule can be negated
 - **Type-safe comparisons** — numeric promotion, string fallback, and NULL answered as C# answers it (an ordering over
   NULL is false; `In` matches NULL only from a list holding `null`)
+- **One answer wherever a rule runs** — in memory, compiled to LINQ, or as SQL: a value given as text (an enum name, a
+  Guid, a date) is converted to the field type by `RuleValueConverter`, a `Like` pattern is read by `RuleLikePattern`
+  (`%` only at either end, case ignored; an interior `%` is refused with `NotSupportedException`)
 - **Stateless evaluator** — singleton-safe, no side effects
 - **LINQ expression converter** — convert rules to `Expression<Func<T, bool>>` for any store (SQL, Elasticsearch, MongoDB, JSON)
 

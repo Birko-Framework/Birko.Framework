@@ -29,7 +29,9 @@ Birko.Rules/
 │   ├── ComparisonHelper.cs       - Internal: type-safe comparison with numeric promotion, string fallback, LIKE patterns
 │   └── RuleEvaluator.cs          - Default stateless evaluator (leaf + group evaluation, respects IsEnabled/IsNegated)
 └── Expressions/
-    └── RuleExpressionConverter.cs - Static converter: IRule/RuleSet/IEnumerable<IRule> → Expression<Func<T, bool>> for any LINQ-based store
+    ├── RuleExpressionConverter.cs - Static converter: IRule/RuleSet/IEnumerable<IRule> → Expression<Func<T, bool>> for any LINQ-based store
+    ├── RuleLikePattern.cs         - Public: the one parser of a Like pattern (anchors, core, OrdinalIgnoreCase match; refuses an interior %) (TASK-882)
+    └── RuleValueConverter.cs      - Public: the one producer of "rule value as the member's type" (enum by name/number, Guid/date/number as text) (TASK-882)
 ```
 
 ## Dependencies
@@ -48,17 +50,37 @@ Birko.Rules/
 - **RuleEvaluator** is stateless, singleton-safe
 - **NULL follows C#** (TASK-881, TASK-859's decision): `ComparisonHelper.CompareValues` returns `null` when either side is
   null, so every ordering and `Between` over NULL is false and its negation true; `In` compares each candidate with
-  `AreEqual`, so NULL is in a list holding `null`. Same rows as the compiled rule and as SQL (TASK-864). The evaluator
-  sees values, not declared types, so a non-nullable member against a `null` rule value answers C#'s lifted answer too,
-  where `RuleExpressionConverter` matches nothing (TASK-882). Tests: `Task881RuleEvaluatorNullTests`
+  `AreEqual`, so NULL is in a list holding `null`. Same rows as the compiled rule and as SQL (TASK-864). Tests:
+  `Task881RuleEvaluatorNullTests`
+- **One answer per rule, the C# lambda's (TASK-882, "C# semantics, always").** The three runners — `RuleEvaluator`,
+  `RuleExpressionConverter` (compiled, then any store) and the SQL `RuleConditionConverter` — select what the equivalent
+  C# lambda over the entity selects, or all refuse the shape by name (`NotSupportedException`):
+  - a `null` against a **non-nullable** member is C#'s lifted comparison: `NotEqual` every row, `Equal` / orderings /
+    `Between` none (their negations every row); `In [null, 5]` matches 5. The compiled rule lifts the member
+    (`(int?)x.Amount == null`, the C# compiler's shape); it matched nothing before. SQL's `Between` with a null bound
+    threw `ArgumentException`; it is the constant lifted ordering now.
+  - **`Like`**: one parser, `RuleLikePattern`. `%` at either end is "anything", the rest literal (`_` included), matched
+    `OrdinalIgnoreCase` like `Contains` / `StartsWith` / `EndsWith` — also without a wildcard (the compiled rule compared
+    that ordinally). **An interior `%` (`a%b`) is refused by name by all three, whatever the data** (it matched nothing in
+    memory and the literal in SQL; the compiled rule has no store-translatable form for it). The refusal names the
+    field, never the pattern.
+  - **Values** are read through `RuleValueConverter` by all three: an enum by name (any case) or number, a Guid / date /
+    number as text. The evaluator aligns a value to the member's runtime type (enum, Guid, date, or any non-string
+    against text); two numbers keep their exact / double promotion. A value with no form for the member (`"Bogus"` for
+    an enum, `"abc"` for an int) matches nothing, negated or not, in every runner. An enum orders by its underlying value.
+  - **Residual, known:** the evaluator sees values, not declared types, so on a NULL member it cannot tell an
+    unconvertible value (`OptState NotEqual "Bogus"` answers true on a NULL row; the compiled rule matches nothing).
+  Tests: `Task882RuleLeftoversTests` (231 shapes x compiled / evaluator / dictionary context), `Task882RuleValueAndPatternTests`;
+  SQL: shared `RuleLeftoversContract` (four providers).
 - **RuleExpressionConverter** is `static` and is the framework's **one** rule-to-LINQ translator (TASK-144):
   `RuleSpecification.ToExpression` calls it. Nested properties with null guards, invariant value conversion
   (string→DateTime/Guid/enum), case-insensitive property resolution. A leaf it cannot express (unknown field, mistyped
-  value, string ordering, null needle, interior `%`) matches nothing and is never negated (TASK-116's invariant); an
-  operator with no arm throws. String `Equal` / `NotEqual` / `In` / `NotIn` is plain `==`, ordinal, and so is
+  value, string ordering, null needle) matches nothing and is never negated (TASK-116's invariant); an operator with no
+  arm, and a `Like` pattern with an interior `%`, throw (TASK-882). String `Equal` / `NotEqual` / `In` / `NotIn` is plain `==`, ordinal, and so is
   `RuleEvaluator`'s comparison of two strings and the SQL rule (`RuleConditionConverter`, through TASK-873's exact
   equality): one answer for a rule (TASK-895, the user's decision; the evaluator ignored case before, SH-M295). String
-  methods (`Contains` / `StartsWith` / `EndsWith` / `Like`) stay `OrdinalIgnoreCase`
+  methods (`Contains` / `StartsWith` / `EndsWith` / `Like`) are `OrdinalIgnoreCase` in all three runners (SQL through
+  TASK-869's exact form since TASK-882; it followed the column's collation before)
 
 ## Conventions
 - Namespace: `Birko.Rules`

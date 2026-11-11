@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Rules give one answer for null, `Like` and enum/Guid values, wherever they run (2026-11-11)
+[[TASK-882]] (the user's decisions). A rule comparing a non-nullable column with null, a `Like`, or an enum/Guid value
+given as text answered differently in memory, compiled and in SQL (up to 331 of 693 measured cases per provider). All
+three now give the C# answer; rule string operators ignore case exactly (`OrdinalIgnoreCase`) on every runner, SQL
+included; a `Like` with an interior `%` is refused by name ([[TASK-915]] to support it).
 ### InfluxDB request timeout is a setting (2026-11-11)
 [[TASK-908]] (the user's decision). Every InfluxDB read or aggregate over ~100k points failed at the client's fixed 10 s
 timeout (measured: 10.05 s); reading 100k points takes ~50 s because each entity is its own series ([[TASK-910]]). New
@@ -372,11 +377,6 @@ its count threw (rule 26, measured): the reader's missing-table swallow, meant f
 views, which nothing heals. Only table reads keep it now. The migrations view generator and the connector's `Table` /
 table-name overloads now run TASK-872's reserved-column check; before, they read the database function or rewrote
 every row.
-### Cosmos DB aggregates answer in LINQ's types and names (2026-11-10)
-[[TASK-897]]. All 15 measured store shapes differed from `AggregateHelper`: numbers came back as long/double, Guid and
-DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
-string SUM ran. Names now resolve in any case, results convert to LINQ's types, DateTime MIN/MAX compare the stored wall
-clock, and what Cosmos cannot answer exactly is refused by name. **Breaking:** result types (COUNT is `int`).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

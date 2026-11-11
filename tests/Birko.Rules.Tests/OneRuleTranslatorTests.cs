@@ -56,10 +56,13 @@ public class OneRuleTranslatorTests
     }
 
     [Fact]
-    public void An_interior_wildcard_matches_nothing_rather_than_the_literal()
+    public void An_interior_wildcard_is_refused_by_name_rather_than_matching_nothing()
     {
-        Converter(new Rule("Name", ComparisonOperator.Like, "W%t")).Should().BeEmpty();
-        Converter(new Rule("Name", ComparisonOperator.Like, "W%t") { IsNegated = true }).Should().BeEmpty();
+        // TASK-882 (rule 56, inverted): it matched nothing here while SQL matched the literal; every runner refuses it now.
+        var act = () => Converter(new Rule("Name", ComparisonOperator.Like, "W%t"));
+        act.Should().Throw<NotSupportedException>().WithMessage("*'Name'*interior*");
+        var negated = () => Converter(new Rule("Name", ComparisonOperator.Like, "W%t") { IsNegated = true });
+        negated.Should().Throw<NotSupportedException>();
     }
 
     [Fact]

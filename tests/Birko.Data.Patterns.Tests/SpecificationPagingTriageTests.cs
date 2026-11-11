@@ -129,15 +129,16 @@ public class SpecificationPagingTriageTests
     [Fact]
     public void A_composite_evaluates_through_its_operands()
     {
-        // The evaluator and the expression answer a null value against a non-nullable member differently (TASK-882: the
-        // expression matches nothing, the evaluator answers C#'s lifted `11 != null`, true): that difference is what makes the
-        // dispatch observable. It was string case (SH-M295) until TASK-895 made both engines compare strings ordinally.
-        var rule = new RuleSpecification<W>(new Rules.Rule(nameof(W.Qty), ComparisonOperator.NotEqual, null));
+        // The evaluator and the expression answer a string ordering differently (SH-M291: the expression has no store form
+        // for it and matches nothing; the evaluator orders the two strings): that difference is what makes the dispatch
+        // observable. It was string case (SH-M295) until TASK-895, then a null against a non-nullable member until TASK-882
+        // made the expression answer C#'s lifted comparison too.
+        var rule = new RuleSpecification<W>(new Rules.Rule(nameof(W.Name), ComparisonOperator.GreaterThan, "a"));
         var always = new RuleSpecification<W>(new Rules.Rule(nameof(W.Qty), ComparisonOperator.GreaterThan, 0));
         var never = new RuleSpecification<W>(new Rules.Rule(nameof(W.Qty), ComparisonOperator.LessThan, 0));
 
         var alone = Sample().Count(rule.IsSatisfiedBy);
-        alone.Should().Be(3);
+        alone.Should().Be(2, "Open and beta order after a; the null name does not");
         Sample().Count(rule.ToExpression().Compile()).Should().Be(0, "the premise: the expression answers otherwise");
         Sample().Count(rule.And(always).IsSatisfiedBy).Should().Be(alone);
         Sample().Count(rule.Or(never).IsSatisfiedBy).Should().Be(alone);

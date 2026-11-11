@@ -41,7 +41,13 @@ namespace Birko.Rules;
 /// </para>
 /// <para>
 /// An operator with no arm here throws <see cref="NotSupportedException"/>: that is a gap in the code, not a property of
-/// the data, and a constant in its place changed the filter silently (SH-H041).
+/// the data, and a constant in its place changed the filter silently (SH-H041). So does a <c>Like</c> pattern with an
+/// interior <c>%</c> (<see cref="RuleLikePattern"/>), which no runner has one answer for (TASK-882).
+/// </para>
+/// <para>
+/// <b>TASK-882: the C# lambda is the reference.</b> A null against a non-nullable member is C#'s lifted comparison (<c>!=</c>
+/// true, the rest false), an enum orders by its underlying value, and a value is read through
+/// <see cref="RuleValueConverter"/>, as <see cref="RuleEvaluator"/> and the SQL rule converter read it.
 /// </para>
 /// </summary>
 public static class RuleExpressionConverter
@@ -158,7 +164,7 @@ public static class RuleExpressionConverter
             ComparisonOperator.NotContains => Negate(BuildStringMethod(member, rule.Value, nameof(string.Contains))),
             ComparisonOperator.StartsWith => BuildStringMethod(member, rule.Value, nameof(string.StartsWith)),
             ComparisonOperator.EndsWith => BuildStringMethod(member, rule.Value, nameof(string.EndsWith)),
-            ComparisonOperator.Like => BuildLike(member, rule.Value),
+            ComparisonOperator.Like => BuildLike(member, rule.Value, rule.Field),
             ComparisonOperator.In => BuildIn(member, rule.Value),
             ComparisonOperator.NotIn => Negate(BuildIn(member, rule.Value)),
             _ => throw new NotSupportedException(
@@ -244,14 +250,21 @@ public static class RuleExpressionConverter
 
     private static Leaf BuildComparison(MemberExpression member, object? value, Func<Expression, Expression, BinaryExpression> comparison)
     {
-        // A value that cannot be converted to the member type (null against a non-nullable value type, a mistyped value)
-        // makes the leaf unevaluable rather than throwing; NOT false, which a negation would invert into match-all.
+        // A value that cannot be converted to the member type (a mistyped value) makes the leaf unevaluable rather than
+        // throwing; NOT false, which a negation would invert into match-all.
         // SH-M294 (TASK-171): ChangeType(10.7, int) is 11, so a fractional value against an integral member is compared
         // in double, as the evaluator compares.
         Expression left = member;
-        if (IsFractional(value) && IsIntegral(member.Type))
+        if (RuleValueConverter.ComparesAsFraction(value, member.Type))
         {
             left = Expression.Convert(member, Nullable.GetUnderlyingType(member.Type) is null ? typeof(double) : typeof(double?));
+        }
+        else if (value is null && left.Type.IsValueType && Nullable.GetUnderlyingType(left.Type) is null)
+        {
+            // TASK-882: null against a non-nullable member is C#'s lifted comparison, `(int?)x.Amount == null`: false for
+            // == and every ordering, true for !=, and so true for their negations. The C# compiler emits exactly this lift.
+            // It matched nothing before, in both polarities, where RuleEvaluator and SQL gave C#'s answer.
+            left = Expression.Convert(member, typeof(Nullable<>).MakeGenericType(left.Type));
         }
 
         if (!TryConvertConstant(value, left.Type, out var constant))
@@ -261,6 +274,12 @@ public static class RuleExpressionConverter
         {
             return Leaf.Predicate(comparison(left, constant));
         }
+        catch (InvalidOperationException) when (EnumUnderlying(left.Type) is { } underlying)
+        {
+            // TASK-882: an enum has no ordering operator in an expression tree; C# orders it by its underlying value, and the
+            // C# compiler emits `(int)x.State > 0` for `x.State > State.Pending`. It matched nothing before.
+            return Leaf.Predicate(comparison(Expression.Convert(left, underlying), Expression.Convert(constant, underlying)));
+        }
         catch (InvalidOperationException)
         {
             // SH-M291 (TASK-171): no such operator for the type (`string > string`, `bool >= bool`). No store can order
@@ -269,19 +288,15 @@ public static class RuleExpressionConverter
         }
     }
 
-    private static bool IsFractional(object? value) => value switch
+    /// <summary>The underlying integral type of an enum (or nullable enum) type, nullable as the type is; else null.</summary>
+    private static Type? EnumUnderlying(Type type)
     {
-        double d => d != Math.Truncate(d),
-        float f => f != MathF.Truncate(f),
-        decimal m => m != decimal.Truncate(m),
-        _ => false,
-    };
-
-    private static bool IsIntegral(Type type)
-    {
-        var t = Nullable.GetUnderlyingType(type) ?? type;
-        return t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)
-            || t == typeof(uint) || t == typeof(ulong) || t == typeof(ushort) || t == typeof(sbyte);
+        var inner = Nullable.GetUnderlyingType(type);
+        var enumType = inner ?? type;
+        if (!enumType.IsEnum)
+            return null;
+        var underlying = Enum.GetUnderlyingType(enumType);
+        return inner is null ? underlying : typeof(Nullable<>).MakeGenericType(underlying);
     }
 
     private static Leaf BuildBetween(MemberExpression member, object? lower, object? upper)
@@ -295,27 +310,25 @@ public static class RuleExpressionConverter
         return Leaf.Predicate(Expression.AndAlso(from.Expr, to.Expr));
     }
 
-    private static Leaf BuildLike(MemberExpression member, object? value)
+    private static Leaf BuildLike(MemberExpression member, object? value, string field)
     {
-        if (member.Type != typeof(string))
-            return Leaf.Unevaluable();
-        var pattern = value?.ToString();
-        if (string.IsNullOrEmpty(pattern))
-            return Leaf.Unevaluable();
-
-        var starts = pattern!.StartsWith('%');
-        var ends = pattern.EndsWith('%');
-        var core = pattern.Trim('%');
-        // An interior wildcard ("a%b") has no single string-method equivalent: unevaluable, never matched as a literal.
-        if (core.Contains('%'))
+        // TASK-882: one parser for every runner (RuleLikePattern), first, so an interior '%' is refused whatever the member.
+        var parsed = RuleLikePattern.Parse(value, field);
+        if (member.Type != typeof(string) || parsed is not { } pattern)
             return Leaf.Unevaluable();
 
-        return (starts, ends) switch
+        return (pattern.AnyPrefix, pattern.AnySuffix) switch
         {
-            (true, true) => BuildStringMethod(member, core, nameof(string.Contains)),
-            (false, true) => BuildStringMethod(member, core, nameof(string.StartsWith)),
-            (true, false) => BuildStringMethod(member, core, nameof(string.EndsWith)),
-            _ => BuildComparison(member, core, Expression.Equal),
+            (true, true) => BuildStringMethod(member, pattern.Core, nameof(string.Contains)),
+            (false, true) => BuildStringMethod(member, pattern.Core, nameof(string.StartsWith)),
+            (true, false) => BuildStringMethod(member, pattern.Core, nameof(string.EndsWith)),
+            // TASK-882: no wildcard is the string operators' OrdinalIgnoreCase equality, as RuleEvaluator and the SQL rule
+            // compare it. It was ordinal ==, so `Like "ABC"` missed "abc" here and matched it in memory.
+            _ => Leaf.Predicate(Expression.Call(
+                typeof(string).GetMethod(nameof(string.Equals), [typeof(string), typeof(string), typeof(StringComparison)])!,
+                member,
+                Expression.Constant(pattern.Core, typeof(string)),
+                Expression.Constant(StringComparison.OrdinalIgnoreCase, typeof(StringComparison)))),
         };
     }
 
@@ -364,45 +377,13 @@ public static class RuleExpressionConverter
 
     private static bool TryConvertConstant(object? value, Type targetType, out Expression constant)
     {
-        constant = Expression.Constant(false);
-        try
+        // TASK-882: through RuleValueConverter, the producer RuleEvaluator and the SQL rule converter read values through.
+        if (!RuleValueConverter.TryConvert(value, targetType, out var converted))
         {
-            object? converted;
-            if (value is null)
-            {
-                // null is only representable for reference types and Nullable<T>.
-                if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) is null)
-                    return false;
-                converted = null;
-            }
-            else if (targetType.IsInstanceOfType(value))
-            {
-                converted = value;
-            }
-            else
-            {
-                var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                // SH-M292 / SH-M293 (TASK-171): a rule value arrives as text from JSON or a rule builder; ChangeType
-                // cannot make a Guid or an enum from text, and it used the host's culture.
-                if (underlying == typeof(Guid) && value is string guidText)
-                    converted = Guid.Parse(guidText);
-                else if (underlying == typeof(DateTime) && value is string dateText)
-                    converted = DateTime.Parse(dateText, CultureInfo.InvariantCulture);
-                else if (underlying == typeof(DateTimeOffset) && value is string dtoText)
-                    converted = DateTimeOffset.Parse(dtoText, CultureInfo.InvariantCulture);
-                else if (underlying.IsEnum && value is string enumText)
-                    converted = Enum.Parse(underlying, enumText, ignoreCase: true);
-                else if (underlying.IsEnum)
-                    converted = Enum.ToObject(underlying, value);
-                else
-                    converted = Convert.ChangeType(value, underlying, CultureInfo.InvariantCulture);
-            }
-            constant = Expression.Constant(converted, targetType);
-            return true;
-        }
-        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException or ArgumentException)
-        {
+            constant = Expression.Constant(false);
             return false;
         }
+        constant = Expression.Constant(converted, targetType);
+        return true;
     }
 }

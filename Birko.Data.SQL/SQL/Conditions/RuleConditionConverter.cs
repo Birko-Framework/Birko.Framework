@@ -205,30 +205,58 @@ public static class RuleConditionConverter
         // TASK-864: the column's IS NULL operand, or null where it cannot hold NULL (never assumed without metadata).
         var nullable = DataBase.RuleFieldCanBeNull(entityType, rule.Field) ? new NullableOperand(name) : null;
 
+        // TASK-882: the column the rule names (null without metadata), for the value's stored form and the string operators.
+        var column = DataBase.RuleFieldColumn(entityType, rule.Field);
+
         // SH-M129: Between kept only `>= lower`. Inclusive on both bounds, as the evaluator; negated by De Morgan
         // (`NOT >= lower OR NOT <= upper`) rather than a NOT around a group, as the rest of this converter does. TASK-864:
         // each bound keeps its own IsNot, so a negated Between gains the IS NULL leg C# gives it (`< lower OR > upper` had
-        // none, and dropped the NULL rows).
+        // none, and dropped the NULL rows). TASK-882: a null bound is C#'s lifted ordering, false (true negated), as every
+        // other ordering against null; it threw ArgumentException here while both in-memory runners answered.
         if (rule.Operator == ComparisonOperator.Between)
         {
-            if (rule.Value is null || rule.UpperValue is null)
-                throw new ArgumentException($"A Between rule on '{rule.Field}' needs both bounds.", nameof(rule));
-            var lower = Comparison(name, new[] { rule.Value }, ConditionType.GreatherAndEqual, isNegated, nullable);
-            var upper = Comparison(name, new[] { rule.UpperValue }, ConditionType.LessAndEqual, isNegated, nullable);
+            if (!DataBase.TryRuleStoredValue(column, rule.Value, out var lowerValue)
+                || !DataBase.TryRuleStoredValue(column, rule.UpperValue, out var upperValue))
+                return null;
+            var lower = Bound(name, lowerValue, ConditionType.GreatherAndEqual, isNegated, nullable);
+            var upper = Bound(name, upperValue, ConditionType.LessAndEqual, isNegated, nullable);
             return isNegated ? Condition.OrSubCondition([lower, upper]) : Condition.AndSubCondition([lower, upper]);
         }
 
-        // SH-M132: Like wrapped the author's pattern in %…% again, so `FV2026%` matched anywhere. The evaluator reads
-        // a `%` only at either end, so the pattern maps the same way: prefix, suffix, substring, or equality, and
-        // the rest of it is literal (escaped by the LIKE strategy, SH-M134).
-        if (rule.Operator == ComparisonOperator.Like && rule.Value is string pattern)
+        // SH-M132: Like wrapped the author's pattern in %…% again, so `FV2026%` matched anywhere. TASK-882: the pattern is
+        // read by RuleLikePattern, the parser every runner uses (an interior '%' is refused by name, as in memory; it ran
+        // here as the literal), and Like / Contains / StartsWith / EndsWith compare as the compiled rule does,
+        // OrdinalIgnoreCase, through TASK-869's exact form (SqlStringMatch) instead of the column's collation. A string
+        // operator on a column that holds no text matches nothing, as in memory (it ran on the column's text here).
+        if (rule.Operator == ComparisonOperator.Like)
         {
-            var (likeType, likeValue) = pattern.Length >= 2 && pattern.StartsWith('%') && pattern.EndsWith('%')
-                ? (ConditionType.Like, pattern[1..^1])
-                : pattern.StartsWith('%') ? (ConditionType.EndsWith, pattern[1..])
-                : pattern.EndsWith('%') ? (ConditionType.StartsWith, pattern[..^1])
-                : (ConditionType.Equal, pattern);
-            return Comparison(name, new object[] { likeValue }, likeType, isNegated, nullable);
+            var parsed = RuleLikePattern.Parse(rule.Value, rule.Field);
+            if (parsed is not { } pattern || !DataBase.RuleColumnHoldsText(column))
+                return null;
+            var likeType = (pattern.AnyPrefix, pattern.AnySuffix) switch
+            {
+                (true, true) => ConditionType.Like,
+                (false, true) => ConditionType.StartsWith,
+                (true, false) => ConditionType.EndsWith,
+                _ => ConditionType.TextEqual,
+            };
+            return IgnoringCase(name, pattern.Core, likeType, isNegated, nullable);
+        }
+
+        if (rule.Operator is ComparisonOperator.Contains or ComparisonOperator.NotContains
+            or ComparisonOperator.StartsWith or ComparisonOperator.EndsWith)
+        {
+            // SH-M296 (TASK-171): a null needle is no predicate; both in-memory engines match nothing under any negation.
+            if (rule.Value is null || !DataBase.RuleColumnHoldsText(column))
+                return null;
+            var methodType = rule.Operator switch
+            {
+                ComparisonOperator.StartsWith => ConditionType.StartsWith,
+                ComparisonOperator.EndsWith => ConditionType.EndsWith,
+                _ => ConditionType.Like,
+            };
+            var methodNot = rule.Operator == ComparisonOperator.NotContains ? !isNegated : isNegated;
+            return IgnoringCase(name, rule.Value.ToString() ?? string.Empty, methodType, methodNot, nullable);
         }
 
         var (condType, values) = MapOperator(rule);
@@ -239,11 +267,6 @@ public static class RuleConditionConverter
         {
             condType = ConditionType.Equal;
             isNot = !isNegated; // NotEqual = Equal + IsNot (double negation if already negated)
-        }
-        else if (rule.Operator == ComparisonOperator.NotContains)
-        {
-            condType = ConditionType.Like;
-            isNot = !isNegated;
         }
         else if (rule.Operator == ComparisonOperator.NotIn)
         {
@@ -261,9 +284,21 @@ public static class RuleConditionConverter
         if (condType == ConditionType.In && values == null)
             return null;
 
-        // SH-M296 (TASK-171): a null needle is no predicate either; both in-memory engines match nothing under any negation.
-        if (values == null && condType is ConditionType.Like or ConditionType.StartsWith or ConditionType.EndsWith)
-            return null;
+        // TASK-882: each value in the column's stored form — read as the compiled rule reads it (RuleValueConverter), then
+        // through AbstractField.ToStoredValue, the producer the lambda path binds through (rule 16). It was bound raw, so an
+        // enum by name or a Guid / date as text matched other rows, none, or failed, by provider. A value with no form for
+        // the column (an unknown enum name, text that is no Guid) matches nothing under any negation, as the compiled rule.
+        if (values != null && condType != ConditionType.IsNull)
+        {
+            var stored = new List<object?>();
+            foreach (var value in values)
+            {
+                if (!DataBase.TryRuleStoredValue(column, value, out var one))
+                    return null;
+                stored.Add(one);
+            }
+            values = stored.ToArray();
+        }
 
         var condition = new Condition(name, values, condType, false, isNot);
         if (condType == ConditionType.IsNull)
@@ -271,7 +306,8 @@ public static class RuleConditionConverter
 
         // SH-M130 / TASK-859: against a null value, Equal / NotEqual is the column's IS [NOT] NULL (it rendered `Field = NULL`,
         // which no row satisfies) and an ordering is C#'s constant false — always true when negated, which TASK-861's guard
-        // refuses as a whole-table write. One producer with the lambda parser.
+        // refuses as a whole-table write. One producer with the lambda parser. On a column that cannot hold NULL that is C#'s
+        // lifted answer too (TASK-882): `(int?)x.Amount != null` is every row.
         if (values == null && condType is ConditionType.Equal or ConditionType.Greather or ConditionType.GreatherAndEqual
                 or ConditionType.Less or ConditionType.LessAndEqual)
         {
@@ -285,9 +321,31 @@ public static class RuleConditionConverter
             MarkNullable(condition, nullable);
 
         // TASK-895 (the user's decision): string Equal / NotEqual / In / NotIn are exact, as a lambda's == and Contains are —
-        // one answer for a rule in SQL, compiled to C# and in RuleEvaluator. Like without a wildcard stays a collation compare.
+        // one answer for a rule in SQL, compiled to C# and in RuleEvaluator.
         if (rule.Operator is ComparisonOperator.Equal or ComparisonOperator.NotEqual or ComparisonOperator.In or ComparisonOperator.NotIn)
             DataBase.MarkRuleOrdinalText(condition, entityType, rule.Field);
+        return condition;
+    }
+
+    /// <summary>
+    /// TASK-882 — one bound of a <c>Between</c>: against a null, C#'s constant lifted ordering (<see cref="DataBase.ComparedWithNull"/>).
+    /// </summary>
+    private static Condition Bound(string name, object? value, ConditionType type, bool isNot, NullableOperand? nullable)
+    {
+        var condition = Comparison(name, new[] { value }, type, isNot, nullable);
+        if (value == null)
+            DataBase.ComparedWithNull(condition);
+        return condition;
+    }
+
+    /// <summary>
+    /// TASK-882 — a string operator of a rule: <see cref="StringComparison.OrdinalIgnoreCase"/>, as the compiled rule calls it,
+    /// rendered by the provider's exact form (TASK-869's <see cref="SqlStringMatch"/>), never the collation's <c>LIKE</c>.
+    /// </summary>
+    private static Condition IgnoringCase(string name, string term, ConditionType type, bool isNot, NullableOperand? nullable)
+    {
+        var condition = Comparison(name, new object?[] { term }, type, isNot, nullable);
+        condition.Comparison = StringComparison.OrdinalIgnoreCase;
         return condition;
     }
 
@@ -312,6 +370,7 @@ public static class RuleConditionConverter
         condition.NullOperandMatches = false;
     }
 
+    /// <summary>The comparison operators; the string operators and Between are built before this is reached.</summary>
     private static (ConditionType type, IEnumerable? values) MapOperator(Rules.Rule rule)
     {
         return rule.Operator switch
@@ -322,18 +381,13 @@ public static class RuleConditionConverter
             ComparisonOperator.GreaterThanOrEqual => (ConditionType.GreatherAndEqual, WrapValue(rule.Value)),
             ComparisonOperator.LessThan => (ConditionType.Less, WrapValue(rule.Value)),
             ComparisonOperator.LessThanOrEqual => (ConditionType.LessAndEqual, WrapValue(rule.Value)),
-            ComparisonOperator.Between => (ConditionType.GreatherAndEqual, WrapValue(rule.Value)),
             ComparisonOperator.IsNull => (ConditionType.IsNull, null),
             ComparisonOperator.IsNotNull => (ConditionType.IsNull, null),
-            ComparisonOperator.Contains => (ConditionType.Like, WrapValue(rule.Value)),
-            ComparisonOperator.NotContains => (ConditionType.Like, WrapValue(rule.Value)),
-            ComparisonOperator.StartsWith => (ConditionType.StartsWith, WrapValue(rule.Value)),
-            ComparisonOperator.EndsWith => (ConditionType.EndsWith, WrapValue(rule.Value)),
-            ComparisonOperator.Like => (ConditionType.Like, WrapValue(rule.Value)),
             // SH-M131: a string is IEnumerable, so `In "ABC"` bound 'A', 'B', 'C'. The evaluator treats it as one value.
             ComparisonOperator.In => (ConditionType.In, InValues(rule.Value)),
             ComparisonOperator.NotIn => (ConditionType.In, InValues(rule.Value)),
-            _ => (ConditionType.Equal, WrapValue(rule.Value))
+            _ => throw new NotSupportedException(
+                $"RuleConditionConverter cannot translate ComparisonOperator.{rule.Operator} on field '{rule.Field}'."),
         };
     }
 

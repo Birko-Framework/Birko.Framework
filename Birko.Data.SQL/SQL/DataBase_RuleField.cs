@@ -346,6 +346,54 @@ namespace Birko.Data.SQL
         }
 
         /// <summary>
+        /// TASK-882 — the column a rule field names on <paramref name="entityType"/>, by <see cref="FindFieldIn"/>'s lookup; null
+        /// without an entity type or table metadata, where a rule's values are bound as given.
+        /// </summary>
+        internal static Fields.AbstractField? RuleFieldColumn(Type? entityType, string field)
+        {
+            var table = entityType == null ? null : TryLoadTable(entityType);
+            return table == null ? null : FindFieldIn(new[] { table }, field);
+        }
+
+        /// <summary>
+        /// TASK-882 — whether a rule's string operator (<c>Like</c>, <c>Contains</c>, <c>StartsWith</c>, <c>EndsWith</c>) applies to
+        /// <paramref name="column"/>: a string property, or a column nothing describes (the type-less overloads).
+        /// </summary>
+        internal static bool RuleColumnHoldsText(Fields.AbstractField? column)
+            => column?.Property == null || UnwrapNullable(column.Property.PropertyType) == typeof(string);
+
+        /// <summary>
+        /// TASK-882 — a rule value in <paramref name="column"/>'s stored form: read as a value of the property's type by
+        /// <see cref="Birko.Rules.RuleValueConverter"/> (the producer the compiled rule and <c>RuleEvaluator</c> read it through),
+        /// then through <see cref="Fields.AbstractField.ToStoredValue"/> (the producer an entity write and the lambda path bind
+        /// through, TASK-596). False when the value has no form for the property (an unknown enum name, text that is no Guid):
+        /// the rule then matches nothing, as the compiled rule does. A null, a fraction against an integral column (compared
+        /// as a number, SH-M294) and any value without column metadata are bound as given.
+        /// </summary>
+        /// <remarks>
+        /// Before (measured, TASK-882), the raw value was bound: on SQLite <c>State Equal "Active"</c> matched nothing and a
+        /// Guid as text missed its row; PostgreSQL refused the statement; MySQL compared <c>'Active'</c> as 0 and matched the
+        /// first member's rows.
+        /// </remarks>
+        internal static bool TryRuleStoredValue(Fields.AbstractField? column, object? value, out object? stored)
+        {
+            stored = value;
+            var type = column?.Property?.PropertyType;
+            if (column == null || type == null || value == null || Birko.Rules.RuleValueConverter.ComparesAsFraction(value, type))
+            {
+                return true;
+            }
+
+            if (!Birko.Rules.RuleValueConverter.TryConvert(value, type, out var converted))
+            {
+                return false;
+            }
+
+            stored = column.ToStoredValue(converted);
+            return true;
+        }
+
+        /// <summary>
         /// TASK-895 (the user's decision, 2026-11-10: a rule's string equality is exact, as the lambda's is) — marks a rule's
         /// <c>Equal</c> / <c>NotEqual</c> / <c>In</c> / <c>NotIn</c> leaf as <see cref="StringComparison.Ordinal"/> through
         /// <see cref="MarkOrdinalText"/>, the producer the expression parser uses, so it renders through

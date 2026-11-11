@@ -122,8 +122,9 @@ public class Task895StringEqualityLeftoversTests
         RuleLeaf(new Rule("Number", ComparisonOperator.Equal, 5)).Comparison.Should().BeNull("a number");
         RuleLeaf(new Rule("Ref", ComparisonOperator.Equal, Guid.NewGuid().ToString())).Comparison.Should().BeNull(
             "text against a Guid column is converted there, not compared as text");
-        RuleLeaf(new Rule("Text", ComparisonOperator.Like, "abc")).Comparison.Should().BeNull(
-            "Like without a wildcard follows the collation, as every LIKE-family rule does");
+        // TASK-882 (rule 56, inverted): Like without a wildcard followed the collation; it is OrdinalIgnoreCase now, as the
+        // compiled rule and RuleEvaluator compare it, like every LIKE-family rule.
+        RuleLeaf(new Rule("Text", ComparisonOperator.Like, "abc")).Comparison.Should().Be(StringComparison.OrdinalIgnoreCase);
         RuleLeaf(new Rule("Text", ComparisonOperator.Equal, null)).Type.Should().Be(ConditionType.IsNull);
     }
 

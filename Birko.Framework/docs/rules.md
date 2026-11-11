@@ -68,7 +68,7 @@ var negated = new Rule("Temperature", ComparisonOperator.GreaterThan, 100)
 | NotContains | String does not contain substring |
 | StartsWith | String starts with prefix |
 | EndsWith | String ends with suffix |
-| Like | `%` at the start and/or end only (`%x%`, `x%`, `%x`, `%`); an interior `%` matches nothing, and `_` is a literal |
+| Like | `%` at the start and/or end only (`%x%`, `x%`, `%x`, `%`), case ignored; `_` is a literal; an interior `%` (`a%b`) is refused with `NotSupportedException` by every runner |
 | In | Value is in a collection |
 | NotIn | Value is not in a collection |
 
@@ -211,7 +211,11 @@ ComparisonHelper handles type-safe comparisons:
   strings is plain `==`, ordinal, in memory (`RuleEvaluator`), compiled, and in SQL (`RuleConditionConverter`, through
   TASK-873's exact equality, on every provider whatever the column's collation). No case-insensitive equality translates
   on every store; where case must not matter, store the value normalised (for example lower-cased) and compare against
-  the normalised form. The string methods (`Contains`, `StartsWith`, `EndsWith`, `Like`) ignore case in memory.
+  the normalised form. The string methods (`Contains`, `StartsWith`, `EndsWith`, `Like`) ignore case (ordinally) in
+  memory, compiled and in SQL (TASK-882).
+- **One answer wherever a rule runs** (TASK-882): a `null` against a non-nullable field answers as C#'s lifted comparison
+  (`NotEqual null` matches every row), a value given as text (an enum name, a Guid, a date) is converted to the field's
+  type by `RuleValueConverter` in every runner, and a value with no such form matches nothing, negated or not.
 
 ### Basic Usage
 

@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Cosmos DB aggregates answer in LINQ's types and names
+[[TASK-897]]. All 15 measured store shapes differed from `AggregateHelper`: numbers came back as long/double, Guid and
+DateTime as text, DateTime MIN/MAX sorted as text (`…00.5Z` before `…00Z`), a lower-case name read nothing, and a
+string SUM ran. Names now resolve in any case, results convert to LINQ's types, DateTime MIN/MAX compare the stored wall
+clock, and what Cosmos cannot answer exactly is refused by name. **Breaking:** result types (COUNT is `int`).
+
 ## 2026-11-10 — Elasticsearch job queue stamps a claim when it writes it
 [[TASK-884]]. As on RavenDB (TASK-879), the claim carried the dequeue's start time, so a slow candidate search made a
 fresh claim look abandoned and the next dequeue handed the same job out again (reproduced offline and live). The claim

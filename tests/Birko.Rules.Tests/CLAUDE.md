@@ -21,6 +21,8 @@ Unit tests for the Birko.Rules project — data-driven rule engine.
 - **RuleEvaluatorTests** — Full evaluator coverage: all comparison operators, negation, disabled rules, AND/OR groups, nested groups, RuleSet evaluation, EvaluateAll/EvaluateMatches
 - **RuleExpressionConverterTests** — LINQ expression conversion: all operators, value type coercion, nested properties with null guards, AND/OR groups, negation, RuleSet, disabled rules, case-insensitive property names
 - **Task881RuleEvaluatorNullTests** — TASK-864's NULL shapes (plus null bounds) x plain / negated / NOT group, `RuleEvaluator` on typed and dictionary contexts vs the compiled rule (C#)
+- **Task882RuleLeftoversTests** — TASK-882's shapes (`tests/Shared/StoreContract/RuleLeftoverShapes.cs`, linked: null against non-nullable members, `Like`, values as text) x plain / negated / NOT group, the compiled rule and `RuleEvaluator` (typed and dictionary contexts) vs the C# lambda; an interior `%` refused by every runner
+- **Task882RuleValueAndPatternTests** — `RuleLikePattern` (anchors, OrdinalIgnoreCase match, refusal by field) and `RuleValueConverter` (enum / Guid / date / number conversion, unconvertible values, fractions)
 
 ## Running Tests
 ```bash

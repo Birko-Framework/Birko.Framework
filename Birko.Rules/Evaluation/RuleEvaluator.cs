@@ -55,6 +55,11 @@ public class RuleEvaluator : IRuleEvaluator
         // The leaf's own flag and an enclosing negated group's cancel out: NOT(NOT a) is a.
         var negated = rule.IsNegated != negate;
 
+        // TASK-882: a Like pattern with an interior '%' is refused by name on the rule alone, whatever the data, as the
+        // compiled rule and the SQL rule refuse it. It matched nothing here, where SQL matched the literal text.
+        if (rule.Operator == ComparisonOperator.Like)
+            RuleLikePattern.Parse(rule.Value, rule.Field);
+
         // TASK-144 (SH-M297): on a context whose fields are fixed by a type, a field it cannot reach (no such property, or
         // a null intermediate of a nested path) has no value at all. It matches nothing, negated or not, as the store
         // filter answers. Only an open context (a dictionary) reads a missing field as null for the null checks.
@@ -80,7 +85,7 @@ public class RuleEvaluator : IRuleEvaluator
         // not apply to this member" must NOT invert to a match — that is how a string operator on an int
         // became "every row" on the expression side (SH-H043/SH-H044, TASK-116), and this engine had the
         // identical hole: `IsNegated ? !match : match` treated both kinds of false alike.
-        if (negated && ComparisonHelper.CanEvaluate(actual, rule.Operator, rule.Value))
+        if (negated && ComparisonHelper.CanEvaluate(actual, rule.Operator, rule.Value, rule.UpperValue))
             match = !match;
 
         return match ? RuleResult.Match(rule, actual) : RuleResult.NoMatch(rule, actual);

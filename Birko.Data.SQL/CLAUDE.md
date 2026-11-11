@@ -718,6 +718,18 @@ On top of that, the SQL parsers themselves handle:
   whole-table write); a null `In` set or string needle matches nothing under any negation. The in-memory `RuleEvaluator`
   answers the same on NULL since TASK-881.
   Tests: `RuleNullContract` (shared, four providers), `Task864RuleNullConditionTests`.
+  **TASK-882 — one answer per rule, the C# lambda's:** a value is bound in the column's stored form —
+  `Birko.Rules.RuleValueConverter` (the producer the compiled rule reads it through) then `AbstractField.ToStoredValue`
+  (the lambda path's), via `DataBase.TryRuleStoredValue`; a value with no form for the column (an unknown enum name,
+  text that is no Guid) matches nothing under any negation. Before, the raw value was bound: an enum by name or a Guid /
+  date as text matched other rows, none, or failed, by provider (measured: 41-78 of 93 item-3 reads wrong). A `Between`
+  with a null bound is the constant lifted ordering (it threw). `Like` is read by `Birko.Rules.RuleLikePattern` (an
+  interior `%` refused by name; it ran as the literal), and `Like` / `Contains` / `StartsWith` / `EndsWith` carry
+  `Comparison = OrdinalIgnoreCase`, so they render through TASK-869's `SqlStringMatch` exactly as the compiled rule
+  compares, not by collation (a `Like` without a wildcard is `TextEqual`); a string operator on a non-string column
+  matches nothing. Type-less overloads have no metadata: values bound as given, columns taken as text. Tests: shared
+  `RuleLeftoversContract` (231 shapes x read / count / delete, and the compiled rule through the store, four providers),
+  `Task882RuleConditionTests`.
 - **Value-position** (`ParseExpression`, Update SET RHS) — `a ?? b` → `COALESCE(a, b)`,
   `c ? t : f` → `CASE WHEN c THEN t ELSE f END`, and `x == null` / `x != null` → `IS [NOT] NULL`.
 
@@ -816,8 +828,8 @@ calls C# through `SqLiteStringMatch.Function`, registered by `SqLiteDecimal.Regi
 - **Rules are exact** (the user's decision, 2026-11-10): `RuleConditionConverter` marks a string `Equal` / `NotEqual` /
   `In` / `NotIn` leaf `Ordinal` through `DataBase.MarkRuleOrdinalText` → `MarkOrdinalText`, the lambda parser's producer,
   so it renders through `OrdinalTextEquality`. A leaf is marked when every value is a string and the column is a string
-  column (by its mapped property; the type-less overloads have no metadata and go by the values). A `Like` without a
-  wildcard keeps the collation, as every LIKE-family rule does. `RuleEvaluator` compares two strings ordinally too, so a
+  column (by its mapped property; the type-less overloads have no metadata and go by the values). Every LIKE-family rule,
+  a `Like` without a wildcard included, is `OrdinalIgnoreCase` since TASK-882 (it kept the collation). `RuleEvaluator` compares two strings ordinally too, so a
   rule answers alike in SQL, compiled and in memory. Measured before: 30 of 42 string rule cases read other rows than the
   compiled rule on MySQL, 36 on SQL Server (SQLite / PostgreSQL 0), and the evaluator differed on 30.
 - **View joins on string keys are exact:** `DataBase.MarkOrdinalJoin`, called by both join builders (`[View]` attribute

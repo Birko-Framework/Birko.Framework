@@ -29,5 +29,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Evaluation\RuleEvaluator.cs" />
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\RuleExpressionConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\RuleLikePattern.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\RuleValueConverter.cs" />
   </ItemGroup>
 </Project>

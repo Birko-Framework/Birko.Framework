@@ -123,10 +123,12 @@ public class FilterTranslationTriageTests : IDisposable
             .Should().Equal(Expected(r => r.Age < 15 || r.Age > 35));
 
     [Fact]
-    public void A_Between_rule_without_an_upper_bound_is_refused()
+    public void A_Between_rule_without_an_upper_bound_is_C_sharp_s_lifted_ordering()
     {
-        var act = () => RuleConditionConverter.ToConditions<Row>(new Rules.Rule("Age", ComparisonOperator.Between, 15));
-        act.Should().Throw<ArgumentException>();
+        // TASK-882 (rule 56, inverted): it threw ArgumentException while both in-memory runners answered. C# answers
+        // `x.Age >= 15 && (int?)x.Age <= null`: no row, and its negation every row.
+        RuleAges(new Rules.Rule("Age", ComparisonOperator.Between, 15)).Should().BeEmpty();
+        RuleAges(new Rules.Rule("Age", ComparisonOperator.Between, 15) { IsNegated = true }).Should().Equal(Expected(_ => true));
     }
 
     [Fact]
