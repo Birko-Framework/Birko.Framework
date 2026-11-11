@@ -29,6 +29,10 @@ Found by TASK-907 (2026-11-10):
 - A MongoDB collection created with a default collation would make `$min`/`$max` follow that collation instead of binary
   order (not measured); `Collation.Simple` on the aggregation would fix it but also changes `$match`.
 
+**Decided by the user (2026-11-11):** yes — `AggregateQuery.StringComparison` (default `Ordinal`) also governs the
+ordering of result rows by a string group key or a string MIN/MAX, on every provider (SQL `ORDER BY` through the ordinal
+key); a provider that cannot match refuses by name, as for MIN/MAX.
+
 ## Acceptance criteria
 
 - [ ] Measure both (rule 54); the user's decision on row ordering recorded.

@@ -30,6 +30,9 @@ every point is its own series and the pivot dominates. Native Flux would not be 
 **Decide with the user:** drop native Flux (recommended: measured no faster), and whether the per-point `Guid` tag and the
 10 s timeout should change.
 
+**Decided by the user (2026-11-11):** the read timeout becomes configurable on the InfluxDB settings (the consumer's
+value wins); reproduce the 100k-point failure first and document the series-per-point cost. Native Flux: pending.
+
 ## Acceptance criteria
 
 - [ ] The user's decision on native Flux recorded.
