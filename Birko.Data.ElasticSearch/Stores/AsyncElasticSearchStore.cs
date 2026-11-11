@@ -1041,7 +1041,7 @@ namespace Birko.Data.ElasticSearch.Stores
             }
             while (after != null);
 
-            return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
+            return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit, query.StringComparison).AsReadOnly();
         }
 
         #endregion

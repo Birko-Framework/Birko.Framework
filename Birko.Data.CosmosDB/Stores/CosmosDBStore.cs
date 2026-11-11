@@ -608,7 +608,7 @@ public class CosmosDBStore<T>
             }
         }
 
-        results = AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit);
+        results = AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit, query.StringComparison);
 
         return results.AsReadOnly();
     }

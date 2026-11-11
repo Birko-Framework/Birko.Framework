@@ -59,7 +59,18 @@ namespace Birko.Data.SQL.Connectors
         /// (the user's decision).
         /// </summary>
         protected override string? OrdinalStringExtreme(string function, string operand)
-            => $"replace({function}(regexp_replace(({operand})::text, '[' || chr(57344) || '-' || chr(65535) || ']', "
-               + $"chr(1114111) || E'\\\\&', 'g') COLLATE \"C\"), chr(1114111), '')";
+            => $"replace({function}({OrdinalOrderKey(operand)}), chr(1114111), '')";
+
+        /// <summary>
+        /// TASK-909 — the Ordinal key <see cref="OrdinalStringExtreme"/> takes its extreme of: the text with U+10FFFF put before
+        /// each character in U+E000–U+FFFF, under <c>COLLATE "C"</c>, so a row order and a MIN / MAX agree, with the same one
+        /// known edge (a value holding U+10FFFF).
+        /// </summary>
+        protected override string? OrdinalOrderKey(string operand)
+            => $"regexp_replace(({operand})::text, '[' || chr(57344) || '-' || chr(65535) || ']', "
+               + $"chr(1114111) || E'\\\\&', 'g') COLLATE \"C\"";
+
+        /// <summary>TASK-909 — PostgreSQL puts NULL last when ascending, where C# puts it first.</summary>
+        protected override bool NullsOrderFirst => false;
     }
 }

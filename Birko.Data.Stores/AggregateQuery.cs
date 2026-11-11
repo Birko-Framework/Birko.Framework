@@ -70,7 +70,14 @@ namespace Birko.Data.Stores
         /// by default, so <c>"Banana"</c> is below <c>"apple"</c> on every machine and in every culture, as TASK-873's exact
         /// string equality is. The in-memory aggregation honours every comparison; a provider that cannot take a Min or Max
         /// of a string in this order refuses the query by name (<see cref="NotSupportedException"/>), never answering in the
-        /// database's own order. It orders nothing else: not a non-string member, not the result rows.
+        /// database's own order. It never orders a non-string member.
+        /// <para>
+        /// TASK-909 (the user's decision, 2026-11-11): it also orders the result rows (<see cref="OrderBy"/>) by a string group
+        /// key or a string Min / Max, before <see cref="Offset"/> and <see cref="Limit"/> cut the page, null below every value.
+        /// A provider that orders its rows in memory (the in-memory aggregation, MongoDB, Elasticsearch, Cosmos DB) honours
+        /// every comparison; one that orders on the server (SQL) orders Ordinal and refuses another comparison by name. Rows
+        /// tied on every key keep the provider's own order: order by a further, unique key for a page that is the same everywhere.
+        /// </para>
         /// </summary>
         public StringComparison StringComparison { get; init; } = StringComparison.Ordinal;
 

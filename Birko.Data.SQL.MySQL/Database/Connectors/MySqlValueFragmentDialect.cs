@@ -117,6 +117,12 @@ namespace Birko.Data.SQL.Connectors
         /// <c>utf8mb4_bin</c> is PAD SPACE and ties <c>"a"</c> with <c>"a "</c>.
         /// </summary>
         protected override string? OrdinalStringExtreme(string function, string operand)
-            => $"CONVERT(CONVERT({function}(CAST(CONVERT({operand} USING utf16) AS BINARY)) USING utf16) USING utf8mb4)";
+            => $"CONVERT(CONVERT({function}({OrdinalOrderKey(operand)}) USING utf16) USING utf8mb4)";
+
+        /// <summary>
+        /// TASK-909 — the Ordinal key <see cref="OrdinalStringExtreme"/> takes its extreme of: the value's big-endian UTF-16
+        /// bytes as a binary string, compared byte by byte with no padding, so a row order and a MIN / MAX agree.
+        /// </summary>
+        protected override string? OrdinalOrderKey(string operand) => $"CAST(CONVERT({operand} USING utf16) AS BINARY)";
     }
 }

@@ -180,6 +180,24 @@ namespace Birko.Data.Stores
                    + "second where Ordinal (UTF-16) puts it below, and it does not answer in its own order. Read the rows and "
                    + "aggregate them in memory. (TASK-907)");
 
+        /// <summary>
+        /// TASK-909: the refusal of a provider that cannot order the result rows by a string in <paramref name="comparison"/>'s
+        /// order (<see cref="AggregateQuery{T}.StringComparison"/>). The one producer of its text.
+        /// </summary>
+        /// <param name="provider">What refuses, for the message: e.g. <c>"SQL aggregate"</c>.</param>
+        /// <param name="key">What the rows are ordered by, e.g. <c>group-by field 'Name'</c> or <c>aggregate 'min_Name'</c>.</param>
+        /// <param name="comparison">The order the query asked for.</param>
+        /// <param name="supported">The order this provider does take, for the message; null where it takes none exactly.</param>
+        public static NotSupportedException StringRowOrderNotSupported(
+            string provider, string key, StringComparison comparison, string? supported = "Ordinal")
+            => new($"{provider} refused: the result rows ordered by the string {key} in {comparison} order. "
+                   + (supported == null
+                       ? "This provider has no exact string order for result rows. "
+                       : $"This provider orders result rows by a string only in {supported} order, before it pages them. ")
+                   + "It does not answer in the database's own order: read the rows and aggregate them in memory"
+                   + (supported == null ? "" : $", or order them in {supported} order")
+                   + ". (TASK-909)");
+
         /// <summary>TASK-907: a regular expression character class of U+E000–U+FFFF, written with the characters themselves, so PCRE (MongoDB), Lucene (Elasticsearch) and Cosmos DB read it alike.</summary>
         public const string HighBmpCharacters = "[\uE000-\uFFFF]";
 

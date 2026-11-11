@@ -157,7 +157,13 @@ namespace Birko.Data.SQL.Connectors
         /// order (measured: U+FF5E below U+1F600, where UTF-16 puts the surrogate pair first).
         /// </summary>
         protected override string? OrdinalStringExtreme(string function, string operand)
-            => $"{function}(({operand}) COLLATE {SqLiteExactFunctions.OrdinalCollation})";
+            => $"{function}({OrdinalOrderKey(operand)})";
+
+        /// <summary>
+        /// TASK-909 — the Ordinal key <see cref="OrdinalStringExtreme"/> takes its extreme of: the value under
+        /// <see cref="SqLiteExactFunctions.OrdinalCollation"/>, so a row order and a MIN / MAX agree.
+        /// </summary>
+        protected override string? OrdinalOrderKey(string operand) => $"({operand}) COLLATE {SqLiteExactFunctions.OrdinalCollation}";
 
         /// <summary>
         /// TASK-892 — a decimal SUM in C#'s decimal, through <see cref="SqLiteDecimal.SumAggregate"/>. SQLite's <c>SUM</c> reads

@@ -146,6 +146,43 @@ namespace Birko.Data.SQL.Conditions
         /// </summary>
         protected virtual string? OrdinalStringExtreme(string function, string operand) => null;
 
+        /// <summary>
+        /// TASK-909 (the user's decision, 2026-11-11): the <c>ORDER BY</c> terms that order rows by a string
+        /// <paramref name="operand"/> (a column, or an aggregate's SQL) in Ordinal order, NULL below every value, as
+        /// <c>AggregateHelper</c> orders them: <see cref="OrdinalOrderKey"/>, after a NULL-first term where this provider puts
+        /// NULL last when ascending (<see cref="NullsOrderFirst"/>). The caller appends each term's direction.
+        /// <see cref="Portable"/> renders the operand itself, which follows the column's collation, as it renders a plain
+        /// string <c>MIN</c>; a provider renders Ordinal or refuses.
+        /// </summary>
+        /// <remarks>
+        /// Measured before (the row order cases of the shared <c>AggregateStringOrderContract</c>): every server ordered in its
+        /// column's collation, before its LIMIT / OFFSET, so a page held other rows than the in-memory aggregation's.
+        /// PostgreSQL and MySQL put <c>"apple"</c> before <c>"Banana"</c>, PostgreSQL put NULL last, SQL Server put
+        /// <c>"a\t"</c> before <c>"a"</c> (space padding), and SQLite's <c>BINARY</c> put U+1F600 above U+FF5E. A string MIN
+        /// ordered by its alias followed the column's collation too, except on SQLite, whose result keeps the ordinal collation.
+        /// </remarks>
+        /// <param name="operand">The string column or aggregate SQL the rows are ordered by.</param>
+        /// <param name="role">What is ordered by, for a refusal: e.g. <c>group-by field 'Name'</c>.</param>
+        /// <exception cref="NotSupportedException">This provider has no Ordinal key.</exception>
+        public System.Collections.Generic.IReadOnlyList<string> OrdinalOrderTerms(string operand, string role)
+        {
+            if (ReferenceEquals(this, Portable)) return new[] { operand };
+            var key = OrdinalOrderKey(operand)
+                ?? throw AggregateMath.StringRowOrderNotSupported("SQL aggregate", role, StringComparison.Ordinal, null);
+            return NullsOrderFirst ? new[] { key } : new[] { $"CASE WHEN {operand} IS NULL THEN 0 ELSE 1 END", key };
+        }
+
+        /// <summary>
+        /// TASK-909: an expression over a string <paramref name="operand"/> that orders as C#'s Ordinal does (UTF-16 code units,
+        /// no padding), NULL staying NULL; or null where this provider has none. The one producer of the Ordinal key: a
+        /// provider's <see cref="OrdinalStringExtreme"/> takes its <c>MIN</c> / <c>MAX</c> of the same key, so a row order and a
+        /// string extreme agree.
+        /// </summary>
+        protected virtual string? OrdinalOrderKey(string operand) => null;
+
+        /// <summary>TASK-909: whether this provider orders NULL below every value when ascending (and above when descending), as C# does.</summary>
+        protected virtual bool NullsOrderFirst => true;
+
         private static bool IsDecimal(Type type) => (Nullable.GetUnderlyingType(type) ?? type) == typeof(decimal);
 
         private static string NoExactAverage(string operand, Type source, Type result)

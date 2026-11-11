@@ -23,6 +23,9 @@ public sealed class MongoAggregateStringOrderContractTests : AggregateStringOrde
     /// <summary>Strings are ordered by code point: a group mixing U+E000–U+FFFF with an astral character is refused (TASK-907).</summary>
     protected override bool OrdersByCodePoint => true;
 
+    /// <summary>The result rows are ordered in memory, after every group is read, so in every comparison (TASK-909).</summary>
+    protected override bool OrdersRowsInEveryComparison => true;
+
     protected override IAsyncBulkStore<StringOrderDoc> NewAsyncStore()
     {
         var store = new AsyncMongoDBStore<StringOrderDoc>();

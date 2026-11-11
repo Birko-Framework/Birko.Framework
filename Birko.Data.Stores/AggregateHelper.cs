@@ -132,7 +132,7 @@ namespace Birko.Data.Stores
                 results.Add(new AggregateResult(row));
             }
 
-            results = ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit);
+            results = ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit, query.StringComparison);
 
             return Task.FromResult<IReadOnlyList<AggregateResult>>(results.AsReadOnly());
         }
@@ -141,23 +141,34 @@ namespace Birko.Data.Stores
         /// Applies ordering, offset, and limit to a list of aggregate results.
         /// Shared by all store providers to avoid duplicating this logic.
         /// </summary>
+        /// <remarks>
+        /// TASK-909 (the user's decision, 2026-11-11): two strings are ordered in <paramref name="stringComparison"/>'s order
+        /// (<see cref="AggregateQuery{T}.StringComparison"/>, Ordinal by default), as a string Min / Max is taken
+        /// (<see cref="AggregateMath.ValueComparer"/>); any other value by <see cref="Comparer{T}.Default"/>, null below every
+        /// value. Measured before: <see cref="Comparer{T}.Default"/> ordered strings in the current culture, so the in-memory
+        /// stores, MongoDB, Elasticsearch and Cosmos DB put <c>"apple"</c> before <c>"Banana"</c>, and a page held other rows
+        /// on a machine with another culture. The order is stable: rows tied on every key keep the order they came in (the
+        /// in-memory aggregation's is the order the groups first occur in).
+        /// </remarks>
         public static List<AggregateResult> ApplyOrderingAndPaging(
             List<AggregateResult> results,
             IDictionary<string, bool>? orderBy,
             int? offset,
-            int? limit)
+            int? limit,
+            StringComparison stringComparison = StringComparison.Ordinal)
         {
             if (orderBy != null && orderBy.Count > 0)
             {
+                var comparer = AggregateMath.ValueComparer(stringComparison);
                 IOrderedEnumerable<AggregateResult>? ordered = null;
                 foreach (var (field, desc) in orderBy)
                 {
                     if (ordered == null)
-                        ordered = desc ? results.OrderByDescending(r => r.GetValue<object>(field))
-                                       : results.OrderBy(r => r.GetValue<object>(field));
+                        ordered = desc ? results.OrderByDescending(r => r.GetValue<object>(field), comparer)
+                                       : results.OrderBy(r => r.GetValue<object>(field), comparer);
                     else
-                        ordered = desc ? ordered.ThenByDescending(r => r.GetValue<object>(field))
-                                       : ordered.ThenBy(r => r.GetValue<object>(field));
+                        ordered = desc ? ordered.ThenByDescending(r => r.GetValue<object>(field), comparer)
+                                       : ordered.ThenBy(r => r.GetValue<object>(field), comparer);
                 }
                 if (ordered != null)
                     results = ordered.ToList();

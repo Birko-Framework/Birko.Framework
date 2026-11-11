@@ -72,7 +72,9 @@ SQL view generation framework for creating database views from entity attributes
 - `DataBase_ViewOrderBy.cs` / `DataBase_ViewConditions.cs` — `ResolveViewOrderFields` and `ResolveViewConditions`, called
   in the four view funnels (`Select`/`SelectCount`, sync and async) once `usePersistent` is known. A persistent view's
   columns are the view properties, so conditions parsed for the on-the-fly SELECT (`Table.Column`) are renamed there;
-  an unqualified source name two fields share is refused (TASK-639)
+  an unqualified source name two fields share is refused (TASK-639). TASK-909: in an aggregating view, a key that is a string group-by column or a string MIN / MAX
+  is rendered through `SqlValueFragmentDialect.OrdinalOrderTerms`, so the rows are in Ordinal order before the page, as the store's
+  `Aggregate` orders them (they were in the column's collation)
 
 ### Fields
 - `FunctionField.cs` — Base aggregate function field. Its sealed `Read` is the one rule for reading an aggregate

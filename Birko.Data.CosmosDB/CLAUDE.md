@@ -257,6 +257,9 @@ The oracle is `AggregateHelper.LinqAggregate` over the documents as read back. M
   group, no time bucket) is refused with `ArgumentException` before any request (it was a 400, SC1001). Pinned by the
   shared `AggregateEdgeContract`.
 - Result types, DateTime MIN/MAX and names: TASK-897, below.
+- `OrderBy`, `Offset` and `Limit` are applied to the rows read back by `AggregateHelper.ApplyOrderingAndPaging`: a string
+  group key or string MIN / MAX orders in `AggregateQuery.StringComparison` (Ordinal by default; it was the current
+  culture), any comparison, TASK-909.
 
 ## Aggregation answers in LINQ's types and names (TASK-897)
 Oracle as above, compared strictly (same CLR type, same value). Measured on the emulator (vnext-preview, 2026-11-10),

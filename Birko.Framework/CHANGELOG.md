@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — SQL store aggregates answer what LINQ answers
+[[TASK-892]]. The store `Aggregate` differed from `AggregateHelper` on 54–106 of 164 cases per provider (measured):
+PostgreSQL named the group key `kind` so every grouped key read null, SQL Server truncated integral AVG, SQLite summed
+decimals as REAL, and result types were the driver's. Store and view aggregates now render through one dialect hook and
+read through one conversion; a store decimal AVG divides in C#. **Breaking:** a view's decimal AVG is refused on the
+servers, and a view SUM over only NULLs is 0 (the store's stays NULL; decision in [[TASK-886]]).
+
 ## 2026-11-10 — Cosmos DB aggregates skip nulls and apply the time bucket
 [[TASK-885]]. SUM/AVG/MIN over a member holding a null returned undefined or null where LINQ skips the nulls, in stores
 and grouped views, and `TimeBucketInterval` was ignored (measured: 24 of 26 cases wrong). Aggregates now skip nulls, a

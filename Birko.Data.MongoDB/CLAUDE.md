@@ -76,8 +76,14 @@ MongoDB implementation for the Birko data layer providing document-based storage
   0001-01-01..1970-01-01 (a week). Group-by fields, sources and the time column are resolved as `AggregateHelper` resolves
   them (case-insensitive, a missing one an `ArgumentException`) and read at their stored element (`_id` for the identity).
   A group key, bucket and Min / Max are read with the member's serializer, so an enum is the enum (it was its `Int32`).
-  Pinned by `Task906MongoStoreAggregateLiveTests`. A string Min / Max compares as MongoDB does (binary), not as C#'s
-  culture comparer: recorded, not fixed.
+  Pinned by `Task906MongoStoreAggregateLiveTests`. A string Min / Max is Ordinal (TASK-907), and so are the result rows
+  ordered by a string group key or Min / Max (TASK-909, in memory, in any `AggregateQuery.StringComparison`).
+- TASK-909: the store's `Aggregate` runs under `Collation.Simple` (`AggregationPipelineBuilder.WithCollation`). A collection
+  created with a default collation (never by Birko) made the aggregation inherit it: measured at `en` strength 1, 2 and 3,
+  the string `$min` / `$max` followed the locale (`apple` below `Banana`), and at strength 1 and 2 the `$group` merged
+  `zebra` with `Zebra` and the `$match` of `Kind == "zebra"` matched `Zebra` (`Task909MongoCollationLiveTests`, 6 of 6
+  red before). The simple collation is the binary comparison the filter translation is written for, so the `$match` now
+  answers as C# does. Reads (`Find`) and views on such a collection still follow its collation: not changed here.
 
 ## Connection
 

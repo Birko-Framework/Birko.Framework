@@ -82,9 +82,34 @@ namespace Birko.Data.SQL
 
                 // Indexer, not Add: a view property and its source column can both be supplied and resolve
                 // to the same column, and a duplicate sort key is not worth throwing over.
-                resolved[ViewOrderFieldName(field, persistent, dialect)] = kvp.Value;
+                var name = ViewOrderFieldName(field, persistent, dialect);
+                if (dialect != null && view!.HasAggregateFields() && IsStringAggregateRowKey(field))
+                {
+                    // TASK-909: an aggregating view's rows ordered by a string group key or a string MIN / MAX are in Ordinal
+                    // order, as the store's Aggregate orders them (a view's string order is always Ordinal, TASK-907).
+                    foreach (var term in dialect.OrdinalOrderTerms(name, $"view column '{field.Property?.Name ?? field.Name}'"))
+                    {
+                        resolved[term] = kvp.Value;
+                    }
+                    continue;
+                }
+                resolved[name] = kvp.Value;
             }
             return resolved;
+        }
+
+        /// <summary>
+        /// TASK-909: whether a column of an aggregating view is one its rows are ordered by as a string in Ordinal order: a
+        /// string group key (every plain column of an aggregating view is grouped by) or a string <c>MIN</c> / <c>MAX</c>.
+        /// Measured before: every provider ordered such a view in the column's collation, on the fly and persistent.
+        /// </summary>
+        private static bool IsStringAggregateRowKey(AbstractField field)
+        {
+            if (field is FunctionField function)
+            {
+                return function.IsAggregate && function.Name is ("MIN" or "MAX") && function.SourceType == typeof(string);
+            }
+            return !field.IsAggregate && field.Property?.PropertyType == typeof(string);
         }
 
         /// <summary>

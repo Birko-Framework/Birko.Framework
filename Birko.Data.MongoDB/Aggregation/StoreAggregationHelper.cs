@@ -448,7 +448,7 @@ namespace Birko.Data.MongoDB.Aggregation
                 }
                 rows.Add(new AggregateResult(row));
             }
-            return AggregateHelper.ApplyOrderingAndPaging(rows, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
+            return AggregateHelper.ApplyOrderingAndPaging(rows, query.OrderBy, query.Offset, query.Limit, query.StringComparison).AsReadOnly();
         }
 
         /// <summary>

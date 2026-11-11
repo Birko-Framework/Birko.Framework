@@ -631,7 +631,9 @@ namespace Birko.Data.MongoDB.Stores
             query.ThrowIfStringOrderNotOrdinal($"MongoDB aggregate of {typeof(T).Name}");   // TASK-907: before any data
             if (Collection == null) return Array.Empty<AggregateResult>();
 
-            var pipeline = Aggregate();
+            // TASK-909: the simple collation, so a collection created with a default collation groups, matches and takes a
+            // string $min / $max as the in-memory aggregation does (measured: it followed the collection's collation).
+            var pipeline = Aggregate().WithCollation(Collation.Simple);
 
             // $match from filter
             if (query.Filter != null)

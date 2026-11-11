@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Aggregate rows ordered by a string are ordinal on every provider (2026-11-11)
+[[TASK-909]] (the user's decision). Ordering aggregate results by a string group key or string MIN/MAX followed the
+machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong per provider (measured; `apple` before
+`Banana`, PostgreSQL NULL last). It now follows `AggregateQuery.StringComparison` (default `Ordinal`) everywhere, also in
+SQL views; SQL refuses other orders by name. MongoDB aggregates ignore a collection's default collation. Found:
+[[TASK-911]] (P1, SQL Server and MySQL GROUP BY merges string keys).
 ### Aggregate string MIN/MAX are ordinal on every provider (2026-11-10)
 [[TASK-907]] (the user's decision). String MIN/MAX followed each database's collation and the in-memory oracle the
 machine's culture: 22–30 of 32 cases differed per provider (measured; `apple` vs `Banana`, ß = ss, `a` = `a `). New
@@ -369,12 +375,6 @@ is now stamped inside the conditional write. SQL and MongoDB have the same defec
 writes: `x.Score.HasValue` matched stored nulls, every negated ordering dropped null rows, and a member missing from
 the JSON failed `== null` and `!=`. One pre-pass shared by store and view now renders "has a value" and "null"
 explicitly. **Breaking:** culture string comparisons and `IsNullOrWhiteSpace` are refused by name.
-### SQL store aggregates answer what LINQ answers (2026-11-10)
-[[TASK-892]]. The store `Aggregate` differed from `AggregateHelper` on 54–106 of 164 cases per provider (measured):
-PostgreSQL named the group key `kind` so every grouped key read null, SQL Server truncated integral AVG, SQLite summed
-decimals as REAL, and result types were the driver's. Store and view aggregates now render through one dialect hook and
-read through one conversion; a store decimal AVG divides in C#. **Breaking:** a view's decimal AVG is refused on the
-servers, and a view SUM over only NULLs is 0 (the store's stays NULL; decision in [[TASK-886]]).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -2015,6 +2015,11 @@ namespace Birko.Data.SQL.Connectors
         /// does in one column (a decimal on a server) is read as its SUM and COUNT and divided here, as LINQ divides it; it is
         /// ordered by the server's own AVG. A SUM over no values is 0 (TASK-886), as <c>AggregateHelper</c> answers.
         /// </para>
+        /// <para>
+        /// TASK-909: an ORDER BY key that is a string group-by column or a string MIN / MAX is rendered through
+        /// <see cref="Conditions.SqlValueFragmentDialect.OrdinalOrderTerms"/>, so the rows are in Ordinal order, NULL first, before
+        /// the server pages them; another <see cref="Birko.Data.Stores.AggregateQuery{T}.StringComparison"/> is refused by name.
+        /// </para>
         /// </remarks>
         protected (Dictionary<int, string> fields, Dictionary<int, string> groupFields, IEnumerable<Conditions.Condition>? conditions, IDictionary<string, bool>? orderFields, Func<DbDataReader, Birko.Data.Stores.AggregateResult> read) BuildAggregateQueryParts<T>(
             Type type,
@@ -2033,6 +2038,8 @@ namespace Birko.Data.SQL.Connectors
             var allFields = DataBase.LoadFields(type).ToList();
             // What an ORDER BY key may name: a group-by field (property or column), an aggregate alias, the bucket.
             var orderable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // TASK-909: the ORDER BY sql that orders a string (a string group-by column, a string MIN / MAX), with what it is for a refusal.
+            var stringOrder = new Dictionary<string, (string Operand, string Role)>(StringComparer.Ordinal);
             foreach (var groupBy in query.GroupByFields)
             {
                 var field = ResolveAggregateField(allFields, groupBy, "group-by field");
@@ -2041,6 +2048,8 @@ namespace Birko.Data.SQL.Connectors
                 groupFields[idx] = sqlName;
                 orderable[groupBy] = sqlName;
                 orderable[sqlName] = sqlName;
+                if (field.Property.PropertyType == typeof(string))
+                    stringOrder[sqlName] = (sqlName, $"group-by field '{groupBy}'");
                 var ordinal = idx;
                 var readKey = ColumnValueReader(field);
                 readers.Add((reader, row) => row[groupBy] = readKey(reader, ordinal));
@@ -2098,6 +2107,7 @@ namespace Birko.Data.SQL.Connectors
                 orderable[alias] = QuoteIdentifier(alias);
                 if (!Birko.Data.SQL.Fields.AggregateValue.IsNumeric(result))
                 {
+                    if (result == typeof(string)) stringOrder[QuoteIdentifier(alias)] = (sql, $"aggregate '{alias}'");   // TASK-909
                     // A MIN / MAX of a string, a date, an enum: the column's own type, read as the column is read.
                     var readValue = ColumnValueReader(field);
                     readers.Add((reader, row) => row[alias] = readValue(reader, ordinal));
@@ -2120,6 +2130,14 @@ namespace Birko.Data.SQL.Connectors
                         throw new ArgumentException(
                             $"Aggregate ORDER BY key '{kvp.Key}' is neither a group-by field, an aggregate alias nor bucket_time.",
                             nameof(query));
+                    if (stringOrder.TryGetValue(sql, out var ordered))
+                    {
+                        // TASK-909: a string key orders in the query's comparison; the server can only be made to order Ordinal.
+                        if (query.StringComparison != StringComparison.Ordinal)
+                            throw Birko.Data.Stores.AggregateMath.StringRowOrderNotSupported("SQL aggregate", ordered.Role, query.StringComparison);
+                        foreach (var term in dialect.OrdinalOrderTerms(ordered.Operand, ordered.Role)) orderFields[term] = kvp.Value;
+                        continue;
+                    }
                     orderFields[sql] = kvp.Value;
                 }
             }

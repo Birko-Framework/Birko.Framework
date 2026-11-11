@@ -28,6 +28,26 @@ namespace Birko.Data.MongoDB.Aggregation
             _stages = new List<BsonDocument>();
         }
 
+        private Collation? _collation;
+
+        /// <summary>
+        /// Runs the pipeline under <paramref name="collation"/> instead of the collection's default collation (null: the
+        /// collection's default, as before).
+        /// </summary>
+        /// <remarks>
+        /// TASK-909: an aggregation inherits the default collation of a collection created with one, and then its
+        /// <c>$min</c> / <c>$max</c> of a string follow the locale and, at strength 1 or 2, its <c>$group</c> merges and its
+        /// <c>$match</c> equates <c>zebra</c> with <c>Zebra</c> (measured). The store's <c>Aggregate</c> passes
+        /// <see cref="Collation.Simple"/>, the binary comparison Birko's translations are written for.
+        /// </remarks>
+        public AggregationPipelineBuilder<T> WithCollation(Collation? collation)
+        {
+            _collation = collation;
+            return this;
+        }
+
+        private AggregateOptions? Options() => _collation == null ? null : new AggregateOptions { Collation = _collation };
+
         private RenderArgs<T> CreateRenderArgs()
         {
             var serializer = BsonSerializer.SerializerRegistry.GetSerializer<T>();
@@ -258,7 +278,7 @@ namespace Birko.Data.MongoDB.Aggregation
         public async Task<List<BsonDocument>> ToListAsync(CancellationToken ct = default)
         {
             var pipeline = PipelineDefinition<T, BsonDocument>.Create(_stages);
-            var cursor = await _collection.AggregateAsync(pipeline, null, ct).ConfigureAwait(false);
+            var cursor = await _collection.AggregateAsync(pipeline, Options(), ct).ConfigureAwait(false);
             return await cursor.ToListAsync(ct).ConfigureAwait(false);
         }
 
@@ -270,7 +290,7 @@ namespace Birko.Data.MongoDB.Aggregation
         public async Task<BsonDocument?> FirstOrDefaultAsync(CancellationToken ct = default)
         {
             var pipeline = PipelineDefinition<T, BsonDocument>.Create(_stages);
-            var cursor = await _collection.AggregateAsync(pipeline, null, ct).ConfigureAwait(false);
+            var cursor = await _collection.AggregateAsync(pipeline, Options(), ct).ConfigureAwait(false);
             return await cursor.FirstOrDefaultAsync(ct).ConfigureAwait(false);
         }
 
@@ -281,7 +301,7 @@ namespace Birko.Data.MongoDB.Aggregation
         public List<BsonDocument> ToList()
         {
             var pipeline = PipelineDefinition<T, BsonDocument>.Create(_stages);
-            var cursor = _collection.Aggregate(pipeline);
+            var cursor = _collection.Aggregate(pipeline, Options());
             return cursor.ToList();
         }
 
@@ -292,7 +312,7 @@ namespace Birko.Data.MongoDB.Aggregation
         public BsonDocument? FirstOrDefault()
         {
             var pipeline = PipelineDefinition<T, BsonDocument>.Create(_stages);
-            var cursor = _collection.Aggregate(pipeline);
+            var cursor = _collection.Aggregate(pipeline, Options());
             return cursor.FirstOrDefault();
         }
     }

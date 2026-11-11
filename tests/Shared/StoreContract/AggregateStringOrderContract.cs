@@ -361,4 +361,214 @@ public abstract class AggregateStringOrderContract<T> where T : AbstractModel, n
         thrown.Should().BeNull(because);
         got.Should().Equal(new[] { "*: count=Int32:17; min=Int32:1; max=Int32:17" }, because);
     }
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // TASK-909 — the order of the result ROWS (the user's decision, 2026-11-11): AggregateQuery.StringComparison, Ordinal by
+    // default, also orders the rows by a string group key or a string Min / Max, before the page (Offset / Limit) is cut.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether the provider orders the result rows in memory (after reading every group), so it orders them in every
+    /// comparison as the oracle does. A provider that orders on the server answers Ordinal and refuses another comparison by
+    /// name. The in-memory stores by default; MongoDB, Elasticsearch and Cosmos DB order their rows in memory too.
+    /// </summary>
+    protected virtual bool OrdersRowsInEveryComparison => AnswersEveryComparison;
+
+    /// <summary>
+    /// The values a row order is measured over, distinct in Ordinal, each pair discriminating one way an order can differ
+    /// from it: case (<c>Banana</c> below <c>apple</c>, <c>Zebra</c> below <c>zebra</c>), accents (<c>éclair</c> above
+    /// <c>zebra</c>), a trailing space and a tab (<c>"a"</c> &lt; <c>"a\t"</c> &lt; <c>"a "</c>, which space padding ties or
+    /// reverses), <c>ß</c> against <c>ss</c> and <c>st</c>, the empty string, a character above U+FFFF against U+E000 and
+    /// U+FF5E (UTF-16 puts its surrogate pair below them, code-point order above), and null (below every value, as the
+    /// oracle orders it).
+    /// </summary>
+    private static readonly string?[] RowOrderValues =
+    {
+        "apple", "Banana", "éclair", "zebra", "Zebra", "a", "a ", "a\t", "ß", "ss", "st", "", "\U0001F600", "\uFF5E", "\uE000", null,
+    };
+
+    /// <summary>
+    /// The group keys a row order by the key itself is measured over: <see cref="RowOrderValues"/> without the values a
+    /// server's GROUP BY merges with another (measured, TASK-909: SQL Server's default collation groups <c>Zebra</c> with
+    /// <c>zebra</c>, <c>"a "</c> with <c>"a"</c>, <c>ß</c> with <c>ss</c>, and U+E000 and U+1F600 with <c>""</c>; MySQL's groups
+    /// <c>Zebra</c> with <c>zebra</c> and <c>ß</c> with <c>ss</c>), so that the order is what is measured. Still
+    /// discriminating: case, accents, a tab, <c>ß</c> against <c>st</c>, U+1F600 against U+FF5E, null (the empty string and a
+    /// trailing space are measured by the <c>Min</c> order, which no GROUP BY merges).
+    /// </summary>
+    private static readonly string?[] RowOrderKeyValues =
+    {
+        "apple", "Banana", "éclair", "zebra", "a", "a\t", "ß", "st", "\U0001F600", "\uFF5E", null,
+    };
+
+    /// <summary>The pages each row order is read in: all, the first four, a page from the middle, the last four.</summary>
+    private static readonly (int? Offset, int? Limit)[] RowOrderWindows = { (null, null), (null, 4), (3, 5), (-4, null) };
+
+    public static IEnumerable<object[]> RowOrderCases
+        => from key in new[] { "min", "Kind" }
+           from desc in new[] { false, true }
+           from window in Enumerable.Range(0, RowOrderWindows.Length)
+           from mode in new[] { "sync", "async" }
+           select new object[] { key, desc, window, mode };
+
+    /// <summary>Null below every string, strings in <paramref name="comparison"/>'s order: the order the oracle takes rows in.</summary>
+    private static int CompareRowKeys(string? x, string? y, StringComparison comparison)
+        => x == null ? (y == null ? 0 : -1) : y == null ? 1 : string.Compare(x, y, comparison);
+
+    private async Task<IReadOnlyList<AggregateResult>> RunRows(string mode, IEnumerable<(string Kind, string? Name, int N)> rows, AggregateQuery<T> query)
+    {
+        if (mode == "async")
+        {
+            var store = NewAsyncStore();
+            foreach (var row in rows) await store.CreateAsync(ToRow(row));
+            Settle();
+            return await ((IAsyncAggregatableStore<T>)store).AggregateAsync(query);
+        }
+
+        var sync = NewSyncStore();
+        foreach (var row in rows) sync.Create(ToRow(row));
+        Settle();
+        return ((IAggregatableStore<T>)sync).Aggregate(query);
+    }
+
+    /// <summary>
+    /// The rows ordered by a string, Ordinal by default, and paged after the order: by a string <c>Min</c> (one value per
+    /// group, so every discriminating value is its own row) and by the string group key itself. Ascending puts null first
+    /// and descending last, as the oracle orders it.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RowOrderCases))]
+    public async Task Contract_Rows_ordered_by_a_string_are_in_Ordinal_order_before_the_page(string key, bool descending, int window, string mode)
+    {
+        if (!Ready()) return;
+        // By Min: a group per value (Kind g00..g15), its Min the value. By the key: a group per value, the key the value
+        // (a null Kind is a group of its own, as in LINQ).
+        var byKey = key == "Kind";
+        var rows = byKey
+            ? RowOrderKeyValues.Select((v, i) => (Kind: v!, Name: (string?)"x", N: i)).ToList()
+            : RowOrderValues.Select((v, i) => (Kind: $"g{i:00}", Name: v, N: i)).ToList();
+        var (offset, limit) = RowOrderWindows[window];
+        if (offset < 0) offset = rows.Count + offset;
+        var query = new AggregateQuery<T>
+        {
+            GroupByFields = new[] { "Kind" },
+            Aggregates = new[] { new AggregateField(AggregateFunction.Count, "N", "count"), new AggregateField(AggregateFunction.Min, "Name", "min") },
+            OrderBy = new Dictionary<string, bool> { [key] = descending },
+            Offset = offset,
+            Limit = limit,
+        };
+
+        var ordered = rows.Select(r => (Kind: (string?)r.Kind, Value: byKey ? (string?)r.Kind : r.Name)).ToList();
+        ordered.Sort((a, b) => CompareRowKeys(a.Value, b.Value, StringComparison.Ordinal) * (descending ? -1 : 1));
+        var expected = ordered.Skip(offset ?? 0).Take(limit ?? int.MaxValue).Select(r => RenderValue(r.Kind)).ToList();
+
+        Exception? thrown = null;
+        var got = new List<string>();
+        try { got = (await RunRows(mode, rows, query)).Select(r => RenderValue(r.GetValue<object>("Kind"))).ToList(); }
+        catch (Exception ex) { thrown = ex; }
+
+        var because = $"{mode} rows by {key} {(descending ? "desc" : "asc")}, offset {offset?.ToString() ?? "-"} limit {limit?.ToString() ?? "-"} "
+                      + $"(expected [{string.Join(" ", expected)}]; got [{string.Join(" ", got)}]; thrown {thrown?.GetType().Name}: {thrown?.Message})";
+        thrown.Should().BeNull(because);
+        got.Should().Equal(expected, because);
+    }
+
+    /// <summary>
+    /// Rows that tie on the first key are ordered by the next, each in Ordinal order, so a page cut across a tie is the
+    /// same page on every provider. (A tie no later key breaks keeps the provider's own order, as on any key: the oracle's
+    /// is the order the groups first occur in.)
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(GroupingModes))]
+    public async Task Contract_Rows_tied_on_a_string_are_ordered_by_the_next_key_in_Ordinal_order(bool descending, string mode)
+    {
+        if (!Ready()) return;
+        var rows = new (string Kind, string? Name, int N)[]
+        {
+            ("c", "same", 1), ("B", "same", 2), ("a", "same", 3), ("d", "Zebra", 4), ("e", "zebra", 5), ("f", null, 6), ("g", null, 7),
+        };
+        var query = new AggregateQuery<T>
+        {
+            GroupByFields = new[] { "Kind" },
+            Aggregates = new[] { new AggregateField(AggregateFunction.Min, "Name", "min") },
+            OrderBy = new Dictionary<string, bool> { ["min"] = descending, ["Kind"] = false },
+            Offset = 1,
+            Limit = 5,
+        };
+        var ordered = rows.ToList();
+        ordered.Sort((a, b) =>
+        {
+            var first = CompareRowKeys(a.Name, b.Name, StringComparison.Ordinal) * (descending ? -1 : 1);
+            return first != 0 ? first : CompareRowKeys(a.Kind, b.Kind, StringComparison.Ordinal);
+        });
+        var expected = ordered.Skip(1).Take(5).Select(r => RenderValue(r.Kind)).ToList();
+
+        Exception? thrown = null;
+        var got = new List<string>();
+        try { got = (await RunRows(mode, rows, query)).Select(r => RenderValue(r.GetValue<object>("Kind"))).ToList(); }
+        catch (Exception ex) { thrown = ex; }
+
+        var because = $"{mode} rows by min {(descending ? "desc" : "asc")} then Kind (expected [{string.Join(" ", expected)}]; "
+                      + $"got [{string.Join(" ", got)}]; thrown {thrown?.GetType().Name}: {thrown?.Message})";
+        thrown.Should().BeNull(because);
+        got.Should().Equal(expected, because);
+    }
+
+    public static IEnumerable<object[]> RowOrderComparisons
+        => from comparison in new[]
+           {
+               StringComparison.OrdinalIgnoreCase, StringComparison.CurrentCulture, StringComparison.CurrentCultureIgnoreCase,
+               StringComparison.InvariantCulture, StringComparison.InvariantCultureIgnoreCase,
+           }
+           from desc in new[] { false, true }
+           from mode in new[] { "sync", "async" }
+           select new object[] { comparison, desc, mode };
+
+    /// <summary>
+    /// Rows ordered by a string group key in another comparison (no string Min / Max in the query): a provider that orders
+    /// its rows in memory orders them in that comparison (ties, such as <c>zebra</c> and <c>Zebra</c> ignoring case, in
+    /// either order); a provider that orders on the server refuses by name, before any data, never answering in the
+    /// database's own order.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RowOrderComparisons))]
+    public async Task Contract_Rows_ordered_by_a_string_in_another_comparison_are_ordered_in_memory_or_refused_by_name(
+        StringComparison comparison, bool descending, string mode)
+    {
+        if (!Ready()) return;
+        var rows = RowOrderValues.Select((v, i) => (Kind: v!, Name: (string?)"x", N: i)).ToList();
+        var query = new AggregateQuery<T>
+        {
+            GroupByFields = new[] { "Kind" },
+            Aggregates = new[] { new AggregateField(AggregateFunction.Count, "N", "count") },
+            OrderBy = new Dictionary<string, bool> { ["Kind"] = descending },
+            StringComparison = comparison,
+        };
+
+        Exception? thrown = null;
+        var got = new List<string?>();
+        try
+        {
+            // A provider that refuses is asked over no rows: the refusal does not depend on the data.
+            var seeded = OrdersRowsInEveryComparison ? rows : rows.Take(0).ToList();
+            got = (await RunRows(mode, seeded, query)).Select(r => r.GetValue<object>("Kind") as string).ToList();
+        }
+        catch (Exception ex) { thrown = ex; }
+
+        var because = $"{mode} rows by Kind {(descending ? "desc" : "asc")} in {comparison} order "
+                      + $"(got [{string.Join(" ", got.Select(RenderValue))}]; thrown {thrown?.GetType().Name}: {thrown?.Message})";
+        if (!OrdersRowsInEveryComparison)
+        {
+            thrown.Should().BeOfType<NotSupportedException>(because);
+            thrown!.Message.Should().Contain(comparison.ToString(), because).And.Contain("TASK-909", because);
+            return;
+        }
+
+        thrown.Should().BeNull(because);
+        got.Should().BeEquivalentTo(RowOrderValues, because);
+        for (var i = 1; i < got.Count; i++)
+        {
+            (CompareRowKeys(got[i - 1], got[i], comparison) * (descending ? -1 : 1)).Should().BeLessThanOrEqualTo(0,
+                $"{RenderValue(got[i - 1])} is before {RenderValue(got[i])}: {because}");
+        }
+    }
 }

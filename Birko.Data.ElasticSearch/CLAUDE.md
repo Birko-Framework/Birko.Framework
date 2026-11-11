@@ -321,6 +321,9 @@ The answer is the LINQ aggregation's (`AggregateHelper`) over the same rows, mea
   time buckets are one composite aggregation with `missing_bucket` (a null key is a group), read page by page
   (`AggregateGroupPageSize`, 1000).
 - `Count` is the row count (bucket `doc_count`, `hits.total` without grouping); its source is ignored, as `COUNT(*)`.
+- `OrderBy`, `Offset` and `Limit` are applied to the groups read back by `AggregateHelper.ApplyOrderingAndPaging`: a string
+  group key or string Min / Max orders in `AggregateQuery.StringComparison` (Ordinal by default; it was the current
+  culture), any comparison, TASK-909.
 - A sum of no values is 0, as Elasticsearch answers it; keys and metrics come back as the member's type (int sum, DateTime
   min, enum key…); an ungrouped query over no rows answers one row (Count 0, Sum 0, the others null), a grouped one none;
   a query with nothing to aggregate is refused (`ArgumentException`; it answered one empty row). TASK-886, the user's
