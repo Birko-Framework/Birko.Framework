@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB queries answer the same on Linux; culture-pinned fold contract (2026-11-11)
+[[TASK-919]]. CI (Linux) failed tests that passed on Windows. Cosmos SDK builds query plans locally only on Windows x64
+and asks the gateway on Linux, where TASK-907's astral check counted 0 (a mixed MIN/MAX group was answered, not refused)
+and TASK-899's nested `Count(p)` threw; both now render forms the gateway path reads correctly. The SQL case-fold contract
+assumed the machine's culture and is pinned to sk-SK. Found: [[TASK-920]] (P1, nested SUM/AVG/MAX on the gateway path).
 ### Live SQL test runs get their own database (2026-11-11)
 [[TASK-883]]. Two concurrent runs of a live SQL suite against one server failed ~1570 of 2602 tests each (shared fixed
 table names; measured), and MySQL classes that drop tables raw failed 3 of 8 runs through the shared cached connector.
@@ -373,11 +378,6 @@ unwrapped value, silently; PostgreSQL and SQL Server dropped widening casts and 
 succeeds; `Math.Abs` at the minimum answered (measured). Every provider now fails a statement exactly where checked C#
 would. A narrowing SET translates on SQLite, and a fold works on a persistent view. **Breaking:**
 `StoresIntegerOverflowLoudly` is replaced by `NarrowedInteger`.
-### Cosmos DB: missing members read as their default, nested predicates and long null lists work (2026-11-10)
-[[TASK-899]]. A non-nullable member missing from a document failed `A == 0`, `!Del` and 32 more shapes (C# reads the
-default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused
-(measured). Each now matches C#. View aggregates got the store's decimal and DateTime rules; a view decimal AVG and a
-sort by a DateTime group key are refused by name. Found: `DateTime` filters compare stored text ([[TASK-902]], P1).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

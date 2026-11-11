@@ -124,6 +124,30 @@ public abstract class TranslationLeftoversContract
 
     public static IEnumerable<object[]> FoldNames => Folds.Keys.Select(k => new object[] { k });
 
+    /// <summary>
+    /// The culture the fold tests run under. <c>ToLower()</c> / <c>ToUpper()</c> fold by the CURRENT culture, so C#'s answer —
+    /// the oracle — depends on the test process: under sk-SK (a developer machine) <c>"İstanbul".ToLower()</c> is
+    /// <c>"istanbul"</c> and <c>"ıi".ToUpper()</c> is <c>"II"</c>, under the invariant culture (a Linux CI runner with
+    /// <c>LANG=C.UTF-8</c>) they stay <c>"İstanbul"</c> and <c>"ıI"</c>, while a server's <c>LOWER</c> / <c>UPPER</c> ignores the
+    /// client's culture. The budgets were measured under sk-SK, so the culture is pinned to keep them one measurement on every
+    /// machine (measured 2026-11-11: the same Linux run failed 6 of 12 under the invariant culture and passed 12 of 12 under
+    /// sk-SK; .NET's ICU casing of these texts is identical on Windows and Linux). SQLite's <c>birko_case_fold</c> reads the
+    /// current culture too, so it folds under the same pin.
+    /// </summary>
+    protected static readonly CultureInfo FoldCulture = CultureInfo.GetCultureInfo("sk-SK");
+
+    /// <summary>Pins <see cref="CultureInfo.CurrentCulture"/> to <see cref="FoldCulture"/> until disposed.</summary>
+    private static CultureScope UseFoldCulture() => new(FoldCulture);
+
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly CultureInfo _saved = CultureInfo.CurrentCulture;
+
+        public CultureScope(CultureInfo culture) => CultureInfo.CurrentCulture = culture;
+
+        public void Dispose() => CultureInfo.CurrentCulture = _saved;
+    }
+
     private async Task<(IAsyncBulkStore<LeftoverRow> Store, List<LeftoverRow> Seed)> SeedTexts()
     {
         var store = NewStore();
@@ -151,6 +175,7 @@ public abstract class TranslationLeftoversContract
     public async Task Contract_A_case_fold_in_SET_stores_what_CSharp_computes(string fold)
     {
         if (!Ready()) return;
+        using var culture = UseFoldCulture();
         var (store, seed) = await SeedTexts();
         var f = Folds[fold];
 
@@ -172,6 +197,7 @@ public abstract class TranslationLeftoversContract
     public async Task Contract_A_case_fold_compared_ordinally_matches_what_CSharp_matches(string fold)
     {
         if (!Ready()) return;
+        using var culture = UseFoldCulture();
         var (store, seed) = await SeedTexts();
         var f = Folds[fold];
         var off = new List<string>();
@@ -202,6 +228,7 @@ public abstract class TranslationLeftoversContract
     public async Task Contract_A_case_fold_compared_by_collation_is_measured(string fold)
     {
         if (!Ready()) return;
+        using var culture = UseFoldCulture();
         var (store, seed) = await SeedTexts();
         var f = Folds[fold];
         var off = new List<string>();

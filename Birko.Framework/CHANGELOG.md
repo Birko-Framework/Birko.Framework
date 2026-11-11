@@ -4,6 +4,12 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Cosmos DB: missing members read as their default, nested predicates and long null lists work
+[[TASK-899]]. A non-nullable member missing from a document failed `A == 0`, `!Del` and 32 more shapes (C# reads the
+default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused
+(measured). Each now matches C#. View aggregates got the store's decimal and DateTime rules; a view decimal AVG and a
+sort by a DateTime group key are refused by name. Found: `DateTime` filters compare stored text ([[TASK-902]], P1).
+
 ## 2026-11-10 — SQL and MongoDB job queues stamp a claim when they write it
 [[TASK-900]]. As on RavenDB and Elasticsearch (TASK-879, TASK-884), the claim carried the dequeue's start time, so a
 candidate read slower than the claim timeout made a fresh claim look abandoned and the next dequeue handed the same job

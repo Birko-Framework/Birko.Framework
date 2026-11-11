@@ -297,7 +297,8 @@ public static partial class CosmosFilterRewrite
             // TASK-899: nested predicates. The provider has no All (it threw DocumentQueryException), and C#'s All(p) is
             // !Any(!p), so it is rewritten to that and the negated predicate is guarded like any other negation. A
             // predicate (Any, Where, Count, First, ...) keeps the elements it is true of, so its body is positive whatever
-            // the polarity outside: an element whose comparison is undefined is not kept, which is C#'s false.
+            // the polarity outside: an element whose comparison is undefined is not kept, which is C#'s false. Count(p) is
+            // Where(p) counted as an array (CountOfElements).
             if (method.DeclaringType == typeof(Enumerable) && node.Arguments.Count == 2
                 && node.Arguments[1] is LambdaExpression predicate && predicate.ReturnType == typeof(bool))
             {
@@ -307,10 +308,23 @@ public static partial class CosmosFilterRewrite
                     var negated = Expression.Lambda(predicate.Type, Expression.Not(predicate.Body), predicate.Parameters);
                     return Visit(Expression.Not(Expression.Call(any, node.Arguments[0], negated)))!;
                 }
+                if (method.Name is nameof(Enumerable.Count) or nameof(Enumerable.LongCount))
+                {
+                    var where = EnumerableWhere.MakeGenericMethod(method.GetGenericArguments()[0]);
+                    return CountOfElements(Visit(Expression.Call(where, node.Arguments[0], predicate))!, method.Name, node.Type);
+                }
                 if (PredicateMethods.Contains(method.Name))
                 {
                     return node.Update(null, new[] { Exact(node.Arguments[0]), Body(predicate, In(Polarity.Positive, predicate.Body)) });
                 }
+            }
+
+            // Count() / LongCount() of a sequence a query produced (Where(..).Count()): counted as an array too, as above.
+            if (method.DeclaringType == typeof(Enumerable) && node.Arguments.Count == 1
+                && method.Name is nameof(Enumerable.Count) or nameof(Enumerable.LongCount)
+                && node.Arguments[0] is MethodCallExpression { Method.Name: not (nameof(Enumerable.ToArray) or nameof(Enumerable.ToList)) })
+            {
+                return CountOfElements(Visit(node.Arguments[0])!, method.Name, node.Type);
             }
 
             if (method.Name == nameof(Nullable<int>.GetValueOrDefault) && node.Object != null
@@ -745,6 +759,40 @@ public static partial class CosmosFilterRewrite
     private static readonly MethodInfo EnumerableAny = typeof(Enumerable)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .Single(m => m.Name == nameof(Enumerable.Any) && m.GetParameters().Length == 2);
+
+    private static readonly MethodInfo EnumerableWhere = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(m => m.Name == nameof(Enumerable.Where) && m.GetParameters().Length == 2
+            && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
+
+    private static readonly MethodInfo EnumerableToArray = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(m => m.Name == nameof(Enumerable.ToArray) && m.GetParameters().Length == 1);
+
+    private static readonly MethodInfo EnumerableCount = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(m => m.Name == nameof(Enumerable.Count) && m.GetParameters().Length == 1);
+
+    /// <summary>
+    /// The number of elements of <paramref name="elements"/> (a nested sequence, already prepared), as
+    /// <c>Count(elements.ToArray())</c>: the provider renders it <c>ARRAY_LENGTH(ARRAY(SELECT VALUE ..))</c>, where
+    /// <c>elements.Count()</c> is a <c>JOIN (SELECT VALUE COUNT(1) ..)</c> subquery. The two answer alike, but a client
+    /// that takes its query plan from the gateway (every client but Windows x64: the SDK's local planner is Windows-only
+    /// unless <c>AZURE_COSMOS_USE_QUERY_PLAN_INTEROP_LINUX</c> is set) is told by the Cosmos DB emulator that the COUNT in
+    /// the subquery is the query's own aggregate, and the read fails ("RewrittenAggregateProjections was not an array",
+    /// "localCount must be a number"; measured 2026-11-11 on emulator builds EN20261008 and EN20261019, from Linux and from
+    /// Windows with AZURE_COSMOS_BYPASS_QUERY_PARSING). An array length is no aggregate on any planner.
+    /// </summary>
+    private static Expression CountOfElements(Expression elements, string method, Type type)
+    {
+        var element = elements.Type.IsArray
+            ? elements.Type.GetElementType()!
+            : elements.Type.GetInterfaces().Append(elements.Type)
+                .First(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GetGenericArguments()[0];
+        Expression count = Expression.Call(EnumerableCount.MakeGenericMethod(element),
+            Expression.Call(EnumerableToArray.MakeGenericMethod(element), elements));
+        return method == nameof(Enumerable.LongCount) ? Expression.Convert(count, type) : count;
+    }
 
     /// <summary>Replaces one node, by reference.</summary>
     private sealed class Replacer : ExpressionVisitor

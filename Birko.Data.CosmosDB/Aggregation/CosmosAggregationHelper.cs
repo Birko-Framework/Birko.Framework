@@ -167,9 +167,13 @@ namespace Birko.Data.CosmosDB.Aggregation
 
         private static string Matches(string field, string pattern)
         {
-            // The pattern as a string literal with its non-ASCII characters escaped (\uXXXX, UTF-16 units, a surrogate
-            // pair for an astral character), as JSON reads it.
-            var literal = string.Concat(pattern.Select(ch => ch < 0x20 || ch > 0x7E ? $"\\u{(int)ch:X4}" : ch.ToString()));
+            // The pattern as a string literal holding its characters themselves; only a control character, a quote or a
+            // backslash is escaped. An astral character written as an escaped surrogate pair (𐀀) is not read as
+            // that character by the Cosmos DB emulator whenever the client takes its query plan from the gateway (every
+            // client but Windows x64; see CosmosFilterRewrite.CountOfElements): the class then matched nothing and a mixed
+            // group was answered in code-point order instead of refused (measured 2026-11-11, emulator builds EN20261008 and
+            // EN20261019; a lone escaped pair failed with a 500). The characters themselves are read alike on every path.
+            var literal = string.Concat(pattern.Select(ch => ch < 0x20 || ch == '"' || ch == '\\' ? $"\\u{(int)ch:X4}" : ch.ToString()));
             return $"COUNT((IS_STRING({field}) AND RegexMatch({field}, \"{literal}\")) ? 1 : undefined)";
         }
 
