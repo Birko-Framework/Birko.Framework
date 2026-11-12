@@ -2,7 +2,7 @@
 id: TASK-921
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-12
@@ -47,10 +47,13 @@ sub-row SHOULD open the panel.
 
 ## Human test plan
 
-- [ ] Playground "Contextual tab (Shell)" card or Symbio's events page, ribbon UNPINNED (Ctrl+F1): select a record, so
+- [x] Playground "Contextual tab (Shell)" card or Symbio's events page, ribbon UNPINNED (Ctrl+F1): select a record, so
       its tab opens; move the pointer out of the panel so it closes; then trigger the sub-row selection (Symbio: click an
       attendee row). Expected: the panel opens again on the contextual tab, with no flicker of another tab. Then pin the
       ribbon and repeat: nothing visibly changes besides the new group.
+      **PASS (the user, 2026-11-12, in Symbio on TASK-1051's build: the sub-row behaviour confirmed, opening on an
+      unpinned ribbon included; relayed by the Symbio session).** The pinned case was not reported separately; it is
+      covered by the smoke's MutationObserver check.
 
 ## Implementation plan
 
@@ -78,3 +81,9 @@ against unmodified Web main (pre-existing, not this change).
 At the user's word: Birko.Web main 156297e, tagged **v0.4.12** locally; Playground main c44c7fd. Not pushed (batch
 with the next push, with the tag). Symbio told; its dev server watches the local checkout, so it builds on v0.4.12.
 Worktrees and branches removed. Status `verify` until the human test plan runs (in Symbio, TASK-1051).
+
+## Closed (2026-11-12)
+
+Human test passed in Symbio (above). Symbio adopted it in TASK-1051 (1b4afb17: events attendee and venue-booking
+rows, manufacturing production steps). Birko.Web v0.4.12 and the Playground merge are still local; push with the
+next batch, with the tag.
