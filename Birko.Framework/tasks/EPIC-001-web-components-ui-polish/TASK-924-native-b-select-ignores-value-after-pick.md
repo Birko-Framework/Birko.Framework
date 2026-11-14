@@ -2,7 +2,7 @@
 id: TASK-924
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-14
@@ -37,9 +37,13 @@ workaround; it is correct either way).
 
 ## Human test plan
 
-- [ ] Symbio pages screen: pick a category in the filter, then cause the page to re-render with a different category
+- [x] Symbio pages screen: pick a category in the filter, then cause the page to re-render with a different category
       set by the page (or clear it): the picker shows the page's value, not the earlier pick. (Symbio's own workaround
       masks this; to exercise the fix alone, use the Playground or remove the workaround locally.)
+      **PASS (the user, 2026-11-14, in Symbio on TASK-1089 built against 8cf3adf: Blog, Legal, then "All categories"
+      keep the picker on the choice and the tree matches; a site change resets it to "All"; relayed by the Symbio
+      session).** Symbio's value-property workaround was in place, so this confirms nothing regressed in the real page;
+      the fix itself is proven by select-combobox-smoke (red 36/38 before, green after).
 
 ## Built and merged (2026-11-14), not pushed
 
@@ -48,3 +52,8 @@ one. Playground `select-combobox-smoke`: 36/38 against unfixed code (re-render a
 fix; verify.mjs failing checks 0. Components `tsc` (TypeScript 5.6.3) clean.
 Birko.Web main 8cf3adf, tagged **v0.4.14** locally; Playground main 3972e00. Not pushed (batch with the next push,
 with the tag). Worktrees and branches removed.
+
+## Closed (2026-11-14)
+
+Human test passed in Symbio (above); Symbio gate 3 PASS on that build (564 tests, only known failures). Birko.Web
+v0.4.14 and the Playground merge are still local; push with the next batch, with the tag.

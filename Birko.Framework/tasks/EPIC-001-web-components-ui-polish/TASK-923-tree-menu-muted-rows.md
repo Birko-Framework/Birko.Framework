@@ -2,7 +2,7 @@
 id: TASK-923
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-14
@@ -40,9 +40,11 @@ already the dimmest text token, and opacity on top would drop it below AA contra
 
 ## Human test plan
 
-- [ ] In Symbio's pages screen (TASK-1089), pick a category: ancestors outside it read muted (grey text, not faded
+- [x] In Symbio's pages screen (TASK-1089), pick a category: ancestors outside it read muted (grey text, not faded
       like a disabled row); click one — it is selected and its page opens; Tab / arrow to one and press Enter — same.
       Hover a muted row: it highlights like any row.
+      **PASS (the user, 2026-11-14, in Symbio on TASK-1089: non-matching ancestors muted, click and Enter select;
+      relayed by the Symbio session).** Hover was not reported separately.
 
 ## Built (2026-11-14)
 
@@ -59,3 +61,8 @@ with the tag). Symbio told; its dev server watches the local checkout. Worktrees
 
 Symbio session, 2026-11-14: `muted` works in Symbio (ancestors muted; click and Enter select). The user's human test
 of TASK-1089 is still pending.
+
+## Closed (2026-11-14)
+
+Human test passed in Symbio (above); Symbio gate 3 PASS on that build (564 tests, only known failures). Birko.Web
+v0.4.13 and the Playground merge are still local; push with the next batch, with the tag.
