@@ -56,3 +56,6 @@ tree-sort-smoke 34/34; verify.mjs failing checks 0. Components `tsc` (TypeScript
 Birko.Web main 6a20347, tagged **v0.4.13** locally; Playground main e41e9df. Not pushed (batch with the next push,
 with the tag). Symbio told; its dev server watches the local checkout. Worktrees and branches removed. Status
 `verify` until the human test plan runs in Symbio (TASK-1089).
+
+Symbio session, 2026-11-14: `muted` works in Symbio (ancestors muted; click and Enter select). The user's human test
+of TASK-1089 is still pending.
