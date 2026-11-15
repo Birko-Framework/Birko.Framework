@@ -2,7 +2,7 @@
 id: TASK-133
 parent: STORY-023
 feature: FEATURE-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-01
@@ -110,7 +110,7 @@ against whichever shape wins.
 
 ## Human test plan
 
-- [ ] Render a `b-form` with a required radio field in the playground gallery, click each option in turn,
+- [x] Render a `b-form` with a required radio field in the playground gallery, click each option in turn,
       and confirm by eye that the selection is visible, the error clears, and the label/spacing match the
       other field rows. The value-collection half is automated; the *layout* of a grouped field inside the
       form grid is a visual judgement, and option 1 changes the DOM around it.
@@ -137,3 +137,9 @@ standalone radio checks green; keyboard-check 225/225; a11y checks pass. Birko.W
 
 Human test pending: the user's look at the layout (screenshot rendered 2026-11-15: label, asterisk and error line
 match a text field in the grid).
+
+## Closed (2026-11-15)
+
+Human test passed: the user confirmed the rendered form after a failed save (the radio label matches a text field's,
+red required mark, lines up in the grid row, one error line for the group; the required checkbox shows its message).
+Ships in Birko.Web v0.4.14, not yet pushed.
