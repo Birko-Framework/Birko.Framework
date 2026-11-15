@@ -3,7 +3,7 @@ id: TASK-600
 parent: STORY-038
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: cancelled
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: unassigned
@@ -41,6 +41,33 @@ opaque status bar `default` reserves, as Apple documents. Per rule 54 this is **
 not fixed: nothing in Reps or the shell changed. Variant B (`black-translucent` + `viewport-fit=cover`) was not run;
 it was the candidate cure for a symptom that is gone. Pending: rapid rotations, lock in landscape then rotate after
 unlock, app-switch then rotate.
+
+## Closed as NO LONGER REPRODUCING (2026-11-15, the user's decision)
+
+**Not fixed** (rule 54): nothing in the shell or Reps changed. The symptom is gone on both platforms measured:
+Android (Mi A2 Lite, Chrome 150) clean since 2026-09-07 by instrument and by hand; iPhone on **iOS 27.2** clean on Reps
+as shipped (table above) and in the user's three resume checks: rapid rotations, lock in landscape then rotate after
+unlock, app-switch then rotate. If it comes back, it re-enters as a field finding (CLAUDE.md lifecycle step 10)
+against the measured baseline above, not against a remembered symptom.
+
+**The status-bar variants measured the same day, iOS 27.2** (built output only, Reps' source untouched):
+
+| | title blur | extra band at top | maxScroll | bottom |
+|---|---|---|---|---|
+| A `default` (as shipped) | yes (iOS) | no | 0 | correct |
+| B `black-translucent` + `viewport-fit=cover` | no (by accident) | yes, top-bar 0..143 | 50 | correct |
+| C = B + top-bar `box-sizing: border-box` + shell `position: fixed; inset: 0` | yes (iOS) | no, top-bar 0..92 | 50 | correct |
+| D = C + `body { min-height: 0 }` | yes (iOS) | no | 0 | layout 762 on an 812 screen: a white band under the nav |
+
+- The **title blur** is iOS's own band under the status bar: it lands on whatever sits there (A, C, D); B only escaped
+  it because its double padding pushed the title lower. Accepted as the platform's look (the user, 2026-11-15).
+- **B's extra band is a Birko.Web shell defect**, measured and root-caused: `.mobile-topbar` adds the top inset to its
+  height AND pads by it, which needs `box-sizing: border-box`, but `reset.css`'s `*` rule does not reach the shadow
+  DOM, so it is `content-box` and counts the inset twice (reproduced: 42 + 50 + 50 = 143). Filed as [[TASK-930]].
+  It is what made Reps leave `black-translucent` originally (Reps' index.html comment: "over-padded the top bar").
+- C → D show the `viewport-fit=cover` route trading one viewport mismatch for another on iOS 27.2 (`body min-height:
+  100dvh` resolves to the screen, 812, against a 762 document; without it the layout viewport itself drops to 762).
+  Not pursued: **Reps stays on A** (the user's decision).
 
 ## Research, 2026-10-19 — what the platforms say (picked up for work)
 
