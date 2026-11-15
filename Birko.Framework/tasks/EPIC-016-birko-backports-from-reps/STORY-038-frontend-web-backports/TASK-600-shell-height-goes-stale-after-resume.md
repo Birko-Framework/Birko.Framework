@@ -23,6 +23,25 @@ jira-key: null
 > **Moved from WorkoutTracker TASK-130 on 2026-10-14.** It was filed there as Birko.Web work, where the framework's pick never saw it. Every TASK / STORY / FEATURE id in the body below is **WorkoutTracker's**. It depended on WorkoutTracker TASK-148 (iOS rotation leaves a gap above the top bar, in progress there) and blocks WorkoutTracker TASK-045 (adopt the mobile shell). There, TASK-130 stays open as the Reps-side check, blocked on this task.
 
 
+## iPhone re-measured on iOS 27.2 — the landscape gap does not reproduce (2026-11-15)
+
+Reps `origin/main` 66d61e9 (Birko.Web 677e238 shell) served from the PC through a Cloudflare quick tunnel, empty
+database, installed to the home screen. An on-screen readout was added to the built `index.html` only (not to Reps'
+source), with the service worker's cache name bumped so the phone took the page. Variant A = Reps as shipped
+(`apple-mobile-web-app-status-bar-style` `default`, no `viewport-fit=cover`). The user's screenshots, iOS **27.2**:
+
+| | inner | vv | screen | safe t/r/b/l | shell | bottom-nav | vs inner | maxScroll |
+|---|---|---|---|---|---|---|---|---|
+| portrait | 375x762 | 375x762 @0 | 375x812 | 0/0/0/0 | 0..762 | 702..762 | 0 | 0 |
+| landscape | 712x375 | 712x375 @0 | 375x812 | 0/0/0/0 | 0..375 | 315..375 | 0 | 0 |
+| portrait again | 375x762 | 375x762 @0 | 375x812 | 0/0/0/0 | 0..762 | 702..762 | 0 | 0 |
+
+No gap above the top bar in landscape, the bottom nav exactly at the bottom in all three. 812 − 762 = 50 is the
+opaque status bar `default` reserves, as Apple documents. Per rule 54 this is **"no longer reproduces on iOS 27.2"**,
+not fixed: nothing in Reps or the shell changed. Variant B (`black-translucent` + `viewport-fit=cover`) was not run;
+it was the candidate cure for a symptom that is gone. Pending: rapid rotations, lock in landscape then rotate after
+unlock, app-switch then rotate.
+
 ## Research, 2026-10-19 — what the platforms say (picked up for work)
 
 Searched before a fifth attempt. Nothing here has been measured yet; each item says what it would change.
