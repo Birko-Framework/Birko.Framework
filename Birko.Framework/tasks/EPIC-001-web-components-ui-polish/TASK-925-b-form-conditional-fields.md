@@ -60,3 +60,6 @@ Birko.Web main 3a42cfe, tagged **v0.4.15** locally; Playground main ca1344c. Not
 Found while testing: `validateGroup()` on a nested group reports under the root's name → [[TASK-926]]. The smoke's
 nested-group checks go through `validate()` for that reason; `validateGroup()` skipping a hidden field is not proven
 by a test until TASK-926 is fixed.
+
+TASK-926 fixed (2026-11-15, v0.4.16): the `validateGroup()` half of the hidden-field skip is now tested
+(form-conditional-smoke 25/25).

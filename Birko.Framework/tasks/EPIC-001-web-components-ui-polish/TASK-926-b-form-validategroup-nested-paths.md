@@ -2,9 +2,9 @@
 id: TASK-926
 parent: EPIC-001
 feature: null
-status: todo
+status: done
 priority: P2
-assignee: null
+assignee: ai
 created: 2026-11-15
 depends-on: []
 blocks: []
@@ -33,12 +33,22 @@ Every other path in b-form (`_walkFields`, `_wireFieldEvents`, `validate()`) lea
 
 ## Acceptance criteria
 
-- [ ] `validateGroup('adv')` validates `adv`'s values and reports `adv.extra`, as `validate()` does.
-- [ ] Clears and returns errors only under that prefix.
-- [ ] Regression check in the Playground (red before); extend `form-conditional-smoke` with the `validateGroup()`
+- [x] `validateGroup('adv')` validates `adv`'s values and reports `adv.extra`, as `validate()` does.
+- [x] Clears and returns errors only under that prefix.
+- [x] Regression check in the Playground (red before); extend `form-conditional-smoke` with the `validateGroup()`
       half of TASK-925 (a conditionally hidden field is skipped).
-- [ ] Check consumers calling `validateGroup` (Symbio, Shell) for code that relied on the `root.`-prefixed keys.
+- [x] Check consumers calling `validateGroup` (Symbio, Shell) for code that relied on the `root.`-prefixed keys.
 
 ## Human test plan
 
 N/A — fully covered by automated tests.
+
+## Fixed (2026-11-15), at the user's word ("fix TASK-926")
+
+`validateGroup` finds the group with its own walk, giving each group the field-path form `validate()` uses (no root
+name); it validates the group's values, clears and reports only that group's errors and its subgroups' group errors,
+and validates the root group as `validate()` does. Measured before: `validateGroup('adv')` reported a filled required
+field missing as `root.adv.extra`; `validateGroup('root')` reported `root.label, root.pageGuid, root.url` (the last
+conditionally hidden). Consumers: no caller in Birko.Web.Shell, Symbio, Symbio.Modules or the Playground.
+Playground `form-conditional-smoke` 18/25 against unfixed code, 25/25 fixed; verify.mjs failing checks 0. Components
+`tsc` clean. Birko.Web main 73dc5ba, tagged **v0.4.16** locally; Playground main 98b2b51. Not pushed.
