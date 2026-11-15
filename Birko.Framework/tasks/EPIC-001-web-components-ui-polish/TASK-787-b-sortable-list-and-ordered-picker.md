@@ -175,3 +175,5 @@ stuck at 3373 of 4235 over a row, scrolling beside the list). Fixed: containment
 failing; keyboard-check 225/225. Birko.Web branch `task/TASK-787b` 192bae4 (v0.4.13), Playground `task/TASK-787b`
 f8424e0 (also fixes the Toast item card, which rendered an empty toast). **Not merged:** held until the Symbio
 session's gates finish (it builds the shared trees).
+
+Merged (2026-11-15, after the Symbio session's gates): Birko.Web main, tagged **v0.4.13** locally; Playground main. Not pushed.
