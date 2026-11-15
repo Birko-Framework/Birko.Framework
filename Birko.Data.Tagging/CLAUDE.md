@@ -39,6 +39,11 @@ Entity tagging system with tenant-scoped tags, polymorphic entity-tag junction, 
     downgraded to "not found": the caller named one record, so a null would hide a breach as a miss.
     The `DeleteTagAsync` guard runs **before** `DeleteAllEntityTagsForTagAsync`, so a foreign tag never
     reaches the cascade.
+  - **Attaching validates the tag (TASK-147, the user's decision).** `AttachTagAsync` loads the tag and refuses
+    another tenant's (`CrossTenantTagAccessException`) or a missing one (`InvalidOperationException`) before
+    writing a link. `SetEntityTagsAsync` checks every id it would add against **one** `ListAllTagsAsync` per call,
+    before changing anything, so CR-M172's removal of a per-tag query stands; `AttachTagByNameAsync` links its
+    already-proven tag with no second lookup. Don't route the set path through per-tag loads.
   - **Collections filter.** `ListTagsAsync` / `SearchTagsAsync` / the entity-link paths drop foreign
     records rather than raising — one leaked row must not blank a whole tag picker. Accepted trade: a
     broken hook is quieter here than on the by-identity paths.

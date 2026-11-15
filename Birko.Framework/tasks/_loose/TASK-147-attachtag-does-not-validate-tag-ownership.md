@@ -3,9 +3,9 @@ id: TASK-147
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
-assignee: human
+assignee: ai
 created: 2026-08-08
 depends-on: []
 blocks: []
@@ -39,18 +39,18 @@ measured and rejected once.
 
 ## Acceptance criteria
 
-- [ ] **Decide** between: validate on attach (and how, without reintroducing the CR-M172 N+1 — e.g. one
+- [x] **Decide** between: validate on attach (and how, without reintroducing the CR-M172 N+1 — e.g. one
       batched ownership check per `SetEntityTagsAsync` call rather than one per tag); leave creation
       unvalidated and rely on the read-side guard; or refuse only the *cross-tenant* case while still
       tolerating a dangling id
-- [ ] The reasoning is recorded **including the per-call cost of the rejected option** — CR-M172's
+- [x] The reasoning is recorded **including the per-call cost of the rejected option** — CR-M172's
       measurement is the baseline and must not be silently undone
-- [ ] If validation is added: `AttachTagAsync`, `AttachTagByNameAsync` and `SetEntityTagsAsync` behave
+- [x] If validation is added: `AttachTagAsync`, `AttachTagByNameAsync` and `SetEntityTagsAsync` behave
       consistently, and a foreign `TagId` is refused with `CrossTenantTagAccessException`, for symmetry
       with the read paths
-- [ ] A **dangling** (non-existent) `TagId` is decided explicitly too — it is the same hole and is today
+- [x] A **dangling** (non-existent) `TagId` is decided explicitly too — it is the same hole and is today
       equally uncaught; deciding only the tenant half would leave the task half-done
-- [ ] Either way a test pins the chosen behaviour, and the `entity-tagging` spec scenario above is
+- [x] Either way a test pins the chosen behaviour, and the `entity-tagging` spec scenario above is
       regenerated to match
 
 ## Out of scope
@@ -60,10 +60,39 @@ measured and rejected once.
 
 ## Human test plan
 
-- [ ] If validation is added, attach several tags at once through `SetEntityTagsAsync` and confirm the
+- [x] If validation is added, attach several tags at once through `SetEntityTagsAsync` and confirm the
       number of tag lookups did not grow per tag. The regression this task must not cause is a
       *performance* one, and it will not show up in any correctness assertion.
 
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-147` — leave empty until then._
+
+## Decision (2026-11-15, the user)
+
+**Validate on attach, one query per call** — chosen over a new batch hook (`GetTagsByIdsAsync`, cheaper for a
+tenant with very many tags but needing an override in every implementation, Symbio's included), refusing only the
+cross-tenant case, and leaving creation unvalidated. Both halves are refused: another tenant's tag
+(`CrossTenantTagAccessException`, symmetric with the reads) and a nonexistent id (`InvalidOperationException`
+`"Tag {id} not found."`, the message `UpdateTagAsync` already gives; now one producer, `TagNotFound`).
+
+**Cost, against CR-M172's baseline** (CR-M172 removed one link re-query per added tag from `SetEntityTagsAsync`):
+- `AttachTagAsync`: +1 `GetTagByIdAsync` per call.
+- `SetEntityTagsAsync`: +1 `ListAllTagsAsync` per call **when it adds anything**, however many tags; 0 per-tag
+  lookups on the happy path (an id the listing lacks is loaded alone, only to word the error). The link query is
+  still once per call. Rejected per-tag validation would have cost N lookups for N added tags.
+- `AttachTagByNameAsync`: +0 (its tag is already proven; it links without a second load).
+- A remove-only `SetEntityTagsAsync`: +0.
+
+## Done (2026-11-15)
+
+`TagServiceAttachValidationTests` (8): foreign and missing refused on attach and on set, set refuses **before**
+changing anything (the extra link is not deleted, nothing added), 5 tags added with ListAllTags 1 / GetTagById 0 /
+link query 1, remove-only lists nothing, by-name does no second lookup. 6 red before the change, 28/28 tagging tests
+after. Spec `entity-tagging` regenerated (scoped, diff reviewed: every change is this decision; unmapped 0;
+`shaped-by` unchanged, no new evidence since c50ed580). `Birko.Data.Tagging/CLAUDE.md` and Recent Updates updated.
+
+**Consumer note:** Symbio's `TagEndpoints` passes a client-supplied `TagGuid` to `AttachTagAsync` /
+`SetEntityTagsAsync`. A foreign or missing id now throws before storing anything (before: it stored the poisoned
+link, then the follow-up read threw). Symbio maps neither exception to a status, so it reaches its global handler;
+a 404 mapping (rule 65) is Symbio's to add — told to the Symbio session.

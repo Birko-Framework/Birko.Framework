@@ -22,6 +22,10 @@ public sealed class InMemoryTagService : TagServiceBase
     /// <summary>Counts calls to the single-entity link query (CR-M172 N+1 regression).</summary>
     public int GetEntityTagLinksCalls { get; private set; }
 
+    /// <summary>Counts by-identity tag loads and full tag listings (TASK-147: attach validation must not be N+1).</summary>
+    public int GetTagByIdCalls { get; private set; }
+    public int ListAllTagsCalls { get; private set; }
+
     /// <summary>
     /// Invoked after every <see cref="FindTagByNameAsync"/> lookup (with the queried name) — lets a
     /// test inject a concurrently-created tag between AttachTagByNameAsync's miss and CreateTagAsync's
@@ -69,7 +73,10 @@ public sealed class InMemoryTagService : TagServiceBase
     }
 
     protected override Task<Tag?> GetTagByIdAsync(Guid tagId, CancellationToken ct)
-        => Task.FromResult(_tags.FirstOrDefault(t => t.Guid == tagId));
+    {
+        GetTagByIdCalls++;
+        return Task.FromResult(_tags.FirstOrDefault(t => t.Guid == tagId));
+    }
 
     protected override Task<Tag?> FindTagByNameAsync(string name, CancellationToken ct)
     {
@@ -79,7 +86,10 @@ public sealed class InMemoryTagService : TagServiceBase
     }
 
     protected override Task<IReadOnlyList<Tag>> ListAllTagsAsync(CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<Tag>>(_tags.ToList());
+    {
+        ListAllTagsCalls++;
+        return Task.FromResult<IReadOnlyList<Tag>>(_tags.ToList());
+    }
 
     protected override Task<IReadOnlyList<Tag>> SearchTagsByNameAsync(string query, int limit, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<Tag>>(
