@@ -54,6 +54,9 @@ public abstract class TagServiceBase : ITagService
     /// here, so one assertion covers the read, the write and the cascade delete for every implementation
     /// of this base at once — without touching any of them.
     /// </remarks>
+    /// <summary>"Not found" for a tag id: update and attach report it the same way.</summary>
+    private static InvalidOperationException TagNotFound(Guid tagId) => new($"Tag {tagId} not found.");
+
     private async Task<Tag?> LoadOwnedTagAsync(Guid tagId, CancellationToken ct)
     {
         var tag = await GetTagByIdAsync(tagId, ct);
@@ -147,8 +150,7 @@ public abstract class TagServiceBase : ITagService
 
     public async Task UpdateTagAsync(Guid tagId, string? name = null, string? color = null, string? group = null, CancellationToken ct = default)
     {
-        var tag = await LoadOwnedTagAsync(tagId, ct)
-                  ?? throw new InvalidOperationException($"Tag {tagId} not found.");
+        var tag = await LoadOwnedTagAsync(tagId, ct) ?? throw TagNotFound(tagId);
 
         if (name is not null) tag.Name = name.Trim();
         if (color is not null) tag.Color = string.IsNullOrWhiteSpace(color) ? null : color;
@@ -184,7 +186,20 @@ public abstract class TagServiceBase : ITagService
         return tags;
     }
 
+    /// <remarks>
+    /// TASK-147 (the user's decision): the tag is loaded and must be this tenant's — another tenant's tag throws
+    /// <see cref="CrossTenantTagAccessException"/> as the read paths do, and a tag that does not exist throws — so a
+    /// bad link is refused here instead of being stored and poisoning every later read of the entity's tags.
+    /// One extra lookup per call.
+    /// </remarks>
     public async Task AttachTagAsync(string entityType, Guid entityId, Guid tagId, CancellationToken ct = default)
+    {
+        _ = await LoadOwnedTagAsync(tagId, ct) ?? throw TagNotFound(tagId);
+        await AttachOwnedTagAsync(entityType, entityId, tagId, ct);
+    }
+
+    /// <summary>Links a tag already proven to be this tenant's (no second lookup).</summary>
+    private async Task AttachOwnedTagAsync(string entityType, Guid entityId, Guid tagId, CancellationToken ct)
     {
         var links = OwnedOnly(await GetEntityTagLinksAsync(entityType, entityId, ct), l => l.TenantGuid);
         if (links.Any(l => l.TagGuid == tagId)) return; // already attached
@@ -210,6 +225,21 @@ public abstract class TagServiceBase : ITagService
         var links = OwnedOnly(await GetEntityTagLinksAsync(entityType, entityId, ct), l => l.TenantGuid);
         var currentTagIds = links.Select(l => l.TagGuid).ToHashSet();
         var desiredTagIds = tagIds.ToHashSet();
+        var toAdd = desiredTagIds.Where(id => !currentTagIds.Contains(id)).ToList();
+
+        // TASK-147: every tag to add must be this tenant's and exist, checked BEFORE anything changes, so a refused
+        // call leaves the entity's tags as they were. One listing of the tenant's tags per call however many tags are
+        // added: CR-M172 removed a per-tag query from this loop and validation must not bring one back. An id the
+        // listing lacks is looked up alone, only to tell "another tenant's" from "does not exist" for the error.
+        if (toAdd.Count > 0)
+        {
+            var owned = OwnedOnly(await ListAllTagsAsync(ct), t => t.TenantGuid)
+                .Where(t => t.Guid.HasValue).Select(t => t.Guid!.Value).ToHashSet();
+            foreach (var tagId in toAdd.Where(id => !owned.Contains(id)))
+            {
+                _ = await LoadOwnedTagAsync(tagId, ct) ?? throw TagNotFound(tagId);
+            }
+        }
 
         // Remove extra
         foreach (var link in links.Where(l => !desiredTagIds.Contains(l.TagGuid)))
@@ -220,7 +250,7 @@ public abstract class TagServiceBase : ITagService
         // absent, so AttachTagAsync's own GetEntityTagLinksAsync re-query is redundant I/O (one
         // extra link query per added tag, i.e. N+1).
         var tenantId = GetCurrentTenantId();
-        foreach (var tagId in desiredTagIds.Where(id => !currentTagIds.Contains(id)))
+        foreach (var tagId in toAdd)
             await CreateEntityTagAsync(new EntityTag
             {
                 TenantGuid = tenantId,
@@ -241,11 +271,12 @@ public abstract class TagServiceBase : ITagService
             // existing tag instead of inserting a duplicate (this layer has no unique-name constraint
             // to fall back on). Don't "optimize" this to CreateTagInternalAsync.
             var dto = await CreateTagAsync(tagName, color, ct: ct);
-            await AttachTagAsync(entityType, entityId, dto.Guid, ct);
+            await AttachOwnedTagAsync(entityType, entityId, dto.Guid, ct);
             return dto;
         }
 
-        await AttachTagAsync(entityType, entityId, tag.Guid!.Value, ct);
+        // Found through the owned by-name lookup, or just created for this tenant: no second lookup (TASK-147).
+        await AttachOwnedTagAsync(entityType, entityId, tag.Guid!.Value, ct);
         return ToDto(tag);
     }
 

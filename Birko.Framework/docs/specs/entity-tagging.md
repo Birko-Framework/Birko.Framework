@@ -1,7 +1,7 @@
 ---
 area: entity-tagging
-generated-at: c50ed580c4d08391a4ae55a7e8b62c394f6e3469
-generated-on: 2026-10-12
+generated-at: 8f1dfca2195f45dc30ef97672964037d1b2ffeab
+generated-on: 2026-11-15
 sources:
   - ../Birko.Data.Tagging/Extensions/TaggingExtensions.cs
   - ../Birko.Data.Tagging/Models/EntityTag.cs
@@ -16,6 +16,9 @@ shaped-by: []
 # Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
 # polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
 # task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# Scoped regen 2026-11-15 (TASK-147): commits since c50ed580 touching these sources checked for new evidence -
+# TASK-226 (FEATURE-014) changed only Birko.Data.Tagging/CLAUDE.md, outside `**/*.cs`; TASK-147 has no feature.
+# Nothing added; the count above is the 2026-10-12 full pass's.
 shaped-by-derived: true
 shaped-by-unresolved: 266
 ---
@@ -255,13 +258,15 @@ as two independent awaited calls with no surrounding transaction or compensation
 - **Then** the exception propagates while the entity links have **already** been deleted — the tag
   survives with all of its attachments lost, and nothing restores them
 
-### Requirement: Attaching a tag is idempotent per link but does not validate the tag
+### Requirement: Attaching a tag validates it and is idempotent per link
 
-The system SHALL, in `AttachTagAsync`, read the entity's existing links via
-`GetEntityTagLinksAsync(entityType, entityId)` and return without writing when any link already has the
+The system SHALL, in `AttachTagAsync`, first load the tag by identity (one `GetTagByIdAsync` call, through the
+ownership assertion): a tag that belongs to another tenant SHALL raise `CrossTenantTagAccessException`, and a tag
+that does not exist SHALL raise `InvalidOperationException` (`"Tag {id} not found."`, the message
+`UpdateTagAsync` gives), in both cases before any link is written. It SHALL then read the entity's existing links
+via `GetEntityTagLinksAsync(entityType, entityId)` and return without writing when any link already has the
 given `TagGuid`; otherwise it SHALL create an `EntityTag` stamped with
-`TenantGuid = GetCurrentTenantId()`, `TagGuid`, `EntityGuid` and `EntityType`. It SHALL NOT verify that the
-tag exists, nor that it belongs to the current tenant.
+`TenantGuid = GetCurrentTenantId()`, `TagGuid`, `EntityGuid` and `EntityType`.
 
 #### Scenario: Attaching a tag twice
 
@@ -273,8 +278,7 @@ tag exists, nor that it belongs to the current tenant.
 
 - **Given** no tag with id `X` exists anywhere
 - **When** a caller invokes `AttachTagAsync("Building", B, X)`
-- **Then** an `EntityTag` referencing `TagGuid = X` is created — the dangling link is accepted and is only
-  filtered out later, at read time, by `GetEntityTagsAsync` / `GetEntityTagsBatchAsync`
+- **Then** `InvalidOperationException` (`"Tag X not found."`) is raised and no `EntityTag` is created
 
 #### Scenario: Concurrent attaches of the same tag
 
@@ -312,9 +316,13 @@ it SHALL return silently.
 ### Requirement: Set-entity-tags reconciles to exactly the desired set
 
 The system SHALL, in `SetEntityTagsAsync`, read the current links once, materialise the current and
-desired tag ids as hash sets, delete every link whose `TagGuid` is not in the desired set, and then create
-one `EntityTag` (stamped with a single `GetCurrentTenantId()` reading) for each desired id not present in
-the current set — creating links directly rather than routing through `AttachTagAsync`, and without any
+desired tag ids as hash sets, and, when any desired id is not yet linked, validate every such id **before any
+change**: one `ListAllTagsAsync` call (foreign rows filtered out) gives the tenant's tag ids, and an id missing
+from it is loaded alone through the ownership assertion, so another tenant's tag raises
+`CrossTenantTagAccessException` and a nonexistent one raises `InvalidOperationException` (`"Tag {id} not
+found."`). Only then SHALL it delete every link whose `TagGuid` is not in the desired set and create one
+`EntityTag` (stamped with a single `GetCurrentTenantId()` reading) for each desired id not present in the
+current set — creating links directly rather than routing through `AttachTagAsync`, and without any
 enclosing transaction.
 
 #### Scenario: Replacing a tag set
@@ -346,10 +354,25 @@ enclosing transaction.
 
 #### Scenario: No round-trip per added tag
 
-- **Given** entity `("Building", B)` has no links and three new tags are requested
+- **Given** entity `("Building", B)` has no links and three new tags of this tenant are requested
 - **When** `SetEntityTagsAsync` adds them
-- **Then** `GetEntityTagLinksAsync` is invoked exactly **once** for the whole operation (not once per
-  added tag), because the add path calls `CreateEntityTagAsync` directly
+- **Then** `GetEntityTagLinksAsync` is invoked exactly **once** and `ListAllTagsAsync` exactly **once** for the
+  whole operation, and `GetTagByIdAsync` not at all (not once per added tag), because the add path validates
+  against one listing and calls `CreateEntityTagAsync` directly
+
+#### Scenario: A refused tag leaves the set unchanged
+
+- **Given** entity `("Building", B)` is linked to `{T1, T2}`, and `T9` belongs to another tenant (or does not
+  exist)
+- **When** a caller invokes `SetEntityTagsAsync("Building", B, [T1, T3, T9])`
+- **Then** `CrossTenantTagAccessException` (or `InvalidOperationException`) is raised, the link to `T2` is not
+  deleted and no link to `T3` or `T9` is created
+
+#### Scenario: Removal only does not list tags
+
+- **Given** entity `("Building", B)` is linked to `{T1}`
+- **When** a caller invokes `SetEntityTagsAsync("Building", B, [])`
+- **Then** `ListAllTagsAsync` is not called — there is nothing to add, so nothing to validate
 
 ### Requirement: Reading an entity's tags resolves each link individually and drops unresolvable ones
 
@@ -388,7 +411,8 @@ per link in link order, appending the DTO when the tag resolves and **silently s
 The system SHALL, in `AttachTagByNameAsync`, look the tag up by `tagName.Trim()`; on a hit it SHALL
 attach `tag.Guid!.Value` and return that tag's DTO; on a miss it SHALL call `CreateTagAsync(tagName,
 color)` — deliberately re-running the name lookup inside that call to narrow the create-create race —
-then attach the resulting id and return the created DTO. It SHALL NOT pass a tag group.
+then attach the resulting id and return the created DTO. Either way the tag is already proven to be this
+tenant's, so it SHALL link it without loading it again by identity. It SHALL NOT pass a tag group.
 
 #### Scenario: Quick-tagging with an existing name
 
@@ -484,9 +508,10 @@ failure mode.
 
 - **A tag loaded by identity SHALL be asserted, and a foreign record SHALL raise
   `CrossTenantTagAccessException`** (an `InvalidOperationException`) carrying the tag id, the record's
-  tenant and the current tenant. This covers `GetTagAsync`, `UpdateTagAsync`, `DeleteTagAsync` and
-  `GetEntityTagsAsync`, which all reach their target through one call, plus the by-name lookup behind
-  `CreateTagAsync` and `AttachTagByNameAsync`. It SHALL NOT be downgraded to "not found": the caller named
+  tenant and the current tenant. This covers `GetTagAsync`, `UpdateTagAsync`, `DeleteTagAsync`,
+  `GetEntityTagsAsync` and `AttachTagAsync`, which all reach their target through one call, plus the by-name
+  lookup behind `CreateTagAsync` and `AttachTagByNameAsync`, and each id `SetEntityTagsAsync` would add that
+  its one listing of the tenant's tags does not contain. It SHALL NOT be downgraded to "not found": the caller named
   one record, and a null would hide an isolation breach as an ordinary miss.
 - **A collection result SHALL have foreign records filtered out**, not raise. One leaked row must not
   blank an entire tag picker. The trade is accepted deliberately: a broken hook is quieter on the
@@ -551,13 +576,14 @@ failure mode.
 - **When** the full create / read / list / search / update / attach / batch / delete surface is exercised
 - **Then** behaviour is unchanged — the guard removes the leak without narrowing anything legitimate
 
-#### Scenario: A link may still reference another tenant's tag while carrying this tenant's stamp
+#### Scenario: Attaching another tenant's tag is refused
 
 - **Given** current tenant `A` and a tag id `T` owned by tenant `B`
-- **When** a caller invokes `AttachTagAsync("Building", B_entity, T)`
-- **Then** an `EntityTag` with `TenantGuid = A` and `TagGuid = T` is created — attach still validates
-  neither the tag's existence nor its ownership. Reading that entity's tags afterwards raises, because the
-  link survives the tenant filter and then resolves a foreign tag by identity
+- **When** a caller invokes `AttachTagAsync("Building", B_entity, T)` (or `SetEntityTagsAsync` with `T`
+  among the ids to add)
+- **Then** `CrossTenantTagAccessException` is raised and no `EntityTag` is created. A foreign link stored
+  before this check (older data) still raises when that entity's tags are read, because the link survives the
+  tenant filter and then resolves a foreign tag by identity
 
 #### Scenario: The models cannot be wrapped by the framework's tenant store wrapper
 

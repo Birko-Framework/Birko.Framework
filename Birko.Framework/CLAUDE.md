@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Tagging refuses a foreign or missing tag on attach (2026-11-15)
+[[TASK-147]] (the user's decision). `AttachTagAsync` / `SetEntityTagsAsync` stored a link to any tag id, so another
+tenant's tag or a nonexistent one was accepted and every later read of that entity's tags threw. Both now refuse it
+before writing (`CrossTenantTagAccessException` / `InvalidOperationException`), the set path with one tag listing per
+call (CR-M172's per-tag saving kept). Symbio's tag endpoints pass a client-supplied id through these.
 ### Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does (2026-11-15)
 [[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path
 when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).
