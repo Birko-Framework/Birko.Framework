@@ -47,3 +47,9 @@ but never the focus.
   - Without the refocus all 5 fail: focus on `body`, one tag kept.
   - `verify.mjs` stays green, including form-assoc 104/104, bare 113/113 and backport 324/324.
 - Committed to Birko.Web and the Playground, not pushed.
+
+## Verification in Chrome (2026-11-15, by the agent, Birko.Web v0.4.12 in the Playground)
+
+Not the FinStat web tester (not reachable from here); the Playground "Tag input" card with real keys: AAA, BBB, CCC
+each committed with Enter, focus stayed in the field after every commit, two Backspaces removed CCC then BBB, focus
+still in the field (value `design,birko,web,components,AAA`).

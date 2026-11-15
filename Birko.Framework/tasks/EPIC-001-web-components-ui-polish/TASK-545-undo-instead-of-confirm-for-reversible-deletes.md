@@ -126,3 +126,13 @@ Drafted at pick, 2026-10-14. Code lands in `Birko\Web` (one commit), the smoke s
   a toast is hovered or holds focus, and resumes with what was left (never under 1 s). `show()` / `notify()` return the
   item instead of `void`, which no caller can observe.
 - Spawned [[TASK-597]]: the toast's `message` and `icon` are rendered as HTML, and pages pass server error text to it.
+
+## Partial verification in Chrome (2026-11-15, by the agent, Birko.Web v0.4.12 in the Playground)
+
+- [x] Hover past the duration: a toast raised as the toast service does (message, Undo action, 8 s), hovered with the
+      real mouse 0.4 s in, was still there at 10.4 s; after the pointer left it was gone within 15 s (exact moment not
+      measurable through the tool's latency). It stays while hovered and goes after.
+- [ ] Real backend restore, keyboard Undo in a consumer page and NVDA: still open (need a consumer page and a screen
+      reader).
+- Found on the way: the Playground's Toast item card rendered an empty toast (it passed the text as children,
+  `b-toast-item` reads `message`); fixed on the Playground branch with TASK-787b.

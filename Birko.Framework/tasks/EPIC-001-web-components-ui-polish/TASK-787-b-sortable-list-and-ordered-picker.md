@@ -154,3 +154,24 @@ At a 390px phone frame in Chrome: the sortable list in grid (two tiles a row, no
 Shipped in Birko.Web **v0.1.22** (pushed and tagged at the user's word). **Follow-up, open:** the touch hold (decision 7) on a real touch device; adoption in Symbio is Symbio TASK-1006.
 
 **Adopted in Symbio, walk PASS (2026-10-30)**, Symbio TASK-1006 (main 7428df17), reported by the Symbio session: the page editor's block list (b-sortable-list, list), ProductGrid's manual products (b-sortable-picker, max = the grid's limit), Gallery images (grid, removable, handle-only, tiles with four b-inputs). Consumer notes offered for API.md, not yet written: (1) a list whose children the host page also re-renders must sit outside the page's morph (Symbio: a `data-morph="skip"` host it fills itself); (2) in Playwright a row's text is the slotted item's, so read b-sortable-item's label/meta attributes; a drag inside a modal needs the rows scrolled into view first or the press becomes a text selection. Still open: the touch hold on a real device.
+
+## Human test run in Chrome (2026-11-15, by the agent, Birko.Web v0.4.12 in the Playground)
+
+1. PASS: a real mouse drag moved row 1 below row 3; by keyboard (Tab-focused handle, Space, ↑ ↑, Space) a row moved
+   5 → 3 with focus kept on its handle. Announcements (via `ariaNotify`): "Velvet mink picked up, position 1 of 6. Arrow
+   keys move it, Space drops it, Escape cancels." / "Velvet mink, position 2 of 6." / "Velvet mink dropped at position
+   2 of 6."
+2. PASS: picker: searched and picked three (each to the end, 5 of 5, the counter red at the limit, results marking
+   "In the list, #n"), moved one 5 → 3 by keyboard, searched again: the chosen list kept its labels and order.
+3. PASS (emulated touch, not a device): `sortable-drag-check` touch cases, a held press then a move drags, a swipe
+   does not.
+4. PASS: grid, a real drag of tile 4 into the row above put it first; tiles follow the container's width (6 per row
+   at full width, 3 at 420px). The Playground card shows 2 columns only because its stage centres the list.
+
+**Found: a mouse wheel over the list did not scroll the page.** The scroller always had `overscroll-behavior:
+contain`, so a real wheel over any row of a list with nothing to scroll moved nothing (measured with puppeteer: page
+stuck at 3373 of 4235 over a row, scrolling beside the list). Fixed: containment only while the rows overflow
+(`.overflows`, ResizeObserver). `sortable-drag-check` wheel section: 3 FAIL against main, 19/19 fixed; verify.mjs 0
+failing; keyboard-check 225/225. Birko.Web branch `task/TASK-787b` 192bae4 (v0.4.13), Playground `task/TASK-787b`
+f8424e0 (also fixes the Toast item card, which rendered an empty toast). **Not merged:** held until the Symbio
+session's gates finish (it builds the shared trees).

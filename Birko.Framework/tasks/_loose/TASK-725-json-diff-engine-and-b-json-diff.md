@@ -78,3 +78,9 @@ component, so inside BAppShell's scrolling `main` they extended the window: docu
 - Four more (`b-kanban`, `b-qty-stepper`, `b-rating`, `b-gallery`) fail the scroll check but measured no document
   growth, so they are TASK-726 rather than changed here.
 - Components CLAUDE.md § Accessibility records the rule.
+
+## Verification in Chrome (2026-11-15, by the agent, Birko.Web v0.4.12 in the Playground)
+
+- [x] Playground "JSON diff" card, driven in the user's Chrome: Tree and Side by side, Only changes, Expand and
+      Collapse each work; dark theme: removed red, added green, changed amber read clearly in both views.
+- [ ] The FinStat web tester item is still open (not reachable from here).

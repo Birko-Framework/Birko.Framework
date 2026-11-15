@@ -65,3 +65,11 @@ Committed to Birko.Web and the Playground, not pushed or tagged (same as TASK-72
   - Screenshot of the XML side-by-side view checked.
   - Unrelated and not touched: the Playground's `src/sync-interrupt-smoke.ts(171,15)` has a `tsc` error (TS2554)
     that predates this task.
+
+## Verification in Chrome (2026-11-15, by the agent, Birko.Web v0.4.12 in the Playground)
+
+Not the FinStat web tester (not reachable from here); the same component with `format="xml"` and two XML bodies,
+dark theme: header "XML DIFF", attributes as `@id`, `total` 10 → 12 changed, `note` removed, and the split view
+shows the original XML with the changed and removed lines tinted. Observation, not judged a defect: a repeated
+element going from one occurrence to two (`<item>`) reads as one whole change (object → list), not "1 added"; the
+`xml` options (`XmlTreeOptions`) are where an element is declared always-a-list, not checked here.
