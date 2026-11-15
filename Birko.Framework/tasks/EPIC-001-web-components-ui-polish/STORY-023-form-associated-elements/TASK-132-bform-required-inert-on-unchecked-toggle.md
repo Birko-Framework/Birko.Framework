@@ -2,7 +2,7 @@
 id: TASK-132
 parent: STORY-023
 feature: FEATURE-001
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-01
@@ -51,21 +51,21 @@ stay open: the first consumer to put a consent box in a `b-form` inherits a sile
 
 ## Acceptance criteria
 
-- [ ] A `required` `checkbox` / `switch` field fails `validate()` while unchecked, and passes once checked.
-- [ ] The error lands on that field (the `error` attribute, via `_applyErrors()`), like every other field's.
-- [ ] The message comes from the same place as every other `required` message (`common.required` via `fmt`,
+- [x] A `required` `checkbox` / `switch` field fails `validate()` while unchecked, and passes once checked.
+- [x] The error lands on that field (the `error` attribute, via `_applyErrors()`), like every other field's.
+- [x] The message comes from the same place as every other `required` message (`common.required` via `fmt`,
       honouring a rule-level `message` override) — not from the browser's `validationMessage`, so a form's
       messages stay consistent and translatable.
-- [ ] Emptiness is decided **per field type**, not by special-casing `false` globally — `false` is a
+- [x] Emptiness is decided **per field type**, not by special-casing `false` globally — `false` is a
       legitimate collected value for a non-required toggle and must keep round-tripping through
       `getValues()` / `data` unchanged.
-- [ ] `b-form`'s existing `required` behaviour for every other field type is untouched (blank string, empty
+- [x] `b-form`'s existing `required` behaviour for every other field type is untouched (blank string, empty
       array, `undefined`) — pinned by the checks already in the suite.
-- [ ] The now-obsolete "known gap" notes are removed rather than left contradicting the code:
+- [x] The now-obsolete "known gap" notes are removed rather than left contradicting the code:
       `src/inputs/b-form.ts` (`_controlVerdict`'s `valueMissing` paragraph), `API.md` § *What `validate()`
       takes from the controls themselves*, and the two pinning checks in `backport-smoke.ts` are inverted
       to assert the fix.
-- [ ] Playground verifier green, with the inverted checks falsified by reverting the fix.
+- [x] Playground verifier green, with the inverted checks falsified by reverting the fix.
 
 ## Out of scope
 
@@ -88,3 +88,11 @@ judgement).
   here on purpose"
 - The convention it sits inside: [[TASK-035]] (`FormControlComponent`), `Birko.Web.Components/CLAUDE.md`
   § *Form-association convention* — "`required` is forwarded to the inner input on checkbox/switch"
+
+## Done (2026-11-15)
+
+`_isEmpty(field, value)`: a checkbox / switch is empty until `true`; every other type keeps `undefined` / `null` /
+`''` / `[]`. The message is `common.required` via `fmt` (a rule's `message` wins), on the field's `error` attribute.
+The `valueMissing` note in `_controlVerdict` and API.md's "Known gap" paragraph are replaced; the two pinning checks
+in `backport-smoke` are inverted (and the error is now visible: [[TASK-932]]). backport-smoke 348/348, 14 FAIL against
+unfixed code (TASK-132 + 133); verify.mjs 0 failing. Birko.Web main 437a18b, **v0.4.14** (local, not pushed).

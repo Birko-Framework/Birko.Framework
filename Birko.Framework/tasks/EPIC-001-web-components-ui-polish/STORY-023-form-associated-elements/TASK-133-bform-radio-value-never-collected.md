@@ -2,7 +2,7 @@
 id: TASK-133
 parent: STORY-023
 feature: FEATURE-001
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-08-01
@@ -84,20 +84,20 @@ against whichever shape wins.
 
 ## Acceptance criteria
 
-- [ ] A `radio` field's selected value appears in `getValues()` and in `validate().data`, under its
+- [x] A `radio` field's selected value appears in `getValues()` and in `validate().data`, under its
       dot-path, for both root-level and nested groups.
-- [ ] A `required` radio group **passes** once a member is checked and fails while none is.
-- [ ] `setValues()` and `reset()` select the right member; `reset()` with no default clears the group.
-- [ ] A user click emits `b-form`'s `change` event with the field's path and value, and fires any
+- [x] A `required` radio group **passes** once a member is checked and fails while none is.
+- [x] `setValues()` and `reset()` select the right member; `reset()` with no default clears the group.
+- [x] A user click emits `b-form`'s `change` event with the field's path and value, and fires any
       `onFieldChange` callback registered for it.
-- [ ] `setFieldError` / `focusField` / `setFieldDisabled` resolve the field and take effect;
+- [x] `setFieldError` / `focusField` / `setFieldDisabled` resolve the field and take effect;
       the error message renders where the other field types render theirs.
-- [ ] `validate-on="blur"` validates the field on change, like every other type.
-- [ ] Exactly **one** error message for the group, not one per member (the reason `b-radio` sets
+- [x] `validate-on="blur"` validates the field on change, like every other type.
+- [x] Exactly **one** error message for the group, not one per member (the reason `b-radio` sets
       `supportsRequiredValidation = false` — do not undo that).
-- [ ] Whichever shape is chosen, the "one element per `data-path`" invariant holds, or every helper that
+- [x] Whichever shape is chosen, the "one element per `data-path`" invariant holds, or every helper that
       assumes it is updated in the same change and the new invariant is documented in `CLAUDE.md`.
-- [ ] Playground checks covering the above, each falsified by reverting the fix; the existing
+- [x] Playground checks covering the above, each falsified by reverting the fix; the existing
       `form-assoc-smoke` radio checks (standalone `b-radio` in a native form) stay green.
 
 ## Out of scope
@@ -121,3 +121,19 @@ against whichever shape wins.
 - The branch: `Birko.Web.Components/src/inputs/b-form.ts` — `_fieldTag`, `case 'radio'`
 - `Birko.Web.Components/CLAUDE.md` § *Form-association convention* — "`b-radio` needs no submission
   coordinator … validate the group in the page or `b-form`" (which is exactly what `b-form` cannot do today)
+
+## Built (2026-11-15) — option 1, the group wrapper
+
+A radio field renders its members inside one `role="radiogroup"` element that carries the field's `data-path`
+(the "one element per path" invariant holds), the shared `.field` label (formFieldSheet, required mark) hidden from
+assistive tech since the group is named by `aria-label`, and one `role="alert"` error line linked by
+`aria-describedby`. `_getFieldValue` / `_setFieldValue` read and write the checked member; `_applyErrors`,
+`setFieldDisabled` and `focusField` have a group branch; the member-only branch in `_fieldTag` is deleted (rule 53).
+b-radio's sibling unchecking (`b-radio-change` on its parent) now runs on the group; member `name` is the path, so
+nested groups cannot collide. The grid no longer bottom-aligns it like a lone toggle. backport-smoke radio checks
+(path, name, one error, click → valid + data, change + onFieldChange, moving the pick, nested, setValues, reset with
+and without a default, setFieldError, setFieldDisabled, focusField): red before, 348/348 after; form-assoc-smoke's
+standalone radio checks green; keyboard-check 225/225; a11y checks pass. Birko.Web main 437a18b, **v0.4.14** (local).
+
+Human test pending: the user's look at the layout (screenshot rendered 2026-11-15: label, asterisk and error line
+match a text field in the grid).
