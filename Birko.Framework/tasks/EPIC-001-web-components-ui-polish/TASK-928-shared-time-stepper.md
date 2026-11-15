@@ -2,7 +2,7 @@
 id: TASK-928
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-15
@@ -42,13 +42,20 @@ datetime. The user asked for arrows beside the box and picked **E: "since birko.
 
 ## Human test plan
 
-- [ ] Playground: b-time and b-datetime-picker cards look the same in the time row, light and dark; − / + change the
+- [x] Playground: b-time and b-datetime-picker cards look the same in the time row, light and dark; − / + change the
       numbers, the panel stays open; type a number; Tab through − 14 + : − 35 +. On a phone or a touch screen the
       buttons are easy to hit.
 
-## Built (2026-11-15), on branches, not merged
+## Built (2026-11-15)
 
 Birko.Web `task/TASK-928` (worktree `Web.TASK-928`); Playground `task/TASK-928`. picker-popup-smoke 88/88 (12 new
 checks), verify.mjs 0 failing (one run had a carousel drag flake, passed on rerun), keyboard-check 225/225,
 a11y-name-check OK, a11y-description-check PASS, Components `tsc` clean. Real-mouse probe: all popups in place.
-Screenshots light / dark / touch checked. Waiting for the user's look before merging.
+Screenshots light / dark / touch checked. 
+
+## Closed (2026-11-15)
+
+Human test: the user looked at both pickers in the Playground ("they look good"). They had no mouse for the wheel, so
+it was checked with real wheel input (CDP) on the branch build: hour and minute, up then down, in both components;
+the step followed (1 in b-time, 5 in datetime), the panel stayed open and the page did not scroll.
+Merged: Birko.Web main 677e238, inside the unpushed **v0.4.12** (tag moved); Playground main f6a1b35. Not pushed.
