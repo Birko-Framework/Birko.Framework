@@ -55,7 +55,7 @@ public abstract class TagServiceBase : ITagService
     /// of this base at once — without touching any of them.
     /// </remarks>
     /// <summary>"Not found" for a tag id: update and attach report it the same way.</summary>
-    private static InvalidOperationException TagNotFound(Guid tagId) => new($"Tag {tagId} not found.");
+    private static TagNotFoundException TagNotFound(Guid tagId) => new(tagId);
 
     private async Task<Tag?> LoadOwnedTagAsync(Guid tagId, CancellationToken ct)
     {

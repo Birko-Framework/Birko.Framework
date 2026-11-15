@@ -40,7 +40,8 @@ Entity tagging system with tenant-scoped tags, polymorphic entity-tag junction, 
     The `DeleteTagAsync` guard runs **before** `DeleteAllEntityTagsForTagAsync`, so a foreign tag never
     reaches the cascade.
   - **Attaching validates the tag (TASK-147, the user's decision).** `AttachTagAsync` loads the tag and refuses
-    another tenant's (`CrossTenantTagAccessException`) or a missing one (`InvalidOperationException`) before
+    another tenant's (`CrossTenantTagAccessException`) or a missing one (`TagNotFoundException`, an
+    `InvalidOperationException` carrying `TagId`, TASK-933 — `UpdateTagAsync` throws it too) before
     writing a link. `SetEntityTagsAsync` checks every id it would add against **one** `ListAllTagsAsync` per call,
     before changing anything, so CR-M172's removal of a per-tag query stands; `AttachTagByNameAsync` links its
     already-proven tag with no second lookup. Don't route the set path through per-tag loads.

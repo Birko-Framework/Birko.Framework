@@ -43,8 +43,10 @@ public class TagServiceBaseTests
     public async Task UpdateTag_MissingTag_Throws()
     {
         var svc = new InMemoryTagService();
-        await svc.Invoking(s => s.UpdateTagAsync(Guid.NewGuid(), name: "x"))
-            .Should().ThrowAsync<InvalidOperationException>();
+        var missing = Guid.NewGuid();
+        (await svc.Invoking(s => s.UpdateTagAsync(missing, name: "x"))
+            .Should().ThrowExactlyAsync<TagNotFoundException>())
+            .WithMessage($"Tag {missing} not found.").Which.TagId.Should().Be(missing);
     }
 
     [Fact]

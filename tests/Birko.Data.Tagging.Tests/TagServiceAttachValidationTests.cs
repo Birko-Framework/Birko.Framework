@@ -63,7 +63,7 @@ public class TagServiceAttachValidationTests
 
         var act = () => svc.AttachTagAsync("Doc", Guid.NewGuid(), missing);
 
-        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage($"*{missing}*not found*");
+        (await act.Should().ThrowExactlyAsync<TagNotFoundException>()).Which.TagId.Should().Be(missing);
         svc.LinkCount.Should().Be(0);
     }
 
@@ -138,7 +138,7 @@ public class TagServiceAttachValidationTests
 
         var act = () => svc.SetEntityTagsAsync("Doc", entity, new[] { missing });
 
-        (await act.Should().ThrowAsync<InvalidOperationException>()).WithMessage($"*{missing}*not found*");
+        (await act.Should().ThrowExactlyAsync<TagNotFoundException>()).Which.TagId.Should().Be(missing);
         (await svc.GetEntityTagsAsync("Doc", entity)).Select(t => t.Name).Should().BeEquivalentTo(new[] { "kept" });
     }
 }

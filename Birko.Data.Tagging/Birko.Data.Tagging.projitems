@@ -16,6 +16,7 @@
     <!-- Services -->
     <Compile Include="$(MSBuildThisFileDirectory)Services\CrossTenantTagAccessException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\ITagService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\TagNotFoundException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\TagService.cs" />
     <!-- Extensions -->
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\TaggingExtensions.cs" />

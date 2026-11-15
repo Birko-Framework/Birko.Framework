@@ -9,6 +9,7 @@ sources:
   - ../Birko.Data.Tagging/Models/Tag.cs
   - ../Birko.Data.Tagging/Services/CrossTenantTagAccessException.cs
   - ../Birko.Data.Tagging/Services/ITagService.cs
+  - ../Birko.Data.Tagging/Services/TagNotFoundException.cs
   - ../Birko.Data.Tagging/Services/TagService.cs
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
@@ -228,7 +229,8 @@ instance via `UpdateTagInternalAsync`.
 
 - **Given** `GetTagByIdAsync` returns `null` for `tagId`
 - **When** a caller invokes `UpdateTagAsync(tagId, name: "x")`
-- **Then** `InvalidOperationException` is thrown with message `"Tag {tagId} not found."` and
+- **Then** `TagNotFoundException` (an `InvalidOperationException`, `TagId` = `tagId`) is thrown with message
+  `"Tag {tagId} not found."` and
   `UpdateTagInternalAsync` is never called
 
 ### Requirement: Tag deletion cascades to links, is idempotent and is not transactional
@@ -262,7 +264,8 @@ as two independent awaited calls with no surrounding transaction or compensation
 
 The system SHALL, in `AttachTagAsync`, first load the tag by identity (one `GetTagByIdAsync` call, through the
 ownership assertion): a tag that belongs to another tenant SHALL raise `CrossTenantTagAccessException`, and a tag
-that does not exist SHALL raise `InvalidOperationException` (`"Tag {id} not found."`, the message
+that does not exist SHALL raise `TagNotFoundException` (an `InvalidOperationException` carrying `TagId`;
+`"Tag {id} not found."`, the message
 `UpdateTagAsync` gives), in both cases before any link is written. It SHALL then read the entity's existing links
 via `GetEntityTagLinksAsync(entityType, entityId)` and return without writing when any link already has the
 given `TagGuid`; otherwise it SHALL create an `EntityTag` stamped with
@@ -278,7 +281,7 @@ given `TagGuid`; otherwise it SHALL create an `EntityTag` stamped with
 
 - **Given** no tag with id `X` exists anywhere
 - **When** a caller invokes `AttachTagAsync("Building", B, X)`
-- **Then** `InvalidOperationException` (`"Tag X not found."`) is raised and no `EntityTag` is created
+- **Then** `TagNotFoundException` (`"Tag X not found."`, `TagId` = `X`) is raised and no `EntityTag` is created
 
 #### Scenario: Concurrent attaches of the same tag
 
@@ -319,7 +322,7 @@ The system SHALL, in `SetEntityTagsAsync`, read the current links once, material
 desired tag ids as hash sets, and, when any desired id is not yet linked, validate every such id **before any
 change**: one `ListAllTagsAsync` call (foreign rows filtered out) gives the tenant's tag ids, and an id missing
 from it is loaded alone through the ownership assertion, so another tenant's tag raises
-`CrossTenantTagAccessException` and a nonexistent one raises `InvalidOperationException` (`"Tag {id} not
+`CrossTenantTagAccessException` and a nonexistent one raises `TagNotFoundException` (`"Tag {id} not
 found."`). Only then SHALL it delete every link whose `TagGuid` is not in the desired set and create one
 `EntityTag` (stamped with a single `GetCurrentTenantId()` reading) for each desired id not present in the
 current set — creating links directly rather than routing through `AttachTagAsync`, and without any
@@ -365,7 +368,7 @@ enclosing transaction.
 - **Given** entity `("Building", B)` is linked to `{T1, T2}`, and `T9` belongs to another tenant (or does not
   exist)
 - **When** a caller invokes `SetEntityTagsAsync("Building", B, [T1, T3, T9])`
-- **Then** `CrossTenantTagAccessException` (or `InvalidOperationException`) is raised, the link to `T2` is not
+- **Then** `CrossTenantTagAccessException` (or `TagNotFoundException`) is raised, the link to `T2` is not
   deleted and no link to `T3` or `T9` is created
 
 #### Scenario: Removal only does not list tags
