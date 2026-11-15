@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does (2026-11-15)
+[[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path
+when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).
+Only the non-null values are aggregated now. On the gateway query plan (Linux) the emulator still cannot plan an
+aggregate subquery and the read throws; it never answers wrong, and Cosmos has no aggregate-free form to rewrite to.
 ### Cosmos DB queries answer the same on Linux; culture-pinned fold contract (2026-11-11)
 [[TASK-919]]. CI (Linux) failed tests that passed on Windows. Cosmos SDK builds query plans locally only on Windows x64
 and asks the gateway on Linux, where TASK-907's astral check counted 0 (a mixed MIN/MAX group was answered, not refused)
@@ -334,50 +339,6 @@ machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong 
 `Banana`, PostgreSQL NULL last). It now follows `AggregateQuery.StringComparison` (default `Ordinal`) everywhere, also in
 SQL views; SQL refuses other orders by name. MongoDB aggregates ignore a collection's default collation. Found:
 [[TASK-911]] (P1, SQL Server and MySQL GROUP BY merges string keys).
-### Aggregate string MIN/MAX are ordinal on every provider (2026-11-10)
-[[TASK-907]] (the user's decision). String MIN/MAX followed each database's collation and the in-memory oracle the
-machine's culture: 22–30 of 32 cases differed per provider (measured; `apple` vs `Banana`, ß = ss, `a` = `a `). New
-`AggregateQuery.StringComparison`, default `Ordinal`, answered exactly by every provider (Elasticsearch and Cosmos no
-longer refuse); any other order works in memory and is refused by name elsewhere. MongoDB enums stored as text now take
-MIN/MAX by value. Migration-generated SQL views render through the connector's dialect.
-### Cosmos DB `TimeSpan` filters answer as C#; one DateTime key producer (2026-11-10)
-[[TASK-905]]. Cosmos compared a TimeSpan's stored text (`"1.02:03:04"` < `"23:00:00"`, `"-00:00:01"` < `"-00:00:02"`),
-so 60–68 of 124 filter shapes per path answered other rows than C# (measured). Orderings now compare the sign and a
-fixed-width magnitude key; equality keeps its index. TimeSpan sorts, members (`Ticks`) and arithmetic on a member are
-refused by name. The DateTime wall-clock key used by filters and aggregates now has one producer.
-### RavenDB view, MongoDB and InfluxDB aggregates answer as LINQ (2026-11-10)
-[[TASK-906]]. RavenDB view MIN/AVG did not skip nulls (MIN of {3, null} was null) and a negative value next to a null
-broke the index; the MongoDB store aggregate ignored ordering, paging and time buckets (36 of 38 cases wrong); the
-InfluxDB native Flux aggregate was wrong in 24 of 27 cases (one row per stored point, buckets on write time). Raven and
-Mongo now follow LINQ; InfluxDB aggregates through `AggregateHelper` (no server-side aggregation).
-### Aggregates answer the same edge cases on every provider (2026-11-10)
-[[TASK-886]] (the user's decisions). An ungrouped aggregate over no rows now returns one row with Count 0 everywhere
-(before: no row on InMemory, MongoDB, RavenDB, Elasticsearch; RavenDB and ES threw on an empty store), and SUM over only
-NULLs is 0 everywhere, like LINQ's `Sum` (MIN / MAX / AVG stay null). An empty `AggregateQuery` is refused by name
-(five providers gave five answers). **Breaking:** `SqlValueFragmentDialect.Aggregate` lost its last parameter.
-### Cosmos DB `DateTime` filters and sorts answer as C# (2026-11-10)
-[[TASK-902]]. Cosmos compared the stored ISO text, whose fraction length varies, so inside one second `…00.5Z` sorted
-before `…00Z`: 76 of 88 filter shapes and 62 of 120 sorted pages were wrong (measured), e.g. `x.T > 10:00:00Z` missed
-the 10:00:00.5 document. Comparisons now use a wall-clock key behind the plain text range (index still used), and sorts
-re-order rows that share a second. DateTimeOffset comparisons and members like `T.Year` are refused by name.
-### SQL `OnException` subscribers run; migrations and job locks reach `OnExecute` (2026-11-10)
-[[TASK-894]]. A consumer's `OnException` subscriber was never called on any provider: each provider subscribed an
-always-throwing handler first (measured). The provider's handling is now an override that runs before every subscriber,
-subscribers are contained (rule 25), and the caller still gets the same exception, so retry and missing-table filters
-match. Statements sent by migrations, view migrations, the TimescaleDB migration and the job lock provider are now
-announced. **Breaking for connector subclasses:** `InitException` is no longer virtual.
-### Long string IN lists split; rules and view joins compare strings exactly (2026-11-10)
-[[TASK-895]] (the user's decisions). A string IN list past the parameter limit is now split like other lists, since
-TASK-873 made string IN exact. SQL rules compared strings by collation (MySQL 30, SQL Server 36 of 42 shapes wrong) and
-`RuleEvaluator` ignored case; both are now ordinal, like lambdas. String view joins returned extra case- and
-space-twin pairs on MySQL and SQL Server; they are exact and keep the index. `string.Equals(.., Ordinal)` renders like
-`==`.
-### SQL integer arithmetic fails where checked C# would, on every provider (2026-11-10)
-[[TASK-890]]. MySQL computed `int` arithmetic in BIGINT, so overflowing filters matched rows and a SET stored the
-unwrapped value, silently; PostgreSQL and SQL Server dropped widening casts and failed `(long)x.Hits * 2` where C#
-succeeds; `Math.Abs` at the minimum answered (measured). Every provider now fails a statement exactly where checked C#
-would. A narrowing SET translates on SQLite, and a fold works on a persistent view. **Breaking:**
-`StoresIntegerOverflowLoudly` is replaced by `NarrowedInteger`.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -4,6 +4,58 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-10 — Aggregate string MIN/MAX are ordinal on every provider
+[[TASK-907]] (the user's decision). String MIN/MAX followed each database's collation and the in-memory oracle the
+machine's culture: 22–30 of 32 cases differed per provider (measured; `apple` vs `Banana`, ß = ss, `a` = `a `). New
+`AggregateQuery.StringComparison`, default `Ordinal`, answered exactly by every provider (Elasticsearch and Cosmos no
+longer refuse); any other order works in memory and is refused by name elsewhere. MongoDB enums stored as text now take
+MIN/MAX by value. Migration-generated SQL views render through the connector's dialect.
+
+## 2026-11-10 — Cosmos DB `TimeSpan` filters answer as C#; one DateTime key producer
+[[TASK-905]]. Cosmos compared a TimeSpan's stored text (`"1.02:03:04"` < `"23:00:00"`, `"-00:00:01"` < `"-00:00:02"`),
+so 60–68 of 124 filter shapes per path answered other rows than C# (measured). Orderings now compare the sign and a
+fixed-width magnitude key; equality keeps its index. TimeSpan sorts, members (`Ticks`) and arithmetic on a member are
+refused by name. The DateTime wall-clock key used by filters and aggregates now has one producer.
+
+## 2026-11-10 — RavenDB view, MongoDB and InfluxDB aggregates answer as LINQ
+[[TASK-906]]. RavenDB view MIN/AVG did not skip nulls (MIN of {3, null} was null) and a negative value next to a null
+broke the index; the MongoDB store aggregate ignored ordering, paging and time buckets (36 of 38 cases wrong); the
+InfluxDB native Flux aggregate was wrong in 24 of 27 cases (one row per stored point, buckets on write time). Raven and
+Mongo now follow LINQ; InfluxDB aggregates through `AggregateHelper` (no server-side aggregation).
+
+## 2026-11-10 — Aggregates answer the same edge cases on every provider
+[[TASK-886]] (the user's decisions). An ungrouped aggregate over no rows now returns one row with Count 0 everywhere
+(before: no row on InMemory, MongoDB, RavenDB, Elasticsearch; RavenDB and ES threw on an empty store), and SUM over only
+NULLs is 0 everywhere, like LINQ's `Sum` (MIN / MAX / AVG stay null). An empty `AggregateQuery` is refused by name
+(five providers gave five answers). **Breaking:** `SqlValueFragmentDialect.Aggregate` lost its last parameter.
+
+## 2026-11-10 — Cosmos DB `DateTime` filters and sorts answer as C#
+[[TASK-902]]. Cosmos compared the stored ISO text, whose fraction length varies, so inside one second `…00.5Z` sorted
+before `…00Z`: 76 of 88 filter shapes and 62 of 120 sorted pages were wrong (measured), e.g. `x.T > 10:00:00Z` missed
+the 10:00:00.5 document. Comparisons now use a wall-clock key behind the plain text range (index still used), and sorts
+re-order rows that share a second. DateTimeOffset comparisons and members like `T.Year` are refused by name.
+
+## 2026-11-10 — SQL `OnException` subscribers run; migrations and job locks reach `OnExecute`
+[[TASK-894]]. A consumer's `OnException` subscriber was never called on any provider: each provider subscribed an
+always-throwing handler first (measured). The provider's handling is now an override that runs before every subscriber,
+subscribers are contained (rule 25), and the caller still gets the same exception, so retry and missing-table filters
+match. Statements sent by migrations, view migrations, the TimescaleDB migration and the job lock provider are now
+announced. **Breaking for connector subclasses:** `InitException` is no longer virtual.
+
+## 2026-11-10 — Long string IN lists split; rules and view joins compare strings exactly
+[[TASK-895]] (the user's decisions). A string IN list past the parameter limit is now split like other lists, since
+TASK-873 made string IN exact. SQL rules compared strings by collation (MySQL 30, SQL Server 36 of 42 shapes wrong) and
+`RuleEvaluator` ignored case; both are now ordinal, like lambdas. String view joins returned extra case- and
+space-twin pairs on MySQL and SQL Server; they are exact and keep the index. `string.Equals(.., Ordinal)` renders like
+`==`.
+
+## 2026-11-10 — SQL integer arithmetic fails where checked C# would, on every provider
+[[TASK-890]]. MySQL computed `int` arithmetic in BIGINT, so overflowing filters matched rows and a SET stored the
+unwrapped value, silently; PostgreSQL and SQL Server dropped widening casts and failed `(long)x.Hits * 2` where C#
+succeeds; `Math.Abs` at the minimum answered (measured). Every provider now fails a statement exactly where checked C#
+would. A narrowing SET translates on SQLite, and a fold works on a persistent view. **Breaking:**
+`StoresIntegerOverflowLoudly` is replaced by `NarrowedInteger`.
+
 ## 2026-11-10 — Cosmos DB: missing members read as their default, nested predicates and long null lists work
 [[TASK-899]]. A non-nullable member missing from a document failed `A == 0`, `!Del` and 32 more shapes (C# reads the
 default), `All(..)` threw and `Any(..)` skipped null members, and a long `Contains` list holding null was refused

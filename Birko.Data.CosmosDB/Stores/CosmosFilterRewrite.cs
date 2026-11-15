@@ -319,6 +319,36 @@ public static partial class CosmosFilterRewrite
                 }
             }
 
+            // TASK-920: Sum / Average / Min / Max over the elements. C# skips a null value; Cosmos does not: SUM and AVG of
+            // [10, null] are undefined and MIN is null (null orders below numbers), so a filter on them dropped or kept the
+            // wrong documents (measured on the emulator, both plan paths). Only the non-null values are aggregated, as in
+            // C#. The aggregate stays a subquery; the gateway's planner cannot plan that (it throws, never answers wrong),
+            // and Cosmos has no aggregate-free array sum to rewrite it to, as Count has (CountOfElements).
+            if (method.DeclaringType == typeof(Enumerable) && AggregateMethods.Contains(method.Name))
+            {
+                var aggregated = node.Arguments[0];
+                // From the sequence, not the method: Sum(IEnumerable<int?>) and its kin are not generic.
+                var element = ElementType(aggregated.Type);
+                LambdaExpression? notNull = null;
+                if (node.Arguments.Count == 2 && node.Arguments[1] is LambdaExpression selector && MayHoldNull(selector.ReturnType))
+                {
+                    notNull = Expression.Lambda(
+                        Expression.NotEqual(selector.Body, Expression.Constant(null, selector.ReturnType)), selector.Parameters);
+                }
+                else if (node.Arguments.Count == 1 && MayHoldNull(element))
+                {
+                    var e = Expression.Parameter(element, "e");
+                    notNull = Expression.Lambda(Expression.NotEqual(e, Expression.Constant(null, element)), e);
+                }
+                if (notNull != null && !AlreadyNonNull(aggregated, notNull))
+                {
+                    var kept = Expression.Call(EnumerableWhere.MakeGenericMethod(element), aggregated, notNull);
+                    var args = node.Arguments.ToArray();
+                    args[0] = kept;
+                    return base.VisitMethodCall(node.Update(null, args));
+                }
+            }
+
             // Count() / LongCount() of a sequence a query produced (Where(..).Count()): counted as an array too, as above.
             if (method.DeclaringType == typeof(Enumerable) && node.Arguments.Count == 1
                 && method.Name is nameof(Enumerable.Count) or nameof(Enumerable.LongCount)
@@ -748,6 +778,53 @@ public static partial class CosmosFilterRewrite
         return true;
     }
 
+    /// <summary>The Enumerable aggregates that skip a null value in C# and not in Cosmos (TASK-920).</summary>
+    private static readonly HashSet<string> AggregateMethods = new(StringComparer.Ordinal)
+    {
+        nameof(Enumerable.Sum), nameof(Enumerable.Average), nameof(Enumerable.Min), nameof(Enumerable.Max),
+    };
+
+    private static bool MayHoldNull(Type type) => !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
+
+    /// <summary>
+    /// The source already keeps only the values <paramref name="notNull"/> tests (a filter prepared a second time, as a
+    /// chunked write does): its <c>Where</c> holds a <c>!= null</c> test of the same operand.
+    /// </summary>
+    private static bool AlreadyNonNull(Expression source, LambdaExpression notNull)
+    {
+        if (source is not MethodCallExpression { Method.Name: nameof(Enumerable.Where) } where
+            || where.Arguments.Count != 2 || where.Arguments[1] is not LambdaExpression kept) return false;
+        var operand = ((BinaryExpression)notNull.Body).Left.ToString();
+        var finder = new NonNullTestFinder(operand);
+        finder.Visit(kept.Body);
+        return finder.Found;
+    }
+
+    private sealed class NonNullTestFinder : ExpressionVisitor
+    {
+        private readonly string _operand;
+        public bool Found { get; private set; }
+        public NonNullTestFinder(string operand) => _operand = operand;
+
+        protected override Expression VisitBinary(BinaryExpression node)
+        {
+            if (node.NodeType == ExpressionType.NotEqual && node.Right is ConstantExpression { Value: null }
+                && node.Left.ToString() == _operand) Found = true;
+            return base.VisitBinary(node);
+        }
+
+        // Prepared once already, the test is the NOT IS_NULL marker of the same operand.
+        protected override Expression VisitUnary(UnaryExpression node)
+        {
+            if (node.NodeType == ExpressionType.Not && node.Operand is MethodCallExpression call && IsNullCall(call)
+                && call.Arguments.Count == 1 && Operand(call.Arguments[0]) == _operand) Found = true;
+            return base.VisitUnary(node);
+        }
+
+        private static string Operand(Expression e)
+            => (Birko.Data.Expressions.SpanContains.UnwrapConvert(e) ?? e).ToString();
+    }
+
     /// <summary>The Enumerable methods whose lambda is a predicate that keeps the elements it is true of (TASK-899).</summary>
     private static readonly HashSet<string> PredicateMethods = new(StringComparer.Ordinal)
     {
@@ -785,14 +862,18 @@ public static partial class CosmosFilterRewrite
     /// </summary>
     private static Expression CountOfElements(Expression elements, string method, Type type)
     {
-        var element = elements.Type.IsArray
-            ? elements.Type.GetElementType()!
-            : elements.Type.GetInterfaces().Append(elements.Type)
-                .First(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GetGenericArguments()[0];
+        var element = ElementType(elements.Type);
         Expression count = Expression.Call(EnumerableCount.MakeGenericMethod(element),
             Expression.Call(EnumerableToArray.MakeGenericMethod(element), elements));
         return method == nameof(Enumerable.LongCount) ? Expression.Convert(count, type) : count;
     }
+
+    /// <summary>The element type of a sequence: an array, or anything that is an <c>IEnumerable&lt;T&gt;</c>.</summary>
+    private static Type ElementType(Type sequence)
+        => sequence.IsArray
+            ? sequence.GetElementType()!
+            : sequence.GetInterfaces().Append(sequence)
+                .First(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GetGenericArguments()[0];
 
     /// <summary>Replaces one node, by reference.</summary>
     private sealed class Replacer : ExpressionVisitor

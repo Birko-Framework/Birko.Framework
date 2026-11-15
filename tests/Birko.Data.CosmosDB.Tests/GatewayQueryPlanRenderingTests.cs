@@ -64,6 +64,44 @@ public class GatewayQueryPlanRenderingTests
             .Should().Be(queryable.Where(once).ToQueryDefinition().QueryText);
     }
 
+    public static TheoryData<string, Expression<Func<Row, bool>>> NestedNullableAggregates => new()
+    {
+        { "Sum(Score)", x => x.Items.Sum(i => i.Score) > 15 },
+        { "Average(Score)", x => x.Items.Average(i => i.Score) > 10 },
+        { "Min(Score)", x => x.Items.Min(i => i.Score) < 6 },
+        { "Max(Score)", x => x.Items.Max(i => i.Score) > 15 },
+        { "Select(Score).Sum()", x => x.Items.Select(i => i.Score).Sum() > 15 },
+        { "Where(N > 0).Sum(Score)", x => x.Items.Where(i => i.N > 0).Sum(i => i.Score) > 5 },
+    };
+
+    /// <summary>
+    /// TASK-920: Cosmos aggregates a null where C# skips it (SUM / AVG of [10, null] undefined, MIN null), so only the
+    /// non-null values are aggregated. Live: Task899FilterLeftoversLiveTests.Nested_aggregates_answer_as_CSharp.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(NestedNullableAggregates))]
+    public void A_nested_aggregate_of_a_nullable_value_aggregates_only_the_non_null_values(string shape, Expression<Func<Row, bool>> filter)
+    {
+        var text = Query(filter);
+        text.Should().Contain("NOT IS_NULL(", $"'{shape}' must leave the null values out of the aggregate");
+    }
+
+    [Fact]
+    public void A_nested_aggregate_of_a_non_nullable_value_is_not_filtered()
+    {
+        Query(x => x.Items.Any() && x.Items.Max(i => i.N) > 2).Should().NotContain("IS_NULL(");
+    }
+
+    [Fact]
+    public void Preparing_a_nested_aggregate_twice_does_not_filter_it_twice()
+    {
+        Expression<Func<Row, bool>> filter = x => x.Items.Sum(i => i.Score) > 15;
+        var once = CosmosFilterRewrite.Prepare(filter)!;
+        var queryable = Client.GetContainer("db", "c").GetItemLinqQueryable<Row>();
+        queryable.Where(CosmosFilterRewrite.Prepare(once)!).ToQueryDefinition().QueryText
+            .Should().Be(queryable.Where(once).ToQueryDefinition().QueryText);
+    }
+
     [Fact]
     public void A_count_of_the_member_itself_stays_its_array_length()
     {

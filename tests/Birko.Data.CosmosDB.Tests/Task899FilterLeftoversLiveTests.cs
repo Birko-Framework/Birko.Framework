@@ -194,6 +194,41 @@ public class Task899FilterLeftoversLiveTests
         };
     }
 
+    /// <summary>
+    /// TASK-920: an aggregate over the elements, nested in a filter. Nullable selectors, so C# answers every document
+    /// (an empty or all-null sequence sums to 0 and has no average, minimum or maximum, which is null) and none throws.
+    /// </summary>
+    internal static (string Label, Expression<Func<Row, bool>> Filter)[] NestedAggregateShapes()
+    {
+        return new (string, Expression<Func<Row, bool>>)[]
+        {
+            ("Sum(Score) > 15", x => x.Items.Sum(i => i.Score) > 15),
+            ("Sum(Score) == 0", x => x.Items.Sum(i => i.Score) == 0),
+            ("Sum(N) > 2", x => x.Items.Sum(i => i.N) > 2),
+            ("Average(Score) > 10", x => x.Items.Average(i => i.Score) > 10),
+            ("Average(Score) == null", x => x.Items.Average(i => i.Score) == null),
+            ("Max(Score) > 15", x => x.Items.Max(i => i.Score) > 15),
+            ("Max(Score) == null", x => x.Items.Max(i => i.Score) == null),
+            ("Min(Score) < 6", x => x.Items.Min(i => i.Score) < 6),
+            ("Min(Score) != null", x => x.Items.Min(i => i.Score) != null),
+            ("Where(N > 0).Sum(Score) > 5", x => x.Items.Where(i => i.N > 0).Sum(i => i.Score) > 5),
+            ("Where(S != null).Max(Score) > 5", x => x.Items.Where(i => i.S != null).Max(i => i.Score) > 5),
+            ("Sum(Score) > A", x => x.Items.Sum(i => i.Score) > x.A),
+            ("Select(Score).Sum() > A", x => x.Items.Select(i => i.Score).Sum() > x.A),
+            ("Select(Score).Min() != null", x => x.Items.Select(i => i.Score).Min() != null),
+            // Non-nullable selectors: a missing N reads as 0 in C#. Any() first, as C# throws on an empty sequence.
+            ("Any() && Average(N) >= 1", x => x.Items.Any() && x.Items.Average(i => i.N) >= 1),
+            ("Any() && Min(N) == 0", x => x.Items.Any() && x.Items.Min(i => i.N) == 0),
+            ("Any() && Max(N) > 2", x => x.Items.Any() && x.Items.Max(i => i.N) > 2),
+        };
+    }
+
+    /// <summary>The SDK plans a query locally only on Windows x64, unless told to ask the gateway (TASK-919).</summary>
+    private static bool GatewayPlans =>
+        !(OperatingSystem.IsWindows() && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture
+            == System.Runtime.InteropServices.Architecture.X64)
+        || string.Equals(Environment.GetEnvironmentVariable("AZURE_COSMOS_BYPASS_QUERY_PARSING"), "true", StringComparison.OrdinalIgnoreCase);
+
     private string? ResolveConnection()
     {
         var conn = Environment.GetEnvironmentVariable(ConnEnv);
@@ -247,8 +282,12 @@ public class Task899FilterLeftoversLiveTests
 
     /// <param name="aggregateRefused">The aggregate path refuses the shapes by name (TASK-876): a nested predicate renders
     /// as a JOIN, not a plain WHERE the aggregation can be placed behind.</param>
+    /// <param name="loudOnGatewayPlan">On a client whose query plan comes from the gateway (every client but Windows x64,
+    /// or one with <c>AZURE_COSMOS_BYPASS_QUERY_PARSING</c>), a shape may fail with an exception, which is reported but
+    /// accepted; a wrong answer is still a failure (TASK-920: the emulator's gateway cannot plan an aggregate subquery).</param>
     private async Task<List<string>> RunMatrixAsync(
-        (string Label, Expression<Func<Row, bool>> Filter)[] shapes, bool writes, bool aggregateRefused = false)
+        (string Label, Expression<Func<Row, bool>> Filter)[] shapes, bool writes, bool aggregateRefused = false,
+        bool loudOnGatewayPlan = false)
     {
         var failures = new List<string>();
         var conn = ResolveConnection();
@@ -281,7 +320,9 @@ public class Task899FilterLeftoversLiveTests
                     }
                     catch (Exception e)
                     {
-                        failures.Add($"{label} [{path}]: {e.GetType().Name}: {e.Message.Split('\n')[0]}");
+                        var message = $"{label} [{path}]: {e.GetType().Name}: {e.Message.Split('\n')[0]}";
+                        if (loudOnGatewayPlan && GatewayPlans) _output.WriteLine("loud on the gateway plan, accepted: " + message);
+                        else failures.Add(message);
                     }
                 }
 
@@ -371,6 +412,20 @@ public class Task899FilterLeftoversLiveTests
     public async Task Nested_predicates_answer_null_and_missing_members_as_CSharp()
     {
         var failures = await RunMatrixAsync(NestedShapes(), writes: false, aggregateRefused: true);
+        failures.Should().BeEmpty(string.Join("\n", failures));
+    }
+
+    [Fact]
+    public async Task Nested_aggregates_answer_as_CSharp()
+    {
+        var failures = await RunMatrixAsync(NestedAggregateShapes(), writes: false, aggregateRefused: true, loudOnGatewayPlan: true);
+        failures.Should().BeEmpty(string.Join("\n", failures));
+    }
+
+    [Fact]
+    public async Task Nested_aggregates_answer_as_CSharp_in_writes()
+    {
+        var failures = await RunMatrixAsync(NestedAggregateShapes(), writes: true, loudOnGatewayPlan: true);
         failures.Should().BeEmpty(string.Join("\n", failures));
     }
 
