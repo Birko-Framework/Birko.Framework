@@ -89,24 +89,17 @@ namespace Birko.Data.SQL.Tests.Views
             sql.Should().Be("CREATE OR REPLACE VIEW \"my_view\" AS SELECT 1");
         }
 
+        /// <summary>
+        /// TASK-917: the view DDL is the connector's dialect's, not an override of the connector (the provider View
+        /// packages that held those overrides are compiled in by no consumer). The per-provider renderings run live in
+        /// the ViewProbeContract on all four servers; this pins the seam.
+        /// </summary>
         [Fact]
-        public void BuildCreateViewSql_MSSqlStyle_UsesCreateOrAlter()
+        public void BuildCreateViewSql_renders_through_the_connectors_dialect()
         {
-            var connector = new TestMSSqlViewConnector(TestSettings);
+            var connector = new DialectViewConnector(TestSettings);
 
-            var sql = connector.TestBuildCreateViewSql("my_view", "SELECT 1");
-
-            sql.Should().Be("CREATE OR ALTER VIEW [my_view] AS SELECT 1");
-        }
-
-        [Fact]
-        public void BuildCreateViewSql_SQLiteStyle_UsesIfNotExists()
-        {
-            var connector = new TestSqLiteViewConnector(TestSettings);
-
-            var sql = connector.TestBuildCreateViewSql("my_view", "SELECT 1");
-
-            sql.Should().Be("CREATE VIEW IF NOT EXISTS my_view AS SELECT 1");
+            connector.TestBuildCreateViewSql("my_view", "SELECT 1").Should().Be("DIALECT \"my_view\" | SELECT 1");
         }
 
         [Fact]
@@ -191,32 +184,16 @@ namespace Birko.Data.SQL.Tests.Views
             public override DbConnection CreateConnection(PasswordSettings settings) => throw new NotImplementedException();
         }
 
-        private class TestMSSqlViewConnector : AbstractConnectorBase
+        private sealed class MarkerDialect : Conditions.SqlValueFragmentDialect
         {
-            public TestMSSqlViewConnector(PasswordSettings settings) : base(settings) { }
-            public string TestBuildCreateViewSql(string name, string select) => BuildCreateViewSql(name, select);
-
-            public override string QuoteIdentifier(string identifier) => "[" + identifier + "]";
-            protected override string BuildCreateViewSql(string viewName, string selectSql)
-                => "CREATE OR ALTER VIEW " + QuoteIdentifier(viewName) + " AS " + selectSql;
-
-            public override string FieldDefinition(Fields.AbstractField field) => field.Name;
-            public override string ConvertType(DbType type, Fields.AbstractField field) => "NVARCHAR(MAX)";
-            public override DbConnection CreateConnection(PasswordSettings settings) => throw new NotImplementedException();
+            public override string CreateOrReplaceViewSql(string quotedViewName, string selectSql) => "DIALECT " + quotedViewName + " | " + selectSql;
         }
 
-        private class TestSqLiteViewConnector : AbstractConnectorBase
+        private class DialectViewConnector : TestViewConnector
         {
-            public TestSqLiteViewConnector(PasswordSettings settings) : base(settings) { }
-            public string TestBuildCreateViewSql(string name, string select) => BuildCreateViewSql(name, select);
-
-            public override string QuoteIdentifier(string identifier) => identifier;
-            protected override string BuildCreateViewSql(string viewName, string selectSql)
-                => "CREATE VIEW IF NOT EXISTS " + QuoteIdentifier(viewName) + " AS " + selectSql;
-
-            public override string FieldDefinition(Fields.AbstractField field) => field.Name;
-            public override string ConvertType(DbType type, Fields.AbstractField field) => "TEXT";
-            public override DbConnection CreateConnection(PasswordSettings settings) => throw new NotImplementedException();
+            private static readonly MarkerDialect Marker = new();
+            public DialectViewConnector(PasswordSettings settings) : base(settings) { }
+            protected override Conditions.SqlValueFragmentDialect FragmentDialect => Marker;
         }
 
         #endregion

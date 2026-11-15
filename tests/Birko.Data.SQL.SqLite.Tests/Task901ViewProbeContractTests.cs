@@ -20,7 +20,6 @@ public sealed class SQLiteViewProbeContractTests : ViewProbeContract
     }
 
     protected override string ProviderName => "SQLite";
-    protected override bool CreatesViewsWithoutViewPackage => false;
     protected override bool DropsSourceTableUnderAView => true;
     protected override AbstractConnector NewConnector() => new SqLiteConnector(_settings);
 

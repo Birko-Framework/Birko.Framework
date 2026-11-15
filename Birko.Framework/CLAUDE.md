@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL views work without the provider View package (2026-11-15)
+[[TASK-917]]. Every consumer runs the base view code, which rendered `CREATE OR REPLACE VIEW` everywhere (SQLite and SQL
+Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
+providers, and inside a PostgreSQL transaction the swallowed error aborted it (`25P02`; all measured). The connector's
+dialect now renders the DDL and a catalogue probe per provider; the View packages keep only their extra features.
 ### Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does (2026-11-15)
 [[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path
 when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).

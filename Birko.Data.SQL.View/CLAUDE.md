@@ -66,24 +66,31 @@ SQL view generation framework for creating database views from entity attributes
   Measured before on all four providers: every later read failed until `InvalidateViewExistsCache`. Not done, the user's
   call: falling back inside the failing read (a failed statement aborts a PostgreSQL boundary, so it could only fall
   back outside one).
-- **The base probe answers "missing" and throws everything else (TASK-901).** `ViewExists` / `ViewExistsAsync` without
-  the provider's View package (the composition every consumer in the tree uses) read `ViewProbeSql`
-  (`SELECT COUNT(*) FROM (SELECT 1 AS probe FROM v WHERE 1=0) probe`) through the reader with `missingTableIsEmpty: true`:
-  a row means the relation exists, the reader's missing-table filter means it does not, and any other error is reported
-  as itself. Before (TASK-717's `catch (DbException)`), measured on all four providers: a missing view reached the catch
+- **The probe asks the catalogue for a VIEW and throws everything else (TASK-901, TASK-917).** `ViewExists` /
+  `ViewExistsAsync` run the connector dialect's `ViewExistsSql` (`sqlite_master` `type='view'`, `sys.views`,
+  `information_schema.views` scoped to the current schema / database) with `@viewName` bound: a row means a view exists,
+  no row means none, and any error is reported as itself. TASK-901 had made it select from the name
+  (`… FROM v WHERE 1=0`) and swallow the missing-relation error; measured by TASK-917, that answered `true` for a
+  same-named TABLE on all four providers, and inside an ambient PostgreSQL transaction the swallowed error aborted it
+  (`25P02` on the next statement). Before (TASK-717's `catch (DbException)`), measured on all four providers: a missing view reached the catch
   rewrapped by `EnsureSchemaAndReport` as a bare `Exception`, so the probe threw (an Auto read failed instead of reading
   on the fly, `CreateViewIfNotExists` failed), while a wrong password answered `false` (rule 26). A "missing" answer is
-  no failure: no `OnException` subscriber, no `OnInit` (both fired once per probe before). Still true: the base probe
-  answers `true` for a same-named TABLE, and the base `CreateView` renders `CREATE OR REPLACE VIEW`, which SQLite and
-  SQL Server reject, so a persistent view cannot be created on those two without the provider's View package.
+  no failure: no `OnException` subscriber, no `OnInit` (both fired once per probe before).
+- **`CreateView` renders through the dialect (TASK-917).** `CreateOrReplaceViewSql`: `CREATE OR REPLACE VIEW`
+  (PostgreSQL, MySQL), `CREATE OR ALTER VIEW` (SQL Server 2016 SP1+), `DROP VIEW IF EXISTS …; CREATE VIEW …` (SQLite).
+  Before, the base rendered `CREATE OR REPLACE VIEW` everywhere and SQLite / SQL Server rejected it unless the provider
+  View package (which no consumer loads) was compiled in. The dialect lives in the provider's base package, so these
+  work in every composition; the View packages no longer carry their own copies (one producer).
 - `AbstractConnector_CreateView.cs` — Sync: `CreateView`, `DropView`, `RecreateView`, `ViewExists`, `CreateViewIfNotExists`, `CreateViews`, `DropViews`
 - `AbstractAsyncConnector_CreateView.cs` — Async equivalents: `CreateViewAsync`, `DropViewAsync`, `RecreateViewAsync`, `ViewExistsAsync`, `CreateViewIfNotExistsAsync`, `CreateViewsAsync`, `DropViewsAsync`
 
-### Provider-Specific Overrides (separate projects)
-- **Birko.Data.SQL.MSSql.View** — `CREATE OR ALTER VIEW`, `sys.views` catalog
-- **Birko.Data.SQL.PostgreSQL.View** — `information_schema.views`, materialized view support
-- **Birko.Data.SQL.MySQL.View** — `information_schema.VIEWS` with `TABLE_SCHEMA` scoping
-- **Birko.Data.SQL.SqLite.View** — drop-then-create, `sqlite_master` catalog
+### Provider-Specific Packages (separate projects)
+The create-or-replace DDL and the view probe come from each provider's dialect (TASK-917, in the provider's base package),
+so these packages add only provider features:
+- **Birko.Data.SQL.MSSql.View** — indexed views (`WITH SCHEMABINDING` + clustered index), the `1`/`0` bool literal
+- **Birko.Data.SQL.PostgreSQL.View** — materialized views
+- **Birko.Data.SQL.MySQL.View** — nothing beyond the dialect today
+- **Birko.Data.SQL.SqLite.View** — nothing beyond the dialect today
 
 ### DataBase
 - `DataBase_View.cs` — View metadata loading and caching

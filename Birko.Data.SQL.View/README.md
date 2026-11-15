@@ -152,14 +152,18 @@ connector.DropViews(new[] { "view1", "view2" });
 
 ### Database-Specific Behavior
 
-Each SQL provider has a separate view project with DDL overrides:
+Each provider's connector renders the view DDL and the existence check through its dialect, so they work without the
+provider's View package (TASK-917); `ViewExists` answers views only, never a table of the same name:
 
 | Provider | CREATE syntax | ViewExists catalog |
 |----------|--------------|-------------------|
-| [MSSql](../Birko.Data.SQL.MSSql.View/) | `CREATE OR ALTER VIEW` | `sys.views` |
-| [PostgreSQL](../Birko.Data.SQL.PostgreSQL.View/) | `CREATE OR REPLACE VIEW` | `information_schema.views` |
-| [MySQL](../Birko.Data.SQL.MySQL.View/) | `CREATE OR REPLACE VIEW` | `information_schema.VIEWS` |
-| [SQLite](../Birko.Data.SQL.SqLite.View/) | `CREATE VIEW IF NOT EXISTS` | `sqlite_master` |
+| SQL Server | `CREATE OR ALTER VIEW` (2016 SP1+) | `sys.views` |
+| PostgreSQL | `CREATE OR REPLACE VIEW` | `information_schema.views`, current schema |
+| MySQL | `CREATE OR REPLACE VIEW` | `information_schema.VIEWS`, current database |
+| SQLite | `DROP VIEW IF EXISTS` + `CREATE VIEW` | `sqlite_master`, `type = 'view'` |
+
+The provider View packages add provider features: [SQL Server](../Birko.Data.SQL.MSSql.View/) indexed views and
+[PostgreSQL](../Birko.Data.SQL.PostgreSQL.View/) materialized views.
 
 PostgreSQL also supports materialized views via `CreateMaterializedView`, `RefreshMaterializedView`, and `DropMaterializedView`.
 

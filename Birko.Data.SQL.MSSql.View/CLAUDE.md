@@ -14,8 +14,8 @@ SQL Server-specific view DDL overrides for the Birko.Data.SQL.View framework. Pr
 
 ### Database/Connector/MSSqlConnector_View.cs
 Partial class extending `MSSqlConnector`. Regular (non-indexed) views:
-- `BuildCreateViewSql(viewName, selectSql)` — Overrides base to use `CREATE OR ALTER VIEW` (SQL Server 2016 SP1+)
-- `ViewExists(viewName)` — Queries `sys.views` catalog with parameterized name lookup
+- Plain views need nothing from this package: `CREATE OR ALTER VIEW` and the `sys.views` probe come from
+  `MSSqlValueFragmentDialect` in Birko.Data.SQL.MSSql (TASK-917; they were overrides here, which no consumer loads)
 
 Indexed (materialized) views — created `WITH SCHEMABINDING` + a unique clustered index that the engine
 maintains automatically:
@@ -40,10 +40,9 @@ emit (create those manually).
 - Birko.Data.SQL.MSSql (MSSqlConnector partial class)
 
 ## Key Notes
-- Uses `CREATE OR ALTER VIEW` instead of `CREATE OR REPLACE VIEW` (SQL Server syntax)
-- Requires SQL Server 2016 SP1 or later for `CREATE OR ALTER` support
-- `ViewExists` uses `sys.views` system catalog rather than `information_schema` for better performance
-- Separate from base SQL.View because each SQL provider has different DDL syntax and catalog queries
+- Plain-view DDL and the probe are the dialect's (Birko.Data.SQL.MSSql), so they work without this package; `CREATE OR
+  ALTER` needs SQL Server 2016 SP1 or later
+- Separate from base SQL.View for the indexed-view support, which only SQL Server has
 
 ## Maintenance
 

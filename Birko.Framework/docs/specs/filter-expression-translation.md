@@ -46,6 +46,9 @@ shaped-by: [FEATURE-014]
 # task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
 shaped-by-unresolved: 259
+# 2026-11-15 (TASK-917): SqlValueFragmentDialect gained SqlValueFragmentDialect_View.cs (CreateOrReplaceViewSql,
+# ViewExistsSql) and each provider dialect overrides them. Their behaviour is specified in views-and-aggregation
+# ("Provider view DDL and existence"); this area was not re-harvested, so generated-at is unchanged.
 ---
 # LINQ filter expression translation to backend queries
 

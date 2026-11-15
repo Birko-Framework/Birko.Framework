@@ -232,13 +232,6 @@ namespace Birko.Data.SQL.Connectors
             _viewExistsCache.TryRemove(viewName, out _);
         }
 
-        /// <summary>
-        /// The base view-existence probe (TASK-901): one row when <paramref name="viewName"/> names a relation, a
-        /// missing-relation error when it does not. <c>WHERE 1=0</c> reads no row of the view; the outer <c>COUNT(*)</c>
-        /// makes the answer a row, so the reader's missing-table filter is what tells the two apart.
-        /// </summary>
-        protected string ViewProbeSql(string viewName)
-            => "SELECT COUNT(*) FROM (SELECT 1 AS probe FROM " + QuoteIdentifier(viewName) + " WHERE 1=0) probe";
 
         /// <summary>
         /// Forgets Auto mode's cached "the view exists" when a persistent read of <paramref name="view"/> reports it missing,
@@ -300,13 +293,24 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Builds the CREATE VIEW SQL statement.
-        /// Override in database-specific connectors for syntax differences.
-        /// Default uses CREATE OR REPLACE VIEW (PostgreSQL, MySQL compatible).
+        /// Builds the statement that creates or replaces a view: the connector's dialect renders it per provider
+        /// (TASK-917), so it works without the provider View package. Before, it was <c>CREATE OR REPLACE VIEW</c> on every
+        /// provider, which SQLite and SQL Server reject.
         /// </summary>
-        protected virtual string BuildCreateViewSql(string viewName, string selectSql)
+        protected string BuildCreateViewSql(string viewName, string selectSql)
+            => FragmentDialect.CreateOrReplaceViewSql(QuoteIdentifier(viewName), selectSql);
+
+        /// <summary>
+        /// Prepares the view probe: the dialect's catalog query with <c>@viewName</c> bound (TASK-917). It answers views
+        /// only, and a missing view is simply no row, never an error to swallow.
+        /// </summary>
+        protected void PrepareViewExistsCommand(System.Data.Common.DbCommand command, string viewName)
         {
-            return "CREATE OR REPLACE VIEW " + QuoteIdentifier(viewName) + " AS " + selectSql;
+            command.CommandText = FragmentDialect.ViewExistsSql;
+            var param = command.CreateParameter();
+            param.ParameterName = "@viewName";
+            param.Value = viewName;
+            command.Parameters.Add(param);
         }
 
         /// <summary>

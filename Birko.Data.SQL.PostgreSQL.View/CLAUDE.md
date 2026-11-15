@@ -5,7 +5,7 @@
 <!-- /spec-links -->
 
 ## Overview
-PostgreSQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `information_schema`-based existence checks and materialized view support.
+PostgreSQL view package for the Birko.Data.SQL.View framework: materialized view support. Plain-view DDL (`CREATE OR REPLACE VIEW`) and the `information_schema.views` existence check (current schema) come from `PostgreSqlValueFragmentDialect` in Birko.Data.SQL.PostgreSQL (TASK-917), so they work without this package.
 
 ## Project Location
 `Birko.Data.SQL.PostgreSQL.View/`
@@ -14,12 +14,11 @@ PostgreSQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Pr
 
 ### Database/Connectors/PostgreSQLConnector_View.cs
 Partial class extending `PostgreSQLConnector`:
-- `ViewExists(viewName)` — Queries `information_schema.views` with parameterized name lookup
 - `CreateMaterializedView(viewType, viewName?)` — Creates a materialized view using `CREATE MATERIALIZED VIEW IF NOT EXISTS`
 - `RefreshMaterializedView(viewName, concurrently?)` — Refreshes a materialized view, optionally with `CONCURRENTLY` (requires unique index)
 - `DropMaterializedView(viewName)` — Drops a materialized view using `DROP MATERIALIZED VIEW IF EXISTS`
 
-Note: `BuildCreateViewSql` is NOT overridden because PostgreSQL natively supports `CREATE OR REPLACE VIEW` (the base default).
+Note: plain-view DDL and `ViewExists` are the dialect's (TASK-917); this package does not override them.
 
 ## Dependencies
 - Birko.Data.SQL (AbstractConnectorBase, AbstractConnector)
@@ -27,7 +26,7 @@ Note: `BuildCreateViewSql` is NOT overridden because PostgreSQL natively support
 - Birko.Data.SQL.PostgreSQL (PostgreSQLConnector partial class)
 
 ## Key Notes
-- PostgreSQL uses the base `CREATE OR REPLACE VIEW` syntax (no override needed)
+- PostgreSQL uses `CREATE OR REPLACE VIEW`, rendered by the dialect
 - `ViewExists` uses `information_schema.views` for standard SQL compliance
 - Materialized views are a PostgreSQL-specific feature not available in other providers
 - `REFRESH MATERIALIZED VIEW CONCURRENTLY` requires a unique index on the materialized view

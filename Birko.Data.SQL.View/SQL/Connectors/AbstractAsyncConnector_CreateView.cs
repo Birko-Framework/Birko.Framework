@@ -122,8 +122,8 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Checks if a SQL VIEW exists in the database: false when the relation is missing, and any other failure (a
-        /// cancelled token included, TASK-717) is thrown. The provider View packages override this with a catalogue lookup.
+        /// Checks if a SQL VIEW exists in the database: false when there is none, and any failure (a cancelled token
+        /// included, TASK-717) is thrown. The connector's dialect supplies the catalogue query per provider (TASK-917).
         /// </summary>
         /// <remarks>TASK-901: the async twin of <see cref="AbstractConnector.ViewExists"/>; see it for why it reads.</remarks>
         public virtual async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct = default)
@@ -131,9 +131,9 @@ namespace Birko.Data.SQL.Connectors
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
             await foreach (var _ in RunReaderCommandAsync(
-                command => { command.CommandText = ViewProbeSql(viewName); return Task.CompletedTask; },
+                command => { PrepareViewExistsCommand(command, viewName); return Task.CompletedTask; },
                 reader => Task.FromResult<IEnumerable<object>>(new object[] { true }),
-                ct, missingTableIsEmpty: true).ConfigureAwait(false))
+                ct, missingTableIsEmpty: false).ConfigureAwait(false))
             {
                 return true;
             }

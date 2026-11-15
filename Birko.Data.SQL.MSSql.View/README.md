@@ -5,7 +5,7 @@ SQL Server-specific view DDL support for the Birko.Data.SQL.View framework.
 ## Features
 
 - **CREATE OR ALTER VIEW** syntax (requires SQL Server 2016 SP1+)
-- **ViewExists** check via `sys.views` catalog
+- (`CREATE OR ALTER VIEW` and the `sys.views` check come from the connector's dialect and need no package, TASK-917)
 - **Indexed views** support:
   - `CreateIndexedView` (CREATE VIEW with SCHEMABINDING + clustered index)
   - `DropIndexedView` (drops clustered index then drops view)

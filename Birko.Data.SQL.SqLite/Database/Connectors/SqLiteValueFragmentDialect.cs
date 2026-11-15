@@ -190,5 +190,15 @@ namespace Birko.Data.SQL.Connectors
             => IsDecimal(source) || (function == Birko.Data.Stores.AggregateFunction.Avg && IsDecimal(result))
                 ? $"{sql} COLLATE {SqLiteDecimal.Collation}"
                 : sql;
+    
+        /// <summary>
+        /// TASK-917: SQLite has no CREATE OR REPLACE VIEW, so drop then create (two statements, one command). Not
+        /// <c>CREATE VIEW IF NOT EXISTS</c>: that keeps an old definition silently (TASK-717).
+        /// </summary>
+        public override string CreateOrReplaceViewSql(string quotedViewName, string selectSql)
+            => "DROP VIEW IF EXISTS " + quotedViewName + "; CREATE VIEW " + quotedViewName + " AS " + selectSql;
+
+        /// <summary>TASK-917: views only, not a table of the same name.</summary>
+        public override string ViewExistsSql => "SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = @viewName";
     }
 }

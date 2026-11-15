@@ -90,6 +90,9 @@ shaped-by: [FEATURE-014]
 # task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
 shaped-by-derived: true
 shaped-by-unresolved: 259
+# Partial regen 2026-11-15 (TASK-917): ONLY "Connector view DDL operations" and "Provider view DDL and existence"
+# were re-read from the code (the dialect's view DDL and catalogue probe). generated-at is left at the full harvest
+# on purpose: the rest of this area is still as of 22cd73f, so /specs verify keeps reporting it stale.
 ---
 # Fluent view definitions and aggregation queries
 
@@ -1014,43 +1017,54 @@ The system SHALL offer on both connector families: `CreateView(Async)` from a vi
 `InvalidOperationException` when `LoadView` yields no tables) or from `Tables.View` (throwing
 `ArgumentNullException` for null and `InvalidOperationException` when neither the `viewName` argument nor
 `View.Name` is non-blank), issuing `BuildCreateViewSql(name, BuildViewSelectSql(view))` as DDL in its own
-transaction — `CREATE OR REPLACE VIEW <quoted> AS …` by default, so an existing definition is replaced on every
-provider; `CreateViews(Async)` over a list (a null list a
+transaction — the statement the connector's dialect renders (`CreateOrReplaceViewSql`, next requirement), so an
+existing definition is replaced on every provider, with or without the provider View package; `CreateViews(Async)`
+over a list (a null list a
 no-op); `DropView(Async)` by type or name as `DROP VIEW IF EXISTS <quoted>` (a blank name
 `ArgumentException`, an unnamed type `InvalidOperationException`); `DropViews(Async)` skipping blank
 names; `RecreateView(Async)` as drop then create; and `CreateViewIfNotExists(Async)`, creating only when
-`ViewExists(Async)` answers false. The base `ViewExists(Async)` SHALL throw `ArgumentException` for a
-blank name, run `SELECT 1 FROM <quoted> WHERE 1=0`, and answer `false` only when that query is refused
-(`DbException`); any other failure, a cancelled token among them, propagates (TASK-717: every exception answered
-`false`, measured). It answers `true` for a table of that name as well as a view, which is why every shipped
-provider overrides both forms with a catalogue lookup.
+`ViewExists(Async)` answers false. `ViewExists(Async)` SHALL throw `ArgumentException` for a blank name and run the
+dialect's catalogue query (`ViewExistsSql`, next requirement) with the name bound as `@viewName`: a row means a VIEW
+of that name exists, no row means none, and any failure, a cancelled token among them, propagates. A missing view is
+an answer, not a failure: no `OnException` subscriber is told and `OnInit` is not raised (TASK-901). Before
+(TASK-917, measured on all four providers), the probe selected from the name and swallowed the missing-relation
+error: it answered `true` for a TABLE of that name, and inside an ambient PostgreSQL transaction the swallowed error
+aborted it, so the next statement failed with `25P02`.
 
-#### Scenario: Default CREATE VIEW replaces
+#### Scenario: CREATE VIEW replaces without the View package (TASK-917)
 
-- **Given** a provider with no `BuildCreateViewSql` override (MySQL, PostgreSQL)
-- **When** `CreateView(typeof(CustomerOrders))` runs
-- **Then** `CREATE OR REPLACE VIEW "<name>" AS <body>` is executed and the name's existence-cache entry is removed
+- **Given** any of the four SQL providers, composed without its View package (as every consumer runs)
+- **When** `CreateView(typeof(CustomerOrders))` runs, and runs again
+- **Then** the view is created, then replaced; the name's existence-cache entry is removed each time (before:
+  SQLite failed `near "OR"` and SQL Server `Incorrect syntax near 'REPLACE'`, measured)
 
-#### Scenario: The base existence check answers only a refused probe (TASK-717)
+#### Scenario: The existence check fails loudly (TASK-717)
 
-- **Given** a connector without a provider override and a cancelled token, or a lost connection
+- **Given** a cancelled token, or a lost connection
 - **When** `ViewExistsAsync("order_summary", token)` runs
-- **Then** the cancellation (or the connection's failure) propagates; `false` means only that the probe was refused
+- **Then** the cancellation (or the connection's failure) propagates; `false` means only that no such view exists
 
-### Requirement: Provider view DDL and existence overrides
+#### Scenario: Probing inside a transaction leaves it usable (TASK-917)
 
-The system SHALL override view DDL and existence per provider: **SQL Server** creates with
+- **Given** an ambient transaction on PostgreSQL and no view named `"order_summary"`
+- **When** `ViewExists("order_summary")` answers `false` and the caller then inserts a row in the same transaction
+- **Then** the insert succeeds (before: `25P02 current transaction is aborted`, measured)
+
+### Requirement: Provider view DDL and existence
+
+The system SHALL render view DDL and the existence query per provider through the connector's dialect
+(`SqlValueFragmentDialect.CreateOrReplaceViewSql` / `ViewExistsSql`, overridden in each provider's base package —
+TASK-917; they were View-package overrides, which no consumer compiles in): **SQL Server** creates with
 `CREATE OR ALTER VIEW` and checks `sys.views WHERE name = @viewName`; **SQLite** creates with
 `DROP VIEW IF EXISTS <quoted>; CREATE VIEW <quoted> AS …` in the command's own transaction, so an existing view is
 replaced (TASK-717: it was `CREATE VIEW IF NOT EXISTS`, which kept the old definition with no error, measured), and
 checks `sqlite_master WHERE type = 'view'`; **MySQL** keeps `CREATE OR REPLACE VIEW` and checks
 `information_schema.VIEWS` in `DATABASE()`; **PostgreSQL** keeps `CREATE OR REPLACE VIEW` — which refuses a
 definition whose columns differ (`42P16`, measured), so such a change goes through `RecreateView` — and checks
-`information_schema.views` in `current_schema()` (CR-L191). Every override binds the name as the
-parameter `@viewName`, throws `ArgumentException` for a blank name, and lets a database error propagate
-rather than answering `false`. All four override both `ViewExists` and `ViewExistsAsync` (TASK-717: SQL Server and
-PostgreSQL used the base probe for the async form, which answered `true` for a same-named table and `false` for a
-cancelled token, measured).
+`information_schema.views` in `current_schema()` (CR-L191). The sync and async probes share one command
+(`PrepareViewExistsCommand`): the name bound as `@viewName`, `ArgumentException` for a blank name, and a database
+error propagated rather than answered as `false`. The provider View packages no longer override `BuildCreateViewSql`
+or `ViewExists(Async)`; they keep only provider features (SQL Server indexed views, PostgreSQL materialized views).
 
 #### Scenario: SQLite replaces an existing view (TASK-717)
 
@@ -1058,11 +1072,12 @@ cancelled token, measured).
 - **When** `CreateView` is called with a new definition
 - **Then** the new definition is in place (it used to keep the old one with no error)
 
-#### Scenario: A same-named table is not a view on SQLite, MySQL and PostgreSQL
+#### Scenario: A same-named table is not a view, on every provider
 
-- **Given** a table, not a view, named `"order_summary"`
-- **When** the provider's `ViewExists("order_summary")` runs
-- **Then** SQLite, MySQL, PostgreSQL and SQL Server answer `false` from their catalogue queries, sync and async
+- **Given** a table, not a view, named `"order_summary"`, and no View package
+- **When** `ViewExists("order_summary")` or `ViewExistsAsync` runs
+- **Then** SQLite, MySQL, PostgreSQL and SQL Server answer `false` from their catalogue queries (before TASK-917,
+  without the View package, all four answered `true`, measured)
 
 ### Requirement: SQL Server indexed views
 

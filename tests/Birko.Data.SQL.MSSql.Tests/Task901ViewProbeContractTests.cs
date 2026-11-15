@@ -12,7 +12,6 @@ public sealed class SQLServerViewProbeContractTests : ViewProbeContract
     public SQLServerViewProbeContractTests(ITestOutputHelper output) : base(output) => _live = new SQLServerLive(output);
     protected override bool Ready() => _live.Ready();
     protected override string ProviderName => "SQL Server";
-    protected override bool CreatesViewsWithoutViewPackage => false;
     protected override bool DropsSourceTableUnderAView => true;
     protected override AbstractConnector NewConnector() => new MSSqlConnector(_live.Settings());
 

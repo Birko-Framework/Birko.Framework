@@ -72,6 +72,15 @@ public abstract class ViewProbeContract : IDisposable
 
     private const string ViewName = "T901PView";
 
+    /// <summary>
+    /// A statement the view probe sent. TASK-917: the probe is the dialect's catalogue query, which asks for the view's
+    /// name as a VALUE — <c>OnExecute</c> reports it with parameters inlined, so the name appears single-quoted, while a
+    /// read names the view as a quoted identifier (<c>"…"</c>, <c>[…]</c>, <c>`…`</c>). The probe used to be a
+    /// <c>SELECT … WHERE 1=0</c> from the name, and these checks matched <c>1=0</c>; kept, that would let a "nothing
+    /// probes" assertion pass whatever the connector did.
+    /// </summary>
+    private static bool IsViewProbe(string statement) => statement.Contains("'" + ViewName + "'", StringComparison.Ordinal);
+
     private AbstractConnector Connector()
     {
         if (_connector != null) return _connector;
@@ -243,10 +252,99 @@ public abstract class ViewProbeContract : IDisposable
     }
 
     /// <summary>
-    /// Whether <c>CreateView</c> works without the provider's View package. The base DDL is <c>CREATE OR REPLACE VIEW</c>,
-    /// which PostgreSQL and MySQL accept and SQLite and SQL Server reject (measured; filed separately by TASK-901).
+    /// Whether <c>CreateView</c> works without the provider's View package. TASK-901 measured the base DDL
+    /// (<c>CREATE OR REPLACE VIEW</c>) rejected by SQLite and SQL Server and let those two opt out here; TASK-917 renders
+    /// it per provider (the connector's dialect), so every provider is held to it and nothing overrides this any more.
     /// </summary>
     protected virtual bool CreatesViewsWithoutViewPackage => true;
+
+    /// <summary>
+    /// TASK-917: <c>CreateView</c> without the View package creates the view on every provider, and creating it again
+    /// replaces it rather than failing.
+    /// </summary>
+    [Fact]
+    public async Task CreateView_creates_and_replaces_a_view_without_the_View_package()
+    {
+        if (!Ready()) return;
+        var connector = Connector();
+        var async = (AbstractAsyncConnector)connector;
+        DropViewOutside(connector);
+
+        var first = await Outcome(() => { connector.CreateView(typeof(T901PView)); return Task.FromResult<object?>("created"); });
+        Output.WriteLine($"MEASURE {ProviderName} | CreateView, no View package | {first}");
+        first.Should().Be("created");
+        connector.ViewExists(ViewName).Should().BeTrue();
+
+        var again = await Outcome(async () => { await async.CreateViewAsync(typeof(T901PView)); return "replaced"; });
+        Output.WriteLine($"MEASURE {ProviderName} | CreateViewAsync over an existing view | {again}");
+        again.Should().Be("replaced");
+        string.Join(",", Logins(connector)).Should().Be("a,b");
+        DropViewOutside(connector);
+    }
+
+    /// <summary>
+    /// TASK-917: the probe asks for a VIEW. The base probe selected from the name, so a table with that name answered
+    /// "the view exists" and Auto mode would read the table as if it were the view.
+    /// </summary>
+    [Fact]
+    public async Task A_table_named_like_the_view_is_not_a_view()
+    {
+        if (!Ready()) return;
+        var connector = Connector();
+        var async = (AbstractAsyncConnector)connector;
+        const string tableName = "T917NotAView";
+        try { connector.DoCommand(c => c.CommandText = "DROP TABLE " + connector.QuoteIdentifier(tableName), c => c.ExecuteNonQuery()); } catch { }
+        connector.DoCommand(c => c.CommandText = "CREATE TABLE " + connector.QuoteIdentifier(tableName) + " (Id INT)", c => c.ExecuteNonQuery());
+        connector.ClearViewExistsCache();
+        try
+        {
+            var sync = connector.ViewExists(tableName);
+            var asyncAnswer = await async.ViewExistsAsync(tableName);
+            Output.WriteLine($"MEASURE {ProviderName} | probe of a TABLE named {tableName} | sync {sync}, async {asyncAnswer}");
+            sync.Should().BeFalse("a table is not a view");
+            asyncAnswer.Should().BeFalse("a table is not a view");
+        }
+        finally
+        {
+            connector.DoCommand(c => c.CommandText = "DROP TABLE " + connector.QuoteIdentifier(tableName), c => c.ExecuteNonQuery());
+            connector.ClearViewExistsCache();
+        }
+    }
+
+    /// <summary>
+    /// TASK-917: probing a missing view inside an ambient transaction leaves the transaction usable. The base probe
+    /// selected from the missing name and swallowed the error; PostgreSQL aborts a transaction on any error, so the next
+    /// statement in it failed (25P02), suspected by TASK-901 and measured here.
+    /// </summary>
+    [Fact]
+    public void Probing_a_missing_view_inside_a_transaction_leaves_it_usable()
+    {
+        if (!Ready()) return;
+        var connector = Connector();
+        DropViewOutside(connector);
+        connector.ClearViewExistsCache();
+
+        using var connection = connector.CreateConnection(connector.Settings);
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        string outcome;
+        using (AmbientSqlTransaction.Enter(connector.Settings.GetId(), connection, transaction))
+        {
+            var exists = connector.ViewExists(ViewName);
+            try
+            {
+                connector.Insert(typeof(T901PSource), new T901PSource { Guid = Guid.NewGuid(), Login = "tx", Amount = 9 });
+                outcome = $"probe {exists}, then an insert in the same transaction succeeded";
+            }
+            catch (Exception ex)
+            {
+                outcome = $"probe {exists}, then the insert failed: {ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
+            }
+        }
+        transaction.Rollback();
+        Output.WriteLine($"MEASURE {ProviderName} | probe of a missing view inside a transaction | {outcome}");
+        outcome.Should().Be("probe False, then an insert in the same transaction succeeded");
+    }
 
     /// <summary>
     /// <c>CreateViewIfNotExists</c> of a missing view gets past the probe and runs <c>CreateView</c>; where that DDL is
@@ -268,7 +366,7 @@ public abstract class ViewProbeContract : IDisposable
             DropViewOutside(connector);
             var outcome = await Outcome(call);
             Output.WriteLine($"MEASURE {ProviderName} | {name}, view missing | {outcome}");
-            outcome.Should().NotContain("1=0", "the probe answers, so the failure, if any, is the CREATE VIEW's");
+            outcome.Should().NotContain("'" + ViewName + "'", "the probe answers, so the failure, if any, is the CREATE VIEW's");
             if (!CreatesViewsWithoutViewPackage) continue;
             outcome.Should().Be("created");
             connector.ViewExists(ViewName).Should().BeTrue();
@@ -354,7 +452,7 @@ public abstract class ViewProbeContract : IDisposable
             }
             return Task.CompletedTask;
         });
-        probes = sent.Count(s => s.Contains("1=0", StringComparison.Ordinal));
+        probes = sent.Count(s => IsViewProbe(s));
         Output.WriteLine($"MEASURE {ProviderName} | Auto view exists | 6 reads | probes {probes} | statements {sent.Count}");
         probes.Should().Be(1);
         ReadThePersistentView(sent).Should().BeTrue();
@@ -382,9 +480,9 @@ public abstract class ViewProbeContract : IDisposable
         string first = "", second = "";
         await Statements(connector, async () => first = await Outcome(() => Task.FromResult<object?>(string.Join(",", Logins(connector)))));
         var sent = await Statements(connector, async () => second = await Outcome(() => Task.FromResult<object?>(string.Join(",", Logins(connector)))));
-        Output.WriteLine($"MEASURE {ProviderName} | Auto view, source table dropped | first read: {first} | next read: {second} | probes {sent.Count(s => s.Contains("1=0", StringComparison.Ordinal))}");
+        Output.WriteLine($"MEASURE {ProviderName} | Auto view, source table dropped | first read: {first} | next read: {second} | probes {sent.Count(s => IsViewProbe(s))}");
 
         second.Should().Contain("T901PTags", "the read still targets the view, which reports its missing source table");
-        sent.Should().NotContain(s => s.Contains("1=0", StringComparison.Ordinal), "the view was not forgotten, so nothing probes");
+        sent.Should().NotContain(s => IsViewProbe(s), "the view was not forgotten, so nothing probes");
     }
 }

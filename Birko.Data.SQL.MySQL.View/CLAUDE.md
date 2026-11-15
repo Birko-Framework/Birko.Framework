@@ -5,7 +5,7 @@
 <!-- /spec-links -->
 
 ## Overview
-MySQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Provides `information_schema.VIEWS`-based existence checks scoped to the current database.
+MySQL view package for the Birko.Data.SQL.View framework. Since TASK-917 it adds nothing: `CREATE OR REPLACE VIEW` and the `information_schema.VIEWS` existence check scoped to the current database come from `MySqlValueFragmentDialect` in Birko.Data.SQL.MySQL, so they work without this package.
 
 ## Project Location
 `Birko.Data.SQL.MySQL.View/`
@@ -14,9 +14,8 @@ MySQL-specific view DDL overrides for the Birko.Data.SQL.View framework. Provide
 
 ### Database/Connectors/MySQLConnector_View.cs
 Partial class extending `MySQLConnector`:
-- `ViewExists(viewName)` — Queries `information_schema.VIEWS` with `TABLE_SCHEMA = DATABASE()` to scope to the current database
 
-Note: `BuildCreateViewSql` is NOT overridden because MySQL natively supports `CREATE OR REPLACE VIEW` (the base default).
+Note: plain-view DDL and `ViewExists` are the dialect's (TASK-917); this package does not override them.
 
 ## Dependencies
 - Birko.Data.SQL (AbstractConnectorBase, AbstractConnector)
@@ -24,8 +23,8 @@ Note: `BuildCreateViewSql` is NOT overridden because MySQL natively supports `CR
 - Birko.Data.SQL.MySQL (MySQLConnector partial class)
 
 ## Key Notes
-- MySQL uses the base `CREATE OR REPLACE VIEW` syntax (no override needed)
-- `ViewExists` uses `information_schema.VIEWS` with `TABLE_SCHEMA = DATABASE()` filtering to avoid false positives from views in other databases on the same server
+- MySQL uses `CREATE OR REPLACE VIEW`, rendered by the dialect
+- The dialect's `ViewExists` query filters `TABLE_SCHEMA = DATABASE()` to avoid false positives from views in other databases on the same server
 - Separate from base SQL.View because each SQL provider has different catalog queries and schema scoping
 
 ## Maintenance
