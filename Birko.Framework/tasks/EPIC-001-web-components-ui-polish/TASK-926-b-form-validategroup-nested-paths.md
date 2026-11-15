@@ -52,3 +52,6 @@ field missing as `root.adv.extra`; `validateGroup('root')` reported `root.label,
 conditionally hidden). Consumers: no caller in Birko.Web.Shell, Symbio, Symbio.Modules or the Playground.
 Playground `form-conditional-smoke` 18/25 against unfixed code, 25/25 fixed; verify.mjs failing checks 0. Components
 `tsc` clean. Birko.Web main 73dc5ba, tagged **v0.4.16** locally; Playground main 98b2b51. Not pushed.
+
+Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
+**v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.

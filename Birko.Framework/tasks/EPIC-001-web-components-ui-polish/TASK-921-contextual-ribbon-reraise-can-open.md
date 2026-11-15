@@ -87,3 +87,6 @@ Worktrees and branches removed. Status `verify` until the human test plan runs (
 Human test passed in Symbio (above). Symbio adopted it in TASK-1051 (1b4afb17: events attendee and venue-booking
 rows, manufacturing production steps). Birko.Web v0.4.12 and the Playground merge are still local; push with the
 next batch, with the tag.
+
+Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
+**v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.

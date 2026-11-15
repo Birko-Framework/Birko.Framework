@@ -77,3 +77,6 @@ so the modal does not receive it; the human test plan covers it.
 
 Birko.Web main 96134ad, tagged **v0.4.17** locally; Playground main 8118d1a. Not pushed. Status `verify` until the
 human test plan runs.
+
+Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
+**v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.

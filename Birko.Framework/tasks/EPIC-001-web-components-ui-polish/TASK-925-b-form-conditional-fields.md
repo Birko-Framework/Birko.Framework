@@ -63,3 +63,6 @@ by a test until TASK-926 is fixed.
 
 TASK-926 fixed (2026-11-15, v0.4.16): the `validateGroup()` half of the hidden-field skip is now tested
 (form-conditional-smoke 25/25).
+
+Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
+**v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.
