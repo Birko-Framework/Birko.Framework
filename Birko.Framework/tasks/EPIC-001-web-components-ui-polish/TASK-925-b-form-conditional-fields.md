@@ -2,7 +2,7 @@
 id: TASK-925
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-15
@@ -44,7 +44,7 @@ and a `required` rule on a hidden field still blocked submit.
 
 ## Human test plan
 
-- [ ] Symbio navigation item form (TASK-1090): new item: Page shown, URL hidden; Save with no page shows "Page is
+- [x] Symbio navigation item form (TASK-1090): new item: Page shown, URL hidden; Save with no page shows "Page is
       required" only. Switch to Custom URL: URL shows, Page hides, its error gone; Save with no URL shows "URL is
       required" only. Open an existing Custom URL item: URL shown at once. The saved item carries only the visible
       field.
@@ -66,3 +66,10 @@ TASK-926 fixed (2026-11-15, v0.4.16): the `validateGroup()` half of the hidden-f
 
 Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
 **v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.
+
+## Closed (2026-11-15)
+
+Human test passed in Symbio (TASK-1090, the user: "all worked"; relayed by the Symbio session): only the chosen field
+shows and the hidden one is not validated; an edit form filled by setValues opens in the right mode; Symbio's
+Playwright spec asserts toBeHidden / toBeVisible on the `[data-field]` wrappers and passes. Ships in Birko.Web
+v0.4.12, not yet pushed. Found on the way: an unknown field type renders as a text box silently → [[TASK-929]].
