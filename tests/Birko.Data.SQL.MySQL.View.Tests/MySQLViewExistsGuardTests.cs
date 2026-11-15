@@ -38,15 +38,19 @@ public class MySQLViewExistsGuardTests
     }
 
     [Fact]
-    public void Async_override_is_declared_on_the_connector()
+    public void The_probe_is_the_MySQL_dialects_catalogue_query_for_sync_and_async_alike()
     {
-        // CR-L186: assert the async override exists (declared on MySQLConnector, not just inherited),
-        // so async callers get the information_schema query rather than the base SELECT/catch fallback.
-        var method = typeof(MySQLConnector).GetMethod(
-            nameof(MySQLConnector.ViewExistsAsync),
-            new[] { typeof(string), typeof(System.Threading.CancellationToken) });
+        // CR-L186 asserted an async override on MySQLConnector, so async callers got the information_schema query
+        // rather than the base fallback. TASK-917 moved the query to the connector's dialect, which both forms run
+        // (one producer) and which needs no View package; the override was removed. Pin what the dialect asks.
+        var dialect = (Birko.Data.SQL.Conditions.SqlValueFragmentDialect)typeof(MySQLConnector)
+            .GetProperty("FragmentDialect", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(NewConnector())!;
 
-        method.Should().NotBeNull();
-        method!.DeclaringType.Should().Be(typeof(MySQLConnector));
+        dialect.ViewExistsSql.Should().Be(
+            "SELECT 1 FROM information_schema.VIEWS WHERE TABLE_NAME = @viewName AND TABLE_SCHEMA = DATABASE()");
+        typeof(MySQLConnector).GetMethod(nameof(MySQLConnector.ViewExistsAsync),
+                new[] { typeof(string), typeof(System.Threading.CancellationToken) })!
+            .DeclaringType.Should().NotBe(typeof(MySQLConnector), "the View package no longer keeps its own copy");
     }
 }

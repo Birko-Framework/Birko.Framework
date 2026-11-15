@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL views work without the provider View package (2026-11-15)
+[[TASK-917]]. Every consumer runs the base view code, which rendered `CREATE OR REPLACE VIEW` everywhere (SQLite and SQL
+Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
+providers, and inside a PostgreSQL transaction the swallowed error aborted it (`25P02`; all measured). The connector's
+dialect now renders the DDL and a catalogue probe per provider; the View packages keep only their extra features.
 ### Tagging refuses a foreign or missing tag on attach (2026-11-15)
 [[TASK-147]] (the user's decision). `AttachTagAsync` / `SetEntityTagsAsync` stored a link to any tag id, so another
 tenant's tag or a nonexistent one was accepted and every later read of that entity's tags threw. Both now refuse it

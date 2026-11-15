@@ -7,64 +7,8 @@ namespace Birko.Data.SQL.Connectors
 {
     public partial class MSSqlConnector
     {
-        /// <summary>
-        /// Builds the CREATE VIEW SQL for Microsoft SQL Server.
-        /// Uses CREATE OR ALTER VIEW (requires SQL Server 2016 SP1+).
-        /// </summary>
-        protected override string BuildCreateViewSql(string viewName, string selectSql)
-        {
-            return "CREATE OR ALTER VIEW " + QuoteIdentifier(viewName) + " AS " + selectSql;
-        }
-
-        /// <summary>
-        /// Checks if a view exists in SQL Server using sys.views catalog.
-        /// </summary>
-        public override bool ViewExists(string viewName)
-        {
-            if (string.IsNullOrWhiteSpace(viewName))
-                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
-
-            bool exists = false;
-            DoCommand((command) =>
-            {
-                command.CommandText = "SELECT 1 FROM sys.views WHERE name = @viewName";
-                var param = command.CreateParameter();
-                param.ParameterName = "@viewName";
-                param.Value = viewName;
-                command.Parameters.Add(param);
-            }, (command) =>
-            {
-                using var reader = command.ExecuteReader();
-                exists = reader.HasRows;
-            });
-            return exists;
-        }
-
-        /// <summary>
-        /// The async twin of <see cref="ViewExists"/>: the same catalog lookup. TASK-717: without it the base probe ran,
-        /// which answered true for a same-named table and false for a cancelled token (both measured).
-        /// </summary>
-        public override async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct = default)
-        {
-            if (string.IsNullOrWhiteSpace(viewName))
-                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
-
-            bool exists = false;
-            await DoCommandAsync((command) =>
-            {
-                command.CommandText = "SELECT 1 FROM sys.views WHERE name = @viewName";
-                var param = command.CreateParameter();
-                param.ParameterName = "@viewName";
-                param.Value = viewName;
-                command.Parameters.Add(param);
-                return Task.CompletedTask;
-            }, async (command) =>
-            {
-                using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
-                exists = reader.HasRows;
-            }, false, ct).ConfigureAwait(false);
-            return exists;
-        }
+        // CREATE OR REPLACE VIEW and the view-exists probe come from the connector's dialect (TASK-917), so they
+        // work without this package; this file adds only what is specific to it.
 
         /// <summary>SQL Server has no boolean literal; a bool join constant is <c>1</c> / <c>0</c> (TASK-717).</summary>
         protected override string ViewBoolLiteral(bool value) => value ? "1" : "0";

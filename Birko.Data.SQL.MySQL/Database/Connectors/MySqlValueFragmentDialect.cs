@@ -124,5 +124,9 @@ namespace Birko.Data.SQL.Connectors
         /// bytes as a binary string, compared byte by byte with no padding, so a row order and a MIN / MAX agree.
         /// </summary>
         protected override string? OrdinalOrderKey(string operand) => $"CAST(CONVERT({operand} USING utf16) AS BINARY)";
+    
+        /// <summary>TASK-917: scoped to the connection's database.</summary>
+        public override string ViewExistsSql
+            => "SELECT 1 FROM information_schema.VIEWS WHERE TABLE_NAME = @viewName AND TABLE_SCHEMA = DATABASE()";
     }
 }

@@ -118,8 +118,9 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Checks if a SQL VIEW exists in the database: false when the relation is missing, and any other failure is
-        /// thrown. The provider View packages override this with a catalogue lookup; this probe runs without them.
+        /// Checks if a SQL VIEW exists in the database: false when there is none, and any failure is thrown. The
+        /// connector's dialect supplies the catalogue query per provider (TASK-917), so it answers views only and works
+        /// without the provider View package.
         /// </summary>
         /// <remarks>
         /// TASK-901. The probe used to run through the command path and catch <see cref="System.Data.Common.DbException"/>
@@ -127,18 +128,19 @@ namespace Birko.Data.SQL.Connectors
         /// view reaches that catch rewrapped by <c>EnsureSchemaAndReport</c> as a bare <see cref="Exception"/>, so the
         /// probe threw (rule 9: an Auto read failed instead of reading on the fly), while a database it could not reach
         /// raises a <see cref="System.Data.Common.DbException"/> before that funnel and answered "no such view" (rule 26).
-        /// It now reads <see cref="AbstractConnectorBase.ViewProbeSql"/> through the reader, whose missing-table filter is
-        /// the one thing it swallows, before the failure funnel: a missing view is an answer, so no <c>OnException</c>
-        /// subscriber is told and <c>OnInit</c> is not raised (both were, once per probe); anything else is reported as itself.
+        /// It then selected from the name and swallowed the missing-relation error, which answered "exists" for a TABLE of
+        /// that name and, inside an ambient PostgreSQL transaction, aborted it (25P02) — both measured by TASK-917. It now
+        /// asks the catalogue (the dialect's <c>ViewExistsSql</c>): a missing view is no row, an answer with nothing to
+        /// swallow, so no <c>OnException</c> subscriber is told and <c>OnInit</c> is not raised; any error is reported.
         /// </remarks>
         public virtual bool ViewExists(string viewName)
         {
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
             return RunReaderCommand(
-                command => command.CommandText = ViewProbeSql(viewName),
+                command => PrepareViewExistsCommand(command, viewName),
                 reader => new object[] { true },
-                missingTableIsEmpty: true).Any();
+                missingTableIsEmpty: false).Any();
         }
 
         /// <summary>

@@ -72,5 +72,9 @@ namespace Birko.Data.SQL.Connectors
 
         /// <summary>TASK-909 — PostgreSQL puts NULL last when ascending, where C# puts it first.</summary>
         protected override bool NullsOrderFirst => false;
+    
+        /// <summary>TASK-917: scoped to the current schema, where a bare, single-part CREATE VIEW lands (CR-L191).</summary>
+        public override string ViewExistsSql
+            => "SELECT 1 FROM information_schema.views WHERE table_name = @viewName AND table_schema = current_schema()";
     }
 }

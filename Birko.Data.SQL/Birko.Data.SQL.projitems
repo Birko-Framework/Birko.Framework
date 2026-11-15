@@ -17,6 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlConversion.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlValueFragmentDialect.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlValueFragmentDialect_Aggregate.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlValueFragmentDialect_View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\SqlStringMatch.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Conditions\RuleConditionConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector.cs" />
