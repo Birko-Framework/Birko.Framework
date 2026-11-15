@@ -2,7 +2,7 @@
 id: TASK-922
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-12
@@ -49,7 +49,7 @@ reader users above all). In a `b-modal`, the Escape may instead reach the dialog
 
 ## Human test plan
 
-- [ ] Playground, `b-time` card: open the picker with the keyboard (Enter), press Escape. Expected: the panel closes
+- [x] Playground, `b-time` card: open the picker with the keyboard (Enter), press Escape. Expected: the panel closes
       and focus is back on the field. Repeat inside a modal: the modal stays open. With NVDA: the field announces
       "collapsed" again.
 
@@ -80,3 +80,8 @@ human test plan runs.
 
 Release consolidated (2026-11-15, the user's call): the unpushed Birko.Web tags v0.4.12-v0.4.17 were folded into one
 **v0.4.12** (Birko.Web 635340e), which carries this change. Any v0.4.13-v0.4.17 above refers to a tag that no longer exists.
+
+## Closed (2026-11-15)
+
+Human test passed: the user, in the Playground on the merged main ("all works"). Ships in Birko.Web v0.4.12, not yet
+pushed.

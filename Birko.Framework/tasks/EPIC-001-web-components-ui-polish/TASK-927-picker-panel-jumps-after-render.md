@@ -2,7 +2,7 @@
 id: TASK-927
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-15
@@ -40,7 +40,7 @@ searchable `b-select` (typing) keep their place.
 
 ## Human test plan
 
-- [ ] Playground (http://localhost:5180/), b-time card: open it, click the hour and minute arrows several times: the
+- [x] Playground (http://localhost:5180/), b-time card: open it, click the hour and minute arrows several times: the
       panel stays where it opened and the time changes. b-datetime-picker card: open it, pick a date: the panel stays
       in place for the time; Set closes it.
 
@@ -52,3 +52,7 @@ removed (72 → 14); fixed, 76/76 with 0 failing checks in two full runs. Real-m
 components stay in place. Components `tsc` clean.
 Released inside the unpushed **v0.4.12** (the user's one-tag release): Birko.Web main cda982b (tag moved there);
 Playground main 56509c6. Not pushed.
+
+## Closed (2026-11-15)
+
+Human test passed: the user, in the Playground ("all works"). Ships in Birko.Web v0.4.12, not yet pushed.
