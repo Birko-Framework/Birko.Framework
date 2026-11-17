@@ -1221,8 +1221,10 @@ command that issues another, and the async stores use only the async path). `nul
 skipped. The async insert SHALL pass its token to `DoCommandWithTransactionAsync` too, so a cancelled insert stops
 waiting for the gate (TASK-724: it waited the holder out, measured). The owned transaction SHALL run under the
 connector's retry policy with the attempt marked sent once the transaction has begun, so a transient failure is retried
-only before that point or when the provider's `IsNotAppliedException` says the server applied nothing (TASK-305); on an
-ambient transaction the insert is never retried.
+only before that point or when the provider's `IsNotAppliedException` says the server applied nothing (TASK-305), and
+not when the provider's `WaitedOutLockTimeout` says that error ended a lock wait that already ran its full timeout
+(TASK-938: SQLite, so a blocked write waits one `CommandTimeout`, not three); on an ambient transaction the insert is
+never retried.
 
 #### Scenario: A heterogeneous batch
 

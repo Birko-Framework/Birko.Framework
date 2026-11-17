@@ -34,6 +34,22 @@ namespace Birko.Data.SQL.Connectors
         public override bool IsNotAppliedException(Exception ex)
             => ex is SqliteException { SqliteErrorCode: 5 or 6 };
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// The wait is the connection's <c>DefaultTimeout</c> (no command sets its own): <see cref="SqLiteSettings.CommandTimeout"/>,
+        /// or Microsoft.Data.Sqlite's 30 s on plain settings. 0 means it waits forever, so a busy error can only be an early
+        /// one (a WAL snapshot conflict, which skips the busy handler) and stays retryable.
+        /// </remarks>
+        public override bool WaitedOutLockTimeout(Exception ex, TimeSpan elapsed)
+        {
+            if (!IsNotAppliedException(ex)) return false;
+            var seconds = _settings is SqLiteSettings sqlite ? sqlite.CommandTimeout : DefaultBusyTimeoutSeconds;
+            return seconds > 0 && elapsed >= TimeSpan.FromSeconds(seconds);
+        }
+
+        /// <summary>Microsoft.Data.Sqlite's <c>DefaultTimeout</c> when the connection string sets none.</summary>
+        private const int DefaultBusyTimeoutSeconds = 30;
+
         /// <summary>
         /// Detects SQLite transient errors: database busy (5), table locked (6).
         /// </summary>

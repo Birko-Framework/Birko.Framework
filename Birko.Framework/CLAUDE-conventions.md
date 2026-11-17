@@ -2619,6 +2619,13 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
     through `Connector.OpenOwnedTransaction[Async]`, so SQLite's busy database is retried there; re-running the
     write would re-run the caller's store delegates, which is the boundary owner's call. Measured: before this, a
     store bulk insert against a held write lock failed even with the connector's bulk retry in place.
+  - **Unapplied is not the same as worth retrying: a lock error that ends the provider's own wait is not retried.**
+    TASK-938 (the user's decision, 2026-11-17). Microsoft.Data.Sqlite already loops on busy/locked until the command
+    timeout, so a busy error after the full timeout is the end of a wait, and retrying it repeats the whole wait:
+    Symbio measured one blocked write failing after 90 432 ms, 3 x the 30 s default (1 s timeout: 3.45 s, red test).
+    `WaitedOutLockTimeout(ex, elapsed)` names that case per provider (base: never); SQLite answers it from
+    `CommandTimeout`. A busy error that arrives early (a WAL snapshot conflict skips the busy handler) is still retried.
+    The longest a write waits on a lock is one timeout; a longer `CommandTimeout` is the knob for a longer wait.
   - **A suspicion was falsified, not adopted (rule 54).** That `Rollback()` on the victim's already-ended
     transaction would throw and hide the 1205: it does not, on Microsoft.Data.SqlClient against 2022, so no guard
     was added for it.

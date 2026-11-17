@@ -323,6 +323,17 @@ namespace Birko.Data.SQL.Connectors
         public virtual bool IsNotAppliedException(Exception ex) => false;
 
         /// <summary>
+        /// Whether a not-applied lock error arrived only after the provider had already waited for the lock as long as it
+        /// allows, so retrying it would repeat that whole wait (TASK-938). Base: never.
+        /// </summary>
+        /// <remarks>
+        /// SQLite: Microsoft.Data.Sqlite loops on SQLITE_BUSY / SQLITE_LOCKED inside the command until the command timeout,
+        /// so a busy error after the full timeout is the end of a wait, not the start of one. Retrying it made one blocked
+        /// write wait (MaxRetries + 1) x the timeout: 90 s at the 30 s default (measured by Symbio, TASK-1101).
+        /// </remarks>
+        public virtual bool WaitedOutLockTimeout(Exception ex, TimeSpan elapsed) => false;
+
+        /// <summary>
         /// Determines whether an exception indicates the queried table/relation does not exist, so a
         /// reader can yield an empty result instead of faulting. The base match is SQLite's wording
         /// ("no such table"); provider-specific connectors override this to add their own phrasing
@@ -496,10 +507,10 @@ namespace Birko.Data.SQL.Connectors
 
         /// <summary>
         /// Whether a failed attempt may run again: a transient failure, and either nothing was sent yet or the
-        /// server says it applied nothing (TASK-305).
+        /// server says it applied nothing (TASK-305), unless the provider already waited out its lock timeout (TASK-938).
         /// </summary>
-        private bool MayRetry(Exception ex, RetryAttempt attempt)
-            => IsTransientException(ex) && (!attempt.Sent || IsNotAppliedException(ex));
+        private bool MayRetry(Exception ex, RetryAttempt attempt, TimeSpan elapsed)
+            => IsTransientException(ex) && (!attempt.Sent || IsNotAppliedException(ex)) && !WaitedOutLockTimeout(ex, elapsed);
 
         /// <summary>
         /// Runs <paramref name="action"/>, and again under <see cref="RetryPolicy"/> when it failed in a way
@@ -511,12 +522,13 @@ namespace Birko.Data.SQL.Connectors
             for (int attempt = 0; ; attempt++)
             {
                 var state = new RetryAttempt();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     action(state);
                     return;
                 }
-                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state))
+                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state, clock.Elapsed))
                 {
                     var delay = policy.GetDelay(attempt + 1);
                     Thread.Sleep(delay);
@@ -531,12 +543,13 @@ namespace Birko.Data.SQL.Connectors
             for (int attempt = 0; ; attempt++)
             {
                 var state = new RetryAttempt();
+                var clock = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
                     await action(state).ConfigureAwait(false);
                     return;
                 }
-                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state))
+                catch (Exception ex) when (attempt < policy.MaxRetries && MayRetry(ex, state, clock.Elapsed))
                 {
                     var delay = policy.GetDelay(attempt + 1);
                     await Task.Delay(delay, ct).ConfigureAwait(false);

@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A locked SQLite database makes a write wait one timeout, not three (2026-11-17)
+[[TASK-938]] (the user's decision). Microsoft.Data.Sqlite already waits on a locked database until the command timeout,
+and TASK-305's retry then repeated that whole wait twice: Symbio measured a write failing after 90 432 ms (3 x 30 s;
+red test: 3.45 s at a 1 s timeout). A busy error after the full wait is no longer retried (`WaitedOutLockTimeout`); an
+early one still is. A lock held past `CommandTimeout` now fails after one timeout; a longer timeout is the knob.
 ### SQL views work without the provider View package (2026-11-15)
 [[TASK-917]]. Every consumer runs the base view code, which rendered `CREATE OR REPLACE VIEW` everywhere (SQLite and SQL
 Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
