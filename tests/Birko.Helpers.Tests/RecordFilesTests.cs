@@ -33,4 +33,26 @@ public class RecordFilesTests
     {
         RecordFiles.Belongs(file, "items-*.xml", RecordFiles.IsIndex).Should().Be(belongs);
     }
+    [Fact]
+    public void Batch_files_are_listed_in_batch_order_not_name_order()
+    {
+        // TASK-931: Directory.GetFiles lists items-10 before items-2 on Windows and in no fixed order on Linux.
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "birko-recordfiles-931-" + System.Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(dir);
+        try
+        {
+            foreach (var n in new[] { "10", "2", "0", "1", "11", "007" })
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, $"items-{n}.xml"), "");
+            }
+            System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "items-archive-3.xml"), "");   // not this store's
+
+            RecordFiles.ListByIndex(dir, "items-*.xml").Select(System.IO.Path.GetFileName)
+                .Should().Equal("items-0.xml", "items-1.xml", "items-2.xml", "items-007.xml", "items-10.xml", "items-11.xml");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
 }

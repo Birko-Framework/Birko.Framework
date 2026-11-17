@@ -224,4 +224,87 @@ public class Task721XmlStoreSafetyTests : IDisposable
         (await reader.ReadAsync(a))!.Name.Should().Be("a");
         (await reader.ReadAsync(b))!.Name.Should().Be("b");
     }
+
+    // ── TASK-931: a save must write every entity back into the batch file it was read from ──────────────────────────
+    // The stores loaded the batch files in Directory.GetFiles order, which is not batch order: unsorted on Linux (the CI
+    // flake above), and lexical on Windows, where items-10.xml comes before items-2.xml. The next save numbered the
+    // batches by that order, so entities moved between files, and a write failing partway through left one entity
+    // overwritten and another one twice. Twelve one-entity batches make the Windows order differ deterministically.
+
+    private const int Batches = 12;
+
+    private static System.Collections.Generic.List<Guid> SeedBatches(BatchSettings settings)
+    {
+        var seed = new XmlBatchStore<TestModel>();
+        seed.SetSettings(settings);
+        return Enumerable.Range(0, Batches).Select(i => seed.Create(new TestModel { Name = $"e{i}" })).ToList();
+    }
+
+    [Fact]
+    public void A_failed_save_of_a_store_loaded_from_twelve_batches_loses_none()
+    {
+        var settings = new BatchSettings { Location = _location, Name = "items", BatchSize = 1 };
+        var ids = SeedBatches(settings);
+
+        var flaky = new Flaky();
+        var store = new FlakyBatch(flaky);   // a fresh store: it loads the twelve files from disk
+        store.SetSettings(settings);
+        var e = store.Read(ids[7])!;
+        e.Name = "changed";
+        flaky.FailOnWrite(4);
+        store.Invoking(s => s.Update(e)).Should().Throw<InvalidOperationException>();
+
+        var reader = new XmlBatchStore<TestModel>();
+        reader.SetSettings(settings);
+        for (var i = 0; i < Batches; i++)
+        {
+            reader.Read(ids[i]).Should().NotBeNull("entity {0} is not lost", i);
+            reader.Read(ids[i])!.Name.Should().Be($"e{i}", "entity {0} keeps its file and its content", i);
+        }
+        reader.Count().Should().Be(Batches, "no entity is lost and none is stored twice");
+    }
+
+    [Fact]
+    public async Task A_failed_async_save_of_a_store_loaded_from_twelve_batches_loses_none()
+    {
+        var settings = new BatchSettings { Location = _location, Name = "items", BatchSize = 1 };
+        var ids = SeedBatches(settings);
+
+        var flaky = new Flaky();
+        var store = new FlakyAsyncBatch(flaky);
+        store.SetSettings(settings);
+        var e = (await store.ReadAsync(ids[7]))!;
+        e.Name = "changed";
+        flaky.FailOnWrite(4);
+        await store.Invoking(s => s.UpdateAsync(e)).Should().ThrowAsync<InvalidOperationException>();
+
+        var reader = new AsyncXmlBatchStore<TestModel>();
+        reader.SetSettings(settings);
+        for (var i = 0; i < Batches; i++)
+        {
+            var got = await reader.ReadAsync(ids[i]);
+            got.Should().NotBeNull("entity {0} is not lost", i);
+            got!.Name.Should().Be($"e{i}", "entity {0} keeps its file and its content", i);
+        }
+        (await reader.CountAsync()).Should().Be(Batches, "no entity is lost and none is stored twice");
+    }
+
+    [Fact]
+    public void A_save_keeps_every_entity_in_its_batch_file()
+    {
+        var settings = new BatchSettings { Location = _location, Name = "items", BatchSize = 1 };
+        var ids = SeedBatches(settings);
+
+        var store = new XmlBatchStore<TestModel>();
+        store.SetSettings(settings);
+        var e = store.Read(ids[3])!;
+        e.Name = "e3b";
+        store.Update(e);
+
+        // items-{i}.xml still holds e{i}: read each file on its own.
+        for (var i = 0; i < Batches; i++)
+        {
+            File.ReadAllText(Directory.GetFiles(Dir, $"items-{i}.xml", SearchOption.AllDirectories).Single()).Should().Contain(i == 3 ? "e3b" : $">e{i}<");
+        }
+    }
 }

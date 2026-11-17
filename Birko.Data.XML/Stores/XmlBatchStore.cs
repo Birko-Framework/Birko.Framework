@@ -208,7 +208,8 @@ namespace Birko.Data.XML.Stores
                 _items ??= new();
                 return;
             }
-            var files = Birko.Helpers.RecordFiles.List(PathDirectory!, _settings.Name + "-*.xml", Birko.Helpers.RecordFiles.IsIndex).ToArray();
+            // TASK-931: in batch order, so the next save writes every entity back into the file it came from.
+            var files = Birko.Helpers.RecordFiles.ListByIndex(PathDirectory!, _settings.Name + "-*.xml");
             if (!files.Any())
             {
                 _items = new();

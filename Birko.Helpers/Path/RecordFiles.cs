@@ -33,6 +33,34 @@ namespace Birko.Helpers
             return Directory.GetFiles(directory, template).Where(path => Belongs(System.IO.Path.GetFileName(path), template, isKey)).ToArray();
         }
 
+        /// <summary>
+        /// The batch files of <paramref name="template"/> (keys that are <see cref="IsIndex"/> numbers), in batch order:
+        /// <c>items-2</c> before <c>items-10</c>.
+        /// </summary>
+        /// <remarks>
+        /// TASK-931. <see cref="Directory.GetFiles(string, string)"/> promises no order: Windows lists by name, so
+        /// <c>items-10</c> came before <c>items-2</c>, and Linux lists in the file system's own order. A batch store loaded
+        /// its entities in that order and numbered the batches by it on the next save, so entities moved between files, and
+        /// a save that failed partway lost one (measured: 11 of 12 left). Keys are compared by length, then ordinally, so a
+        /// number longer than <see cref="long"/> still sorts.
+        /// </remarks>
+        public static string[] ListByIndex(string directory, string template)
+        {
+            var star = template.IndexOf('*');
+            var prefix = star < 0 ? template.Length : star;
+            var suffix = star < 0 ? 0 : template.Length - star - 1;
+            string Key(string path)
+            {
+                var name = System.IO.Path.GetFileName(path);
+                return name.Substring(prefix, name.Length - prefix - suffix);
+            }
+            return List(directory, template, IsIndex)
+                .OrderBy(path => Key(path).TrimStart('0').Length)
+                .ThenBy(path => Key(path).TrimStart('0'), StringComparer.Ordinal)
+                .ThenBy(path => path, StringComparer.Ordinal)
+                .ToArray();
+        }
+
         /// <summary>Whether <paramref name="fileName"/> is <paramref name="template"/> with one key in place of its <c>*</c>.</summary>
         public static bool Belongs(string fileName, string template, Func<string, bool> isKey)
         {
