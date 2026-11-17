@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A fresh async XML store loads before its first write (2026-11-17)
+[[TASK-939]], found at TASK-931. `AsyncXmlSeparateStore` never loaded in Init, so a fresh async XML separate or batch
+store whose first call was a write saw an empty store: a batch create left 1 of 6 entities (batch 0 rewritten, every
+other batch file deleted), an update threw not-found and a delete did nothing (measured). Init now loads, as
+`AsyncXmlStore` does. All ten XML and JSON store kinds are tested with each write as the first call.
 ### XML batch stores keep every entity in its batch file (2026-11-17)
 [[TASK-931]]. The XML batch stores loaded their files in `Directory.GetFiles` order (`items-10` before `items-2` on
 Windows, file-system order on Linux) and renumbered the batches by it on the next save, so a save that failed partway

@@ -51,7 +51,10 @@ namespace Birko.Data.XML.Stores
                 Directory.CreateDirectory(PathDirectory!);
             }
             _files = new Dictionary<Guid, string>();
-            await Task.CompletedTask;
+            // TASK-939: load what is on disk before the first operation, as AsyncXmlStore does. The write overrides here and
+            // in AsyncXmlBatchStore work on _items, so a fresh store whose first call was a write saw an empty store: a
+            // batch create rewrote batch 0 and deleted every other batch file, and an update or delete missed the entity.
+            await EnsureDataLoadedAsync(ct);
         }
 
         /// <inheritdoc />
