@@ -3,7 +3,7 @@ id: TASK-810
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-03
@@ -43,8 +43,16 @@ The other five workflows were already path-filtered or scheduled.
 - [x] `wiki-snippets.yml`: the same three exclusions after `Birko.*/**`.
 - [x] Workflows themselves still trigger (`.github/**` is not excluded).
 - [x] Recorded in CLAUDE.md § Commands and in the workflow's header comment.
-- [ ] Verified on GitHub: the next push touching only task files or docs starts no `build-and-test` / `wiki-snippets`
+- [x] Verified on GitHub: the next push touching only task files or docs starts no `build-and-test` / `wiki-snippets`
       run, and a push with code still starts one.
+
+## Verified (2026-11-17)
+
+Three pushes changed only a task file: 714341b0 (TASK-934), 5264160b (TASK-935) and fbf6b4c9 (TASK-936). None has a
+push-triggered run; the only runs on 5264160b and fbf6b4c9 are `schedule` (the nightly live-tests, helper-scripts and
+wiki-snippets, which run on whatever main is), checked with `gh run list --commit <sha> --json name,event`. The code
+pushes 257c41f4 (TASK-938) and 93f267c3 (TASK-931/939) started `build-and-test` and `wiki-snippets` as before.
+A trap for the next reader: `gh run list --commit` lists scheduled runs too, so filter on `event == push`.
 
 ## Out of scope
 
