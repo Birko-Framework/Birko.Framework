@@ -64,10 +64,18 @@ namespace Birko.Data.SQL.SqLite.Stores
         /// ⚠ <b>It is applied per database, by whichever settings object created the connector.</b>
         /// <c>DataBase.GetConnector</c> caches per (type, settings id) and the id is <c>Location:Name</c>, plus
         /// <c>:Schema</c> when one is set — never the journal mode — so, exactly as with <see cref="CommandTimeout"/>,
-        /// the first caller's value wins for everyone on that file.
+        /// the first caller's value wins for everyone on that file. A connector built from plain
+        /// <c>PasswordSettings</c> applies <see cref="DefaultJournalMode"/> (TASK-941), so that first caller
+        /// cannot leave the file on the rollback journal by not knowing about this property.
         /// </para>
         /// </remarks>
-        public string? JournalMode { get; set; } = "WAL";
+        public string? JournalMode { get; set; } = DefaultJournalMode;
+
+        /// <summary>
+        /// The journal mode a database gets when nobody chose one: the default of <see cref="JournalMode"/>, and
+        /// the mode a connector built from plain <c>PasswordSettings</c> applies (TASK-941).
+        /// </summary>
+        public const string DefaultJournalMode = "WAL";
 
         public SqLiteSettings() : base() { }
 

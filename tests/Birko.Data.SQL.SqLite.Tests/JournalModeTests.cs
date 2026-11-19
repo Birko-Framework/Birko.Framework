@@ -92,6 +92,29 @@ public class JournalModeTests : IDisposable
     }
 
     /// <summary>
+    /// TASK-941, reported by DraCode: the stores accept plain <see cref="Birko.Configuration.PasswordSettings"/>,
+    /// and a connector built from them never applied a journal mode, so the database stayed on the rollback journal
+    /// with the stale-schema empty read TASK-296 measured. A caller who does not know to pass <see cref="SqLiteSettings"/>
+    /// gets the same default as one who does.
+    /// </summary>
+    [Fact]
+    public async Task Plain_password_settings_also_put_the_database_into_WAL()
+    {
+        var sqlite = Fresh();
+        var plain = new Birko.Configuration.PasswordSettings(sqlite.Location!, sqlite.Name!);
+
+        var store = new AsyncSQLiteStore<JournalRow>();
+        store.SetSettings(plain);
+        await store.CreateAsync(new JournalRow { Guid = Guid.NewGuid(), Value = "x" });
+
+        var connector = (SqLiteConnector)DataBase.GetConnector<SqLiteConnector>(plain);
+        JournalModeInFile(sqlite).Should().Be("wal");
+        connector.JournalModeInEffect.Should().Be("wal");
+        connector.JournalModeFailure.Should().BeNull();
+        (await store.CountAsync()).Should().Be(1);
+    }
+
+    /// <summary>
     /// WAL is <b>persistent in the file</b>, which is why applying it once per connector is enough — and
     /// is also the consequence a consumer has to know about, since it outlives the process.
     /// </summary>

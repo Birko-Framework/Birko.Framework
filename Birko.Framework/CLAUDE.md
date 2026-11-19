@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQLite on plain PasswordSettings gets WAL too (2026-11-19)
+[[TASK-941]], reported by DraCode. TASK-296's WAL default was applied only when a store got `SqLiteSettings`; with
+plain `PasswordSettings` the file stayed on the rollback journal, and a read could answer empty for a table that had
+rows (DraCode reproduced it deterministically). The connector now applies `SqLiteSettings.DefaultJournalMode` for plain
+settings too. Filed: [[TASK-942]] (a SQLite read still answers empty for a stale "no such table" off WAL).
 ### A fresh async XML store loads before its first write (2026-11-17)
 [[TASK-939]], found at TASK-931. `AsyncXmlSeparateStore` never loaded in Init, so a fresh async XML separate or batch
 store whose first call was a write saw an empty store: a batch create left 1 of 6 entities (batch 0 rewritten, every

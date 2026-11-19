@@ -186,14 +186,14 @@ namespace Birko.Data.SQL.Connectors
         /// open per database per process.
         /// </para>
         /// </remarks>
-        private void ApplyJournalMode(SqLiteSettings settings)
+        private void ApplyJournalMode(string? journalMode, string connectionString)
         {
             if (System.Threading.Interlocked.Exchange(ref _journalModeApplied, 1) != 0)
             {
                 return;
             }
 
-            var requested = settings.JournalMode?.Trim();
+            var requested = journalMode?.Trim();
             if (string.IsNullOrEmpty(requested))
             {
                 // The full opt-out: emit no PRAGMA at all and leave the file exactly as it is.
@@ -218,7 +218,7 @@ namespace Birko.Data.SQL.Connectors
 
             try
             {
-                using var db = NewConnection(settings.GetConnectionString());
+                using var db = NewConnection(connectionString);
                 db.Open();
                 using var command = db.CreateCommand();
                 command.CommandText = "PRAGMA journal_mode=" + mode;
@@ -244,12 +244,15 @@ namespace Birko.Data.SQL.Connectors
             string connectionString;
             if (settings is SqLiteSettings sqliteSettings)
             {
-                ApplyJournalMode(sqliteSettings);
                 connectionString = sqliteSettings.GetConnectionString();
+                ApplyJournalMode(sqliteSettings.JournalMode, connectionString);
             }
             else
             {
+                // Plain PasswordSettings carry no journal mode, so they get the default (TASK-941). Without it the
+                // file stayed on the rollback journal and kept TASK-296's stale-schema empty read.
                 connectionString = ComposeConnectionString(Path, settings.Password, defaultTimeout: null);
+                ApplyJournalMode(SqLiteSettings.DefaultJournalMode, connectionString);
             }
 
             var connection = NewConnection(connectionString);

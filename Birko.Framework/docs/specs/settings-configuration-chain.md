@@ -469,7 +469,15 @@ non-empty) and `Default Timeout = CommandTimeout` through `SqLiteConnector.Compo
 
 The system SHALL expose `SqLiteSettings.JournalMode` as a nullable string defaulting to `"WAL"`, SHALL
 copy it (together with `CommandTimeout`) in `LoadFrom`, and SHALL include it in neither
-`GetConnectionString()` nor `GetId()`.
+`GetConnectionString()` nor `GetId()`. A `SqLiteConnector` built from plain `PasswordSettings` SHALL apply
+`SqLiteSettings.DefaultJournalMode` (`"WAL"`), so the default does not depend on the caller passing `SqLiteSettings`
+(TASK-941).
+
+#### Scenario: Plain PasswordSettings get the default journal mode
+
+- **Given** a store given plain `PasswordSettings(location, name)` for a new SQLite file
+- **When** the store creates an entity
+- **Then** the file reports `journal_mode` `wal`, and the connector's `JournalModeInEffect` is `"wal"`
 
 #### Scenario: Default journal mode
 
