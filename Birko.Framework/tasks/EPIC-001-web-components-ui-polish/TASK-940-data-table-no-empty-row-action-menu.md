@@ -2,7 +2,7 @@
 id: TASK-940
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-19
