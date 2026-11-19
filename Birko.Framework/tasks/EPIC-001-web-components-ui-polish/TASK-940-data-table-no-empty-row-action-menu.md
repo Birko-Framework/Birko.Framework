@@ -38,6 +38,12 @@ has no trigger; both rows keep the same cell count):
 keyboard-check 225/225, contextual-ribbon-check 13/13, rerender-leak-check PASS, a11y-name-check OK (43), Components
 `tsc` clean.
 
+In Symbio (checked by the Symbio session, 2026-11-19): Symbio.UI built with `BIRKO_SRC` set to the TASK-940 worktree,
+Customers → Erasure requests on the Testing API, in Chrome. The pending request shows `⋮` and its menu offers both
+actions; the 6 completed or rejected rows show an empty cell, and the columns stay aligned. Symbio's service worker
+kept serving the previous bundle after the rebuild: unregister it and clear its caches before re-checking. The
+"token drift" build warning appears on Web main too, so it isn't from this change.
+
 ## Acceptance criteria
 
 - [x] A row where no row action is visible renders no trigger, and its actions cell is still there.
