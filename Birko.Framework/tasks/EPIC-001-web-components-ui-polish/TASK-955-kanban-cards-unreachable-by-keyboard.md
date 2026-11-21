@@ -40,14 +40,22 @@ column. On the TASK-947 branch before this change 5 of those fail (focus stays o
 verify 0 failing (backport 413/413); a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23;
 device-fix 245/245; Components `tsc` clean.
 
+Then the user, retrying: "arrows right dont work". Two more gaps, both pre-existing: without a pick-up, → on a card
+without sub-cards did nothing (← already moved focus to the previous column); and during a keyboard move only the live
+region changed, so on screen the card looked stuck until Enter. Fixed on the same branch (5400401): → moves focus to
+the next column, and a keyboard move highlights the target column with a drop line, as a mouse drag does.
+keyboard-check: 2 more checks, red before, 234/234 after; verify 0 failing.
+
 ## Acceptance criteria
 
 - [x] Tab reaches a card, and the board is one tab stop.
 - [x] Returning by Tab lands on the card last focused.
 - [x] A card can be picked up and moved with the keyboard alone.
+- [x] ←/→ move focus between columns, and a keyboard move shows its target on screen.
 
 ## Human test plan
 
 1. In the Playground's Data → Kanban, Tab from the page into the board: focus is on a card (visible focus ring).
 2. Press ↓, Tab away, Shift+Tab back: the same card has focus.
-3. Space, → →, Enter: the card moves, and Done (locked) is skipped.
+3. → and ← move focus between columns.
+4. Space, then →: the target column highlights with a drop line; another → skips Done (locked); Enter drops.
