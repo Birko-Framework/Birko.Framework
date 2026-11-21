@@ -30,8 +30,10 @@ apps pass translated or user-supplied text.
 ## Change (Birko.Web v0.4.20, with TASK-943 and TASK-944)
 
 - `render()` escapes both values once, with the file's `escapeHtml`.
-- **Consumer-visible:** a consumer that escaped these itself now gets them escaped twice (`&amp;` shown). DraCode does
-  this today and was told. Documented in the Components README and the CHANGELOG.
+- **Consumer-visible:** a consumer that passed already-escaped text (to `setConfig`, or by setting the attribute from
+  code) now gets it escaped twice (`&amp;` shown). Documented in the Components README and the CHANGELOG. Escaping the
+  value inside one's own HTML markup is not that case: the browser decodes it when parsing, so `b-chat` reads plain
+  text. DraCode does only the latter and needs no change (its session confirmed, 2026-11-21).
 
 ## Evidence
 
@@ -46,5 +48,5 @@ Components `tsc` clean.
 ## Human test plan
 
 1. In a page with `b-chat`, set `placeholder` to `Ask "anything" & more`: the input shows exactly that text.
-2. A consumer that used to pre-escape these (DraCode) checks its labels after moving to v0.4.20: no `&amp;` or `&quot;`
+2. A consumer that passes already-escaped text checks its labels after moving to v0.4.20: no `&amp;` or `&quot;`
    visible.
