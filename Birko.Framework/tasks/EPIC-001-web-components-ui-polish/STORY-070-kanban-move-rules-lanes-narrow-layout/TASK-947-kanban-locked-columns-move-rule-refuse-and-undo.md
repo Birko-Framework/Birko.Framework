@@ -2,7 +2,7 @@
 id: TASK-947
 parent: STORY-070
 feature: FEATURE-022
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -37,7 +37,8 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 - [ ] An optional move rule is asked before every move with the card, where it comes from and where it would go; it is
       asked after the lock.
 - [ ] A refused place shows that it refuses while a card is dragged over it, and the reason is announced.
-- [ ] `card-move` can be cancelled before the move is applied; the card stays put and nothing else is reported.
+- [ ] A cancelable `card-move-request` fires before the move is applied; cancelling it keeps the card put and nothing
+      else is reported. `card-move` is unchanged (it still fires after the move).
 - [ ] An undo call puts a card back where its last move took it from, without firing `card-move` or `card-reorder`.
 - [ ] A board that uses none of this behaves exactly as before (Symbio's three boards do not cancel moves).
 - [ ] No undo notice is shown by the board (D11).
@@ -92,7 +93,8 @@ reason reaches the live region; the refuse hook keeps the card put; `revertMove`
 event; `moveCard()` still moves into a locked column; a board without any of this moves exactly as before
 (keyboard-check and contextual-ribbon-check unchanged).
 
-**Open decision — how an app refuses a move as it happens:**
+**Decided (the user, 2026-11-21): (B).** A new cancelable `card-move-request`; `card-move` unchanged. The criterion
+above is reworded to match. The two options as they were put:
 - **(A) `card-move` becomes cancelable and fires before the move is applied** (as this task's criterion is worded).
   One event, but its meaning shifts: `detail.card.columnId` is then still the old column while the event runs, and
   the board reads the old position. Symbio's three handlers do not read either, so nothing breaks today.
