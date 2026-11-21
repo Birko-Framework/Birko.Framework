@@ -2,7 +2,7 @@
 id: TASK-948
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -29,13 +29,26 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 
 ## Acceptance criteria
 
-- [ ] A column can list lanes (an id, a label, an optional colour); a card names its lane.
-- [ ] Each lane shows its label and its own card count, and is a drop target; an empty lane stays visible.
-- [ ] A card dropped on a column with lanes but outside any lane lands in a defined lane (documented).
-- [ ] A move between lanes, or into or out of a lane, is reported with the lane it left and the lane it entered; the
+- [x] A column can list lanes (an id, a label, an optional colour); a card names its lane.
+- [x] Each lane shows its label and its own card count, and is a drop target; an empty lane stays visible.
+- [x] A card dropped on a column with lanes but outside any lane lands in a defined lane (documented).
+- [x] A move between lanes, or into or out of a lane, is reported with the lane it left and the lane it entered; the
       lock and the move rule from TASK-947 see the lanes.
-- [ ] Columns without lanes behave as before.
-- [ ] Docs and CHANGELOG; Playground checks red before, green after.
+- [x] Columns without lanes behave as before.
+- [x] Docs and CHANGELOG; Playground checks red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-947` 03e9304 (v0.4.21), Playground a052083:
+- backport-smoke: 10 TASK-948 checks (lanes with labels and counts, an empty lane visible, the default lane for no and
+  an unknown lane, a column without lanes unchanged, a drag between lanes and from a column without lanes, `card-move`
+  with `fromLane` / `toLane`, `canMove` seeing and refusing a lane, `revertMove`, `moveCard` with a lane). 9 fail on
+  the branch before the change (the 10th, a column without lanes showing none, holds trivially); 423/423 after, and
+  the 13 TASK-947 checks still pass.
+- keyboard-check (trusted keys) 236/236, including a keyboard move into a laned column landing in its default lane.
+- verify 0 failing; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23; device-fix 245/245;
+  contextual-ribbon 13/13; Components `tsc` clean.
+- The Playground gallery kanban's To do now has Critical / High / Normal lanes.
 
 ## Human test plan
 
