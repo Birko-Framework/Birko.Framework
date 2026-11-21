@@ -39,12 +39,14 @@ goes into Birko — the tester supplies its own ignore and normalize rules.
 
 ## Human test plan
 
-- [ ] In the Birko.Web playground gallery, open "JSON diff": toggle Tree / Side by side and Only changes,
+- [x] In the Birko.Web playground gallery, open "JSON diff": toggle Tree / Side by side and Only changes,
       expand and collapse, switch theme to dark and check the added / removed / changed colours read
   - **Failed 2026-11-21:** run in Chrome by the agent, at the user's request (Birko.Web main, v0.4.20). Tree / Side by
     side, Only changes, Expand and Collapse all work (Expand 6 → 16 nodes, Only changes hides the 5 unchanged, Side by
     side shows two panes and "2 added, 1 removed, 2 changed"). The colours do not read well enough: in dark mode every
     coloured element is below 4.5:1 (added value 2.80:1), and in light the added value is 4.23:1 → TASK-951
+  - **Passed 2026-11-21:** after TASK-951 (Birko.Web v0.4.20), the user checked the colours in dark and light; the
+    toggles were checked earlier the same day.
 - [ ] In the FinStat web tester, compare one request across two environments once it is wired
 
 ## Outcome (2026-10-22)

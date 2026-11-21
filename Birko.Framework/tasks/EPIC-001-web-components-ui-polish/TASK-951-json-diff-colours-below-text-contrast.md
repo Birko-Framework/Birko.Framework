@@ -2,7 +2,7 @@
 id: TASK-951
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -81,6 +81,12 @@ Framework commit and Birko.Web's must be pushed in the same go.
 
 ## Human test plan
 
-1. In the Playground's JSON diff, switch to dark, expand everything, and read the added, removed and changed values:
-   each is clearly legible, and the three still look different from one another.
-2. Repeat in light, and glance at neon, finstat and inverse.
+- [x] In the Playground's JSON diff, switch to dark, expand everything, and read the added, removed and changed values:
+      each is clearly legible, and the three still look different from one another.
+  - **Passed 2026-11-21:** checked by the user in the Playground built from the task branch.
+- [x] Repeat in light, and glance at neon, finstat and inverse.
+  - **Passed 2026-11-21:** the user checked light and the JSON / XML viewers' darker card; neon, finstat and inverse are
+    covered by device-fix-check § 3c (all 8 compositions, 105/105).
+
+Merged into Birko.Web main (e9854f5), in v0.4.20 (tag moved; not pushed). `Birko.DesignTokens.Tests` 59/59 against Web
+main after the merge.
