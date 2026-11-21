@@ -108,6 +108,7 @@
       <em>To do</em>; agents move everything else.</p>
     <ol>
       <li>Drag a To-do card between the priority lanes. Try dragging it into <em>In progress</em> or <em>Done</em>, and try dragging a card out of a locked column.</li>
+      <li>Turn off <em>DraCode's setup</em> to see an ordinary board: every column then takes cards, and a card dropped on <em>To do</em> lands in the Normal lane.</li>
       <li>Turn on <em>Make the next save fail</em>, then move a card between lanes: watch it go back with an error.</li>
       <li>Click <em>Retry</em> on the failed card: it must not pick the card up or count as clicking the card.</li>
       <li>With the keyboard: Tab to a card, <kbd>Space</kbd> to pick it up, <kbd>↑</kbd>/<kbd>↓</kbd> between lanes, <kbd>←</kbd>/<kbd>→</kbd> between columns, <kbd>Enter</kbd> to drop, <kbd>Esc</kbd> to cancel.</li>
@@ -126,6 +127,7 @@
         <option value="flat">one list, lane shown on each card</option>
       </select>
     </label>
+    <label><input id="dracode" type="checkbox" checked> DraCode's setup: lock agent columns</label>
     <label><input id="fail" type="checkbox"> Make the next save fail</label>
     <button id="reset" type="button">Reset</button>
   </div>
@@ -193,6 +195,9 @@
 
   const laneLabel = (id) => LANES.find((l) => l.id === id)?.label ?? id;
   const colOf = (id) => COLUMNS.find((c) => c.id === id);
+  let dracode = true;
+  const isLocked = (col) => !!col.locked && dracode;
+  const DEFAULT_LANE = 'normal';
   const n = (k) => `${k} card${k === 1 ? '' : 's'}`;
   const where = (col, lane) => lane ? `${colOf(col).label} › ${laneLabel(lane)}` : colOf(col).label;
 
@@ -206,11 +211,11 @@
   // D1 + D2: the lock is asked first, then the app's own rule.
   function canMove(card, to) {
     const from = colOf(card.col);
-    if (from.locked) return { ok: false, why: `${from.label} is locked: cards leave it only when an agent moves them` };
+    if (isLocked(from)) return { ok: false, why: `${from.label} is locked: cards leave it only when an agent moves them` };
     const target = colOf(to.col);
-    if (target.locked) return { ok: false, why: `${target.label} is locked: agents move cards there` };
+    if (isLocked(target)) return { ok: false, why: `${target.label} is locked: agents move cards there` };
     // DraCode's rule (D2): only between To-do lanes.
-    if (to.col !== 'todo') return { ok: false, why: 'Only the To-do lanes accept a move' };
+    if (dracode && to.col !== 'todo') return { ok: false, why: 'Only the To-do lanes accept a move' };
     if (to.col === card.col && to.lane === card.lane) return { ok: false, same: true, why: 'Already in this lane — reordering is off here' };
     return { ok: true };
   }
@@ -220,10 +225,10 @@
     for (const col of COLUMNS) {
       const colCards = cards.filter((c) => c.col === col.id);
       const el = document.createElement('section');
-      el.className = 'column' + (col.locked ? ' locked' : '');
+      el.className = 'column' + (isLocked(col) ? ' locked' : '');
       el.dataset.col = col.id;
-      el.setAttribute('aria-label', `${col.label}, ${n(colCards.length)}${col.locked ? ', locked' : ''}`);
-      el.innerHTML = `<div class="column-header"><span class="title">${col.label}${col.locked ? ' <span class="lock" title="Locked: no card goes in or out">🔒 locked</span>' : ''}</span><span class="count">${colCards.length}</span></div><div class="body"></div>`;
+      el.setAttribute('aria-label', `${col.label}, ${n(colCards.length)}${isLocked(col) ? ', locked' : ''}`);
+      el.innerHTML = `<div class="column-header"><span class="title">${col.label}${isLocked(col) ? ' <span class="lock" title="Locked: no card goes in or out">🔒 locked</span>' : ''}</span><span class="count">${colCards.length}</span></div><div class="body"></div>`;
       const body = el.querySelector('.body');
       const groups = col.lanes ?? [{ id: null }];
       for (const lane of groups) {
@@ -248,11 +253,11 @@
 
   function cardEl(c, col) {
     const el = document.createElement('div');
-    el.className = 'card' + (col.locked ? ' locked-card' : '') + (grabbed?.id === c.id ? ' grabbed' : '') + (c.saving ? ' saving' : '');
+    el.className = 'card' + (isLocked(col) ? ' locked-card' : '') + (grabbed?.id === c.id ? ' grabbed' : '') + (c.saving ? ' saving' : '');
     el.tabIndex = 0; el.dataset.id = c.id;
-    el.draggable = !col.locked && !c.saving;
+    el.draggable = !isLocked(col) && !c.saving;
     el.setAttribute('aria-roledescription', 'card');
-    el.setAttribute('aria-label', `${c.title}, ${where(c.col, c.lane)}${col.locked ? ', locked' : ''}`);
+    el.setAttribute('aria-label', `${c.title}, ${where(c.col, c.lane)}${isLocked(col) ? ', locked' : ''}`);
     el.innerHTML = `<div class="row"><span>${c.title}</span>${c.lane ? `<span class="badge lane-tag">${laneLabel(c.lane)}</span>` : ''}</div>`
       + (c.agent ? `<div class="meta">${c.agent} is working on it</div>` : '')
       + (c.failed ? `<div class="err">${c.failed}</div><div class="row" style="margin-top:6px"><a href="#log" data-no-drag>View log</a><button type="button" class="retry">Retry</button></div>` : '')
@@ -271,12 +276,12 @@
       dragId = c.id; el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.id);
     });
-    el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragId = null; clearMarks(); });
+    el.addEventListener('dragend', () => { el.classList.remove('dragging'); dragId = null; wireDrop.last = null; clearMarks(); });
     for (const ctl of el.querySelectorAll('button, a')) {
       ctl.draggable = false;
       ctl.addEventListener('mousedown', (e) => e.stopPropagation());
     }
-    if (col.locked) {
+    if (isLocked(col)) {
       el.addEventListener('dragstart', (e) => e.preventDefault());
     }
     el.addEventListener('keydown', (e) => onKey(e, c));
@@ -292,8 +297,12 @@
       const card = cards.find((c) => c.id === dragId);
       const verdict = canMove(card, { col: laneEl.dataset.col, lane: laneEl.dataset.lane });
       clearMarks();
-      if (verdict.ok) { e.preventDefault(); laneEl.classList.add('drop-ok'); }
-      else if (!verdict.same) laneEl.classList.add('drop-no');
+      if (verdict.ok) { e.preventDefault(); laneEl.classList.add('drop-ok'); return; }
+      if (verdict.same) return;
+      // A refused place takes no drop, so the browser never fires one: say why while the card hovers (D3).
+      laneEl.classList.add('drop-no');
+      const spot = laneEl.dataset.col + '/' + (laneEl.dataset.lane ?? '');
+      if (wireDrop.last !== spot) { wireDrop.last = spot; say(verdict.why); toast(verdict.why); write('refused', `refused: "${card.title}" → ${where(laneEl.dataset.col, laneEl.dataset.lane)} — ${verdict.why}`); }
     });
     laneEl.addEventListener('dragleave', () => laneEl.classList.remove('drop-ok', 'drop-no'));
     laneEl.addEventListener('drop', (e) => {
@@ -302,21 +311,9 @@
       tryMove(card, { col: laneEl.dataset.col, lane: laneEl.dataset.lane });
     });
   }
-  // Dropping on a locked column (outside a lane) is refused and logged.
-  board.addEventListener('drop', (e) => {
-    if (!dragId || e.target.closest('.lane[data-lane]')) return;
-    const colEl = e.target.closest('.column'); if (!colEl) return;
-    const card = cards.find((c) => c.id === dragId);
-    const v = canMove(card, { col: colEl.dataset.col });
-    if (!v.ok) { write('refused', `refused: "${card.title}" → ${colOf(colEl.dataset.col).label} — ${v.why}`); toast(v.why); }
-  });
-  board.addEventListener('dragover', (e) => {
-    const colEl = e.target.closest('.column.locked');
-    if (colEl && dragId) { clearMarks(); colEl.querySelector('.lane')?.classList.add('drop-no'); }
-  });
-
   // D3 (refuse before) and D4 (revert after a failed save).
   function tryMove(card, to) {
+    if (colOf(to.col).lanes && !to.lane) to = { col: to.col, lane: DEFAULT_LANE };
     const v = canMove(card, to);
     if (!v.ok) {
       if (!v.same) { write('refused', `refused: "${card.title}" → ${where(to.col, to.lane)} — ${v.why}`); toast(v.why); }
@@ -333,12 +330,12 @@
       if (fail) {
         $('#fail').checked = false;
         card.col = from.col; card.lane = from.lane;
-        card.error = `Couldn't change priority to ${laneLabel(to.lane)} — put back`;
+        card.error = `Couldn't move it to ${where(to.col, to.lane)} — put back`;
         write('revert', `revertMove: "${card.title}" back to ${where(from.col, from.lane)} (no second card-move)`);
         say(`Saving failed. ${card.title} is back in ${where(from.col, from.lane)}.`);
-        toast(`Couldn't save — "${card.title}" put back in ${laneLabel(from.lane)}`);
+        toast(`Couldn't save — "${card.title}" put back in ${where(from.col, from.lane)}`);
       } else {
-        write('info', `saved: "${card.title}" is now ${laneLabel(to.lane)}`);
+        write('info', `saved: "${card.title}" is now in ${where(to.col, to.lane)}`);
       }
       render();
       focusCard(card.id);
@@ -355,7 +352,7 @@
       if (e.key === ' ' || e.key === 'Enter') {
         if (e.target !== e.currentTarget) return;
         e.preventDefault();
-        if (col.locked) { say(`${c.title} is in ${col.label}, which is locked. It can't be moved by hand.`); write('refused', `refused pick-up: "${c.title}" — ${col.label} is locked`); return; }
+        if (isLocked(col)) { say(`${c.title} is in ${col.label}, which is locked. It can't be moved by hand.`); write('refused', `refused pick-up: "${c.title}" — ${col.label} is locked`); return; }
         grabbed = { id: c.id, col: c.col, lane: c.lane, origin: { col: c.col, lane: c.lane } };
         say(`Picked up ${c.title} in ${where(c.col, c.lane)}. Up and Down change the lane, Left and Right the column. Enter drops, Escape cancels.`);
         render(); focusCard(c.id);
@@ -367,7 +364,8 @@
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
       const next = laneIdx + (e.key === 'ArrowUp' ? -1 : 1);
-      if (grabbed.col !== 'todo' || next < 0 || next >= LANES.length) { say(`No lane ${e.key === 'ArrowUp' ? 'above' : 'below'}.`); return; }
+      if (!colOf(grabbed.col).lanes) { say(`${colOf(grabbed.col).label} has no lanes.`); return; }
+      if (laneIdx < 0 || next < 0 || next >= LANES.length) { say(`No lane ${e.key === 'ArrowUp' ? 'above' : 'below'}.`); return; }
       grabbed.lane = LANES[next].id;
       previewKeyboard();
       say(`Over ${where(grabbed.col, grabbed.lane)}. Enter to drop here.`);
@@ -378,11 +376,15 @@
       const step = e.key === 'ArrowLeft' ? -1 : 1;
       const skipped = [];
       for (i += step; i >= 0 && i < order.length; i += step) {
-        const v = canMove(cards.find((x) => x.id === c.id), { col: order[i], lane: LANES[0].id });
+        const v = canMove(cards.find((x) => x.id === c.id), { col: order[i], lane: colOf(order[i]).lanes ? DEFAULT_LANE : undefined });
         if (v.ok) break;
         skipped.push(colOf(order[i]).label);
       }
       if (i < 0 || i >= order.length) { say(`No column ${step < 0 ? 'to the left' : 'to the right'} accepts this card${skipped.length ? ` (${skipped.join(', ')}: locked)` : ''}.`); return; }
+      grabbed.col = order[i];
+      grabbed.lane = colOf(order[i]).lanes ? (grabbed.col === cards.find((x) => x.id === c.id).col ? cards.find((x) => x.id === c.id).lane : DEFAULT_LANE) : undefined;
+      previewKeyboard();
+      say(`Over ${where(grabbed.col, grabbed.lane)}${skipped.length ? ` (skipped ${skipped.join(', ')}: locked)` : ''}. Enter to drop here.`);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const card = cards.find((x) => x.id === c.id);
@@ -397,7 +399,9 @@
   }
   function previewKeyboard() {
     clearMarks();
-    const laneEl = board.querySelector(`.lane[data-col="${grabbed.col}"][data-lane="${grabbed.lane}"]`);
+    const laneEl = grabbed.lane
+      ? board.querySelector(`.lane[data-col="${grabbed.col}"][data-lane="${grabbed.lane}"]`)
+      : board.querySelector(`.lane[data-col="${grabbed.col}"]`);
     laneEl?.classList.add('drop-ok');
   }
 
@@ -406,6 +410,7 @@
   const setWidth = () => { frame.style.width = width.value + 'px'; out.textContent = width.value + 'px' + (width.value < 704 ? ' (narrow)' : ''); };
   width.addEventListener('input', setWidth); setWidth();
   $('#stack').addEventListener('change', (e) => { kanban.dataset.stack = e.target.checked ? 'on' : 'off'; write('info', `stack when narrow: ${e.target.checked ? 'on' : 'off (scrolls sideways)'}`); });
+  $('#dracode').addEventListener('change', (e) => { dracode = e.target.checked; grabbed = null; render(); write('info', dracode ? "DraCode's setup: agent columns locked, moves only between To-do lanes" : 'Ordinary board: every column takes cards'); });
   $('#narrow-lanes').addEventListener('change', (e) => { kanban.dataset.narrowLanes = e.target.value; });
   $('#reset').addEventListener('click', () => { cards = structuredClone(START); grabbed = null; log.innerHTML = ''; say(''); render(); write('info', 'reset'); });
 

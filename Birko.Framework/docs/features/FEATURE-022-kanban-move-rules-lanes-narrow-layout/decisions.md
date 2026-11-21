@@ -40,3 +40,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   leave that to the app; under D5, whether an empty lane stays visible or collapses; under D6, whether lanes on a
   stacked narrow board stay grouped under their headings or become one list with the lane on each card (the page
   shows both). No row added; all ten stay `proposed`.
+- 2026-11-21 — reaction to the mockup, bearing on D1 and D2, from the maintainer: "i cennot do wsitching between lanes
+  since they ar e locked", then "i meant between columns". The mockup only showed DraCode's setup, where every column
+  but To do is locked and DraCode's own rule allows moves only between To-do lanes, so no card could change column.
+  The mockup gained a switch that turns DraCode's setup off: every column then takes cards by mouse and keyboard, and
+  a card dropped on a column with lanes lands in its Normal lane. A refused drop now shows its reason while the card
+  hovers, since a browser fires no drop on a refused place. No row changed.
