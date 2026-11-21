@@ -27,6 +27,8 @@ created: 2026-11-21
 | D14 | In a column with lanes, a card that names no lane, or a lane the column does not have, shows in the column's default lane (the one the page names, else the first), so no card disappears | approved | Asked when TASK-948 was planned, over hiding such a card until it names a real lane | 2026-11-21 | František Bereň (maintainer) | TASK-948 |
 | D15 | Rows across the board come from lanes set for the whole board, which split every column; a column can opt out and is then one tall cell beside the rows. A column's own lanes still win in the other two modes | approved | Asked when TASK-956 was planned (D5's lanes belonged to one column), over the union of all columns' lanes and over rows only through columns with the same lanes | 2026-11-21 | František Bereň (maintainer) | TASK-956 |
 | D16 | The page picks the lane display mode in the board's configuration (sections, rows or tags; sections by default) | approved | Asked when TASK-956 was planned, over an attribute and over both | 2026-11-21 | František Bereň (maintainer) | TASK-956 |
+| D17 | In tags mode the lane tag on a card is a small control that opens a menu of the lanes; picking one moves the card there. By keyboard the lane also changes by moving a picked-up card past the end of its lane | approved | Asked when TASK-957 was planned (no lane areas to drop on), over dropping onto a card to take its lane (invisible) and keyboard only | 2026-11-21 | František Bereň (maintainer) | TASK-957 |
+| D18 | In tags mode a column's cards are grouped by lane, in lane order, with no headings | approved | Asked when TASK-957 was planned, over the cards' own order with lanes mixed | 2026-11-21 | František Bereň (maintainer) | TASK-957 |
 
 _`Date` and `By` stay `—` until `/feature decide` stamps a verdict — they record **when/who decided**, not when the row was created (creation is in the History log)._
 
@@ -74,3 +76,5 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   with no or an unknown lane).
 - 2026-11-21 — D15 and D16 added and approved, by the maintainer when TASK-956 was planned (where rows across the
   board take their lanes from; how a page picks the lane mode).
+- 2026-11-21 — D17 and D18 added and approved, by the maintainer when TASK-957 was planned (how the lane changes
+  in tags mode; the order of cards).
