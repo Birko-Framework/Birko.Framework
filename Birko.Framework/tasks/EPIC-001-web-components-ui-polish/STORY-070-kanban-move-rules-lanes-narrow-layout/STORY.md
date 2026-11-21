@@ -20,7 +20,11 @@ The decisions are FEATURE-022's ([decisions.md](../../../docs/features/FEATURE-0
 TASK-946 stands alone and can ship first. TASK-947 (locks, the move rule, refuse and undo) comes before TASK-948
 (lanes), which TASK-949 (reordering off, keyboard across lanes) and TASK-950 (stacked layout) build on.
 
-When each part lands, tell the DraCode session which Birko.Web version it is in.
+**One release (the user, 2026-11-21: "all kanban should be done in one tag").** Every task here is built on one
+Birko.Web integration branch, `task/TASK-947` (worktree `C:\Source\Birko\Web-TASK-947`), as v0.4.21, and merged into
+Web main and tagged once, when all of them are built. Web main, which Symbio's dev server builds from, stays unchanged
+until then. TASK-955 (keyboard reach, found testing TASK-947) rides the same branch. When the release lands, tell the
+DraCode session the version.
 
 ## Tasks
 
@@ -29,3 +33,4 @@ When each part lands, tell the DraCode session which Birko.Web version it is in.
 - TASK-948 — b-kanban: lanes inside a column
 - TASK-949 — b-kanban: reordering off per column, and the keyboard across lanes
 - TASK-950 — b-kanban: an opt-in stacked layout for a narrow board
+- TASK-955 — b-kanban cards cannot be reached with the keyboard (found testing TASK-947; parented to EPIC-001, shipped here)
