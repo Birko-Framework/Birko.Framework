@@ -2,7 +2,7 @@
 id: TASK-950
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -28,13 +28,26 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 
 ## Acceptance criteria
 
-- [ ] A page can opt in with a width; below it the board stacks one column per row with no horizontal scroll.
-- [ ] It follows the board's own width, not the window's.
-- [ ] Lanes stay grouped under their headings when stacked; a rows board falls back to sections when stacked and returns
+- [x] A page can opt in with a width; below it the board stacks one column per row with no horizontal scroll.
+- [x] It follows the board's own width, not the window's.
+- [x] Lanes stay grouped under their headings when stacked; a rows board falls back to sections when stacked and returns
       to rows when wide (D19); tags stack as plain lists.
-- [ ] Without the opt-in the board looks and scrolls exactly as before.
-- [ ] Drag and keyboard moves still work when stacked.
-- [ ] Checked at phone width and beside a narrow container (device-fix-check or an equivalent), in light and dark.
+- [x] Without the opt-in the board looks and scrolls exactly as before.
+- [x] Drag and keyboard moves still work when stacked.
+- [x] Checked at phone width and beside a narrow container (device-fix-check or an equivalent), in light and dark.
+
+## Evidence
+
+Birko.Web `task/TASK-947` 81edc45 (v0.4.21), Playground 1600204:
+- backport-smoke: 7 TASK-950 checks. Before the change 3 failed (a narrow board stacking; rows falling back to sections;
+  tags stacking); the other 4 held already (un-stacking and returning to rows, trivially, since nothing stacked; the
+  no-`stackBelow` baseline; a drag). After: 459/459, 0 failing checks. A first pass left 2px of sideways overflow
+  (column borders on top of `width: 100%`), fixed with `box-sizing: border-box`.
+- device-fix-check 247/247: at a 390px phone viewport, in light and dark, a `stackBelow` board stacks its 3 columns and
+  nothing is wider than the screen (written after the code; its red proof is the backport-smoke checks above).
+- keyboard 237/237; verify 0 failing; a11y-name OK; rerender-leak PASS (the ResizeObserver adds no listeners per
+  render); entry-points 433/433; locale-keys 23/23; contextual-ribbon 13/13; Components `tsc` clean. All from builds
+  that printed "✓ Built". The gallery kanban opts in at 44rem.
 
 ## Human test plan
 
