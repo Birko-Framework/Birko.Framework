@@ -118,3 +118,17 @@ component without a row. Then:
 Grill answers in the session's picker: a Markdown table the test reads; the test fails on a web piece with no row, on a
 row whose web piece is gone, and on a row naming a desktop control that does not exist; Birko.Web.Shell is covered too,
 one row per file; tour, chat, gallery, segmented, button-group, toolbar, empty, skeleton and stale-banner are skipped.
+
+### 2026-11-21 — became FEATURE-022 (`b-kanban`: move rules, lanes, narrow layout, card buttons)
+
+The DraCode session asked for three additions to `b-kanban` so DraCode's project Board can be built on it: per-column
+drag rules (a column whose cards cannot be dragged in or out, with a way to refuse or undo a move), lanes inside a
+column (To do split by priority, a move between lanes changes the priority), and a stacked layout when the board is
+narrow instead of sideways scrolling; plus card buttons that do not start a drag. Offered as a feature, a filed task, or
+a narrower first step:
+
+> a, start the feature
+
+Grill answers in the session's picker: a per-column lock plus an optional move-rule callback; a move can be refused
+before it happens and undone after a failed save; lanes as a list on a column; the narrow layout opt-in; reordering
+switchable per column; a card's own controls exempt from dragging; Up/Down crosses lanes; a clickable mockup first.

@@ -50,6 +50,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-019](FEATURE-019-office-like-ribbon/) | An Office-like ribbon (`b-ribbon`) | done | 12/1/0/0/0 | 31/31 | built (live preview, not kept) | [STORY-067](../../tasks/EPIC-001-web-components-ui-polish/STORY-067-office-like-ribbon/STORY.md) (EPIC-001) |
 | [FEATURE-020](FEATURE-020-xaml-diff-and-parity-controls/) | Birko.Xaml — JSON/XML comparison, diff viewer, tag input, accordion look | done | 6/3/2/1/0 | 8/8 | skipped (port of settled web behaviour) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
 | [FEATURE-021](FEATURE-021-web-xaml-parity-list/) | Birko.Web ↔ Birko.Xaml — a parity list, kept honest by a test | done | 12/1/0/0/0 | 4/4 | skipped (a list and a check) | [STORY-069](../../tasks/EPIC-015-birko-xaml-ui-framework/STORY-069-web-xaml-parity-list/STORY.md) (EPIC-015) |
+| [FEATURE-022](FEATURE-022-kanban-move-rules-lanes-narrow-layout/) | Kanban board: move rules, lanes, a narrow layout, and buttons on cards | idea | 0/0/0/0/**10** | 0/0 | pending | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.
