@@ -2,7 +2,7 @@
 id: TASK-953
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -53,4 +53,10 @@ rerender-leak PASS; Components `tsc` clean.
 1. In Symbio, with the three keys in its cs and sk bundles, open a selectable table with row actions in Czech, then
    Slovak: the accessibility tree names the select-all and row checkboxes and the `⋮` button in that language.
 
-Merged into Birko.Web main (e9bd9ec), in v0.4.20, pushed 2026-11-21 at the user's word; still at verify for Symbio's Czech and Slovak check.
+Merged into Birko.Web main (e9bd9ec), in v0.4.20, pushed 2026-11-21 at the user's word.
+
+**Human test, 2026-11-21: PASS** — run by the Symbio session in Chrome on Symbio's admin (localhost:3000), Birko.Web
+v0.4.20 with Symbio TASK-1110's keys, after clearing its service worker and caches:
+select-all "Vybrat všechny řádky" / "Vybrať všetky riadky" / "Select all rows"; row checkbox "Vybrat řádek" /
+"Vybrať riadok" / "Select row"; ⋮ button "Akce" / "Akcie" (on the shipping-methods table, 13 triggers; not re-read in
+English). The step passed.
