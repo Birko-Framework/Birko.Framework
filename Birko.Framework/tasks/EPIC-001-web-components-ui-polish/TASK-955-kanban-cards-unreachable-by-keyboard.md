@@ -46,6 +46,11 @@ region changed, so on screen the card looked stuck until Enter. Fixed on the sam
 the next column, and a keyboard move highlights the target column with a drop line, as a mouse drag does.
 keyboard-check: 2 more checks, red before, 234/234 after; verify 0 failing.
 
+Then again: "still cannot move it right". The move worked, but the card stayed in place until Enter, shown only by a
+column tint and a 2px line. The user chose (a): the picked-up card itself travels with the arrows (DOM only; Enter
+saves, Escape puts it back). b-kanban 3d22b89 on task/TASK-947; keyboard-check 235/235; checked in Chrome on the gallery
+board with real keys (Space, → shows Task A in In progress; the next → is refused at Done; Enter saves).
+
 ## Acceptance criteria
 
 - [x] Tab reaches a card, and the board is one tab stop.
@@ -58,4 +63,5 @@ keyboard-check: 2 more checks, red before, 234/234 after; verify 0 failing.
 1. In the Playground's Data → Kanban, Tab from the page into the board: focus is on a card (visible focus ring).
 2. Press ↓, Tab away, Shift+Tab back: the same card has focus.
 3. → and ← move focus between columns.
-4. Space, then →: the target column highlights with a drop line; another → skips Done (locked); Enter drops.
+4. Space, then →: the card itself moves into the next column, which is highlighted; another → is refused at Done
+   (locked) and said; Enter keeps it there, Escape puts it back.
