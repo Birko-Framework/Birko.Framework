@@ -2,7 +2,7 @@
 id: TASK-956
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -25,11 +25,24 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 
 ## Acceptance criteria
 
-- [ ] A page can choose rows; each lane is a row with its label and count, crossing every column it applies to.
-- [ ] A card can be dragged and keyboard-moved to any column × lane crossing; moves report `fromLane` / `toLane`, and the
+- [x] A page can choose rows; each lane is a row with its label and count, crossing every column it applies to.
+- [x] A card can be dragged and keyboard-moved to any column × lane crossing; moves report `fromLane` / `toLane`, and the
       locks and `canMove` (TASK-947) apply.
-- [ ] Sections stay the default; a board that does not choose rows looks as with TASK-948.
-- [ ] Docs and CHANGELOG; Playground checks red before, green after.
+- [x] Sections stay the default; a board that does not choose rows looks as with TASK-948.
+- [x] Docs and CHANGELOG; Playground checks red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-947` c22631d (v0.4.21), Playground af0aa91:
+- backport-smoke: 8 TASK-956 checks (row headers with labels and board-wide counts; a cell per column × row with the
+  opted-out column as one cell spanning all three rows; cards in their cells, one with no lane in the default row; a
+  drag to another column's row reporting `toColumn` and `toLane`; a locked column's cell refusing; the keyboard keeping
+  the row; board-level lanes as sections with `lanes: []` opting out). All 8 fail on the branch before the change;
+  441/441 after. (The two commits say "9"; it is 8.)
+- keyboard-check 237/237; verify 0 failing; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23;
+  device-fix 245/245; Components `tsc` clean.
+- In Chrome, the gallery kanban's new "lanes" switch turns the board into a 3-row grid (Task B in the High row) and
+  back into sections.
 
 ## Human test plan
 
