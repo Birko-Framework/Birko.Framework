@@ -64,7 +64,6 @@ The grill resolved every question it raised — see decisions.md.
 **Fog** — concerns not yet precise enough to state as a question:
 
 - Whether a lane can be collapsed like a column, and whether a lane has a card limit like a column's.
-- How a stacked narrow board shows lanes (as stacked groups inside the stacked column, or flattened).
 
 ## Out of scope (initial)
 
@@ -75,4 +74,4 @@ The grill resolved every question it raised — see decisions.md.
 
 ## Prototype
 
-Built — [prototype.html](prototype.html)
+Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last version at a0785383
