@@ -84,6 +84,9 @@ the four page themes, and `inverse` over each of them. The verb prints the repor
   compositions for that half.
 
 Adding a pair: a component that paints a new token pair as text adds it to `Contrast.Pairs` in the same change.
+`SemanticOnSurface` (TASK-951) is such a pair: `--b-color-{success,warning,danger}-text` on `--b-bg` and
+`--b-bg-secondary`, for `b-json-diff`. Not on `--b-bg-tertiary`, where dark's are ~3.5:1 — which is why the
+data-viewer card sits on bg-secondary.
 
 ## Convention deviations (deliberate — do not "fix")
 

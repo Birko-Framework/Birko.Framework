@@ -15,6 +15,8 @@ public enum PairKind
     FillText,
     /// <summary><c>b-tooltip</c>.</summary>
     Tooltip,
+    /// <summary>Semantic text straight on a page or card surface: <c>b-json-diff</c>'s markers, counts and summary (TASK-951).</summary>
+    SemanticOnSurface,
 }
 
 public sealed record ContrastPair(PairKind Kind, string Foreground, string Background, string UsedBy);
@@ -111,6 +113,7 @@ public static class Contrast
         PairKind.TintBadge => 4.5,
         PairKind.FillText => 4.5,
         PairKind.Tooltip => 4.5,
+        PairKind.SemanticOnSurface => 4.5,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
@@ -231,6 +234,11 @@ public static class Contrast
         foreach (var name in Fills)
             pairs.Add(new(PairKind.FillText, $"--b-text-on-{name}", $"--b-color-{name}", "b-toast, b-button"));
         pairs.Add(new(PairKind.Tooltip, "--b-tooltip-text", "--b-tooltip-bg", "b-tooltip"));
+        // Not the tertiary surface: the -text colours are not AA there in dark, which is why the data-viewer card is
+        // bg-secondary (TASK-951). A component that puts them on tertiary must add that pair and fix what fails.
+        foreach (var name in new[] { "success", "warning", "danger" })
+            foreach (var surface in new[] { "--b-bg", "--b-bg-secondary" })
+                pairs.Add(new(PairKind.SemanticOnSurface, $"--b-color-{name}-text", surface, "b-json-diff markers and counts"));
         return pairs;
     }
 }

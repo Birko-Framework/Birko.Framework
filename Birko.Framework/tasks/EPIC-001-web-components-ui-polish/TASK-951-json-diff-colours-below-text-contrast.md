@@ -2,7 +2,7 @@
 id: TASK-951
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -38,12 +38,42 @@ these is a question for TASK-130, not for this task.
 
 ## Acceptance criteria
 
-- [ ] Every coloured element of `b-json-diff` (added, removed and changed markers, values and counts, in the tree and
+- [x] Every coloured element of `b-json-diff` (added, removed and changed markers, values and counts, in the tree and
       side-by-side views) is at least 4.5:1 against its actual background in every shipped theme (light, dark, neon,
       finstat, inverse).
-- [ ] Added, removed and changed stay distinguishable from one another, and not by colour alone (the `+` / `−` / `~`
+- [x] Added, removed and changed stay distinguishable from one another, and not by colour alone (the `+` / `−` / `~`
       markers and the screen-reader text stay).
-- [ ] A Playground check measures these ratios per theme and fails below 4.5:1; it is shown red before the fix.
+- [x] A Playground check measures these ratios per theme and fails below 4.5:1; it is shown red before the fix.
+
+## Decision
+
+The user's, 2026-11-21, picked from three: the shared data-viewer card moves to `--b-bg-secondary` (over a diff-only
+surface, or retuning the semantic text tokens everywhere). Then, for the `inverse` box the card fix did not reach, the
+user chose to lighten inverse's success and warning text, as inverse already does for danger.
+
+## Change (Birko.Web v0.4.20, Birko.Framework tokens)
+
+- `.data-viewer-card` (b-json-diff, b-json-viewer, b-object-tree, b-xml-viewer, b-code-block): `--b-bg-tertiary` →
+  `--b-bg-secondary`.
+- `b-json-diff` `ins` / `del`: the solid `--b-color-{success,danger}-light` tint instead of the `-alpha-bg` wash; that
+  is the badge pair the token gate already holds at 4.5:1.
+- `inverse` theme, in `tokens.json` and generated: `--b-color-success-text` `#2cac5b` → `#4ade80`,
+  `--b-color-warning-text` `#dc8117` → `#fbbf24`.
+- Token gate: new `SemanticOnSurface` pairs (success/warning/danger `-text` on `--b-bg` and `--b-bg-secondary`), 48
+  more measurements, 280 in all.
+
+## Evidence
+
+- Playground `device-fix-check` § 3c: 35 FAIL on Birko.Web main (the numbers in Context, plus the markers inside
+  `inverse` at ~3.0:1); with the card and tint change, 16 FAIL left, all inside `inverse`; with the inverse tokens,
+  105/105, 245/245 overall.
+- `Birko.DesignTokens contrast`: the new pairs fail 8 times with inverse's old values (3.50 and 3.52:1 on `#434040`),
+  pass with the new; `Birko.DesignTokens.Tests` 59/59 against the worktree; `verify`: CSS and AXAML match tokens.json.
+- `verify.mjs` 400/400 twice, 0 failing checks; theme-roundtrip 11/11; rerender-leak PASS; a11y-name OK;
+  entry-points 433/433; Components `tsc` clean.
+
+**Push together:** Birko.Web's `token-parity` CI compares its CSS with Birko.Framework `main`'s `tokens.json`, so the
+Framework commit and Birko.Web's must be pushed in the same go.
 
 ## Out of scope
 
