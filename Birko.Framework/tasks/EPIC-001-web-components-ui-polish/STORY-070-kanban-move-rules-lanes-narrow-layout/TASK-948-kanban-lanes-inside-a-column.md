@@ -43,3 +43,40 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
    shows a place to drop.
 2. Drag a card from Normal to Critical: it moves, both counts change, and the page is told the old and new lane.
 3. Drag a card from another column into To do: it lands in the documented lane.
+
+## Implementation plan
+
+Drafted 2026-11-21 on the integration branch `task/TASK-947` (b-kanban with TASK-947 and TASK-955).
+
+**API (names for review):**
+- `KanbanColumn.lanes?: KanbanLane[]`, `KanbanLane = { id, label, color? }`; `KanbanColumn.defaultLane?: string`.
+- `KanbanCard.laneId?: string`. In a column with lanes, a card with no `laneId`, or one naming no lane of that
+  column, shows in the default lane (`defaultLane`, else the first lane). Ignored in a column without lanes.
+- `moveCard(id, column, index?, parent?, lane?)`: a fifth, optional argument; index counts within the lane.
+- `KanbanMove` and the `card-move` / `card-reorder` / `card-move-request` detail gain `fromLane` / `toLane` when a
+  column involved has lanes. `canMove` and the locks receive them.
+- `getCards(columnId?, laneId?)`.
+
+**Steps:**
+1. One helper for a card's effective lane, and ordering per (column, lane, parent): `_getOrderedCards` takes the lane;
+   `order` is renumbered within a lane.
+2. Render: a laned column's body holds one `lane` section per lane (header: colour dot, label, count) whose body is
+   the drop target (`.column-body` with `data-lane-id`, so the existing drag code applies). An empty lane keeps a
+   minimum height and the empty text. The column count stays the column's total.
+3. Drop: the lane comes from the drop target; a drop on a laned column outside any lane (not reachable with the
+   mouse, but by keyboard and code) lands in the default lane.
+4. Moves: `_applyMove` / `_userMove` / `revertMove` carry the lane; a lane change is reported (see the open decision).
+5. Keyboard (enough for this task; TASK-949 adds ↑/↓ across lanes): entering a laned column targets its default lane;
+   ↑/↓ move within the card's lane. The travelling card (TASK-955) goes into the lane's body.
+6. Nested cards follow their parent's lane.
+7. Docs: README (lanes), CHANGELOG under v0.4.21; the gallery kanban gets lanes in To do.
+
+**Tests** (backport-smoke, red first): lanes render with label and count, an empty lane is visible; a card with no or an
+unknown `laneId` shows in the default lane; a drag between lanes moves it and reports `fromLane` / `toLane`; `canMove`
+sees `toLane` and can refuse it; `revertMove` restores the lane; `moveCard(…, lane)` works; a board without lanes moves
+as before (the TASK-947 checks unchanged).
+
+**Open decisions:**
+- A move to another lane of the **same column**: report it as `card-move` (proposed: for DraCode a lane change is a
+  priority change to save, as a column change is) or as `card-reorder`.
+- A card with no or an unknown `laneId`: show it in the default lane (proposed), or hide it.
