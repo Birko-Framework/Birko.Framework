@@ -24,14 +24,14 @@ generated: 2026-11-21
 0 / 5 tasks done.
 
 - TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — todo
-- TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — todo
+- TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — verify
 - TASK-948 b-kanban: lanes inside a column — todo
 - TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — todo
 - TASK-950 b-kanban: an opt-in stacked layout for a narrow board — todo
 
 ## What can be tested now
 
-Nothing to test yet.
+Ready to test: TASK-947.
 
 ## Prototype
 
@@ -39,4 +39,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-5 tasks to do.
+4 tasks to do. 1 awaiting sign-off: TASK-947.
