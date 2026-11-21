@@ -25,6 +25,8 @@ created: 2026-11-21
 | D12 | A lane can be collapsed, or given a card limit, like a column | deferred | Not now: DraCode's four priority lanes need neither. Revisit when an app asks for a collapsible or limited lane | 2026-11-21 | František Bereň (maintainer) | — |
 | D13 | A card moved to another lane of the same column is reported as a move (card-move), with the lane it left and the lane it entered, as a column change is | approved | Asked when TASK-948 was planned: for DraCode a lane change is a priority change to save, like a column change | 2026-11-21 | František Bereň (maintainer) | TASK-948 |
 | D14 | In a column with lanes, a card that names no lane, or a lane the column does not have, shows in the column's default lane (the one the page names, else the first), so no card disappears | approved | Asked when TASK-948 was planned, over hiding such a card until it names a real lane | 2026-11-21 | František Bereň (maintainer) | TASK-948 |
+| D15 | Rows across the board come from lanes set for the whole board, which split every column; a column can opt out and is then one tall cell beside the rows. A column's own lanes still win in the other two modes | approved | Asked when TASK-956 was planned (D5's lanes belonged to one column), over the union of all columns' lanes and over rows only through columns with the same lanes | 2026-11-21 | František Bereň (maintainer) | TASK-956 |
+| D16 | The page picks the lane display mode in the board's configuration (sections, rows or tags; sections by default) | approved | Asked when TASK-956 was planned, over an attribute and over both | 2026-11-21 | František Bereň (maintainer) | TASK-956 |
 
 _`Date` and `By` stay `—` until `/feature decide` stamps a verdict — they record **when/who decided**, not when the row was created (creation is in the History log)._
 
@@ -70,3 +72,5 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   their tasks.
 - 2026-11-21 — D13 and D14 added and approved, by the maintainer at TASK-948's plan (the lane-change event; a card
   with no or an unknown lane).
+- 2026-11-21 — D15 and D16 added and approved, by the maintainer when TASK-956 was planned (where rows across the
+  board take their lanes from; how a page picks the lane mode).
