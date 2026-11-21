@@ -52,3 +52,5 @@ rerender-leak PASS; Components `tsc` clean.
 
 1. In Symbio, with the three keys in its cs and sk bundles, open a selectable table with row actions in Czech, then
    Slovak: the accessibility tree names the select-all and row checkboxes and the `⋮` button in that language.
+
+Merged into Birko.Web main (e9bd9ec), in v0.4.20, pushed 2026-11-21 at the user's word; still at verify for Symbio's Czech and Slovak check.

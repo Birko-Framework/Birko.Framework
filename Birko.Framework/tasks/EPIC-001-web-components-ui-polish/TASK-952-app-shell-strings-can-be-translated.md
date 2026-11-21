@@ -68,3 +68,5 @@ rerender-leak PASS; a11y-name OK; entry-points 433/433; Shell `tsc` clean.
    bundles, switch the admin to Czech, then Slovak: the theme switcher's name and the theme names in its menu are
    translated, and a screen reader (or the accessibility tree) names the Ctrl+K button in that language.
 2. Switch back to English: the same three read as before.
+
+Merged into Birko.Web main (e9bd9ec), in v0.4.20, pushed 2026-11-21 at the user's word; still at verify for Symbio's Czech and Slovak check.
