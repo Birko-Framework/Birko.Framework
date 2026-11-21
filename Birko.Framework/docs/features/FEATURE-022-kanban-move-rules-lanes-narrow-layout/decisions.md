@@ -35,3 +35,8 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-11-21 — feature created from DraCode's request (session dracode-aa, for its Board, its tasks 153 and 154);
   decisions seeded as `proposed` from the grill-me interview, asked in the session's picker. The request and the user's
   go-ahead are in docs/BRIEF.md under 2026-11-21.
+- 2026-11-21 — clickable mockup built (prototype.html, an HTML mockup). Building it raised three questions, asked on the
+  page and left for `/feature decide`: under D4, whether a card should also offer an undo after a successful move or
+  leave that to the app; under D5, whether an empty lane stays visible or collapses; under D6, whether lanes on a
+  stacked narrow board stay grouped under their headings or become one list with the lane on each card (the page
+  shows both). No row added; all ten stay `proposed`.

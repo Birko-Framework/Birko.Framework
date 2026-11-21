@@ -75,4 +75,4 @@ The grill resolved every question it raised — see decisions.md.
 
 ## Prototype
 
-Pending
+Built — [prototype.html](prototype.html)
