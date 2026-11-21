@@ -2,7 +2,7 @@
 id: TASK-944
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -54,3 +54,10 @@ locale-switch 47/47, Components `tsc` clean.
 1. In a `b-markdown-editor` preview, type `1. one\n   still one\n2. two`: one numbered list of two items.
 2. Type `Components:\n- a\n- b`: the line, then a tight list with no gaps between items.
 3. Type a fence with no language around two lines: the code block starts on the first line.
+
+## Verified (2026-11-21)
+
+The user ran the human test plan in the Playground (built from the task branch) and confirmed it; the same inputs were
+then checked in Chrome: no alert and no `on*` attribute after hover/focus on every preview element, no `javascript:`
+link, the `b-chat` placeholder and `aria-label` equal to the hostile string as text, the send label as text.
+Merged into Birko.Web main (be2be45), tagged v0.4.20 locally.

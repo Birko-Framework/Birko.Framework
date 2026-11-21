@@ -2,7 +2,7 @@
 id: TASK-943
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-21
@@ -62,3 +62,10 @@ see TASK-944 (same branch).
    `[q](x" onmouseover="alert(1))` into the source. The preview shows the first as text, and hovering the second shows
    no alert.
 2. `[docs](https://example.com)` and `![p](https://example.com/p.png)` still render as a working link and an image.
+
+## Verified (2026-11-21)
+
+The user ran the human test plan in the Playground (built from the task branch) and confirmed it; the same inputs were
+then checked in Chrome: no alert and no `on*` attribute after hover/focus on every preview element, no `javascript:`
+link, the `b-chat` placeholder and `aria-label` equal to the hostile string as text, the send label as text.
+Merged into Birko.Web main (be2be45), tagged v0.4.20 locally.
