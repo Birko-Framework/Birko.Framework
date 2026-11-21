@@ -177,3 +177,17 @@ f8424e0 (also fixes the Toast item card, which rendered an empty toast). **Not m
 session's gates finish (it builds the shared trees).
 
 Merged (2026-11-15, after the Symbio session's gates): Birko.Web main, tagged **v0.4.13** locally; Playground main. Not pushed.
+
+## Human test run in Chrome (2026-11-21, by the agent at the user's request, Birko.Web main at v0.4.20)
+
+1. PASS: a real mouse drag moved "Shaggy fur" 1 → 3; by keyboard (focused handle, Space, ↑ ↑, Space) it went back to
+   1, and "Velvet mink" 2 → 4 announced (via `ariaNotify`) "picked up, position 2 of 6", "position 3 of 6", "position
+   4 of 6", "dropped at position 4 of 6". Escape mid-move put a row back.
+2. PASS: picker, real typing: searched and added three (5 of 5), moved the last to the top by keyboard (Home), then
+   searched again: the chosen list kept its labels and order. At the limit a sixth pick is refused with "The list holds
+   5. Remove one to add Shaggy fur." and a `max` notice event.
+3. PASS (emulated touch, not a device): `sortable-drag-check` 19/19, a held press then a move drags, a swipe does not.
+4. PASS: `sortable-drag-check`: grid tiles wrap (4 columns), a tile dragged up a row lands before its target, the drop
+   bar sits in the gap.
+
+Still open, as before: the touch hold on a real touch device. The task stays at verify for it.
