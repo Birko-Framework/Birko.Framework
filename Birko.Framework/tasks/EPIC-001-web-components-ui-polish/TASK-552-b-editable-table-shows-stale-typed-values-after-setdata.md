@@ -3,7 +3,7 @@ id: TASK-552
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P2
 assignee: ai
@@ -46,8 +46,9 @@ once this lands. `pricing/promotions/promotions-page.ts` also uses the table and
 - [x] After removing a row, the remaining rows show their own values (reproduce first: type in rows 0-2,
       remove row 1, and check that row 1 shows the old row 2).
 - [x] A playground or unit-level check fails without the fix (typed value → `setData` → displayed value).
-- [ ] Symbio's `syncCellValues` workaround is removed in a Symbio follow-up once the framework version carrying
-      this is consumed.
+- [x] Symbio's `syncCellValues` workaround is removed in a Symbio follow-up once the framework version carrying
+      this is consumed. **Met 2026-11-21:** Symbio commit e0820915d (its TASK-900) removed it; `git grep syncCellValues`
+      finds it nowhere in Symbio's code. Symbio's TASK-930 still lists this clean-up as todo, which is out of date.
 
 ## Out of scope
 
