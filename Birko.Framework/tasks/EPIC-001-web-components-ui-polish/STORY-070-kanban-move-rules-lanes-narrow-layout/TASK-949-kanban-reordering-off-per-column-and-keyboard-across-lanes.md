@@ -2,7 +2,7 @@
 id: TASK-949
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -28,13 +28,25 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 
 ## Acceptance criteria
 
-- [ ] A column with reordering off shows no drop position between cards; a dropped card takes the app's order; a drag
+- [x] A column with reordering off shows no drop position between cards; a dropped card takes the app's order; a drag
       within the same lane or column changes nothing and reports nothing.
-- [ ] Columns keep reordering unless they turn it off.
-- [ ] Keyboard: Up/Down cross lanes (within a lane first where reordering is on); Left/Right cross columns, skipping
+- [x] Columns keep reordering unless they turn it off.
+- [x] Keyboard: Up/Down cross lanes (within a lane first where reordering is on); Left/Right cross columns, skipping
       locked columns and places the move rule refuses, and saying which were skipped.
-- [ ] The live announcement names the column and the lane.
-- [ ] Playground checks (including the existing keyboard-check) red before, green after.
+- [x] The live announcement names the column and the lane.
+- [x] Playground checks (including the existing keyboard-check) red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-947` 089eeb6 (v0.4.21), Playground 6969312:
+- backport-smoke: 10 TASK-949 checks (no drop line over an unsortable column, a drag within its lane changing nothing
+  and firing nothing, a dropped card placed by the app's `order`, that `order` not renumbered, ↓ jumping lanes with
+  reordering off and crossing at the lane edge with it on, Enter dropping in the lane reached, a refused lane skipped
+  and named, reordering-off said in a lane-less column). All 10 fail on the branch before the change; 433/433 after.
+- keyboard-check 237/237: a lane crossing with real keys (written after the code, so its red proof is the
+  backport-smoke checks above).
+- verify 0 failing; locale-keys 23/23; a11y-name OK; rerender-leak PASS; entry-points 433/433; device-fix 245/245;
+  Components `tsc` clean. The gallery's To do now has reordering off.
 
 ## Human test plan
 
