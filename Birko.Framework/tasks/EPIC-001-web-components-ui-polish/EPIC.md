@@ -20,3 +20,4 @@ Remaining ergonomic improvements to the Shadow DOM web component catalogue: a `b
 - Display & disclosure components closed (STORY-028): `b-chart` unitless-height fix, a framework-native `b-accordion`
 - Text-like controls take `prefix` / `suffix` adornments and `clearable` without layout shift (STORY-057)
 - `b-ribbon` looks and behaves like the Office ribbon: even groups, arrow keys, menus, key tips and the rest of FEATURE-019 (STORY-067)
+- `b-kanban` has locked columns, a move rule, lanes, an opt-in stacked layout and card buttons that don't drag (FEATURE-022, STORY-070)

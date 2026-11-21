@@ -13,17 +13,21 @@ generated: 2026-11-21
 
 | State | Count |
 |-------|-------|
-| ✅ approved | 10 |
+| ✅ approved | 11 |
 | ✏️ changed | 0 |
-| ⏸️ deferred | 0 |
+| ⏸️ deferred | 1 |
 | ❌ removed | 0 |
 | 💭 proposed (undecided) | 0 |
 
 ## Build progress
 
-0 / 0 tasks done.
+0 / 5 tasks done.
 
-_None_
+- TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — todo
+- TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — todo
+- TASK-948 b-kanban: lanes inside a column — todo
+- TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — todo
+- TASK-950 b-kanban: an opt-in stacked layout for a narrow board — todo
 
 ## What can be tested now
 
@@ -35,4 +39,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-Break the approved decisions into tasks with /feature decompose.
+5 tasks to do.

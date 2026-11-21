@@ -63,7 +63,7 @@ The grill resolved every question it raised — see decisions.md.
 
 **Fog** — concerns not yet precise enough to state as a question:
 
-- Whether a lane can be collapsed like a column, and whether a lane has a card limit like a column's.
+- None left: lane collapse and lane limits became D12 (deferred).
 
 ## Out of scope (initial)
 
