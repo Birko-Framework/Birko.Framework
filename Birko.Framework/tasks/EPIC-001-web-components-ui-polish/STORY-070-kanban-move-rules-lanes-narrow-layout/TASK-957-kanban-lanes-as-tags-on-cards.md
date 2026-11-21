@@ -2,7 +2,7 @@
 id: TASK-957
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -23,12 +23,28 @@ small tag. Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-mo
 
 ## Acceptance criteria
 
-- [ ] A page can choose tags; every card in a laned column shows its lane's label (and colour) as a tag.
-- [ ] The lane can be changed from the tag's menu (D17), and by keyboard by moving a picked-up card past its lane's end;
+- [x] A page can choose tags; every card in a laned column shows its lane's label (and colour) as a tag.
+- [x] The lane can be changed from the tag's menu (D17), and by keyboard by moving a picked-up card past its lane's end;
       the change is reported with `fromLane` / `toLane`.
-- [ ] Cards are grouped by lane in lane order, with no headings (D18).
-- [ ] A board that does not choose tags looks as with TASK-948.
-- [ ] Docs and CHANGELOG; Playground checks red before, green after.
+- [x] Cards are grouped by lane in lane order, with no headings (D18).
+- [x] A board that does not choose tags looks as with TASK-948.
+- [x] Docs and CHANGELOG; Playground checks red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-947` 359792b (v0.4.21), Playground 5a93445:
+- backport-smoke: 11 TASK-957 checks. Before the change: 2 failed (no tags; lane sections instead of one body), 1
+  passed (grouped order, which sections already gave), and the other 8 did not run, because the missing menu threw
+  ("11 red" in the commits overstates it). After: 452/452, 0 failing checks.
+- One check was changed after the code: a move with no position now lands at the end of its lane (fixed here: it
+  sorted by the card's old `order`), so the High lane holds H then N, and the keyboard check now presses ↓ twice
+  (within the lane first, then across, D9) instead of once.
+- keyboard-check 237/237; verify 0 failing; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23;
+  device-fix 245/245; contextual-ribbon 13/13; Components `tsc` clean.
+- Chrome, the gallery in tags mode, real click and keys: Task D's tag opens Critical / High / Normal (checked); ↑,
+  Enter moves it to High, the menu closes and focus returns to the card.
+- Two Playground builds on the way failed on an apostrophe in a gallery note and left the old bundle in place; all
+  numbers above are from a build that printed "✓ Built".
 
 ## Human test plan
 

@@ -29,11 +29,11 @@ generated: 2026-11-21
 - TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — verify
 - TASK-950 b-kanban: an opt-in stacked layout for a narrow board — todo
 - TASK-956 b-kanban: lanes shown as rows across the board (swimlanes) — verify
-- TASK-957 b-kanban: lanes shown as a tag on each card — todo
+- TASK-957 b-kanban: lanes shown as a tag on each card — verify
 
 ## What can be tested now
 
-Ready to test: TASK-947, TASK-948, TASK-949, TASK-956.
+Ready to test: TASK-947, TASK-948, TASK-949, TASK-956, TASK-957.
 
 ## Prototype
 
@@ -41,4 +41,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-3 tasks to do. 4 awaiting sign-off: TASK-947, TASK-948, TASK-949, TASK-956.
+2 tasks to do. 5 awaiting sign-off: TASK-947, TASK-948, TASK-949, TASK-956, TASK-957.
