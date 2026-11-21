@@ -29,6 +29,8 @@ created: 2026-11-21
 | D16 | The page picks the lane display mode in the board's configuration (sections, rows or tags; sections by default) | approved | Asked when TASK-956 was planned, over an attribute and over both | 2026-11-21 | František Bereň (maintainer) | TASK-956 |
 | D17 | In tags mode the lane tag on a card is a small control that opens a menu of the lanes; picking one moves the card there. By keyboard the lane also changes by moving a picked-up card past the end of its lane | approved | Asked when TASK-957 was planned (no lane areas to drop on), over dropping onto a card to take its lane (invisible) and keyboard only | 2026-11-21 | František Bereň (maintainer) | TASK-957 |
 | D18 | In tags mode a column's cards are grouped by lane, in lane order, with no headings | approved | Asked when TASK-957 was planned, over the cards' own order with lanes mixed | 2026-11-21 | František Bereň (maintainer) | TASK-957 |
+| D19 | On a stacked (narrow) board, rows mode shows each column one under another with its lanes as grouped sections, and returns to rows when the board is wide again; tags mode stacks as plain lists | approved | Asked when TASK-950 was planned (D6 was decided for sections), over keeping the rows grid and scrolling it sideways, which D6 rules out | 2026-11-21 | František Bereň (maintainer) | TASK-950 |
+| D20 | A page opts into stacking in the board's configuration, giving the width below which it stacks (any CSS length), measured on the board's own width | approved | Asked when TASK-950 was planned, over an attribute; matches D16 | 2026-11-21 | František Bereň (maintainer) | TASK-950 |
 
 _`Date` and `By` stay `—` until `/feature decide` stamps a verdict — they record **when/who decided**, not when the row was created (creation is in the History log)._
 
@@ -78,3 +80,5 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   board take their lanes from; how a page picks the lane mode).
 - 2026-11-21 — D17 and D18 added and approved, by the maintainer when TASK-957 was planned (how the lane changes
   in tags mode; the order of cards).
+- 2026-11-21 — D19 and D20 added and approved, by the maintainer when TASK-950 was planned (rows and tags on a
+  stacked board; how a page opts in).
