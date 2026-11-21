@@ -2,7 +2,7 @@
 id: TASK-947
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -32,17 +32,33 @@ Decisions: [FEATURE-022](../../../docs/features/FEATURE-022-kanban-move-rules-la
 
 ## Acceptance criteria
 
-- [ ] A locked column takes no card and gives none, by mouse or keyboard; picking up a card in it by keyboard is
+- [x] A locked column takes no card and gives none, by mouse or keyboard; picking up a card in it by keyboard is
       refused and announced.
-- [ ] An optional move rule is asked before every move with the card, where it comes from and where it would go; it is
+- [x] An optional move rule is asked before every move with the card, where it comes from and where it would go; it is
       asked after the lock.
-- [ ] A refused place shows that it refuses while a card is dragged over it, and the reason is announced.
-- [ ] A cancelable `card-move-request` fires before the move is applied; cancelling it keeps the card put and nothing
+- [x] A refused place shows that it refuses while a card is dragged over it, and the reason is announced.
+- [x] A cancelable `card-move-request` fires before the move is applied; cancelling it keeps the card put and nothing
       else is reported. `card-move` is unchanged (it still fires after the move).
-- [ ] An undo call puts a card back where its last move took it from, without firing `card-move` or `card-reorder`.
-- [ ] A board that uses none of this behaves exactly as before (Symbio's three boards do not cancel moves).
-- [ ] No undo notice is shown by the board (D11).
-- [ ] Docs (API.md, README) and CHANGELOG; Playground checks red before, green after.
+- [x] An undo call puts a card back where its last move took it from, without firing `card-move` or `card-reorder`.
+- [x] A board that uses none of this behaves exactly as before (Symbio's three boards do not cancel moves).
+- [x] No undo notice is shown by the board (D11).
+- [x] Docs (API.md, README) and CHANGELOG; Playground checks red before, green after. (b-kanban has no API.md section;
+      its API is documented in the Components README, which now covers all of this.)
+
+## Evidence
+
+Birko.Web `task/TASK-947` b6bc8e4 (v0.4.21), Playground cef3238..402a24a:
+- backport-smoke: 13 TASK-947 checks (drag and keyboard into and out of a locked column, the refusal mark and reason,
+  `canMove`'s arguments and its reason, `card-move-request` cancelled and not, `revertMove` with and without a move,
+  `moveCard()` into a locked column). 12 fail on Birko.Web main; the 13th (`moveCard()` unrestricted) passes before and
+  after, as it must. 413/413 with the change, 0 failing checks.
+- locale-keys 23/23 (the six `bwc.kanban.*` keys read and present), keyboard 225/225, locale-switch 47/47,
+  device-fix 245/245, a11y-name OK, rerender-leak PASS, entry-points 433/433, Components `tsc` clean.
+- In the Playground gallery (Chrome): "Done" shows "🔒 Locked" and its card is not draggable.
+- Found: the board's own keyboard announcements (pick up, ↑/↓) never reach the live region → TASK-954.
+
+The Playground commit cb55799 did not build (an apostrophe the shell unescaped in a gallery note); 402a24a fixes it,
+and the numbers above are from a fresh build.
 
 ## Human test plan
 
