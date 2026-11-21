@@ -33,4 +33,6 @@ DraCode session the version.
 - TASK-948 — b-kanban: lanes inside a column
 - TASK-949 — b-kanban: reordering off per column, and the keyboard across lanes
 - TASK-950 — b-kanban: an opt-in stacked layout for a narrow board
+- TASK-956 — b-kanban: lanes shown as rows across the board (swimlanes)
+- TASK-957 — b-kanban: lanes shown as a tag on each card
 - TASK-955 — b-kanban cards cannot be reached with the keyboard (found testing TASK-947; parented to EPIC-001, shipped here)

@@ -76,7 +76,7 @@ unknown `laneId` shows in the default lane; a drag between lanes moves it and re
 sees `toLane` and can refuse it; `revertMove` restores the lane; `moveCard(…, lane)` works; a board without lanes moves
 as before (the TASK-947 checks unchanged).
 
-**Open decisions:**
-- A move to another lane of the **same column**: report it as `card-move` (proposed: for DraCode a lane change is a
-  priority change to save, as a column change is) or as `card-reorder`.
-- A card with no or an unknown `laneId`: show it in the default lane (proposed), or hide it.
+**Decided (the user, 2026-11-21):** a lane change within a column is a `card-move` (FEATURE-022 D13); a card with no
+or an unknown `laneId` shows in the default lane (D14). And D5 changed: lanes have three display modes. This task
+builds the lane model and the default mode, sections; rows are TASK-956 and tags TASK-957, which build on it. So the
+model must not assume sections: the effective-lane helper, the lane-aware ordering and the move detail are shared.
