@@ -24,16 +24,16 @@ Screenshots from DraCode's board: wide, light, all columns locked (chip in four 
 
 ## Proposed shape
 
-To be grilled. Three asks: the page can hide the column footer; the lock can show as an icon only, still named for
+Grilled 2026-11-22; see decisions.md. Three asks: the page can hide the column footer; the lock can show as an icon only, still named for
 screen readers; a whole board can be locked in one place, perhaps shown once instead of per column.
 
 ## Open questions
 
 | # | Question | State |
 |---|---|---|
-| Q1 | Is hiding the footer a page option, or should the footer go by default (it repeats the header count)? | open |
-| Q2 | Icon-only lock: an option, or the new default? | open |
-| Q3 | A board-wide lock: one setting that locks every column? How is it shown: once for the board, or per column? | open |
+| Q1 | Is hiding the footer a page option, or should the footer go by default (it repeats the header count)? | answered → D1 |
+| Q2 | Icon-only lock: an option, or the new default? | answered → D2 |
+| Q3 | A board-wide lock: one setting that locks every column? How is it shown: once for the board, or per column? | answered → D3 |
 
 ## Out of scope (initial)
 

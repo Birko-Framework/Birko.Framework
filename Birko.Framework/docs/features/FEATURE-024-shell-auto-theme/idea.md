@@ -24,7 +24,7 @@ theme menu offers Auto."
 
 ## Proposed shape
 
-To be grilled. An "Auto" choice next to Light and Dark: the app follows the browser's setting, and changes when the
+Grilled 2026-11-22; see decisions.md. An "Auto" choice next to Light and Dark: the app follows the browser's setting, and changes when the
 setting changes while the app is open. The app remembers that the user chose Auto, not the theme Auto picked. An app
 can make Auto its starting theme for users who have not chosen one.
 
@@ -32,10 +32,10 @@ can make Auto its starting theme for users who have not chosen one.
 
 | # | Question | State |
 |---|---|---|
-| Q1 | Does Auto become every app's starting theme, or does each app opt in (Symbio's users would otherwise switch to dark if their system is dark)? | open |
-| Q2 | Apps can register their own themes beyond light and dark. Which two does Auto choose between: always light and dark, or a light/dark pair each app names? | open |
-| Q3 | How the theme menu shows Auto: its label, its place in the list, and whether it says which theme it is showing now. | open |
-| Q4 | Before the app has loaded, the page shows the default look. Should a dark-set browser get dark from the first paint, with no flash of light? | open |
+| Q1 | Does Auto become every app's starting theme, or does each app opt in (Symbio's users would otherwise switch to dark if their system is dark)? | answered → D2 |
+| Q2 | Apps can register their own themes beyond light and dark. Which two does Auto choose between: always light and dark, or a light/dark pair each app names? | answered → D3 |
+| Q3 | How the theme menu shows Auto: its label, its place in the list, and whether it says which theme it is showing now. | answered → D4 |
+| Q4 | Before the app has loaded, the page shows the default look. Should a dark-set browser get dark from the first paint, with no flash of light? | answered → D5 |
 
 ## Out of scope (initial)
 
