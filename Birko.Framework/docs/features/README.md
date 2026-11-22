@@ -52,6 +52,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-021](FEATURE-021-web-xaml-parity-list/) | Birko.Web ↔ Birko.Xaml — a parity list, kept honest by a test | done | 12/1/0/0/0 | 4/4 | skipped (a list and a check) | [STORY-069](../../tasks/EPIC-015-birko-xaml-ui-framework/STORY-069-web-xaml-parity-list/STORY.md) (EPIC-015) |
 | [FEATURE-022](FEATURE-022-kanban-move-rules-lanes-narrow-layout/) | Kanban board: move rules, lanes, a narrow layout, and buttons on cards | done | 19/1/1/0/0 | 10/10 | deleted | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 | [FEATURE-023](FEATURE-023-kanban-quieter-column-headers/) | Kanban board: quieter column headers (footer, lock, a board-wide lock) | idea | 0/0/0/0/0 | 0/0 | not built yet | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
+| [FEATURE-024](FEATURE-024-shell-auto-theme/) | App shell: an "Auto" theme that follows the browser's light or dark setting | idea | 0/0/0/0/0 | 0/0 | not built yet | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.

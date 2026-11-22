@@ -132,3 +132,22 @@ a narrower first step:
 Grill answers in the session's picker: a per-column lock plus an optional move-rule callback; a move can be refused
 before it happens and undone after a failed save; lanes as a list on a column; the narrow layout opt-in; reordering
 switchable per column; a card's own controls exempt from dragging; Up/Down crosses lanes; a clickable mockup first.
+
+### 2026-11-22 — became FEATURE-023 (`b-kanban`: quieter column headers)
+
+The DraCode session asked, after running its board on v0.4.21, for "a way to hide the per-column footer ("N cards"
+repeats the header count) and to show the lock as just the icon (with an accessible label) instead of the "Locked" chip
+in every header. When the whole board is locked, the chip repeats four times. A board-level `locked` might suit that
+case." Offered as a new feature or folded into the open work:
+
+> Close; request as new feature
+
+### 2026-11-22 — became FEATURE-024 (app shell: an "Auto" theme)
+
+The DraCode session asked for an "auto" theme in `BCoreAppShell` that follows the browser's `prefers-color-scheme`:
+`setTheme('auto')` and a saved `auto` apply dark or light and switch live, `currentTheme` reports `auto`, the default
+when nothing is saved can be auto (or is configurable per app), and the header theme menu offers Auto. Offered as a
+feature to capture, to capture and build now, or not now:
+
+> Capture as feature (Recommended)
+
