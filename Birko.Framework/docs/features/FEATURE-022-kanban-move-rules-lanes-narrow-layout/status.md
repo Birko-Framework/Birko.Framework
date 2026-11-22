@@ -30,12 +30,12 @@ generated: 2026-11-22
 - TASK-950 b-kanban: an opt-in stacked layout for a narrow board — verify
 - TASK-956 b-kanban: lanes shown as rows across the board (swimlanes) — verify
 - TASK-957 b-kanban: lanes shown as a tag on each card — verify
-- TASK-958 b-kanban: controls on cards keep the board one Tab stop, and the keyboard still reaches them — in-progress
+- TASK-958 b-kanban: controls on cards keep the board one Tab stop, and the keyboard still reaches them — verify
 - TASK-959 b-kanban: a card stays dimmed and the board stops responding after a drag — verify
 
 ## What can be tested now
 
-Ready to test: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-959.
+Ready to test: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-958, TASK-959.
 
 ## Prototype
 
@@ -43,4 +43,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-1 task in progress (TASK-958). 8 awaiting sign-off: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-959. They ship together as Birko.Web v0.4.21.
+All 9 tasks built; awaiting sign-off: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-958, TASK-959. They ship together as Birko.Web v0.4.21.

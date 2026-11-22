@@ -2,7 +2,7 @@
 id: TASK-958
 parent: STORY-070
 feature: FEATURE-022
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -28,17 +28,33 @@ already pick a card up (TASK-947/955), which rules out reusing them unless D21 s
 
 ## Acceptance criteria
 
-- [ ] On a board whose cards carry controls, Tab from outside lands on one card, and the Tab order then follows D21 and
+- [x] On a board whose cards carry controls, Tab from outside lands on one card, and the Tab order then follows D21 and
       leaves the board without visiting other cards' controls.
-- [ ] A card's controls can be reached and used by keyboard alone, as D21 decides, including a control inside a
+- [x] A card's controls can be reached and used by keyboard alone, as D21 decides, including a control inside a
       component's own shadow root (`b-button`).
-- [ ] Moving between cards with the arrow keys, and picking a card up, work as before.
-- [ ] A screen-reader user is told that a card has controls and how to reach them.
-- [ ] Playground checks with real keys: red before, green after.
+- [x] Moving between cards with the arrow keys, and picking a card up, work as before.
+- [x] A screen-reader user is told that a card has controls and how to reach them.
+- [x] Playground checks with real keys: red before, green after.
 
 ## Out of scope
 
 - Controls the app adds outside `renderCard` (e.g. in a column header).
+
+## Evidence
+
+Birko.Web `task/TASK-947` 7c0f97f (v0.4.21), Playground e62cf56:
+- keyboard-check, real keys in headless Chrome, on a board whose every card has a button and a `b-button`-like control
+  (its real button in its own shadow root): 6 TASK-958 checks. Before the change 5 failed: Tab went card A, A's
+  controls, then D's controls (every card's buttons were stops), Shift+Tab, arrow-then-Tab and Escape did not follow,
+  and no card had the hint. Space on a control already pressed it (TASK-946). After: Tab goes card A > A's Retry > A's
+  More > out of the board; Shift+Tab back to the card; → to D then Tab reaches D's Retry; Space presses it and lifts
+  nothing; Escape returns to D, where Space picks it up; the card is described "Press Tab to reach its buttons and
+  fields." 244/244, three clean runs in a row. Two runs before them each failed different, unrelated ribbon and
+  focus-timing checks, which did not recur. My first version of the check pressed Tab once too often (it left the
+  board), which made the Shift+Tab checks look red; corrected.
+- The TASK-955 checks (one Tab stop, roving focus, the travelling card) keep passing.
+- backport-smoke 469/469; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23; device-fix
+  247/247; contextual-ribbon 13/13; Components `tsc` clean. All from builds that printed "✓ Built".
 
 ## Human test plan
 
