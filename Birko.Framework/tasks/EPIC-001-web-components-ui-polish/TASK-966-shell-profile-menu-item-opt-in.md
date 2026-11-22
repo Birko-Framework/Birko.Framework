@@ -2,7 +2,7 @@
 id: TASK-966
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -49,6 +49,9 @@ Birko.Web `task/TASK-966` 39a5128 (v0.5.0), Playground a74908d:
   Against the fix: settings, signout by default; profile, settings, signout when opted in. 482/482.
 - verify 0 failing; contextual-ribbon 13/13; keyboard 244/244; entry-points 433/433; Shell `tsc` clean. All from
   builds that printed "✓ Built".
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-966` build: "all passed". Merged into Birko.Web main 1578c5e, tagged v0.5.0.
 
 ## Human test plan
 
