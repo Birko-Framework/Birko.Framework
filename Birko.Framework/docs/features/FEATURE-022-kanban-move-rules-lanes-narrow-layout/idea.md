@@ -3,7 +3,7 @@ id: FEATURE-022
 created: 2026-11-21
 owner: both
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: idea
+status: done
 ---
 
 # Kanban board: move rules, lanes, a narrow layout, and buttons on cards
@@ -75,3 +75,15 @@ The grill resolved every question it raised — see decisions.md.
 ## Prototype
 
 Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last version at a0785383
+
+## Review (2026-11-22)
+
+- **Built:** every approved and changed decision (D1-D11, D13-D21) is built; D12 is deferred. 10 tasks done (TASK-946
+  to 950, 956 to 960), with TASK-955 found and fixed along the way. Shipped as Birko.Web v0.4.21 (pushed).
+- **Tested:** each task's human test plan was run by the maintainer in the Playground ("All passed"; TASK-960 steps
+  1-3 work).
+- **Stakeholder sign-off:** DraCode, who asked for it, runs its project board on v0.4.21 and confirmed it does what
+  was asked (locked columns by mouse and keyboard, reordering off, a Retry button on cards, the stacked layout at
+  900px and 375px in light and dark). Lanes are its next step.
+- **Follow-ups:** DraCode's later request (hide the column footer, a lock shown as an icon, a board-wide lock) is
+  FEATURE-023. Two defects it found are TASK-961 and TASK-962.

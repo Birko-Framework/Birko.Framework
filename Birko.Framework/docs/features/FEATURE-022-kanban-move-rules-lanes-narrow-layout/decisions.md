@@ -86,3 +86,5 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
 - 2026-11-22 — D21 added as proposed, found at TASK-946 (controls on cards are each a Tab stop); filed TASK-958 to build it
   in v0.4.21, by the maintainer's request.
 - 2026-11-22 — D21 approved by the maintainer: only the focused card's controls are in the Tab order.
+- 2026-11-22 — Feature reviewed and done: every approved or changed decision built and shipped in Birko.Web v0.4.21;
+  signed off by the maintainer and by DraCode. D12 stays deferred.
