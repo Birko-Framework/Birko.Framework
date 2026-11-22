@@ -31,6 +31,7 @@ created: 2026-11-21
 | D18 | In tags mode a column's cards are grouped by lane, in lane order, with no headings | approved | Asked when TASK-957 was planned, over the cards' own order with lanes mixed | 2026-11-21 | František Bereň (maintainer) | TASK-957 |
 | D19 | On a stacked (narrow) board, rows mode shows each column one under another with its lanes as grouped sections, and returns to rows when the board is wide again; tags mode stacks as plain lists | approved | Asked when TASK-950 was planned (D6 was decided for sections), over keeping the rows grid and scrolling it sideways, which D6 rules out | 2026-11-21 | František Bereň (maintainer) | TASK-950 |
 | D20 | A page opts into stacking in the board's configuration, giving the width below which it stacks (any CSS length), measured on the board's own width | approved | Asked when TASK-950 was planned, over an attribute; matches D16 | 2026-11-21 | František Bereň (maintainer) | TASK-950 |
+| D21 | Only the focused card's buttons and fields are in the Tab order: Tab from a card goes through its own controls and then leaves the board; moving to another card with the arrows brings that card's controls in instead. The arrows, Enter and Space on a card are unchanged | approved | Found at TASK-946 (each control on a card was its own Tab stop, so Tab walked every card's buttons). Chosen over a key that enters the card (F2, grid style; must be announced to be found) and over Enter entering a card with controls (Enter would mean different things on different cards) | 2026-11-22 | František Bereň (maintainer) | TASK-958 |
 
 _`Date` and `By` stay `—` until `/feature decide` stamps a verdict — they record **when/who decided**, not when the row was created (creation is in the History log)._
 
@@ -82,3 +83,6 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   in tags mode; the order of cards).
 - 2026-11-21 — D19 and D20 added and approved, by the maintainer when TASK-950 was planned (rows and tags on a
   stacked board; how a page opts in).
+- 2026-11-22 — D21 added as proposed, found at TASK-946 (controls on cards are each a Tab stop); filed TASK-958 to build it
+  in v0.4.21, by the maintainer's request.
+- 2026-11-22 — D21 approved by the maintainer: only the focused card's controls are in the Tab order.
