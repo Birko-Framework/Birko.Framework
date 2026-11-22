@@ -2,7 +2,7 @@
 id: TASK-960
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -43,6 +43,9 @@ Birko.Web `task/TASK-947` 6f483b4 (v0.4.21), Playground 12a5fef:
 - Chrome, the gallery, synthetic drag events at the real coordinates: Task E dropped on Task A's top edge was accepted
   and, before the fix, stayed below it (A 0, E 1). The Chrome tool's own mouse drag never delivers a drop on a card's
   top edge (its last dragover stops short), so a real-mouse check is in the human test plan.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22: steps 1-3 work. Merged into Birko.Web main
+904c850, tagged v0.4.21 (not pushed).
 
 ## Human test plan
 
