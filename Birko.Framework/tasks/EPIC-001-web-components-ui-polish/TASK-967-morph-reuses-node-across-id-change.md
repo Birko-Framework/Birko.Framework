@@ -2,7 +2,7 @@
 id: TASK-967
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -43,7 +43,7 @@ morph replaces the node with the new render's instead of updating it in place.
 
 - [x] After a re-render that shifts elements, each button runs only its own handler, once.
 - [x] Playground check red before, green after; Core README and CHANGELOG say what changed.
-- [ ] Symbio's failing gate test passes against the fix.
+- [x] Symbio's failing gate test passes against the fix.
 
 ## Evidence
 
@@ -55,6 +55,13 @@ Birko.Web `task/TASK-967` 4a2c741 (v0.5.1), Playground e0fea78:
   unrelated timing); keyboard 244/244; rerender-leak PASS; locale-switch 47/47; contextual-ribbon 13/13; a11y-name OK;
   entry-points 433/433; device-fix 247/247; sortable 19/19; tree drag 17/17; escape-in-modal 27/27; Core `tsc` clean.
   All from builds that printed "✓ Built".
+
+- Symbio, against `Web-TASK-967`: hotel.extra.spec.ts 5/5 (the create-room test failed on v0.5.0); the full browser
+  suite 574 of 575 passed, 7 skipped. The one failure (catalogue-translations, a photo's alt text) fails the same way on
+  v0.5.0, a Symbio test race on an unresolvable seeded host, fixed on Symbio's side.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 on Symbio's results: "merge it if it's passed".
+Merged into Birko.Web main ad07e18, tagged v0.5.1.
 
 ## Human test plan
 
