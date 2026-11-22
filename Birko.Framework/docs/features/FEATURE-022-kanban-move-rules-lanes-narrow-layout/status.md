@@ -21,21 +21,22 @@ generated: 2026-11-22
 
 ## Build progress
 
-0 / 9 tasks done.
+9 / 10 tasks done.
 
-- TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — verify
-- TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — verify
-- TASK-948 b-kanban: lanes inside a column — verify
-- TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — verify
-- TASK-950 b-kanban: an opt-in stacked layout for a narrow board — verify
-- TASK-956 b-kanban: lanes shown as rows across the board (swimlanes) — verify
-- TASK-957 b-kanban: lanes shown as a tag on each card — verify
-- TASK-958 b-kanban: controls on cards keep the board one Tab stop, and the keyboard still reaches them — verify
-- TASK-959 b-kanban: a card stays dimmed and the board stops responding after a drag — verify
+- TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — done
+- TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — done
+- TASK-948 b-kanban: lanes inside a column — done
+- TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — done
+- TASK-950 b-kanban: an opt-in stacked layout for a narrow board — done
+- TASK-956 b-kanban: lanes shown as rows across the board (swimlanes) — done
+- TASK-957 b-kanban: lanes shown as a tag on each card — done
+- TASK-958 b-kanban: controls on cards keep the board one Tab stop, and the keyboard still reaches them — done
+- TASK-959 b-kanban: a card stays dimmed and the board stops responding after a drag — done
+- TASK-960 b-kanban: a card dropped at a position among ordered cards goes back where it was — verify
 
 ## What can be tested now
 
-Ready to test: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-958, TASK-959.
+Ready to test: TASK-960.
 
 ## Prototype
 
@@ -43,4 +44,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-All 9 tasks built; awaiting sign-off: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957, TASK-958, TASK-959. They ship together as Birko.Web v0.4.21.
+9 tasks (and TASK-955, the keyboard fixes found along the way) signed off by the maintainer on 2026-11-22. TASK-960 (reordering at a position, found while testing) awaits sign-off; then all ship as Birko.Web v0.4.21.

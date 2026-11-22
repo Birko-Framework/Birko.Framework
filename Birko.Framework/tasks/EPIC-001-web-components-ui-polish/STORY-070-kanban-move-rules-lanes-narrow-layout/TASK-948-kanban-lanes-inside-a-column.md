@@ -2,7 +2,7 @@
 id: TASK-948
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -49,6 +49,9 @@ Birko.Web `task/TASK-947` 03e9304 (v0.4.21), Playground a052083:
 - verify 0 failing; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23; device-fix 245/245;
   contextual-ribbon 13/13; Components `tsc` clean.
 - The Playground gallery kanban's To do now has Critical / High / Normal lanes.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

@@ -2,7 +2,7 @@
 id: TASK-956
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -43,6 +43,9 @@ Birko.Web `task/TASK-947` c22631d (v0.4.21), Playground af0aa91:
   device-fix 245/245; Components `tsc` clean.
 - In Chrome, the gallery kanban's new "lanes" switch turns the board into a 3-row grid (Task B in the High row) and
   back into sections.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

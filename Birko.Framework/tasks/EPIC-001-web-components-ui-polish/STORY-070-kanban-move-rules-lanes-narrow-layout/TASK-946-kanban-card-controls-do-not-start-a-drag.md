@@ -2,7 +2,7 @@
 id: TASK-946
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -55,6 +55,9 @@ Birko.Web `task/TASK-947` fde5210 (v0.4.21), Playground 44d4804:
   contextual-ribbon 13/13; Components `tsc` clean. All from builds that printed "✓ Built".
 - The gallery kanban's Task B has a Retry button: pressing it shows a "Retry pressed" toast; the rest of the card
   shows a "Card click" toast.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

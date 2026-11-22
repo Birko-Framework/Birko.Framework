@@ -2,7 +2,7 @@
 id: TASK-959
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -47,6 +47,9 @@ Birko.Web `task/TASK-947` 7411727 (v0.4.21), Playground 1e05da7:
   drag end never reached the board (the card had been redrawn), the case that stuck the board before.
 - keyboard 238/238; verify 0 failing; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23;
   device-fix 247/247; contextual-ribbon 13/13; Components `tsc` clean. All from builds that printed "✓ Built".
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

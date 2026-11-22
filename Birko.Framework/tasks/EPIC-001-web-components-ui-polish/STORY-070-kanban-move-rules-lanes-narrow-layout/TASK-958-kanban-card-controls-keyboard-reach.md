@@ -2,7 +2,7 @@
 id: TASK-958
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -55,6 +55,9 @@ Birko.Web `task/TASK-947` 7c0f97f (v0.4.21), Playground e62cf56:
 - The TASK-955 checks (one Tab stop, roving focus, the travelling card) keep passing.
 - backport-smoke 469/469; a11y-name OK; rerender-leak PASS; entry-points 433/433; locale-keys 23/23; device-fix
   247/247; contextual-ribbon 13/13; Components `tsc` clean. All from builds that printed "✓ Built".
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

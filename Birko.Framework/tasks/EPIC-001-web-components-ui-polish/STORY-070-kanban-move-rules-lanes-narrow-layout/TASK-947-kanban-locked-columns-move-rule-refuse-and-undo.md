@@ -2,7 +2,7 @@
 id: TASK-947
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -59,6 +59,9 @@ Birko.Web `task/TASK-947` b6bc8e4 (v0.4.21), Playground cef3238..402a24a:
 
 The Playground commit cb55799 did not build (an apostrophe the shell unescaped in a gallery note); 402a24a fixes it,
 and the numbers above are from a fresh build.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

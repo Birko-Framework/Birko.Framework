@@ -2,7 +2,7 @@
 id: TASK-950
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -48,6 +48,9 @@ Birko.Web `task/TASK-947` 81edc45 (v0.4.21), Playground 1600204:
 - keyboard 237/237; verify 0 failing; a11y-name OK; rerender-leak PASS (the ResizeObserver adds no listeners per
   render); entry-points 433/433; locale-keys 23/23; contextual-ribbon 13/13; Components `tsc` clean. All from builds
   that printed "✓ Built". The gallery kanban opts in at 44rem.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

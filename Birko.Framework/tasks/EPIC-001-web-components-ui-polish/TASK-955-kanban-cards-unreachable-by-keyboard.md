@@ -2,7 +2,7 @@
 id: TASK-955
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-21
@@ -57,6 +57,9 @@ board with real keys (Space, → shows Task A in In progress; the next → is re
 - [x] Returning by Tab lands on the card last focused.
 - [x] A card can be picked up and moved with the keyboard alone.
 - [x] ←/→ move focus between columns, and a keyboard move shows its target on screen.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

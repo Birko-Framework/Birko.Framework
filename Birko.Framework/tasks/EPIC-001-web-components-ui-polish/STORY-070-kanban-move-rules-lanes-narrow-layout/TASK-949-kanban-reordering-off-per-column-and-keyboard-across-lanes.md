@@ -2,7 +2,7 @@
 id: TASK-949
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -47,6 +47,9 @@ Birko.Web `task/TASK-947` 089eeb6 (v0.4.21), Playground 6969312:
   backport-smoke checks above).
 - verify 0 failing; locale-keys 23/23; a11y-name OK; rerender-leak PASS; entry-points 433/433; device-fix 245/245;
   Components `tsc` clean. The gallery's To do now has reordering off.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 

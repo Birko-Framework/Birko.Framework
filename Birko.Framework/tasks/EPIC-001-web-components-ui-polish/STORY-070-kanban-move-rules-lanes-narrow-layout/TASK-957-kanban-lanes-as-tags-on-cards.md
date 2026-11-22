@@ -2,7 +2,7 @@
 id: TASK-957
 parent: STORY-070
 feature: FEATURE-022
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-21
@@ -45,6 +45,9 @@ Birko.Web `task/TASK-947` 359792b (v0.4.21), Playground 5a93445:
   Enter moves it to High, the menu closes and focus returns to the card.
 - Two Playground builds on the way failed on an apostrophe in a gallery note and left the old bundle in place; all
   numbers above are from a build that printed "✓ Built".
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-947` build: "All passed".
 
 ## Human test plan
 
