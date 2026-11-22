@@ -2,7 +2,7 @@
 id: TASK-965
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P0
 assignee: ai
 created: 2026-11-22
@@ -55,6 +55,9 @@ Birko.Web `task/TASK-965` 27a259e (v0.4.23), Playground 7b59e5c:
   markup as text, avatar `<I`, no `<img>` in it, no "TASK-965" console error.
 - verify: 0 failing; contextual-ribbon 13/13; keyboard 244/244; a11y-name OK; entry-points 433/433; Shell `tsc`
   clean. All from builds that printed "✓ Built".
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22, the human test plan below run in the Playground
+from the `task/TASK-965` build: "test was as you told". Merged into Birko.Web main dcf19b2, tagged v0.4.23.
 
 ## Human test plan
 
