@@ -2,7 +2,7 @@
 id: TASK-962
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -48,6 +48,9 @@ Birko.Web `task/TASK-961` 4e304f5 (v0.4.22), Playground 096d8a9:
   rerender-leak PASS, a11y-name, entry-points 433/433, device-fix 247/247, sortable-drag, tree-drag, escape-in-modal,
   category/contextual ribbon, ribbon-a11y; Core, Components and Shell tsc clean. cross-engine reports 8 Firefox page
   errors, the same on v0.4.21 (deliberately malformed XML in the XML diff tests).
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed". Merged into
+Birko.Web main 2d02508, tagged v0.4.22 (not pushed).
 
 ## Human test plan
 

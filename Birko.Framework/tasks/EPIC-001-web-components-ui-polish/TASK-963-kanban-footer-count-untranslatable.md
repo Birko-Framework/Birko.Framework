@@ -2,7 +2,7 @@
 id: TASK-963
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-22
@@ -30,6 +30,9 @@ Found 2026-11-22 while checking DraCode's request (FEATURE-023). The column foot
 
 Birko.Web `task/TASK-961` 9c62d34 (v0.4.22), Playground 096d8a9: backport-smoke with Slovak-like strings added for
 `bwc.kanban.cardCount`: v0.4.21 showed "2 cards | 1 card", after: "2 kariet | 1 karta". locale-keys-check 23/23.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed". Merged into
+Birko.Web main 2d02508, tagged v0.4.22 (not pushed).
 
 ## Human test plan
 

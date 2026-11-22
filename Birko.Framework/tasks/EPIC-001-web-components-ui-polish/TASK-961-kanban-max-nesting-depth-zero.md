@@ -2,7 +2,7 @@
 id: TASK-961
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -40,6 +40,9 @@ Birko.Web `task/TASK-961` 9c62d34 (v0.4.22), Playground 096d8a9:
 - The checks first came out wrong for another reason: every drop resolved against the column's first card. That is
   TASK-964, fixed in the same commit.
 - Full Playground run: backport 479/479, keyboard 244/244, rerender-leak PASS, the drag suites; tsc clean.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed". Merged into
+Birko.Web main 2d02508, tagged v0.4.22 (not pushed).
 
 ## Human test plan
 

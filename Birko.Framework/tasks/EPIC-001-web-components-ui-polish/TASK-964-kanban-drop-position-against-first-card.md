@@ -2,7 +2,7 @@
 id: TASK-964
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -36,6 +36,9 @@ does not reorder, and the gallery's lanes hold at most two cards.
 Birko.Web `task/TASK-961` 9c62d34 (v0.4.22), Playground 096d8a9: backport-smoke, 2 TASK-964 checks, both red on
 v0.4.21 (a drop on the third card's top edge landed after the first, the line shown "after a"; with sub-cards above,
 a drop before C landed after A), green after. Every earlier kanban drag check still passes (479/479).
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed". Merged into
+Birko.Web main 2d02508, tagged v0.4.22 (not pushed).
 
 ## Human test plan
 
