@@ -1,6 +1,6 @@
 ---
 id: FEATURE-022
-generated: 2026-11-21
+generated: 2026-11-22
 ---
 
 # Kanban board: move rules, lanes, a narrow layout, and buttons on cards — Status
@@ -23,7 +23,7 @@ generated: 2026-11-21
 
 0 / 7 tasks done.
 
-- TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — todo
+- TASK-946 b-kanban: buttons, links and fields on a card do not start a drag or count as a card click — verify
 - TASK-947 b-kanban: locked columns, a move rule, and refusing or undoing a move — verify
 - TASK-948 b-kanban: lanes inside a column — verify
 - TASK-949 b-kanban: reordering off per column, and the keyboard across lanes — verify
@@ -33,7 +33,7 @@ generated: 2026-11-21
 
 ## What can be tested now
 
-Ready to test: TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957.
+Ready to test: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957.
 
 ## Prototype
 
@@ -41,4 +41,4 @@ Built, then deleted — answered D1, D2, D3, D4, D5, D6, D7, D8, D9, D10; last v
 
 ## Next step
 
-1 task to do. 6 awaiting sign-off: TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957.
+All 7 tasks built; awaiting sign-off: TASK-946, TASK-947, TASK-948, TASK-949, TASK-950, TASK-956, TASK-957. After sign-off they ship together as Birko.Web v0.4.21.
