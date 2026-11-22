@@ -2,7 +2,7 @@
 id: TASK-961
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -24,11 +24,22 @@ limit only hides the toggle; it never stopped nesting.
 
 ## Acceptance criteria
 
-- [ ] `maxNestingDepth: 0`: no card can have sub-cards; no spacer, no toggle; a drop on a card's middle does not nest
+- [x] `maxNestingDepth: 0`: no card can have sub-cards; no spacer, no toggle; a drop on a card's middle does not nest
       (it places the card before or after it).
-- [ ] `maxNestingDepth: n`: a drop that would put a card deeper than n does not nest it.
-- [ ] No `maxNestingDepth`: unchanged (unlimited).
-- [ ] Playground check: red before, green after.
+- [x] `maxNestingDepth: n`: a drop that would put a card deeper than n does not nest it.
+- [x] No `maxNestingDepth`: unchanged (unlimited).
+- [x] Playground check: red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-961` 9c62d34 (v0.4.22), Playground 096d8a9:
+- backport-smoke, 3 TASK-961 checks. On v0.4.21 2 failed: with `maxNestingDepth: 0` the board showed 3 sub-card
+  strips and a drop on A's middle made C its sub-card; with `maxNestingDepth: 1` a card dropped on a sub-card's middle
+  and a card with sub-cards dropped on another's middle both nested past the limit. The baseline (no limit: a drop on a
+  card's middle nests) held. After: all pass.
+- The checks first came out wrong for another reason: every drop resolved against the column's first card. That is
+  TASK-964, fixed in the same commit.
+- Full Playground run: backport 479/479, keyboard 244/244, rerender-leak PASS, the drag suites; tsc clean.
 
 ## Human test plan
 

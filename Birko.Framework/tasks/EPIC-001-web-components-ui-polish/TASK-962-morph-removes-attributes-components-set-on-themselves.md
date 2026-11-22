@@ -2,7 +2,7 @@
 id: TASK-962
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P1
 assignee: ai
 created: 2026-11-22
@@ -28,11 +28,26 @@ loses it at its next redraw. TASK-791 already special-cased a dialog's `open` fo
 
 ## Acceptance criteria
 
-- [ ] An attribute a component set on itself survives its page's redraw; an attribute the page rendered and then
+- [x] An attribute a component set on itself survives its page's redraw; an attribute the page rendered and then
       stops rendering is still removed, and one the page renders with a new value still updates.
-- [ ] Covered at least: b-kanban `stacked`, b-sync-status `hidden`, b-tabs `active`, b-checkbox `checked`.
-- [ ] No component gains listeners or loses state on re-render (rerender-leak, the full Playground suite).
-- [ ] Playground check: red before, green after.
+- [x] Covered at least: b-kanban `stacked`, b-sync-status `hidden`, b-tabs `active`, b-checkbox `checked`.
+- [x] No component gains listeners or loses state on re-render (rerender-leak, the full Playground suite).
+- [x] Playground check: red before, green after.
+
+## Evidence
+
+Birko.Web `task/TASK-961` 4e304f5 (v0.4.22), Playground 096d8a9:
+- backport-smoke: a BaseComponent page rendering a test element that sets its own attribute on connect and later, a
+  `b-checkbox` (checked by code) and a `b-kanban` (stacked at 360px), then redrawing twice. On v0.4.21 the same
+  elements lost every self-set attribute: the checkbox unchecked, the kanban un-stacked (DraCode's case). After: all
+  kept. The baseline (an attribute the page stopped rendering is removed, a changed one updates) passes on both.
+- My first version of the check put the conditionally rendered element in the middle; the morph matches by position,
+  so it replaced the elements after it and the check measured the wrong elements. Moved to the end; the README now
+  says to keep conditional elements last.
+- Full Playground run, as this touches every component: backport 479/479, keyboard 244/244, locale-switch 47/47,
+  rerender-leak PASS, a11y-name, entry-points 433/433, device-fix 247/247, sortable-drag, tree-drag, escape-in-modal,
+  category/contextual ribbon, ribbon-a11y; Core, Components and Shell tsc clean. cross-engine reports 8 Firefox page
+  errors, the same on v0.4.21 (deliberately malformed XML in the XML diff tests).
 
 ## Human test plan
 

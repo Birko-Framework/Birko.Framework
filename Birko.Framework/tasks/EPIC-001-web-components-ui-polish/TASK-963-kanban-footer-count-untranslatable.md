@@ -2,7 +2,7 @@
 id: TASK-963
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P3
 assignee: ai
 created: 2026-11-22
@@ -22,9 +22,14 @@ Found 2026-11-22 while checking DraCode's request (FEATURE-023). The column foot
 
 ## Acceptance criteria
 
-- [ ] The footer text comes from a `bwc.kanban` key with the count interpolated (singular and plural), English
+- [x] The footer text comes from a `bwc.kanban` key with the count interpolated (singular and plural), English
       fallback unchanged; overridable like the other kanban labels.
-- [ ] locale-keys-check passes; a Playground check shows a translated footer.
+- [x] locale-keys-check passes; a Playground check shows a translated footer.
+
+## Evidence
+
+Birko.Web `task/TASK-961` 9c62d34 (v0.4.22), Playground 096d8a9: backport-smoke with Slovak-like strings added for
+`bwc.kanban.cardCount`: v0.4.21 showed "2 cards | 1 card", after: "2 kariet | 1 karta". locale-keys-check 23/23.
 
 ## Human test plan
 
