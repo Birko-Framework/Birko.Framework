@@ -2,7 +2,7 @@
 id: TASK-970
 parent: EPIC-001
 feature: FEATURE-023
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -31,6 +31,9 @@ FEATURE-023 D3 (DraCode): DraCode locks every column of its board, and the lock 
 
 Birko.Web `task/TASK-968` 3bcc1e1 (v0.5.2), Playground ef425d8. verify 0 failing (backport 492/492; carousel-smoke failed once, passed on the rerun); keyboard 244/244; a11y-name OK; contextual-ribbon 13/13; locale-keys 23/23; locale-switch 47/47; rerender-leak PASS; entry-points 433/433; device-fix 247/247; sortable 19/19; tree drag 17/17; escape-in-modal 27/27; theme-roundtrip 11/11; Components and Shell `tsc` clean. All from builds that printed "✓ Built".
 - backport-smoke: a locked board shows one notice and no column lock; its cards are not draggable; Space on a card says "The board is locked: its cards cannot be moved."; the app's `moveCard()` still moves a card. Chrome: the gallery's lock board switch shows one Locked notice and no column locks.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed".
+Merged into Birko.Web main fcf0623, tagged v0.5.2 (not pushed).
 
 ## Human test plan
 

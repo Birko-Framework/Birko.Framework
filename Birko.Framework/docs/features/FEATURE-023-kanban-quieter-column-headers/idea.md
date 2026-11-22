@@ -3,7 +3,7 @@ id: FEATURE-023
 created: 2026-11-22
 owner: both
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: idea
+status: done
 ---
 
 # Kanban board: quieter column headers (footer, lock, a board-wide lock)

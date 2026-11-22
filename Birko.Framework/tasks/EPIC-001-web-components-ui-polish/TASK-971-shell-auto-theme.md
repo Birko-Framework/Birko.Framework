@@ -2,7 +2,7 @@
 id: TASK-971
 parent: EPIC-001
 feature: FEATURE-024
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-22
@@ -33,6 +33,9 @@ FEATURE-024 D1-D4 (DraCode, its TASK-188). Auto applies dark or light from the b
 
 Birko.Web `task/TASK-968` 3bcc1e1 (v0.5.2), Playground ef425d8. verify 0 failing (backport 492/492; carousel-smoke failed once, passed on the rerun); keyboard 244/244; a11y-name OK; contextual-ribbon 13/13; locale-keys 23/23; locale-switch 47/47; rerender-leak PASS; entry-points 433/433; device-fix 247/247; sortable 19/19; tree drag 17/17; escape-in-modal 27/27; theme-roundtrip 11/11; Components and Shell `tsc` clean. All from builds that printed "✓ Built".
 - backport-smoke, with the browser setting emulated: an app starting on Auto applies dark, switches to light and back as the setting changes, lists Auto first and ticked; a chosen light stays light; Auto is saved as `auto`; the listener is removed with the shell; without dark, Auto is light and not offered; an app that does not opt in starts light. i18n-message: the theme names now start with Auto (`bws.shell.themes.auto` translated). Chrome: the Contextual tab (Shell) menu lists Auto, Light, Dark; Auto with a light system shows light.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-22 in the Playground: "all passed".
+Merged into Birko.Web main fcf0623, tagged v0.5.2 (not pushed).
 
 ## Human test plan
 

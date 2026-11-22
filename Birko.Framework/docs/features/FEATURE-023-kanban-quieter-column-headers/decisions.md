@@ -21,3 +21,5 @@ created: 2026-11-22
 
 - 2026-11-22 — feature created from DraCode's request after v0.4.21 (docs/BRIEF.md, 2026-11-22). Q1-Q3 grilled with
   the maintainer in the session's picker the same day; all three approved as recommended (D1-D3).
+- 2026-11-22 — Feature reviewed and done: D1-D3 built in TASK-968..970 and shipped in Birko.Web v0.5.2;
+  every human test plan run and signed off by the maintainer in the Playground ("all passed").

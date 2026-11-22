@@ -3,7 +3,7 @@ id: FEATURE-024
 created: 2026-11-22
 owner: both
 # status — one of: idea, review (built, sign-off pending), done, dropped, superseded
-status: idea
+status: done
 ---
 
 # App shell: an "Auto" theme that follows the browser's light or dark setting
