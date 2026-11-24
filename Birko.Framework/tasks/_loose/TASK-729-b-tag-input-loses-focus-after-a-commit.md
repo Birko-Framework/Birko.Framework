@@ -2,7 +2,7 @@
 id: TASK-729
 parent: null
 feature: null
-status: verify  # verified with trusted key presses 2026-10-22; the human test plan is left
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -65,3 +65,6 @@ but never the focus.
 Not the FinStat web tester (not reachable from here); the Playground "Tag input" card with real keys: AAA, BBB, CCC
 each committed with Enter, focus stayed in the field after every commit, two Backspaces removed CCC then BBB, focus
 still in the field (value `design,birko,web,components,AAA`).
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24 on the agent's FinStat web tester run that
+day ("yes close them").

@@ -2,7 +2,7 @@
 id: TASK-725
 parent: null
 feature: null
-status: verify  # verified headlessly 2026-10-22; the human test plan is left
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -96,3 +96,6 @@ component, so inside BAppShell's scrolling `main` they extended the window: docu
 - [x] Playground "JSON diff" card, driven in the user's Chrome: Tree and Side by side, Only changes, Expand and
       Collapse each work; dark theme: removed red, added green, changed amber read clearly in both views.
 - [ ] The FinStat web tester item is still open (not reachable from here).
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24 on the agent's FinStat web tester run that
+day ("yes close them").

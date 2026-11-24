@@ -2,7 +2,7 @@
 id: TASK-727
 parent: null
 feature: null
-status: verify  # verified headlessly 2026-10-22; the human test plan is left
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-22
@@ -81,3 +81,6 @@ dark theme: header "XML DIFF", attributes as `@id`, `total` 10 → 12 changed, `
 shows the original XML with the changed and removed lines tinted. Observation, not judged a defect: a repeated
 element going from one occurrence to two (`<item>`) reads as one whole change (object → list), not "1 added"; the
 `xml` options (`XmlTreeOptions`) are where an element is declared always-a-list, not checked here.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24 on the agent's FinStat web tester run that
+day ("yes close them").
