@@ -2,7 +2,7 @@
 id: TASK-130
 parent: null
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-01
@@ -109,7 +109,7 @@ for the rest:
 
 ## Human test plan
 
-- [ ] Pick one pair the scan reports as failing and one it passes, open the Birko.Web Playground in that
+- [x] Pick one pair the scan reports as failing and one it passes, open the Birko.Web Playground in that
       theme, and confirm by eye that the verdicts match what you see — a contrast number that disagrees with
       the screen means the wrong pair is being measured (this is exactly how the `b-stale-banner` defect was
       first noticed, and how the "measuring the light theme" harness bug was caught).
@@ -118,6 +118,11 @@ for the rest:
     scan exactly: light danger badge #ca2323 on #fee2e2, 4.55 (scan 4.55); light warning 4.58 (4.58); dark danger
     5.40 (5.40); dark warning 4.60 (4.60), and by eye they read as the scan says. The failing half needs a decision:
     drop it, or check a deliberately broken token instead (the second step already proves the scan goes red).
+  - **Passed 2026-11-24:** the user chose the broken-token form. By the agent, the light `--b-color-danger-text` in
+    `tokens.json` was set to #ef4444: the scan failed 3 pairs, naming the badge pair at 3.08:1 (and the json-diff
+    markers on --b-bg 3.76 and --b-bg-secondary 3.60). The same value applied on the Playground page painted #ef4444 on
+    #fee2e2 = 3.08, and the badge visibly washes out beside the shipped one (#ca2323, 4.55, as the scan says). The token
+    was reverted at once; the scan is clean again (280 pairs) and `tokens.json` is unchanged.
 - [x] Verify the gate FAILS when it should: revert one of the four `dark.css` tint tokens to its pastel and
       confirm the scan goes red naming that token. A gate never seen failing is not known to work.
 - [x] Check a recorded exception still reports its measured number in the output, so a silently worsening
@@ -150,3 +155,6 @@ human check left: confirm two verdicts by eye in the Playground.
   (`device-fix-check.mjs` § 3b) failed on the old CSS and components and passes 140/140 now. Avalonia suite 202/202,
   theme round-trip 11/11, `verify.mjs` green.
 - The values and the component changes are [[TASK-599]]'s; see there.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24: "Break a token, then close", on the run
+above.
