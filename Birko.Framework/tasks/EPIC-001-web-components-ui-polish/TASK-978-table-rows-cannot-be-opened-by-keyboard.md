@@ -2,7 +2,7 @@
 id: TASK-978
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-11-24
@@ -32,19 +32,37 @@ Playground undo page has a row menu, which is why the keyboard Undo passed there
 
 ## Acceptance criteria
 
-- [ ] A table whose rows open something (`row-click` has a listener, or a config flag such as `rowsActivatable`;
-      decide which while planning, preferring no consumer change) puts its rows in the keyboard order with a roving
-      tabindex: one tab stop for the body, the remembered row or the first one.
-- [ ] On a focused row, Enter (and Space) emit `row-click` with the same detail a click gives; Up/Down move between
-      rows, Home/End to the first/last; the focused row has a visible focus ring in light and dark themes.
-- [ ] Keys pressed inside an interactive element in a row (button, link, input, select, row menu) keep their own
-      meaning and never also open the row, as the click path already ensures.
-- [ ] The row's role and name let a screen reader say what Enter will do (e.g. the row is announced with its first
-      cell's text); a table with no row action keeps its rows out of the tab order, as today.
-- [ ] `b-data-table` (selection, bulk bar, Escape) keeps working; selection and row activation do not fight over
-      Space if the table is `selectable` (settle which key does what in the plan).
-- [ ] Playground check proving each of the above, red before the change; keyboard-check stays green.
-- [ ] README (Components, `b-table` / `b-data-table`) documents the keys; CHANGELOG records it.
+- [x] A table whose rows open something puts its rows in the keyboard order with a roving tabindex: one tab stop for
+      the body, the row last focused, else the active row, else the first. Decided: an attribute,
+      `<b-table clickable-rows>` (`b-data-table`: `clickableRows`), set by the Shell, not detected from listeners: a
+      split page always sets it (a row opens its detail), a list page when it overrides `onRowClick`. No consumer
+      change.
+- [x] On a focused row, Enter and Space emit `row-click` with the same detail a click gives; Up/Down move between
+      rows, Home/End to the first/last; the focused row has a focus ring (2px primary outline) in light and dark.
+- [x] Keys pressed inside a control in a row keep their own meaning and never also open the row (the handler acts
+      only when the row itself is the key's target).
+- [x] A table with no row action keeps its rows out of the tab order, as today. A focused row is a `row` with its
+      cells' text, which is what a screen reader reads; no extra name was added.
+- [x] `b-data-table` selection keeps working. Decided: Space on a row with a checkbox toggles that checkbox (the
+      selectable table's case); Enter opens the row.
+- [x] Playground check proving each of the above, red before the change; keyboard-check stays green.
+- [x] README (Components `b-table` / `b-data-table`, Shell hooks) documents the keys; CHANGELOG records it.
+
+Also: a re-render (a reload, new data, a sort) while a row has focus puts focus back on that row; the positional DOM
+morph would otherwise leave it on whatever row now sits in that place.
+
+## Evidence
+
+Birko.Web `task/TASK-978` f1a5f4e (joins the unpushed v0.5.3), Playground 0d0169d. All from builds that printed
+"✓ Built".
+- `table-rows-keyboard-check` 17/17 (trusted keys): a split page in undo mode laid out like Symbio's Positions is
+  opened, deleted and restored by keyboard only (Tab to the rows, arrows, Enter opens the detail, Tab to Delete,
+  Enter, Enter on Undo); a reload keeps row focus; list pages with and without `onRowClick`; a selectable table's
+  Space. **Proven red:** 4/17 against Birko.Web main (the four that hold either way), and the reload-focus check red
+  (16/17) with only the re-focus removed.
+- verify 0 failing; keyboard-check 244/244; a11y-name OK (43); rerender-leak PASS; escape-in-modal 27/27;
+  locale-switch 47/47; entry-points 433/433; toast-announce 7/7; Core, Components and Shell `tsc` clean.
+- Looked at in Chrome on `/?rows=show`: the focused row's outline is clear in the light and the dark theme.
 
 ## Out of scope
 
