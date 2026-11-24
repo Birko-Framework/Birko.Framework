@@ -2,7 +2,7 @@
 id: TASK-980
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P3
 assignee: ai
 created: 2026-11-24
@@ -32,12 +32,23 @@ assigned elements.
 
 ## Acceptance criteria
 
-- [ ] `<b-modal>` and `<b-drawer>` with nothing slotted into `footer` show no footer: it takes no space and draws no
+- [x] `<b-modal>` and `<b-drawer>` with nothing slotted into `footer` show no footer: it takes no space and draws no
       border.
-- [ ] A footer slotted in later (slotchange) appears, and one removed later disappears.
-- [ ] A footer with content looks exactly as today.
-- [ ] The dead `:empty` rule in `b-drawer` is replaced by the working mechanism, shared rather than duplicated.
-- [ ] Playground check proving the above for both components, red before the change.
+- [x] A footer slotted in later (slotchange) appears, and one removed later disappears.
+- [x] A footer with content looks exactly as today.
+- [x] The dead `:empty` rule in `b-drawer` is replaced by the working mechanism, shared rather than duplicated.
+- [x] Playground check proving the above for both components, red before the change.
+
+## Evidence
+
+Birko.Web `task/TASK-980` aa62a21 (joins the unpushed v0.5.3), Playground 58901c6. All from builds that printed
+"✓ Built". `hideEmptyFooter` (dom-utils) sets `hidden` on `.overlay-footer` while its slot has nothing assigned and
+re-checks on `slotchange`; the shared sheet's `.overlay-footer[hidden] { display: none }` wins over its `display: flex`.
+Both components call it from `onUpdated`; b-drawer's `:empty` rule is gone.
+- `overlay-footer-check` 8/8 on both components; **red** 4/8 against Birko.Web main (an empty footer: a 29 px band
+  with its border; removing a late footer left it showing).
+- verify 0 failing; keyboard-check 244/244; escape-in-modal 27/27; rerender-leak PASS; a11y-name OK (43);
+  entry-points 433/433; toast-announce 7/7; Components `tsc` clean.
 
 ## Out of scope
 
