@@ -2,7 +2,7 @@
 id: TASK-976
 parent: EPIC-001
 feature: null
-status: todo
+status: in-progress
 priority: P1
 assignee: ai
 created: 2026-11-24
