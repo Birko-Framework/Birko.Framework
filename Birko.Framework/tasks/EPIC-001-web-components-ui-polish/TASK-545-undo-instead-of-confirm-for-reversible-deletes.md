@@ -78,10 +78,19 @@ Automated: Playground `undo-delete-smoke` 41/41 and `keyboard-check` 27/27 (10 n
 `entry-points-check` green; the guard, the focus/hover pause and the keyboard-only focus move each proven red by
 breaking them. What is left needs a real backend and a screen reader:
 
-- [ ] In a consumer page with the opt-in: delete a row, click Undo — the row is back, and a reload confirms it
+- [x] In a consumer page with the opt-in: delete a row, click Undo — the row is back, and a reload confirms it
       was restored server-side, not just redrawn
   - **Not run 2026-11-24:** needs a consumer page with a real backend.
+  - **Passed 2026-11-24** (agent, in Chrome with real clicks): Symbio HR → Positions (`/#/hr/positions`, opted in by
+    Symbio TASK-1122), Testing database, tenant acme, UI built from Birko.Web main. Delete in the row's detail panel
+    removed the row with no confirm and a toast "Pozícia odstránená." with "Zpět"; the server got `DELETE` (200).
+    Undo sent `POST /api/hr/positions/{id}/restore` (200) and the row came back; after a reload it was still there.
+    Found (Symbio): the restore toast reads the raw key `bws.common.restored`, because the page's own `t()` label map
+    (`crudLabels`) has no `common.restored` entry and so bypasses the framework's English default.
 - [ ] Same with keyboard only: Tab to the toast's Undo, press Enter
+  - **Blocked on Symbio 2026-11-24:** a keyboard user cannot reach Delete there. Positions opens its detail panel
+    (where Delete is) only on a row click: `b-table` rows have no tabindex and no key handling, so Tab goes from the
+    column header to the page-size select, and arrow keys do nothing. Framework gap, not specific to Symbio.
   - **Run 2026-11-24, stand-in only:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3, on the `?kb=1` undo-mode page over its in-memory table, not a consumer page:
     Tab to Bravo's row menu, Enter, Down, Enter deleted it and moved focus to Undo; Enter restored it (back in the
     table and in the fake backend's live rows). Found: after Undo, focus falls to the page body, so a keyboard user
