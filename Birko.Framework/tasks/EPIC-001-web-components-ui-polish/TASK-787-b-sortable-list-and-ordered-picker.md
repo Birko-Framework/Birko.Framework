@@ -1,7 +1,7 @@
 ---
 id: TASK-787
 parent: EPIC-001
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-10-29
@@ -201,3 +201,7 @@ Merged (2026-11-15, after the Symbio session's gates): Birko.Web main, tagged **
    bar sits in the gap.
 
 Still open, as before: the touch hold on a real touch device. The task stays at verify for it.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24 on the agent's run of all four steps that day
+(real touch covered by `sortable-drag-check`'s touchscreen): "787 can be closed". The click-on-handle focus finding is
+TASK-975.
