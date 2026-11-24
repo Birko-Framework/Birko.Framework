@@ -2,7 +2,7 @@
 id: TASK-976
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-24
@@ -78,6 +78,12 @@ Birko.Web `task/TASK-976` 4057a32 (joins the unpushed v0.5.3), Playground 9a6232
 
 ## Human test plan
 
-1. With NVDA on, load a consumer page with the undo opt-in and delete a row first thing: NVDA says the message and
+1. [x] With NVDA on, load a consumer page with the undo opt-in and delete a row first thing: NVDA says the message and
    that Undo is available, once, without "times" or "×".
-2. Trigger an error toast first thing on a fresh page: NVDA announces it.
+2. [x] Trigger an error toast first thing on a fresh page: NVDA announces it.
+
+**Passed 2026-11-24** by the user with a screen reader, on two temporary Playground pages made for it (a fresh
+undo-mode list page, and a fresh page whose first toast is an error); the pages were removed before the merge.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24: "all passed". Merged into Birko.Web main
+83085d1 as part of v0.5.3 (the unpushed tag moved to the merge); `toast-announce-check` 7/7 on main.

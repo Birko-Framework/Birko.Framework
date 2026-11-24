@@ -86,12 +86,15 @@ breaking them. What is left needs a real backend and a screen reader:
     Tab to Bravo's row menu, Enter, Down, Enter deleted it and moved focus to Undo; Enter restored it (back in the
     table and in the fake backend's live rows). Found: after Undo, focus falls to the page body, so a keyboard user
     loses their place; this task does not say where it should go.
-- [ ] With a screen reader (NVDA): the toast announces the message and that an action is available
+- [x] With a screen reader (NVDA): the toast announces the message and that an action is available
   - **Failed 2026-11-24:** by the agent at the user's request, NVDA 2026.3.1 (portable, its speech log read) with
     Chrome on the Playground's `?kb=1` page (Birko.Web v0.5.3). On a fresh page the undo toast is not announced at all
     (mouse: focus falls to "document"; keyboard: only "Undo, button"), because the toast's live region is created
     with its first message. Once a toast has been shown on the page, NVDA says "Item deletedUndo ×" (message, action
     and close glyph run together), then "Undo, button" on the keyboard path; "Item restored×" after Undo. → TASK-976
+  - **Passed 2026-11-24:** after TASK-976 (Birko.Web v0.5.3): NVDA on a fresh page said "Item deleted. Undo is
+    available." for the first delete, by mouse and by keyboard, and "Item restored" after Undo (agent's run, NVDA's
+    speech log); the user confirmed it with a screen reader on a fresh undo-mode page.
 - [x] Hover the toast past its duration — it stays; move away — it dismisses
   - **Passed 2026-11-24:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. An Undo toast (10 s) stayed for over 40 s under the pointer, and was gone within 12 s
     of the pointer leaving (it resumes with the time it had left).
