@@ -55,3 +55,7 @@ Birko.Web `task/TASK-979` 44471c1 (joins the unpushed v0.5.3), Playground 04621e
 - [ ] In DraCode, after Birko.Web main has it: focusing the chat panel widens it smoothly and leaving it narrows it
       smoothly; dragging the divider follows the pointer without lag; with Windows "Show animations" off (reduced
       motion) the width changes at once.
+
+**Merged 2026-11-24** on the user's word ("merge") into Birko.Web main 3e56111 as part of v0.5.3 (the unpushed tag
+moved to the merge); `split-transition-check` 10/10 and verify 0 failing on main. Stays at verify until the DraCode
+step above is run.
