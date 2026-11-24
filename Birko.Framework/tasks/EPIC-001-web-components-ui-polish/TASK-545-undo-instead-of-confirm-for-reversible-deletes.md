@@ -91,6 +91,7 @@ breaking them. What is left needs a real backend and a screen reader:
   - **Blocked on Symbio 2026-11-24:** a keyboard user cannot reach Delete there. Positions opens its detail panel
     (where Delete is) only on a row click: `b-table` rows have no tabindex and no key handling, so Tab goes from the
     column header to the page-size select, and arrow keys do nothing. Framework gap, not specific to Symbio.
+    Fixed by TASK-978 (Birko.Web main aa5d91c, v0.5.3); re-run on Symbio once its UI is rebuilt from main.
   - **Run 2026-11-24, stand-in only:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3, on the `?kb=1` undo-mode page over its in-memory table, not a consumer page:
     Tab to Bravo's row menu, Enter, Down, Enter deleted it and moved focus to Undo; Enter restored it (back in the
     table and in the fake backend's live rows). Found: after Undo, focus falls to the page body, so a keyboard user

@@ -2,7 +2,7 @@
 id: TASK-978
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-11-24
@@ -71,7 +71,16 @@ Birko.Web `task/TASK-978` f1a5f4e (joins the unpushed v0.5.3), Playground 0d0169
 
 ## Human test plan
 
-- [ ] Symbio HR → Positions with the keyboard only: Tab into the table, arrow to a position, Enter opens its detail
+- [ ] (moved to TASK-545's keyboard step) Symbio HR → Positions with the keyboard only: Tab into the table, arrow to a position, Enter opens its detail
       panel, Tab to Delete, Enter; reach the toast's Undo and press Enter; the row comes back and survives a reload
       (this is TASK-545's keyboard step).
-- [ ] The same table in the dark theme: the focused row is clearly visible.
+- [x] The same table in the dark theme: the focused row is clearly visible.
+
+**Passed 2026-11-24** by the user with the keyboard on the Playground's `/?rows=show` page (a split page in undo
+mode laid out like Symbio's Positions): rows reached by Tab, arrows between them, Enter opened the detail, Delete and
+Undo by keyboard. The Symbio Positions run is the same flow on the consumer and is TASK-545's open keyboard step; it
+needs Symbio's UI rebuilt from Birko.Web main.
+
+**Signed off** by the user (František Bereň, maintainer) on 2026-11-24: "seems working". Merged into Birko.Web main
+aa5d91c as part of v0.5.3 (the unpushed tag moved to the merge); `table-rows-keyboard-check` 17/17 and verify 0
+failing on main.
