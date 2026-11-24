@@ -80,12 +80,15 @@ error or a 5xx and still backs off to `retryMaxMs`. That is how Reps implements 
 
 ## Progress log
 
-- 2026-11-24 — Built from Reps (TASK-196). Committed in Birko.Web as **`e977ad0`, part of v0.5.3**, by the parallel
-  session that owns that release (it committed the working tree; the `v0.5.3` tag still points at the TASK-976 merge
-  and has not been pushed).
+- 2026-11-24 — Built from Reps (TASK-196). Merged into Birko.Web main **`3ebe9fd`** (commit `78beb83`), part of
+  v0.5.3; the unpushed `v0.5.3` tag moved to the merge. (An earlier `e977ad0` was made while this session was still
+  editing the files and was undone before any merge; it is in no branch.) The framework session folded the separate
+  v0.5.4 into the unpushed v0.5.3 (one tag per push) and added the Components README section for `b-sync-status`.
   - Playground: `sync-interrupt-smoke` 25/25, `sync-retry-smoke` 55/55, `backport-smoke` 497/497, `verify.mjs` 0
     failing. **Proven red** with the four framework files reverted: `sync-interrupt-smoke` 21/25 (`deadCount`,
     `replaySafe`), `sync-retry-smoke` 54/55 (`deadCount`), `backport-smoke` failing at the dead chip. The
     `maxRetries: Infinity` checks pass either way, by design: they assert existing behaviour; case 2 is their control.
   - Reps consumes it (`dead-writes.spec.ts`, full suite 252/252).
   - Human test step not run yet: it can be run on Reps' phone pass for TASK-196, which produces a real dead write.
+  - Re-run by the framework session on the merged code (build "✓ Built"): `verify.mjs` 0 failing (the three smokes as
+    above), keyboard-check 244/244, a11y-name OK (43), rerender-leak PASS, Core and Components `tsc` clean.
