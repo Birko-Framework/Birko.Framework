@@ -63,6 +63,9 @@ error or a 5xx and still backs off to `retryMaxMs`. That is how Reps implements 
 - [ ] In the Playground gallery's `b-sync-status` card (or a page binding a fake source with a dead count), check the
       dead state in light and dark themes: readable red, visibly a button, keyboard-focusable, and the event fires on
       Enter as well as on a tap.
+  - _Partly run 2026-11-24 on Android (Reps on a Mi A2 Lite, Chrome 152, a real dead write):_ the button reads
+    "1 neuložené", red and readable in dark and in light, sits beside the other top-bar controls, and a real tap
+    dispatched `b-sync-dead` (Reps opened its list). Not checked: keyboard focus and Enter, so the step stays open.
 
 ## Implementation plan
 
