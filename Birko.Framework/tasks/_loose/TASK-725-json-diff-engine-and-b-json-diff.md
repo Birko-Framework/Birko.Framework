@@ -47,9 +47,13 @@ goes into Birko — the tester supplies its own ignore and normalize rules.
     coloured element is below 4.5:1 (added value 2.80:1), and in light the added value is 4.23:1 → TASK-951
   - **Passed 2026-11-21:** after TASK-951 (Birko.Web v0.4.20), the user checked the colours in dark and light; the
     toggles were checked earlier the same day.
-- [ ] In the FinStat web tester, compare one request across two environments once it is wired
+- [x] In the FinStat web tester, compare one request across two environments once it is wired
   - **Not run 2026-11-24:** needs the FinStat tester and its environments. The diff itself was exercised again in the
     Playground the same day (TASK-727's XML run).
+  - **Passed 2026-11-24:** by the agent at the user's request, in the FinStat web tester running locally (localhost:5127, Birko.Web main
+    v0.5.3), with the API keys the user entered. SK Basic for four ICOs, zdrojakcz.eu (baseline) against finstat.sk: with host
+    names hidden all four are "Equal"; with them shown each is "0 added, 0 removed, 1 changed" (the Url, sk.finstat.cz
+    against finstat.sk), marked in the tree and side by side, and "Fields that differ (1)".
 
 ## Outcome (2026-10-22)
 

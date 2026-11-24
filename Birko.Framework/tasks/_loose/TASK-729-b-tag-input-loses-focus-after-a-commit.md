@@ -34,7 +34,7 @@ but never the focus.
 
 ## Human test plan
 
-- [ ] In the FinStat web tester's compare page and batch runner, enter several codes with Enter, then remove two with
+- [x] In the FinStat web tester's compare page and batch runner, enter several codes with Enter, then remove two with
       Backspace
   - **Run 2026-11-24, stand-in only:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3, in the gallery's tag input instead of the FinStat tester: three codes
     committed with Enter, focus stayed in the field after each; four Backspaces removed four tags, one per press, focus
@@ -43,6 +43,11 @@ but never the focus.
     (localhost:5127, Birko.Web main v0.5.3): three ICOs committed with Enter, then four Backspaces removed four tags,
     one per press; focus stayed in the ICO field throughout. The batch runner half is not run: its endpoint select showed
     "SK Detail — Basic" while the runner said "Pick an endpoint.", and a pick did not register (not looked into).
+  - **Passed 2026-11-24:** by the agent at the user's request, in the FinStat web tester running locally (localhost:5127, Birko.Web main
+    v0.5.3), with the API keys the user entered. Batch runner (SK Detail — Detail, picked by keyboard): three ICOs committed
+    with Enter, two Backspaces removed two, focus stayed in the field. Compare page as above. (The earlier "pick did not
+    register" was a mouse click in the native list; the runner showing an endpoint while asking for one is the
+    tester's own select, not this component.)
 
 ## Outcome (2026-10-22)
 

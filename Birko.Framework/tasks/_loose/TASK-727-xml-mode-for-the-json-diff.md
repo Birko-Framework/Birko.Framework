@@ -39,11 +39,15 @@ item names) are options with those values as defaults.
 
 ## Human test plan
 
-- [ ] In the FinStat web tester, compare one XML endpoint across two environments in both views, light and dark
+- [x] In the FinStat web tester, compare one XML endpoint across two environments in both views, light and dark
   - **Run 2026-11-24, stand-in only:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3: the gallery's `b-json-diff` with `format="xml"` and two company XML bodies.
     "1 added, 1 removed, 2 changed"; the tree marks the name, the revenue text (beside its unchanged @currency), Region
     added and Legacy removed; side by side shows the original XML with the changed lines marked; both views read in
     light and dark. The FinStat tester step itself is not run.
+  - **Passed 2026-11-24:** by the agent at the user's request, in the FinStat web tester running locally (localhost:5127, Birko.Web main
+    v0.5.3), with the API keys the user entered. SK Basic as XML, zdrojakcz.eu against finstat.sk, four ICOs: the tree and the
+    side-by-side view (the original XML, pretty-printed) both mark the changed Url line. The tester ships only its
+    light FinStat theme, so dark was checked in the Playground run above, with the same component.
 
 ## Outcome (2026-10-22)
 
