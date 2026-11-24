@@ -59,3 +59,13 @@ Birko.Web `task/TASK-979` 44471c1 (joins the unpushed v0.5.3), Playground 04621e
 **Merged 2026-11-24** on the user's word ("merge") into Birko.Web main 3e56111 as part of v0.5.3 (the unpushed tag
 moved to the merge); `split-transition-check` 10/10 and verify 0 failing on main. Stays at verify until the DraCode
 step above is run.
+
+**DraCode's run 2026-11-24 (Birko.Web 3e56111):** 1 PASS (widen/narrow animate over ~170 ms), 2 FAIL, 3 PASS
+(reduced motion, emulated). Step 2: with DraCode's shape (master `1fr`, detail a fixed px), the drag moved only the
+master, so the detail kept its width and an empty strip opened beside it mid-drag (since TASK-525); DraCode then
+re-set the sizes on `split-resize`, and since this task that correction animated, so the drop visibly moved too.
+**Fixed** (Birko.Web main 0b3e085, v0.5.3 tag moved): with a flexible master and a fixed-length detail, the separator
+and the arrow keys resize the detail, and the drop commits `{ master: '1fr', detail: 'Npx' }`, so a consumer re-setting
+those sizes changes nothing. `split-transition-check` 15/15 (Playground 7d1d13e), red 12/15 against 3e56111 (the
+strip measured: 490 + 20 + 300 of 960 px); verify 0 failing; keyboard-check 244/244. Waiting for DraCode to re-run
+step 2. Not changed: the drag clamps to 120 px per column, not to a consumer's own minimum (DraCode clamps at drop).
