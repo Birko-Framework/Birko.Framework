@@ -2,7 +2,7 @@
 id: TASK-976
 parent: EPIC-001
 feature: null
-status: in-progress
+status: verify
 priority: P1
 assignee: ai
 created: 2026-11-24
@@ -37,14 +37,18 @@ the Playground's `?kb=1` undo-mode page (Birko.Web v0.5.3).
 
 ## Acceptance criteria
 
-- [ ] The toast container (each position's) exists, empty, as a live region before the first toast is added to it,
-      so the first toast is announced. Error toasts stay assertive.
-- [ ] A toast is announced as its message alone (for an action toast, the message and the action's name as separate
-      words, e.g. "Item deleted. Undo"), without the "×" glyph.
-- [ ] One live region per announcement, not a region nested in another.
-- [ ] Playground check: the container is in the accessibility tree before the first toast (CDP
-      `Accessibility.getFullAXTree`), and the announced text has no "×". Proven red against the current behaviour.
-- [ ] NVDA re-run on a fresh page: the first undo-delete says "Item deleted" and that Undo is available.
+- [x] A live region exists, empty, before the first toast, so the first toast is announced; error toasts are
+      assertive. (Built as two announcers the toast manager adds at startup, `#b-toast-announce` polite and
+      `#b-toast-announce-alert` assertive, rather than making the visible container the live region: the container
+      holds the buttons, which is what ran into the message.)
+- [x] A toast is announced as its message; an action toast as "Item deleted. Undo is available."
+      (`bwc.toast.actionAvailable`), without the "×" glyph (also `aria-hidden` on the close button).
+- [x] One live region per announcement: the container and the toast item are no longer live regions.
+- [x] Playground check (`toast-announce-check.mjs`, CDP accessibility tree): the announcers are live regions in the
+      tree before any toast, the first toast is said once without its buttons, an error goes to the assertive one, and
+      the announcer follows a modal. 0/7 on Birko.Web main v0.5.3, 7/7 with the fix.
+- [x] NVDA re-run on a fresh page: the first undo-delete said "Item deleted. Undo is available.", and Undo then
+      "Item restored".
 
 ## Out of scope
 
@@ -60,6 +64,17 @@ the Playground's `?kb=1` undo-mode page (Birko.Web v0.5.3).
 3. Drop the item's own `role`/`aria-live` in favour of the container's, keeping assertive for errors (an assertive
    container, or `role="alert"` on error items only).
 4. Add the tree check to a Playground smoke; re-run NVDA as in TASK-545.
+
+## Evidence
+
+Birko.Web `task/TASK-976` 4057a32 (joins the unpushed v0.5.3), Playground 9a62322. All from builds that printed
+"✓ Built".
+- `toast-announce-check` 7/7 (0/7 against main v0.5.3); verify 0 failing (undo-delete-smoke 42/42, backport 492/492;
+  backport's TASK-133 focusField check failed once and passed on the rerun); keyboard-check 244/244 (one earlier run
+  243/244, passed on the rerun); a11y-name OK (43); locale-keys 23/23; locale-switch 47/47; escape-in-modal 27/27;
+  entry-points 433/433; rerender-leak PASS; Components `tsc` clean.
+- NVDA 2026.3.1 (portable, its speech log read), Chrome in front, fresh `?kb=1` page with no toast shown yet: a mouse
+  delete said "Item deleted. Undo is available."; a keyboard delete the same, and Undo then "Item restored".
 
 ## Human test plan
 
