@@ -48,6 +48,8 @@ goes into Birko — the tester supplies its own ignore and normalize rules.
   - **Passed 2026-11-21:** after TASK-951 (Birko.Web v0.4.20), the user checked the colours in dark and light; the
     toggles were checked earlier the same day.
 - [ ] In the FinStat web tester, compare one request across two environments once it is wired
+  - **Not run 2026-11-24:** needs the FinStat tester and its environments. The diff itself was exercised again in the
+    Playground the same day (TASK-727's XML run).
 
 ## Outcome (2026-10-22)
 

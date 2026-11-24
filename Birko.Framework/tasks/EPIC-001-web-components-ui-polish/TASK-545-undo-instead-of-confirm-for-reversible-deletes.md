@@ -80,9 +80,17 @@ breaking them. What is left needs a real backend and a screen reader:
 
 - [ ] In a consumer page with the opt-in: delete a row, click Undo — the row is back, and a reload confirms it
       was restored server-side, not just redrawn
+  - **Not run 2026-11-24:** needs a consumer page with a real backend.
 - [ ] Same with keyboard only: Tab to the toast's Undo, press Enter
+  - **Run 2026-11-24, stand-in only:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3, on the `?kb=1` undo-mode page over its in-memory table, not a consumer page:
+    Tab to Bravo's row menu, Enter, Down, Enter deleted it and moved focus to Undo; Enter restored it (back in the
+    table and in the fake backend's live rows). Found: after Undo, focus falls to the page body, so a keyboard user
+    loses their place; this task does not say where it should go.
 - [ ] With a screen reader (NVDA): the toast announces the message and that an action is available
-- [ ] Hover the toast past its duration — it stays; move away — it dismisses
+  - **Not run 2026-11-24:** needs NVDA.
+- [x] Hover the toast past its duration — it stays; move away — it dismisses
+  - **Passed 2026-11-24:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. An Undo toast (10 s) stayed for over 40 s under the pointer, and was gone within 12 s
+    of the pointer leaving (it resumes with the time it had left).
 
 ## Implementation plan
 

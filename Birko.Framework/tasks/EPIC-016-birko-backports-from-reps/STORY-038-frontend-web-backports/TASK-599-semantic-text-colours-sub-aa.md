@@ -109,6 +109,9 @@ palette decision with a visual consequence in two consumers, so it should be *ch
 - [ ] Read a `danger` and a `warning` badge on a real phone in **both** themes, in daylight. The measurement
       settles compliance; a human settles whether it now reads as *urgent* rather than merely legible — a
       contrast fix that makes danger look like a neutral chip has passed the number and failed the purpose.
+  - **Not run 2026-11-24** (needs a real phone in daylight). On a desktop screen the same day, by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3: danger and warning
+    badges measure 4.55 and 4.58 in light, 5.40 and 4.60 in dark, and side by side with a neutral Draft chip danger
+    still reads red and urgent in both themes.
 
 ## Implementation plan
 

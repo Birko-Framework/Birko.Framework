@@ -133,11 +133,21 @@ Screenshots of every layout, the limit line, the picker and the empty state, in 
 ## Human test plan
 
 1. Playground: drag a row to a new position, then move one with the keyboard. The order and the announcement are right.
+   - **Passed 2026-11-24:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. A mouse drag moved Short pile plush from 6 to 2 ("moved to position 2 of 6"); Space, Down,
+     Down, Space moved Velvet mink from 3 to 5, announced as picked up / position 4 / position 5 / dropped at 5 of 6.
+     Seen in passing: a mouse click on a handle does not focus it, so the keyboard move starts from Tab, not a click.
 2. Playground ordered picker: search, pick three, reorder, then search for something else. The chosen list keeps its
    labels and order.
+   - **Passed 2026-11-24:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. Picked Shaggy fur, Velvet mink and Short pile plush (5 of 5), dragged and moved by keyboard;
+     a search for "velvet" left the chosen list's labels and order as they were. A sixth pick at the max was refused
+     with a notice. The search keeps its text after a pick (by design: the results stay, marked "In the list").
 3. On a touch device or touch emulation, drag still works.
+   - **Passed 2026-11-24:** `sortable-drag-check.mjs` (puppeteer's touchscreen, trusted touch) 19/19: a held press then a move
+     drags, a quick swipe does not.
 4. Switch the Playground list to `grid`: tiles wrap with the container's width, and a tile can be dragged into the
    previous row.
+   - **Passed 2026-11-24:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. In grid, the 6 tiles wrap to 3, 2 and 1 rows at 320, 640 and 960 px; Teddy bouclé dragged
+     from the second row into the first landed at position 1, announced.
 
 ## Human test, round 1 (2026-10-29, the user)
 

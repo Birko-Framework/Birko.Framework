@@ -113,6 +113,11 @@ for the rest:
       theme, and confirm by eye that the verdicts match what you see — a contrast number that disagrees with
       the screen means the wrong pair is being measured (this is exactly how the `b-stale-banner` defect was
       first noticed, and how the "measuring the light theme" harness bug was caught).
+  - **Run 2026-11-24, half of it:** by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3. The scan now reports no failing pair (280 measured, no recorded exception left
+    after TASK-599), so there is no failing pair to pick. For passing pairs, the colours the page paints match the
+    scan exactly: light danger badge #ca2323 on #fee2e2, 4.55 (scan 4.55); light warning 4.58 (4.58); dark danger
+    5.40 (5.40); dark warning 4.60 (4.60), and by eye they read as the scan says. The failing half needs a decision:
+    drop it, or check a deliberately broken token instead (the second step already proves the scan goes red).
 - [x] Verify the gate FAILS when it should: revert one of the four `dark.css` tint tokens to its pastel and
       confirm the scan goes red naming that token. A gate never seen failing is not known to work.
 - [x] Check a recorded exception still reports its measured number in the output, so a silently worsening
