@@ -193,7 +193,7 @@
       <FontFamily x:Key="BFont">"Roboto", Arial, Helvetica, sans-serif</FontFamily>
       <FontFamily x:Key="BFontHeading">"Roboto Condensed", "Roboto", Tahoma, Arial, sans-serif</FontFamily>
       <FontFamily x:Key="BFontMono">'SF Mono', 'Fira Code', 'Cascadia Code', monospace</FontFamily>
-      <!-- 24 composite/motion token(s) deferred (shadows, focus rings,
+      <!-- 26 composite/motion token(s) deferred (shadows, focus rings,
            transitions, easings, durations, gradients). -->
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
