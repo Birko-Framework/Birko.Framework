@@ -59,5 +59,10 @@ minimum wins, otherwise the master's; a width is never negative. Both attributes
 
 ## Human test plan
 
-- [ ] In DraCode, with its chat panel's minimum set to 320 px: dragging the divider toward the chat panel stops at
+- [x] In DraCode, with its chat panel's minimum set to 320 px: dragging the divider toward the chat panel stops at
       320 px while dragged, and letting go does not animate a correction.
+  - _Run 2026-11-25 by DraCode (built against task/TASK-981 a0083e9, `master-min="320px" detail-min="280px"`):_ a
+    mouse drag stops the tabs at 320 px and the chat panel at 280 px while dragged, with no gap at any step, and every
+    frame for 400 ms after the drop keeps the width (nothing springs back); Home / End give 320 / 1064 and 1104 / 280,
+    and the arrows do not pass a limit. Two new DraCode e2e tests (red without the attributes: 184 / 120 px) pass;
+    DraCode suite 187/187. Merge waits for the user's word; DraCode's change waits for it on main.
