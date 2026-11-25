@@ -57,6 +57,12 @@ off). A failure that arrives after the stream opened (Claude's `error` event, a 
 `FinalResponse` built with `LlmResponse.Error`, so the agent reports its message. Ollama's `arguments` may be an object
 (`/api/chat`) or a string.
 
+Streamed usage (TASK-987): an OpenAI-shaped streaming request sends `stream_options: { include_usage: true }`, or the
+server sends no token counts and the call never reaches cost tracking or token rate limits. `RequestStreamUsage`
+(default `true`) turns it off per provider: OpenRouter overrides it (deprecated there, usage always sent). Groq's
+streamed usage arrives under `x_groq.usage`, which the shared parser reads. `AzureOpenAiProvider` does not send it: its
+pinned `api-version=2024-02-15-preview` predates the option.
+
 ## Turn order (TASK-546)
 
 The agent's conversation can hold a text user turn right after a tool-result user turn (a hook's

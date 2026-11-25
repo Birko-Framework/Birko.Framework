@@ -208,15 +208,37 @@ namespace Birko.AI.Providers
         /// </summary>
         protected virtual object BuildStreamingPayload(List<Message> messages, List<Tool> tools, string systemPrompt)
         {
+            if (!RequestStreamUsage)
+            {
+                return new
+                {
+                    model = Model,
+                    messages = BuildMessages(messages, systemPrompt),
+                    stream = true,
+                    tools = BuildOpenAiStyleTools(tools),
+                    temperature = Temperature,
+                    max_tokens = MaxTokens
+                };
+            }
             return new
             {
                 model = Model,
                 messages = BuildMessages(messages, systemPrompt),
                 stream = true,
+                stream_options = new { include_usage = true },
                 tools = BuildOpenAiStyleTools(tools),
                 temperature = Temperature,
                 max_tokens = MaxTokens
             };
         }
+
+        /// <summary>
+        /// Whether a streaming request asks the server for a final usage chunk (<c>stream_options.include_usage</c>).
+        /// Without it an OpenAI-compatible server sends no token counts on a stream, so cost tracking and token rate
+        /// limits missed every streamed call (TASK-987). Documented by vLLM, SGLang, llama.cpp, LM Studio (0.3.18+),
+        /// DeepSeek, Groq (under <c>x_groq.usage</c>) and Mistral's public spec. Override to <c>false</c> for a server
+        /// that rejects or ignores it.
+        /// </summary>
+        protected virtual bool RequestStreamUsage => true;
     }
 }

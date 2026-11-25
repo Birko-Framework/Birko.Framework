@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Streamed OpenAI-compatible calls record their token usage (2026-11-25)
+[[TASK-987]], found by DraCode. Streaming requests on `OpenAiCompatibleProviderBase` (vLLM, SGLang, llama.cpp, LM Studio,
+Groq, DeepSeek, Mistral) and `OpenAiProvider` never asked for `stream_options.include_usage`, so the server sent no
+usage chunk and every streamed call was missing from cost tracking and token rate limits. They now ask; Groq's
+`x_groq.usage` is read too; OpenRouter (deprecated option, always sends usage) opts out via `RequestStreamUsage`. Azure
+stays off: its pinned api-version predates the option.
 ### Tracked LLM providers can key usage and rate limits on a configured name (2026-11-25)
 [[TASK-984]], asked for by DraCode. `TrackedLlmProvider` keyed usage records, pricing and every rate-limiter call on the
 client's display name, so two vLLM providers both recorded under "vLLM (finstat)" and a limit configured under
@@ -368,12 +374,6 @@ a value that breaks the client, or one set alongside a URL timeout, is refused.
 SQL views. GROUP BY now adds the exact form of each string key on every SQL provider, so each group returns its own text.
 Cost: an indexed SQL Server key went from ~20 to ~170 ms on 100k rows. **Breaking:** the migrations `ViewSqlGenerator`
 refuses a string-grouped aggregating view without a connector.
-### Aggregate rows ordered by a string are ordinal on every provider (2026-11-11)
-[[TASK-909]] (the user's decision). Ordering aggregate results by a string group key or string MIN/MAX followed the
-machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong per provider (measured; `apple` before
-`Banana`, PostgreSQL NULL last). It now follows `AggregateQuery.StringComparison` (default `Ordinal`) everywhere, also in
-SQL views; SQL refuses other orders by name. MongoDB aggregates ignore a collection's default collation. Found:
-[[TASK-911]] (P1, SQL Server and MySQL GROUP BY merges string keys).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

@@ -134,7 +134,9 @@ namespace Birko.AI.Providers
                     messages = BuildOpenAiStyleMessages(messages, systemPrompt),
                     tools = BuildOpenAiStyleTools(tools),
                     max_tokens = 16384,
-                    stream = true
+                    stream = true,
+                    // Without it OpenAI sends no token counts on a stream, so its usage went unrecorded (TASK-987).
+                    stream_options = new { include_usage = true }
                 };
                 var json = JsonSerializer.Serialize(payload);
 

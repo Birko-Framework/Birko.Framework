@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-11 — Aggregate rows ordered by a string are ordinal on every provider
+[[TASK-909]] (the user's decision). Ordering aggregate results by a string group key or string MIN/MAX followed the
+machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong per provider (measured; `apple` before
+`Banana`, PostgreSQL NULL last). It now follows `AggregateQuery.StringComparison` (default `Ordinal`) everywhere, also in
+SQL views; SQL refuses other orders by name. MongoDB aggregates ignore a collection's default collation. Found:
+[[TASK-911]] (P1, SQL Server and MySQL GROUP BY merges string keys).
+
 ## 2026-11-10 — Aggregate string MIN/MAX are ordinal on every provider
 [[TASK-907]] (the user's decision). String MIN/MAX followed each database's collation and the in-memory oracle the
 machine's culture: 22–30 of 32 cases differed per provider (measured; `apple` vs `Banana`, ß = ss, `a` = `a `). New

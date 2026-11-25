@@ -2,7 +2,7 @@
 id: TASK-987
 parent: EPIC-019
 feature: null
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -31,13 +31,32 @@ that base is affected: DeepSeek, Groq, LlamaCpp, LmStudio, Mistral, OpenRouter, 
 
 ## Acceptance criteria
 
-- [ ] The streaming payload asks for usage (`stream_options.include_usage`), and a streamed call through
+- [x] The streaming payload asks for usage (`stream_options.include_usage`), and a streamed call through
       `TrackedLlmProvider` records prompt and completion tokens.
-- [ ] A server that rejects `stream_options` does not lose the call: measure which of the eight providers' servers accept
+- [x] A server that rejects `stream_options` does not lose the call: measure which of the eight providers' servers accept
       it, and let a provider opt out (an override, or retry without it) where one does not.
-- [ ] Tests: a fake SSE stream with a final usage chunk yields recorded usage; the request body carries the option. Red
+- [x] Tests: a fake SSE stream with a final usage chunk yields recorded usage; the request body carries the option. Red
       before the change.
-- [ ] Recent Updates entry.
+- [x] Recent Updates entry.
+
+## Evidence
+
+Streaming requests on `OpenAiCompatibleProviderBase` now send `stream_options: { include_usage: true }`;
+`RequestStreamUsage` (virtual, default `true`) is the per-provider opt-out. `OpenAiProvider` (not on the base, same
+stream format) sends it too. The shared parser also reads `x_groq.usage`.
+- **Which servers accept it**, from their docs (2026-11-25), not measured against live servers: vLLM, SGLang, llama.cpp
+  (opt-in since #16052), LM Studio 0.3.18+, DeepSeek (400 only if sent without `stream: true`, which the non-streaming
+  payload does not do), OpenAI. Groq accepts it and reports under `x_groq.usage`. Mistral: documented only by a
+  third-party mirror of its public spec. OpenRouter deprecated it (no effect, usage always sent): opted out.
+  `AzureOpenAiProvider` left unchanged: its pinned `api-version=2024-02-15-preview` predates the option (added in
+  2024-09-01-preview), so sending it would risk a 400 on every streamed call. A Mistral or old LM Studio server that
+  rejects the field would now fail streaming; the override is the remedy, and the human test below covers vLLM.
+- `Task987StreamUsageTests` (7): vLLM, Groq and DeepSeek streaming payloads carry the option; OpenRouter's does not; a
+  non-streaming payload does not; an OpenAI stream asks for usage and records 12 + 3 tokens from the final chunk; a
+  Groq-shaped stream records 20 + 5 from `x_groq.usage`. **Red** 5/7 before the change (the two guards held already).
+- `Birko.AI.Providers.Tests` 268/268, `Birko.AI.Tests` 75/75, `Birko.AI.Agents.Tests` 86/86,
+  `Birko.AI.Resilience.Tests` 24/24, `Birko.AI.Orchestration.Tests` 42/42; no nullable warnings. Providers CLAUDE.md,
+  § Recent Updates (oldest entry rolled to CHANGELOG.md to stay under the 10 KB budget).
 
 ## Out of scope
 

@@ -9,6 +9,9 @@ namespace Birko.AI.Providers
     {
         protected override string ProviderName => "OpenRouter";
 
+        /// <summary>OpenRouter deprecated <c>stream_options.include_usage</c>: it always sends usage on the last chunk (TASK-987).</summary>
+        protected override bool RequestStreamUsage => false;
+
         public OpenRouterProvider(string apiKey, string model = "anthropic/claude-3.5-sonnet", string? baseUrl = null)
             : base(model, baseUrl ?? "https://openrouter.ai/api/v1/chat/completions", apiKey)
         {

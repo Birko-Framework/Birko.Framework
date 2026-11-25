@@ -771,7 +771,10 @@ namespace Birko.AI.Providers
                 try { json = JsonSerializer.Deserialize<JsonElement>(chunk); }
                 catch { continue; }
 
-                if (json.TryGetProperty("usage", out var usageEl) && usageEl.ValueKind == JsonValueKind.Object)
+                // Groq reports a stream's usage under x_groq.usage rather than at the top level (TASK-987).
+                if ((json.TryGetProperty("usage", out var usageEl) && usageEl.ValueKind == JsonValueKind.Object)
+                    || (json.TryGetProperty("x_groq", out var groq) && groq.ValueKind == JsonValueKind.Object
+                        && groq.TryGetProperty("usage", out usageEl) && usageEl.ValueKind == JsonValueKind.Object))
                 {
                     tokenUsage = new TokenUsage
                     {
