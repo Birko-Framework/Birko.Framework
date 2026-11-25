@@ -180,9 +180,9 @@ public partial class Ribbon : ContentControl
     /// the window narrows (STORY-049).
     /// </summary>
     /// <remarks>
-    /// Defaults to <see cref="RibbonGroupSize.Medium"/>: it matches what both skins rendered before the
-    /// scaling pass existed, so an existing app's ribbon does not change height on upgrade.
-    /// <see cref="RibbonGroupSize.Large"/> is the Office-like look and is opt-in.
+    /// Defaults to <see cref="RibbonGroupSize.Medium"/>, as b-ribbon's <c>preferred-group-size</c> does, so
+    /// both skins start a group at the same step. <see cref="RibbonGroupSize.Large"/> is the Office-like look
+    /// and is opt-in: an app that sets it is choosing a look, not fixing a parity gap.
     /// </remarks>
     public RibbonGroupSize PreferredGroupSize
     {

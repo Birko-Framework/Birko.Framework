@@ -2,7 +2,7 @@
 id: TASK-124
 parent: STORY-056
 feature: FEATURE-015
-status: todo
+status: verify
 priority: P3
 assignee: ai
 created: 2026-07-31
@@ -55,14 +55,27 @@ doing it twice. Independent, not order-dependent.
 
 ## Acceptance criteria
 
-- [ ] The stale paragraph is replaced with the measured current behaviour
-- [ ] The shared `medium` default is stated, with the note that Symbio's `large` is a preference and
+- [x] The stale paragraph is replaced with the measured current behaviour
+- [x] The shared `medium` default is stated, with the note that Symbio's `large` is a preference and
       not a parity fix
-- [ ] The "keep the two in step" line survives
-- [ ] Neighbouring task-id-bearing comments in `b-ribbon.ts` are checked and corrected if also stale
-- [ ] The equivalent comment on the C# side (`RibbonModels.cs`, `Ribbon.cs:106`) is checked for the
+- [x] The "keep the two in step" line survives
+- [x] Neighbouring task-id-bearing comments in `b-ribbon.ts` are checked and corrected if also stale
+- [x] The equivalent comment on the C# side (`RibbonModels.cs`, `Ribbon.cs:106`) is checked for the
       mirror-image claim
-- [ ] No behaviour change — comments only, and the suites confirm it
+- [x] No behaviour change — comments only, and the suites confirm it
+
+## Evidence
+
+Built with TASK-123 (Birko.Web `task/TASK-123` 4790fee, joins v0.5.7) and in Birko.Framework.
+- `b-ribbon.ts` and `RibbonModels.cs`: the paragraph now says both skins render all four (TASK-099 / TASK-100), both
+  start a group at `medium` (`preferred-group-size` / `PreferredGroupSize`, re-read 2026-11-25), and that an app
+  starting at `large` (Symbio) is choosing a look. "Keep the two in step" kept on both sides.
+- The mirror-image claim was found in `Ribbon.cs` `PreferredGroupSize`: "matches what both skins rendered before the
+  scaling pass" (Avalonia rendered `large` then). Rewritten to the same statement. The TASK-098 token comment
+  (`b-ribbon.ts` ~577) is still accurate: every size comes from a `--b-ribbon-*` token.
+- Comments only: Xaml.Core tests 121/121, Xaml.Avalonia 448/448, Components `tsc` clean, ribbon checks as TASK-123.
+  The Avalonia parity test first failed on a missing `pages/focus-utils` row, a TASK-992 omission unrelated to this
+  task; the row was added (n/a: no shadow DOM on the desktop).
 
 ## Out of scope
 

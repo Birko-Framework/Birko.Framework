@@ -2,7 +2,7 @@
 id: TASK-123
 parent: STORY-056
 feature: FEATURE-015
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-07-31
@@ -61,17 +61,44 @@ carry a mixed group at a width that forces degradation, and assert nothing clips
 
 ## Acceptance criteria
 
-- [ ] The rule for deriving `--b-ribbon-panel-height` under mixed sizes is written down, with the
+- [x] The rule for deriving `--b-ribbon-panel-height` under mixed sizes is written down, with the
       Clipboard example worked through
-- [ ] Decided and recorded: whether the framework exposes the computed height or the consumer derives
+- [x] Decided and recorded: whether the framework exposes the computed height or the consumer derives
       it — and if the latter, why the former was not possible
-- [ ] The derivation accounts for **every reachable configuration**, not the preferred one — the
+- [x] The derivation accounts for **every reachable configuration**, not the preferred one — the
       Symbio TASK-306 failure is the named regression case
-- [ ] A playground check renders a mixed group at a width that forces degradation and asserts no
+- [x] A playground check renders a mixed group at a width that forces degradation and asserts no
       clipping, at more than one width
-- [ ] The docs beside `--b-ribbon-panel-height` carry the rule
+- [x] The docs beside `--b-ribbon-panel-height` carry the rule
 - [ ] A follow-up task is filed **in Symbio's own tasks tree** to extend
       `ribbon-clipping-check.spec.ts` to mixed groups, and cross-linked here
+
+## Decision
+
+**The framework exposes the number** (web): `b-ribbon.requiredPanelHeight`, and one `console.warn` per
+(needed, ceiling) pair when `--b-ribbon-panel-height` is below it. It was possible because the ladder is finite and
+`_measureAndScale` already renders every group at every step in a probe to get the widths, so the heights come from the
+same pass at no extra layout cost. Only the steps the ladder can reach count: `_groupStart(group)` (the preferred step,
+raised by `minSize`) and tighter; a roomier step is never shown and counting it over-estimated (measured 113 vs the
+correct 112). A documented formula alone lost because, as this task says, a formula is what a consumer gets wrong at
+1024px. **Avalonia gets no property:** its `RibbonGroupsPanel` has no ceiling (the panel is as tall as the tallest
+picked variant), so it cannot clip; the README says so.
+
+## Evidence
+
+Birko.Web `task/TASK-123` 4790fee (joins v0.5.7), Playground c521e41.
+- The ceiling is read from the token through the measurement probe, not from the panel's `max-height`, which animates
+  over 300ms on expand: read mid-animation it gave a false warning at 101px and, deduped on the needed height alone,
+  suppressed the real one (both seen, fixed).
+- Clipboard measured at default tokens (7px panel padding top and bottom): `large` 71px, `medium` 98px, `small`
+  98px, so 112px needed; a `large`-preferring ribbon shows an 85px panel at 900px and needs 113px (with border) at 600px,
+  the TASK-306 shape. Worked into the README beside the token.
+- `ribbon-mixed-check` 18/18: a 900→200px sweep finds no command below the panel's bottom (descendants compared, since
+  groups stretch to the panel and the group box never sticks out); `requiredPanelHeight` 112 ≤ the 112px default
+  ceiling; no warning at the default; a 60px token is warned about ("is 60px, but this tab needs 112px") and the sweep
+  sees the cut. **Red** on Birko.Web main: 16/18, the two `requiredPanelHeight` / warning checks.
+- ribbon-a11y 22/22, category-ribbon 19/19, contextual-ribbon 13/13, verify 0 failing (one navigation timeout, passed on
+  re-run and on main), Components `tsc` clean.
 
 ## Out of scope
 

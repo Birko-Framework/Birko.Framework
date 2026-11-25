@@ -10,11 +10,10 @@ namespace Birko.Xaml.Core.Ribbon;
 /// Declared in the order they degrade, so <c>&gt;</c> / <c>&lt;</c> comparisons read as
 /// "roomier than" / "tighter than".
 /// <para>
-/// <b>Neither skin renders all four yet</b> — STORY-049/TASK-099 and TASK-100 build them. As of
-/// TASK-098 the Avalonia <c>Ribbon</c> renders every item as <see cref="Large"/> (icon above a
-/// centred label) while the web <c>b-ribbon</c> renders every item as <see cref="Medium"/>
-/// (16px icon, label to its right) — a pre-existing parity gap this enum names so TASK-099 has to
-/// reconcile it deliberately instead of discovering it.
+/// Both skins render all four (TASK-099 / TASK-100) and both start a group at <see cref="Medium"/>
+/// (<c>Ribbon.PreferredGroupSize</c> here, <c>preferred-group-size</c> on the web <c>b-ribbon</c>).
+/// An app that starts at <see cref="Large"/> (Symbio does) is choosing a look, not fixing a parity
+/// gap; there is none left. Mirrored by <c>RibbonGroupSize</c> in b-ribbon.ts; keep the two in step.
 /// </para>
 /// </remarks>
 public enum RibbonGroupSize
