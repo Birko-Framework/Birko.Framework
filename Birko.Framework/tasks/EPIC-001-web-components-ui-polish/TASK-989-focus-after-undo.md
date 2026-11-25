@@ -56,3 +56,7 @@ the Components README (`focusRow`).
 
 - [ ] On Symbio HR → Positions, keyboard only: delete a position, Enter on Undo; focus is on the restored row and the
       arrow keys keep working from there.
+
+**Merged 2026-11-25** on the user's word ("also merge 989") into Birko.Web main 9a87f73, tagged v0.5.5. On main:
+Components and Shell `tsc` clean, keyboard-check 249/249, table-rows-keyboard-check 17/17, verify 0 failing. Stays at
+verify until the Symbio step above is run (it needs Symbio rebuilt from v0.5.5).
