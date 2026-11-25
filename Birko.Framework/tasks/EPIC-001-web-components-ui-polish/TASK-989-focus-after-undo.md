@@ -2,7 +2,7 @@
 id: TASK-989
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -26,11 +26,27 @@ and a keyboard user loses their place. TASK-545 did not say where focus should g
 
 ## Acceptance criteria
 
-- [ ] After Undo, focus goes to the restored row in the table (via TASK-978's roving tab stop) when the page shows one,
+- [x] After Undo, focus goes to the restored row in the table (via TASK-978's roving tab stop) when the page shows one,
       otherwise back to where the delete was started; never to `<body>`.
-- [ ] Decide and document what a page without a table gets.
-- [ ] Playground check (the `?kb=1` undo-mode page): after Enter on Undo, the focused element is the restored row; red
+- [x] Decide and document what a page without a table gets.
+- [x] Playground check (the `?kb=1` undo-mode page): after Enter on Undo, the focused element is the restored row; red
       before the change.
+
+## Evidence
+
+Birko.Web `task/TASK-989` (starts v0.5.5), Playground keyboard-check commit below. All from builds that printed
+"✓ Built". `base-crud-page` reads at the Undo whether it was pressed from the keyboard (`:focus-visible`, before the
+toast that holds focus is replaced) and, after `_afterRestore` reloads, calls `_focusRestored(id)`: the restored row
+(`b-data-table.focusRow` → `b-table.focusRow`), else the table's tab-stop row (`focusTabStop`) when the restored row is
+not rendered (another page, filtered out), else — rows not focusable (no `clickable-rows`) or no table — the page
+itself (`tabindex="-1"`, no outline), so Tab carries on from the top of the page. A pointer Undo leaves focus alone.
+**Decided for a page without a table** (criterion 2): the page itself. Documented in the Shell README (undo mode) and
+the Components README (`focusRow`).
+- `keyboard-check` 249/249: on the undo page whose rows are not focusable, focus after Undo is the page, not `<body>`;
+  on a clickable-rows variant, Tab and Down reach Bravo, the keyboard delete moves focus to Undo, Enter on Undo puts
+  focus on the restored Bravo row, and Up then moves to Alpha. **Red** 3 of the 5 new on Birko.Web main (focus on a
+  stray button / `<body>`).
+- verify 0 failing; table-rows-keyboard-check 17/17; toast-announce-check 7/7; Components and Shell `tsc` clean.
 
 ## Out of scope
 
