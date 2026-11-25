@@ -50,5 +50,10 @@ which starts v0.5.4 (README design-token table names both forms and why not `ins
 
 ## Human test plan
 
-- [ ] In DraCode, with `.phone-tab` switched to the token: Tab through the phone tab bar in light and dark; the ring and
+- [x] In DraCode, with `.phone-tab` switched to the token: Tab through the phone tab bar in light and dark; the ring and
       its glow stay inside each tab.
+  - _Run 2026-11-25 by DraCode (built against task/TASK-986 8bc8eb4, 390 px phone width, keyboard Tab):_ PASS.
+    `.phone-tab:focus-visible` uses `var(--b-focus-ring-inset)`; in light and dark both the line and the glow sit inside
+    each tab, and the other tabs' pixels are identical to the unfocused bar (no spill). DraCode e2e 188/188, with a new
+    test requiring every shadow of the focused tab's ring to be inset (red without the token). Merge waits for the
+    user's word; DraCode's TASK-199 waits for it on Birko.Web main.

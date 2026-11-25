@@ -2,7 +2,7 @@
 id: TASK-984
 parent: EPIC-019
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -61,5 +61,13 @@ serving `finstat`, so:
 
 ## Human test plan
 
-- [ ] In DraCode, with two providers of one type (`finstat`, `lan2`): the cost report lists them separately, and a
+- [x] In DraCode, with two providers of one type (`finstat`, `lan2`): the cost report lists them separately, and a
       limit configured under `finstat` holds that provider's calls.
+  - _Run 2026-11-25 by DraCode (Birko.Framework 16dc33f3, its TASK-193, a throwaway server):_ PASS. Two vLLM providers on
+    one model, `finstat` ($1/M) and `lan2` ($10/M), a 2 RPM limit under `finstat` only. Usage records name `lan2` and
+    `finstat`, each at its own price (lan2 6,344 tokens = $0.0634), listed as separate cost-report rows. The limit holds
+    finstat ("Rate limit hit for finstat: 2/2 RPM", the third call waited ~58 s); three `lan2` calls ran in 0.7 s.
+    Older records stay under "vLLM (finstat)" and still read. Found on the way: streamed calls record no usage at all
+    (older, not caused by this): [[TASK-987]].
+
+**Closed 2026-11-25** (already on Framework main and pushed, 16dc33f3).
