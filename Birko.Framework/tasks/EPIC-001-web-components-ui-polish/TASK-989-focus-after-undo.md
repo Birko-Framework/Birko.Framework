@@ -34,7 +34,7 @@ and a keyboard user loses their place. TASK-545 did not say where focus should g
 
 ## Evidence
 
-Birko.Web `task/TASK-989` (starts v0.5.5), Playground keyboard-check commit below. All from builds that printed
+Birko.Web `task/TASK-989` 6800e5a (starts v0.5.5), Playground b4047f3. All from builds that printed
 "✓ Built". `base-crud-page` reads at the Undo whether it was pressed from the keyboard (`:focus-visible`, before the
 toast that holds focus is replaced) and, after `_afterRestore` reloads, calls `_focusRestored(id)`: the restored row
 (`b-data-table.focusRow` → `b-table.focusRow`), else the table's tab-stop row (`focusTabStop`) when the restored row is
