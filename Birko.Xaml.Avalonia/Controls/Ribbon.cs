@@ -1669,6 +1669,9 @@ public partial class Ribbon : ContentControl
                 (row, column, span) = (nextRow, nextColumn, 1);
                 if (++nextRow >= perColumn) { nextRow = 0; nextColumn++; }
                 item.VerticalAlignment = VerticalAlignment.Stretch;
+                // At the column's start, as b-ribbon's justify-items: start: a Small command under a wider Medium one
+                // ("Paste ▾") sits under its icon, not centred in the column (seen side by side, 2026-11-25).
+                item.HorizontalAlignment = HorizontalAlignment.Left;
             }
             Grid.SetRow(item, row);
             Grid.SetColumn(item, column);

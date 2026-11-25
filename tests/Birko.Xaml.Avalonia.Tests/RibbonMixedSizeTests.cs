@@ -157,4 +157,30 @@ public class RibbonMixedSizeTests
         panel.Children.Where(c => c.GetVisualDescendants().OfType<Button>().Any(b => Name(b) == "Cut"))
             .Should().NotBeEmpty().And.OnlyContain(c => c.IsVisible);
     }
+
+    [AvaloniaFact]
+    public void At_the_Small_step_the_icons_sit_at_the_column_start_under_Paste()
+    {
+        // Seen side by side with b-ribbon (2026-11-25): stretched to the column's width, a Small command centred its icon
+        // under the wider "Paste ▾"; the web's justify-items: start puts it under Paste's icon, as Office does.
+        var ribbon = Show(out var window, 1000);
+        for (double w = 1000; w >= 260; w -= 20)
+        {
+            Layout(window, w);
+            var panel = PanelOf(ribbon);
+            var pasteBtn = Stops(panel).FirstOrDefault(b => Name(b) == "Paste");
+            var cutBtn = Stops(panel).FirstOrDefault(b => Name(b) == "Cut");
+            if (pasteBtn is null || cutBtn is null) break;
+            var paste = RectIn(pasteBtn, panel);
+            var cut = RectIn(cutBtn, panel);
+            if (cut.Y < paste.Bottom - 1) continue; // Paste still spans the rows, the stack is beside it
+            // The ICONS, not the buttons: a stretched button starts at the column's edge and centres its icon inside it.
+            Rect Icon(Button b) => RectIn(b.GetVisualDescendants().OfType<TextBlock>().First(), panel);
+            var pasteIcon = Icon(pasteBtn);
+            Icon(cutBtn).X.Should().BeApproximately(pasteIcon.X, 2, $"Cut's icon is under Paste's at {w}px");
+            Icon(Command(panel, "Copy")).X.Should().BeApproximately(pasteIcon.X, 2, $"Copy's icon is under Paste's at {w}px");
+            return;
+        }
+        throw new Xunit.Sdk.XunitException("the Clipboard group never reached the step where Paste shares a column with the icons");
+    }
 }
