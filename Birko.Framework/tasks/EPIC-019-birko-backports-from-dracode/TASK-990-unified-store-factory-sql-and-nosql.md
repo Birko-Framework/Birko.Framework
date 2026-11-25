@@ -2,7 +2,7 @@
 id: TASK-990
 parent: EPIC-019
 feature: null
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -53,6 +53,25 @@ that only reads and writes is backend-neutral once it has a store; what is missi
   candidate), and whether `SqlStoreProviders` becomes the shared registry or stays a SQL view of it.
 - Index / schema setup for NoSQL (Elasticsearch mappings, Mongo indexes, Cosmos containers): part of the factory, or
   left to each backend's own API.
+
+## Decisions (the user, 2026-11-25)
+
+- **Backends:** MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON, XML and InMemory. **InfluxDB waits**: it is a
+  time-series store whose point layout is still open (TASK-910).
+- **Connection string:** the product's own format where it has one (`mongodb://…`, Cosmos
+  `AccountEndpoint=…;AccountKey=…`) plus the keys the settings need beside it; `Key=Value;…` for the rest; InMemory
+  takes none. The string is only parsed into the backend's own `Settings` (refusing by name any key it cannot carry,
+  rule 41), and the factory is always built from that settings object. **`StoreFactory.Create(settings, providers)`**
+  takes a settings object directly and picks the backend from its type (the user asked: "we also have the settings class
+  for this"), so a consumer that already builds `Settings` needs no string.
+- **Registry:** `Birko.Data.Stores` holds `IStoreFactory`, `StoreProviders` and `StoreFactory`; the SQL providers
+  register into it too, and `SqlStoreFactory.Create` stays as the typed SQL entry so TASK-988 callers do not change.
+  Repositories: `Birko.Data.Repositories` depends on `Birko.Data.Stores`, not the reverse, so the shared interface
+  hands out stores, and a `GetAsyncRepository<T>()` extension in Repositories wraps one in a generic
+  `AsyncStoreRepository<T>`. `ISqlStoreFactory.GetAsyncRepository` (an instance method) still wins for SQL callers.
+  No new project reference.
+- **Schema / indexes:** an optional `ISchemaStoreFactory` capability (`CreateSchemaAsync(types)`) the caller checks
+  for; SQL has it, a NoSQL backend has it only where its store can ensure its own schema.
 
 ## Out of scope
 
