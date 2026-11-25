@@ -2,7 +2,7 @@
 id: TASK-985
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -63,3 +63,8 @@ does (`full`), optionally under CPU throttling.
 ## Human test plan
 
 - N/A — fully covered by automated tests.
+
+**Merged 2026-11-25** on the user's word ("merge and push") into Birko.Web main 30eef30, tagged v0.5.4 (both entries kept
+under one v0.5.4 heading; TASK-986's tokens.json merged into Framework main 4aced9a2). On main: DesignTokens verify OK,
+tests 59/59; `focus-ring-check` 36/36, keyboard-check 244/244, verify 0 failing (carousel-smoke 61/61,
+ribbon-overflow-smoke 16/16); Components `tsc` clean.

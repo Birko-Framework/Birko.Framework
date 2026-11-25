@@ -2,7 +2,7 @@
 id: TASK-986
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -57,3 +57,8 @@ which starts v0.5.4 (README design-token table names both forms and why not `ins
     each tab, and the other tabs' pixels are identical to the unfocused bar (no spill). DraCode e2e 188/188, with a new
     test requiring every shadow of the focused tab's ring to be inset (red without the token). Merge waits for the
     user's word; DraCode's TASK-199 waits for it on Birko.Web main.
+
+**Merged 2026-11-25** on the user's word ("merge and push") into Birko.Web main 30eef30, tagged v0.5.4 (both entries kept
+under one v0.5.4 heading; TASK-986's tokens.json merged into Framework main 4aced9a2). On main: DesignTokens verify OK,
+tests 59/59; `focus-ring-check` 36/36, keyboard-check 244/244, verify 0 failing (carousel-smoke 61/61,
+ribbon-overflow-smoke 16/16); Components `tsc` clean.
