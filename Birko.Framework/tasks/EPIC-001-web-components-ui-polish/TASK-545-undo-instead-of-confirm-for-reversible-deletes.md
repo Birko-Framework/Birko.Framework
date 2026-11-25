@@ -3,7 +3,7 @@ id: TASK-545
 parent: EPIC-001
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P3
 assignee: ai
@@ -87,7 +87,7 @@ breaking them. What is left needs a real backend and a screen reader:
     Undo sent `POST /api/hr/positions/{id}/restore` (200) and the row came back; after a reload it was still there.
     Found (Symbio): the restore toast reads the raw key `bws.common.restored`, because the page's own `t()` label map
     (`crudLabels`) has no `common.restored` entry and so bypasses the framework's English default.
-- [ ] Same with keyboard only: Tab to the toast's Undo, press Enter
+- [x] Same with keyboard only: Tab to the toast's Undo, press Enter
   - **Blocked on Symbio 2026-11-24:** a keyboard user cannot reach Delete there. Positions opens its detail panel
     (where Delete is) only on a row click: `b-table` rows have no tabindex and no key handling, so Tab goes from the
     column header to the page-size select, and arrow keys do nothing. Framework gap, not specific to Symbio.
@@ -96,6 +96,12 @@ breaking them. What is left needs a real backend and a screen reader:
     Tab to Bravo's row menu, Enter, Down, Enter deleted it and moved focus to Undo; Enter restored it (back in the
     table and in the fake backend's live rows). Found: after Undo, focus falls to the page body, so a keyboard user
     loses their place; this task does not say where it should go.
+  - **Passed 2026-11-25 on Symbio** (Symbio TASK-1122's human test b, run by the Symbio session with real keys, HR →
+    Positions, tenant acme, UI built with TASK-978): Tab to a row, Enter opens its detail, Tab to Delete, Enter deletes
+    and focus lands on the toast's Undo, Enter restores ("Pozícia obnovená." as words, not the raw key), and after F5 the
+    row is still there. The same day the agent ran the row half again on Symbio rebuilt from v0.5.4 (Tab reaches one
+    row, arrows / Home / End move, Up on the first stays, Enter opens the detail panel). Still seen: after Undo, focus
+    drops to <body> because the toast that held it is replaced, filed as [[TASK-989]].
 - [x] With a screen reader (NVDA): the toast announces the message and that an action is available
   - **Failed 2026-11-24:** by the agent at the user's request, NVDA 2026.3.1 (portable, its speech log read) with
     Chrome on the Playground's `?kb=1` page (Birko.Web v0.5.3). On a fresh page the undo toast is not announced at all
@@ -157,7 +163,10 @@ Drafted at pick, 2026-10-14. Code lands in `Birko\Web` (one commit), the smoke s
 - [x] Hover past the duration: a toast raised as the toast service does (message, Undo action, 8 s), hovered with the
       real mouse 0.4 s in, was still there at 10.4 s; after the pointer left it was gone within 15 s (exact moment not
       measurable through the tool's latency). It stays while hovered and goes after.
-- [ ] Real backend restore, keyboard Undo in a consumer page and NVDA: still open (need a consumer page and a screen
+- [x] Real backend restore, keyboard Undo in a consumer page and NVDA (covered 2026-11-24/25 by the human test plan runs above; was: still open, need a consumer page and a screen
       reader).
 - Found on the way: the Playground's Toast item card rendered an empty toast (it passed the text as children,
   `b-toast-item` reads `message`); fixed on the Playground branch with TASK-787b.
+
+**Closed 2026-11-25:** every human test step has passed (mouse and keyboard Undo on Symbio HR → Positions with a real
+backend, NVDA after TASK-976, hover). Follow-up: [[TASK-989]] (focus after Undo).
