@@ -25,7 +25,7 @@ Production resilience for LLM API calls — rate limiting, circuit breaker, cost
 - `CostTrackingService` — Token usage and cost tracking per provider. `CheckBudgetAsync` answers the first exceeded budget (daily, monthly, project), and only then the first warning (TASK-715: a warning used to hide a later exceeded budget)
 
 ### Services/TrackedLlmProvider.cs
-- `TrackedLlmProvider` — Decorator wrapping `ILlmProvider` with rate limiting, circuit breaker, and cost tracking. Every request made counts against the rate limit, with or without usage in the reply and when it throws (TASK-715)
+- `TrackedLlmProvider` — Decorator wrapping `ILlmProvider` with rate limiting, circuit breaker, and cost tracking. Every request made counts against the rate limit, with or without usage in the reply and when it throws (TASK-715). `ProviderName` (init, optional; TASK-984) is the configured name usage records, pricing and the rate limiter key on (`TrackingName`); null keeps `Name`, the client's display name; blank throws
 
 ### Configuration/RateLimitConfiguration.cs
 - `RateLimitConfiguration` — Rate limit settings (requests per minute, tokens per minute)

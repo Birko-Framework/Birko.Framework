@@ -20,7 +20,30 @@ namespace Birko.AI.Resilience.Services
         public string? AgentType { get; set; }
         public string? CallerContext { get; set; }
 
+        /// <summary>The client's display name (e.g. "vLLM (finstat)"); unchanged by <see cref="ProviderName"/>.</summary>
         public string Name => _inner.Name;
+
+        private readonly string? _providerName;
+
+        /// <summary>
+        /// The consumer's configured name for this provider (e.g. <c>finstat</c>), which usage records, pricing and the
+        /// rate limiter key on when set, so two providers of one type stay apart and a limit configured under that name
+        /// applies. <c>null</c> (the default): they key on <see cref="Name"/>, as before. A blank name is refused
+        /// (TASK-984). Price it under this name too: <see cref="CostTrackingService"/> looks pricing up by it.
+        /// </summary>
+        public string? ProviderName
+        {
+            get => _providerName;
+            init
+            {
+                if (value != null && string.IsNullOrWhiteSpace(value))
+                    throw new ArgumentException("ProviderName must not be blank; leave it null to use the client's Name.", nameof(ProviderName));
+                _providerName = value;
+            }
+        }
+
+        /// <summary>What usage records, pricing and the rate limiter key on.</summary>
+        private string TrackingName => _providerName ?? Name;
 
         public Action<string, string>? MessageCallback
         {
@@ -63,10 +86,10 @@ namespace Birko.AI.Resilience.Services
 
             for (var attempt = 0; attempt < MaxRateLimitWaitAttempts; attempt++)
             {
-                if (_rateLimiter.CanMakeRequest(Name))
+                if (_rateLimiter.CanMakeRequest(TrackingName))
                     return true;
 
-                var retryAfter = _rateLimiter.GetRetryAfter(Name);
+                var retryAfter = _rateLimiter.GetRetryAfter(TrackingName);
                 var delay = retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero
                     ? retryAfter.Value
                     : TimeSpan.FromSeconds(1);
@@ -74,19 +97,19 @@ namespace Birko.AI.Resilience.Services
                     delay = MaxSingleRateLimitWait;
 
                 _logger?.LogWarning("Rate limited for {Provider} ({Context}), waiting {Seconds:F1}s (attempt {Attempt}/{Max})",
-                    Name, context, delay.TotalSeconds, attempt + 1, MaxRateLimitWaitAttempts);
+                    TrackingName, context, delay.TotalSeconds, attempt + 1, MaxRateLimitWaitAttempts);
                 await Task.Delay(delay, cancellationToken);
             }
 
             // Final re-check after exhausting the attempt cap.
-            return _rateLimiter.CanMakeRequest(Name);
+            return _rateLimiter.CanMakeRequest(TrackingName);
         }
 
         public async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!await WaitForRateLimitSlotAsync("sync", cancellationToken))
             {
-                var limitMsg = $"Rate limit for {Name} could not be satisfied after waiting.";
+                var limitMsg = $"Rate limit for {TrackingName} could not be satisfied after waiting.";
                 _logger?.LogWarning(limitMsg);
                 return LlmResponse.Error(limitMsg);
             }
@@ -111,10 +134,10 @@ namespace Birko.AI.Resilience.Services
             }
             catch
             {
-                _rateLimiter?.RecordRequest(Name);
+                _rateLimiter?.RecordRequest(TrackingName);
                 throw;
             }
-            _rateLimiter?.RecordRequest(Name, response.Usage?.TotalTokens ?? 0);
+            _rateLimiter?.RecordRequest(TrackingName, response.Usage?.TotalTokens ?? 0);
             await RecordCostFromResponse(response.Usage);
             return response;
         }
@@ -123,7 +146,7 @@ namespace Birko.AI.Resilience.Services
         {
             if (!await WaitForRateLimitSlotAsync("streaming", cancellationToken))
             {
-                var limitMsg = $"Rate limit for {Name} could not be satisfied after waiting.";
+                var limitMsg = $"Rate limit for {TrackingName} could not be satisfied after waiting.";
                 _logger?.LogWarning(limitMsg);
                 return new LlmStreamingResponse
                 {
@@ -155,11 +178,11 @@ namespace Birko.AI.Resilience.Services
             }
             catch
             {
-                _rateLimiter?.RecordRequest(Name);   // TASK-715
+                _rateLimiter?.RecordRequest(TrackingName);   // TASK-715
                 throw;
             }
             // TASK-715: the request is counted now; its tokens when the stream ends, if it reports any.
-            _rateLimiter?.RecordRequest(Name);
+            _rateLimiter?.RecordRequest(TrackingName);
 
             // Preserve the inner response's disposable Resource by re-wrapping only the stream delegate.
             var originalGetStream = streamingResponse.GetStreamAsync;
@@ -185,7 +208,7 @@ namespace Birko.AI.Resilience.Services
             var usage = streamingResponse.Usage ?? streamingResponse.FinalResponse?.Usage;
             if (usage != null)
             {
-                _rateLimiter?.RecordTokens(Name, usage.TotalTokens);
+                _rateLimiter?.RecordTokens(TrackingName, usage.TotalTokens);
             }
             await RecordCostFromResponse(usage);
         }
@@ -201,7 +224,7 @@ namespace Birko.AI.Resilience.Services
                 {
                     // No token: the call has been made, so its spend is recorded even if the caller cancels now.
                     await _costTracker.RecordUsageAsync(new UsageRecord(
-                        Provider: Name,
+                        Provider: TrackingName,
                         Model: usage.Model ?? "",
                         PromptTokens: usage.PromptTokens,
                         CompletionTokens: usage.CompletionTokens,
@@ -212,7 +235,7 @@ namespace Birko.AI.Resilience.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "Failed to record usage for {Provider}", Name);
+                    _logger?.LogWarning(ex, "Failed to record usage for {Provider}", TrackingName);
                 }
             }
         }

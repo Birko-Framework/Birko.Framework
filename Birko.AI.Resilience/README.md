@@ -33,8 +33,18 @@ Birko.AI.Resilience wraps `ILlmProvider` instances with production-grade resilie
 ```csharp
 using Birko.AI.Resilience.Services;
 
-var tracked = new TrackedLlmProvider(provider, rateLimiter, circuitBreaker, costTracker);
+var tracked = new TrackedLlmProvider(provider, rateLimiter, costTracker, logger)
+{
+    // Optional: the name usage records, pricing and rate limits key on. Without it, provider.Name (the client's
+    // display name, e.g. "vLLM (finstat)") is used, so two providers of one type would share one name.
+    ProviderName = "finstat",
+};
 ```
+
+`ProviderName` (TASK-984) is the consumer's own name for the provider. When set, `UsageRecord.Provider`, the
+`CostTrackingService` pricing lookup and every `ProviderRateLimiter` call use it, so configure pricing and
+`ProviderLimits[].Provider` under that name. `Name` stays the client's display name. A blank name throws
+`ArgumentException`.
 
 ## License
 

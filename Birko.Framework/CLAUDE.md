@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### Tracked LLM providers can key usage and rate limits on a configured name (2026-11-25)
+[[TASK-984]], asked for by DraCode. `TrackedLlmProvider` keyed usage records, pricing and every rate-limiter call on the
+client's display name, so two vLLM providers both recorded under "vLLM (finstat)" and a limit configured under
+`finstat` never matched (never applied; seen in DraCode's test). New optional `ProviderName` (init) is what they key on
+when set; null keeps `Name`; blank throws. `Name` stays the display name.
 ### SQLite on plain PasswordSettings gets WAL too (2026-11-19)
 [[TASK-941]], reported by DraCode. TASK-296's WAL default was applied only when a store got `SqLiteSettings`; with
 plain `PasswordSettings` the file stayed on the rollback journal, and a read could answer empty for a table that had
