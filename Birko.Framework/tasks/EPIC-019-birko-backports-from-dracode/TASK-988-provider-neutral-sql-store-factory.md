@@ -38,7 +38,7 @@ What DraCode uses from a store today: `CreateSchemaAsync`, the connector's `Ensu
 - [x] The SQLite path keeps today's `SqLiteSettings` behaviour: WAL on first use and one connector per file (TASK-941;
       DraCode's `SqliteJournalModeTests` guard it).
 - [x] An unknown provider name or a connection string the provider cannot use is refused at registration, by name.
-- [ ] Tests: the same store-level suite runs on SQLite and, live, on PostgreSQL (the `BIRKO_PG_HOST` convention, skipped
+- [x] Tests: the same store-level suite runs on SQLite and, live, on PostgreSQL (the `BIRKO_PG_HOST` convention, skipped
       when unset, required under `BIRKO_REQUIRE_LIVE`).
 - [x] README / CLAUDE.md for the projects touched; Recent Updates entry.
 
@@ -82,6 +82,10 @@ that and keeps the SQL-only connector / schema part separate.
 - `Birko.Data.SQL.Providers.Tests` 61/61; `Birko.Data.SQL.Tests` 1147, SqLite 3193, PostgreSQL 2605, MySQL 2627, MSSql
   2661, `Birko.Data.Tests` 335, all passing; `Birko.Framework.slnx` builds, 0 errors. READMEs (SQL and the four
   providers), Birko.Data.SQL CLAUDE.md, § Recent Updates (oldest entry rolled to CHANGELOG.md).
+
+**Live PostgreSQL passed in CI 2026-11-25:** the live-tests job on Framework a6fd43a5 ran `Birko.Data.SQL.Providers.Tests`
+61/61 with none skipped (`BIRKO_PG_HOST` set), so `PostgreSQL_live_runs_the_same_store_suite` ran and passed. That
+job failed only on an unrelated Cosmos DB test, failing since an earlier run. DraCode's human test remains.
 
 ## Out of scope
 
