@@ -155,6 +155,7 @@ Words outside backticks are not. By status:
 | `shell/mobile-nav` | built | `MobileNavItem` | |
 | `shell/shell-types` | n/a | | types shared by the web shells |
 | `shell/shell-wrapper` | built | `ViewLocator` | swaps the page inside a persistent shell |
+| `shell/theme-boot` | n/a | | browser-only: an inline script that applies the saved theme before the page's first paint (TASK-972); a desktop window is themed before it is shown |
 | `shell/theme-registry` | built | `IThemeManager` and `AvaloniaThemeManager` | |
 | `tenants/branding` | missing | | the desktop shell has a tenant switcher but no per-tenant branding |
 | `tenants/tenant-types` | n/a | | types of the tenant switcher; the desktop's is a list of names |
