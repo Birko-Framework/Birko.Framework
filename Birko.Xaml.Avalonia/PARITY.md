@@ -146,6 +146,7 @@ Words outside backticks are not. By status:
 | `pages/base-split-page` | built | `SplitPageViewModel` and `SplitPageView` | |
 | `pages/contextual-ribbon` | missing | | a page raising its record's contextual tab through the shell (TASK-804); the desktop `Ribbon` has contextual tabs (`RibbonContextual`), set by the host, with no page-to-shell request |
 | `pages/endpoint-utils` | n/a | | builds REST URLs; desktop pages read through `ICrudDataSource` |
+| `pages/focus-utils` | n/a | | finds and moves focus through shadow roots (TASK-992); Avalonia has no shadow DOM and moves focus with `FocusManager` |
 | `pages/live-refresh` | missing | | |
 | `shell/b-app-shell` | built | `RibbonShellView` | |
 | `shell/b-core-app-shell` | built | `ShellViewModel` | |
