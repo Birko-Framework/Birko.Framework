@@ -2,7 +2,7 @@
 id: TASK-983
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -65,10 +65,18 @@ inverse #60a5fa / #f87171 (new: the inherited base ring measured 2.80:1 on its c
 
 ## Human test plan
 
-- [ ] Tab through a Symbio form and list page in light and dark: every focused control is plainly marked.
+- [x] Tab through a Symbio form and list page in light and dark: every focused control is plainly marked.
 
 **Signed off and merged 2026-11-25** (the user: "it looks good", then "merge", after tabbing through the Playground
 built from task/TASK-983). Framework main cb1e154d (`tokens.json`) and Birko.Web main 75a972f together, as part of
 v0.5.3 (the unpushed tag moved). On main: DesignTokens `verify` OK and tests 59/59; `focus-ring-check` 24/24,
 `sync-dead-focus-check` 15/15, `split-transition-check` 26/26, `overlay-footer-check` 8/8, keyboard-check 244/244,
 verify 0 failing. Stays at verify until the Symbio step above is run (it needs Symbio rebuilt from Birko.Web main).
+  - _Run 2026-11-25 by the agent in Chrome with real keys_, Symbio rebuilt from Birko.Web v0.5.4 (30eef30), tenant
+    acme, with Symbio's own light/dark tokens updated to v0.5.4 by its TASK-1131 (served by the dev server, branch
+    not yet merged there). HR → Positions and its Add Position form, computed styles after the 150 ms fade: in light
+    the search box, the sort header and the form fields (title, code, department, pay grade) draw
+    `rgb(37,99,235) 0 0 0 1px, rgba(37,99,235,.5) 0 0 4px 1px` and the focused row a 2px rgb(37,99,235) outline; in
+    dark the same in rgb(59,130,246). Plainly visible in the screenshots in both. PASS.
+
+**Closed 2026-11-25.** Symbio's own tokens follow via its TASK-1131.
