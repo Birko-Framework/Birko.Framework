@@ -2,7 +2,7 @@
 id: TASK-119
 parent: STORY-056
 feature: FEATURE-015
-status: todo
+status: done
 priority: P1
 assignee: human
 created: 2026-07-31
@@ -93,18 +93,97 @@ Judge both against these, and record why the loser lost:
 
 ## Acceptance criteria
 
-- [ ] **Default / cap / anchor** decided and recorded, with the reasoning — this constrains everything
+- [x] **Default / cap / anchor** decided and recorded, with the reasoning — this constrains everything
       below it
-- [ ] If **default** is chosen, the undegradable-group case has a defined answer
-- [ ] One model chosen, written up in this file with the reasoning
-- [ ] The rejected option is recorded with *why* — so it is not re-proposed later as if unexplored
-- [ ] An item that sets no size resolves to its group's size, in the chosen model
-- [ ] The chosen model is shown to satisfy each bullet above, determinism first
-- [ ] The replacement for `RibbonGroupMetrics.Widths` is sketched concretely enough that TASK-121 can
+- [x] If **default** is chosen, the undegradable-group case has a defined answer
+- [x] One model chosen, written up in this file with the reasoning
+- [x] The rejected option is recorded with *why* — so it is not re-proposed later as if unexplored
+- [x] An item that sets no size resolves to its group's size, in the chosen model
+- [x] The chosen model is shown to satisfy each bullet above, determinism first
+- [x] The replacement for `RibbonGroupMetrics.Widths` is sketched concretely enough that TASK-121 can
       start from it (the key type, and how a width is obtained for a candidate configuration)
-- [ ] Worked example: Word's Clipboard group — big Paste beside stacked Cut/Copy/Format Painter —
+- [x] Worked example: Word's Clipboard group — big Paste beside stacked Cut/Copy/Format Painter —
       expressed in the chosen model, and its degrade path down to `popup` traced
-- [ ] Confirmed the model does not require the scaling pass to read the applied layout
+- [x] Confirmed the model does not require the scaling pass to read the applied layout
+
+## Decision (the user, 2026-11-25)
+
+Picked by the user from a side-by-side preview of the options (default / cap / anchor, then the two models), both
+times the recommended one. Recorded in FEATURE-015 as D13 and D14.
+
+### 1. The group size is an **anchor**
+
+An item that sets a size keeps its **offset** from the group's starting step, and moves with the group at every step.
+Sizes are ranked Large > Medium > Small; Popup is a group-level step, not an item size.
+
+- The offset is measured against the group's **starting step**: the step the ladder starts it at (the ribbon's
+  preferred step, Medium by default, made roomier by the group's `MinSize` floor, exactly as `Resolve` starts today).
+  `Paste = large` in a group that starts at Medium is "one step bigger than the rest".
+- At step S an item renders at `clamp(S shifted by its offset, Large .. Small)`. At the top the relationship can
+  flatten (Paste at +1 in a Large group is still Large); at the bottom every item reaches Small, so the group can
+  always go to its next step and finally to Popup.
+- **An item that sets no size has offset 0**: it renders at the group's step, exactly as today.
+
+*Why:* it keeps the author's intent ("Paste is the big one") at every step, and every group stays degradable, so the
+ladder never meets a group it cannot shrink.
+*Rejected:* **default** (the item size always wins) lets a group become impossible to shrink and then needs a rule
+for that case (overflow, force Popup, or break the item size); **cap** (the group size is a ceiling) makes the big
+Paste vanish at the first narrowing, as if it had no size at all.
+
+### 2. The model: **one layout per step (templates)**
+
+A group still degrades through the same four steps, Large → Medium → Small → Popup. Each step has **one** item
+layout:
+
+- **generated** by the anchor rule above, unless
+- the group **declares** a layout for that step (a template), which then wins. This is how Office's "Paste stays
+  Large while Cut / Copy / Format Painter shrink" is written; Office's own `SizeDefinition` is the same idea, a
+  declared layout rather than a solver.
+
+*Rejected:* **per-item degrade order** (each item has its own size and shrink priority, and the pass shrinks one item
+at a time). A group's width would depend on every item's state, up to 3^n combinations to measure and to test
+identically in C# and the web, and the pass becomes an optimiser, the class of feedback that caused STORY-049's
+boundary oscillation. An author who needs a mix the anchor rule does not give declares a template for that step.
+
+### How it meets the requirements
+
+- **Determinism.** A step's layout is a pure function of (the step, the items' sizes, the group's templates), and
+  `RibbonScaling.Resolve` still chooses steps from the measured widths alone. Nothing reads the applied layout.
+- **Testability.** Still four widths per group, so C# tests and the Playground smoke assert the same finite table.
+- **Both skins.** The same shape in `RibbonModels.cs` and `b-ribbon.ts`: an optional size per item, an optional
+  map from step to per-item sizes per group.
+- **Additive.** No item size and no template: every item has offset 0, every step's layout is today's, so existing
+  ribbons render byte-identically.
+- **`MinSize`** keeps its meaning, a floor on the group's **step** (preferred, breached least-important-first rather
+  than overflowing, as now); it says nothing about individual items.
+
+### The replacement for `RibbonGroupMetrics.Widths`
+
+None is needed: the key stays `RibbonGroupSize` (the step) and the value stays one width. What changes is what the
+renderer measures for each step: the step's **resolved layout** (generated or declared) instead of "every item at
+that size". So TASK-121 (the ladder) is expected to be small: `Resolve` keeps its shape; the work is resolving a
+step's layout (TASK-120), and measuring and drawing mixed columns (TASK-122).
+
+```text
+RibbonItem.Size?            : Large | Medium | Small     (null = offset 0)
+RibbonGroup.Layouts?        : { [step]: { [itemId]: size } }   (declared templates, any subset of steps)
+LayoutAt(group, step)       = Layouts[step] ?? anchor(group, step)
+Widths[step]                = measure(LayoutAt(group, step))       // still 4 numbers per group
+```
+
+### Worked example: Word's Clipboard group
+
+Items Paste, Cut, Copy, Format Painter; the ribbon starts groups at Medium. Anchor only, `Paste = Large`:
+
+| Step | Paste | Cut / Copy / Format Painter |
+|---|---|---|
+| Medium (start) | Large (one column, label below) | Medium (stacked, labels) |
+| Small | Medium | Small (stacked, icons only) |
+| Popup | the group is one button; its flyout shows the items at Large | |
+
+Office keeps Paste Large one step longer; with a declared template for Small (`Paste = Large`, the rest Small) the
+path is Medium {Paste L, rest M} → Small {Paste L, rest S} → Popup. Each row is one measured width, so the ladder
+degrades it exactly as it degrades a uniform group today.
 
 ## Out of scope
 
