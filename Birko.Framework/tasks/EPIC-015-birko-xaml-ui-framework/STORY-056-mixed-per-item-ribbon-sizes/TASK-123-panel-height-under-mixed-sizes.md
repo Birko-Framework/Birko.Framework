@@ -70,8 +70,10 @@ carry a mixed group at a width that forces degradation, and assert nothing clips
 - [x] A playground check renders a mixed group at a width that forces degradation and asserts no
       clipping, at more than one width
 - [x] The docs beside `--b-ribbon-panel-height` carry the rule
-- [ ] A follow-up task is filed **in Symbio's own tasks tree** to extend
-      `ribbon-clipping-check.spec.ts` to mixed groups, and cross-linked here
+- [x] A follow-up task is filed **in Symbio's own tasks tree** to extend
+      `ribbon-clipping-check.spec.ts` to mixed groups, and cross-linked here: **Symbio TASK-1133**
+      (`tasks/EPIC-026-ui-component-extensions/TASK-1133-ribbon-clipping-spec-covers-mixed-size-groups.md`, filed
+      2026-11-25 by the Symbio session; waits for v0.5.7 pushed and a Symbio rebuild)
 
 ## Decision
 
