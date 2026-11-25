@@ -2,7 +2,7 @@
 id: TASK-980
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-24
@@ -56,5 +56,12 @@ Both components call it from `onUpdated`; b-drawer's `:empty` rule is gone.
 
 ## Human test plan
 
-- [ ] Open a modal and a drawer with no footer (light and dark): the body's last line sits on the overlay's bottom
+- [x] Open a modal and a drawer with no footer (light and dark): the body's last line sits on the overlay's bottom
       edge padding, with no extra band or border line under it. Open one with a footer: unchanged.
+
+**Signed off and merged 2026-11-25** on the user's word ("looks ok merge", after checking the Playground built from
+task/TASK-980: the gallery drawer, a footerless modal and the footer modal, light and dark) into Birko.Web main e287410
+as part of v0.5.3 (the unpushed tag moved). On main: `overlay-footer-check` 8/8, `split-transition-check` 15/15;
+verify 0 failing on the third of three runs. The first two each failed one different scroll-timing check
+(`ribbon-overflow-smoke` "back chevron became visible", `carousel-smoke` "lands at the end"). Neither involves an
+overlay footer, and each passed on the other runs.
