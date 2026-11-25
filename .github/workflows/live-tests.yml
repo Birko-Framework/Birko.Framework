@@ -80,7 +80,7 @@ jobs:
                    Birko.Data.SQL.MSSql.Tests Birko.Data.SQL.MSSql.View.Tests Birko.Data.SQL.Providers.Tests Birko.Data.SQL.Views.Tests \
                    Birko.Data.Migrations.SQL.Tests Birko.Data.TimescaleDB.Tests \
                    Birko.Data.Migrations.TimescaleDB.Tests Birko.BackgroundJobs.SQL.Tests Birko.Data.Localization.SQL.Tests; do
-            dotnet test "tests/$p" --nologo -v q || { echo "::error::$p failed"; fail=1; }
+            dotnet test "tests/$p" --nologo -v q --logger "console;verbosity=minimal" || { echo "::error::$p failed"; fail=1; }
           done
           exit $fail
 
@@ -115,7 +115,7 @@ jobs:
           fail=0
           for p in Birko.Data.MongoDB.Tests Birko.Data.MongoDB.Views.Tests Birko.Data.Migrations.MongoDB.Tests \
                    Birko.Workflow.MongoDB.Tests Birko.BackgroundJobs.MongoDB.Tests; do
-            dotnet test "tests/$p" --nologo -v q || { echo "::error::$p failed"; fail=1; }
+            dotnet test "tests/$p" --nologo -v q --logger "console;verbosity=minimal" || { echo "::error::$p failed"; fail=1; }
           done
           exit $fail
 
@@ -161,7 +161,7 @@ jobs:
           # suite already carries in source.
           BIRKO_COSMOS_CONNECTION: 'AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=='
           BIRKO_COSMOS_CONNECTION_MODE: Gateway
-        run: dotnet test tests/Birko.Data.CosmosDB.Tests --nologo -v q
+        run: dotnet test tests/Birko.Data.CosmosDB.Tests --nologo -v q --logger "console;verbosity=minimal"
 
   # UNVERIFIED FIXTURES (2026-09-18)
   # The three jobs below were written from the suites' env vars, NOT from a measured local run the
@@ -183,7 +183,7 @@ jobs:
       - name: Run RavenDB suites
         env:
           BIRKO_RAVEN_URL: http://localhost:8080
-        run: dotnet test tests/Birko.Data.RavenDB.Tests --nologo -v q
+        run: dotnet test tests/Birko.Data.RavenDB.Tests --nologo -v q --logger "console;verbosity=minimal"
 
   redis:
     name: Redis (unverified fixture)
@@ -200,7 +200,7 @@ jobs:
       - name: Run Redis suites
         env:
           BIRKO_REDIS_HOST: localhost
-        run: dotnet test tests/Birko.BackgroundJobs.Redis.Tests --nologo -v q
+        run: dotnet test tests/Birko.BackgroundJobs.Redis.Tests --nologo -v q --logger "console;verbosity=minimal"
 
   influx:
     name: InfluxDB (unverified fixture)
@@ -218,4 +218,4 @@ jobs:
         env:
           BIRKO_INFLUX_HOST: localhost
           BIRKO_INFLUX_PORT: '8086'
-        run: dotnet test tests/Birko.Data.Migrations.InfluxDB.Tests --nologo -v q
+        run: dotnet test tests/Birko.Data.Migrations.InfluxDB.Tests --nologo -v q --logger "console;verbosity=minimal"
