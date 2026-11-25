@@ -111,6 +111,8 @@ Birko.Web `task/TASK-123` 4790fee (joins v0.5.7), Playground c521e41.
 
 ## Human test plan
 
-- [ ] Narrow a window carrying a mixed-size ribbon from wide to ~1024px in steps, watching for a
+- [x] Narrow a window carrying a mixed-size ribbon from wide to ~1024px in steps, watching for a
       clipped row. This is the exact failure Symbio shipped: it looked perfect at 1600px, so a check at
       one comfortable width proves nothing. Do it on both skins.
+
+**Human test passed 2026-11-25** (the user, both skins: "seem to be working"). Awaiting the merge into v0.5.7.
