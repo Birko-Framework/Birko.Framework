@@ -3,7 +3,7 @@ id: TASK-977
 parent: EPIC-018
 feature: FEATURE-018
 priority: P1
-status: verify
+status: done
 assignee: ai
 created: 2026-11-24
 depends-on: []
@@ -72,7 +72,7 @@ error or a 5xx and still backs off to `retryMaxMs`. That is how Reps implements 
     **Found:** the focus indicator is faint. It is `outline: none` plus a 3px box-shadow at 15% red, so on the pink
     chip in light mode the focused and unfocused states are hard to tell apart; `b-button` shows a clear ring
     beside it. Not a failure of this step, but it is below the 3:1 a focus indicator needs, so it needs a
-    follow-up task.
+    follow-up task: filed as [[TASK-982]]. Plan fully run; closed 2026-11-25.
 
 ## Implementation plan
 
