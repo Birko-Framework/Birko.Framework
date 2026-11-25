@@ -2,7 +2,7 @@
 id: TASK-987
 parent: EPIC-019
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -64,4 +64,10 @@ stream format) sends it too. The shared parser also reads `x_groq.usage`.
 
 ## Human test plan
 
-- [ ] In DraCode, a streamed Dragon reply through vLLM appears in the cost report with its token counts.
+- [x] In DraCode, a streamed Dragon reply through vLLM appears in the cost report with its token counts.
+  - _Run 2026-11-25 by DraCode (Birko.Framework e4a18826, a throwaway server, vLLM provider `lan2`):_ PASS. A streamed
+    Dragon reply is now recorded (lan2 / dragon, 3,646 prompt + 43 completion tokens, $0.0369); a 600-word streamed story
+    recorded 695 completion tokens. The cost report lists lan2 at 5 requests / 23,284 tokens (2 before the run), finstat
+    on its own row. vLLM accepted `stream_options`, no errors.
+
+**Closed 2026-11-25** (on Framework main, e4a18826; not pushed yet).
