@@ -49,6 +49,12 @@ What DraCode uses from a store today: `CreateSchemaAsync`, the connector's `Ensu
 - The connection string vs Birko's settings chain (`SqlSettings` descendants): parse one into the other, or accept both.
 - Whether the existing per-provider factories are kept, implemented on top of the new one, or retired.
 
+Inputs from DraCode (2026-11-25), not decisions: it needs one database per process, chosen by a provider name plus a
+connection string (or a SQLite file path), so anything in the `SqlSettings` chain buildable from those two strings
+works for it; it uses only async stores and repositories, so the sync factories do not matter to it. The user
+(2026-11-25): SQL databases only; NoSQL stores already share `IAsyncBulkStore<T>`, so the factory hands stores out as
+that and keeps the SQL-only connector / schema part separate.
+
 ## Out of scope
 
 - Non-SQL stores (MongoDB, Elasticsearch, …).
