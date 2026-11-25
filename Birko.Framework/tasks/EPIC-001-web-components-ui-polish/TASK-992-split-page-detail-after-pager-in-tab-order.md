@@ -79,3 +79,8 @@ does not move focus. `deepActiveElement` moved to `pages/focus-utils.ts`, shared
 
 - [ ] On Symbio HR → Positions, keyboard only: open a position with Enter, reach Delete in the fewest keys the chosen
       option promises, close the panel, focus is back on the row.
+
+**Merged 2026-11-25** on the user's word ("merge") into Birko.Web main 77f5e15, tagged v0.5.7 locally (not pushed; the
+next Birko.Web work joins v0.5.7 and moves the tag until it is pushed). On main: Shell `tsc` clean,
+`table-rows-keyboard-check` 23/23, keyboard-check 249/249, verify 0 failing. Stays at verify until the Symbio step
+above is run (it needs Symbio rebuilt from v0.5.7 once that is pushed).
