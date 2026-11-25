@@ -141,6 +141,12 @@ wall clock. On a UTC server the two are unambiguous and nothing downstream has t
 - [Birko.Data.SQL](../Birko.Data.SQL/) - SQL base classes
 - [Birko.Data.TimescaleDB](../Birko.Data.TimescaleDB/) - TimescaleDB (PostgreSQL extension)
 
+## Choosing the provider by configuration
+
+`p.AddPostgreSQL()` registers this provider with `SqlStoreFactory.Create` under the name `PostgreSQL` (TASK-988), so code
+that takes an `ISqlStoreFactory` runs on it without naming it. See
+[Birko.Data.SQL — Choosing the provider by configuration](../Birko.Data.SQL/README.md).
+
 ## License
 
 Part of the Birko Framework.

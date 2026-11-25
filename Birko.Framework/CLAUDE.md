@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### One SQL store factory for any provider, chosen by configuration (2026-11-25)
+[[TASK-988]], asked for by DraCode. `SqlStoreFactory.Create(provider, connectionString, p => p.AddSqLite().AddPostgreSQL())`
+returns an `ISqlStoreFactory` handing out async stores (`IAsyncSqlBulkStore<T>`: bulk, aggregation, connector),
+repositories (`AsyncSqlModelRepository<T>`), the connector and `CreateSchemaAsync`, so the same code runs on SQLite and
+PostgreSQL (MySQL, SQL Server too). `Birko.Data.SQL` references no provider and no DI; each provider registers itself and
+parses its own connection string, refusing any key its settings cannot carry. SQLite paths are made absolute (one file,
+one connector) and keep WAL. SQL only; the per-provider factories stay.
 ### Streamed OpenAI-compatible calls record their token usage (2026-11-25)
 [[TASK-987]], found by DraCode. Streaming requests on `OpenAiCompatibleProviderBase` (vLLM, SGLang, llama.cpp, LM Studio,
 Groq, DeepSeek, Mistral) and `OpenAiProvider` never asked for `stream_options.include_usage`, so the server sent no
@@ -368,12 +375,6 @@ included; a `Like` with an interior `%` is refused by name ([[TASK-915]] to supp
 timeout (measured: 10.05 s); reading 100k points takes ~50 s because each entity is its own series ([[TASK-910]]). New
 `Settings.RequestTimeout` (default: the URL's `timeout`, else 10 s; the consumer's value wins), applied at one funnel;
 a value that breaks the client, or one set alongside a URL timeout, is refused.
-### SQL GROUP BY on a string makes the groups C# makes (2026-11-11)
-[[TASK-911]]. SQL Server and MySQL grouped strings by collation, silently merging keys C# keeps apart (`Zebra`/`zebra`,
-`ß`/`ss`, `"a "`/`"a"`; 20 keys became 13 and 14, counts and sums added across them; measured), in store aggregates and
-SQL views. GROUP BY now adds the exact form of each string key on every SQL provider, so each group returns its own text.
-Cost: an indexed SQL Server key went from ~20 to ~170 ms on 100k rows. **Breaking:** the migrations `ViewSqlGenerator`
-refuses a string-grouped aggregating view without a connector.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

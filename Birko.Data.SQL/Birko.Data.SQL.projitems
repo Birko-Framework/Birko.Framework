@@ -97,6 +97,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\DataBaseModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncDataBaseModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\ISqlConnectedStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncSqlBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ISqlStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\SqlStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncSqlModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\DataBaseStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\DuplicateCreate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\SqlRetryableWrite.cs" />

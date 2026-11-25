@@ -942,6 +942,18 @@ public class MyRepository : DataBaseRepository<Entity, MyStore, SqlConnection>
 - Based on PostgreSQL
 - Connector: `NpgsqlConnection`
 
+## Provider-neutral factory (TASK-988)
+
+`ISqlStoreFactory` (`Stores/ISqlStoreFactory.cs`) is built by `SqlStoreFactory.Create(provider, connectionString,
+providers)`. This project never references a provider: `SqlStoreProviders` is filled by each provider's own
+`AddSqLite()` / `AddPostgreSQL()` / `AddMySQL()` / `AddMSSql()` (`Stores/<P>SqlStoreFactory.cs` in each provider), and
+stays free of `Microsoft.Extensions.DependencyInjection` because several importers do not reference it; the app
+registers the result itself. Each provider's `FromConnectionString` is the one parser of its connection string and
+refuses, through `SqlStoreFactory.RequireOnlyKeys`, every key its settings cannot carry (rule 41). Stores come out as
+`IAsyncSqlBulkStore<T>` (bulk + aggregation + connector; `AsyncDataBaseBulkStore` implements it), repositories as
+`AsyncSqlModelRepository<T>`, because `AsyncDataBaseModelRepository<TConnector, T>` needs the connector type. SQL
+only: NoSQL stores already share `IAsyncBulkStore<T>`. The per-provider factories (`ISqLiteStoreFactory`, …) stay.
+
 ## Maintenance
 
 ### README Updates

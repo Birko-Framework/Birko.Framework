@@ -31,6 +31,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStoreFactoryOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IMSSqlStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlSqlStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\MSSqlServiceCollectionExtensions.cs" />
   </ItemGroup>
 </Project>

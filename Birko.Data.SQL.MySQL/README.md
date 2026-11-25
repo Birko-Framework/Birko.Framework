@@ -106,6 +106,12 @@ because both sides agree the column holds UTC. Measured: a non-UTC session does 
 
 - [Birko.Data.SQL](../Birko.Data.SQL/) - SQL base classes
 
+## Choosing the provider by configuration
+
+`p.AddMySQL()` registers this provider with `SqlStoreFactory.Create` under the name `MySQL` (TASK-988), so code
+that takes an `ISqlStoreFactory` runs on it without naming it. See
+[Birko.Data.SQL — Choosing the provider by configuration](../Birko.Data.SQL/README.md).
+
 ## License
 
 Part of the Birko Framework.

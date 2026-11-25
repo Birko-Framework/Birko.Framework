@@ -44,6 +44,8 @@
   <Import Project="..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
+  <!-- TASK-988: the provider-neutral factory runs its store suite on SQLite offline and on PostgreSQL live. -->
+  <Import Project="..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
 
   <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
 

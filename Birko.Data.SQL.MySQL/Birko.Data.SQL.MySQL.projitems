@@ -31,6 +31,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactoryOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IMySQLStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLSqlStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\MySQLServiceCollectionExtensions.cs" />
   </ItemGroup>
 </Project>

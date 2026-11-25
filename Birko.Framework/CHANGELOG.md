@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-11 — SQL GROUP BY on a string makes the groups C# makes
+[[TASK-911]]. SQL Server and MySQL grouped strings by collation, silently merging keys C# keeps apart (`Zebra`/`zebra`,
+`ß`/`ss`, `"a "`/`"a"`; 20 keys became 13 and 14, counts and sums added across them; measured), in store aggregates and
+SQL views. GROUP BY now adds the exact form of each string key on every SQL provider, so each group returns its own text.
+Cost: an indexed SQL Server key went from ~20 to ~170 ms on 100k rows. **Breaking:** the migrations `ViewSqlGenerator`
+refuses a string-grouped aggregating view without a connector.
+
 ## 2026-11-11 — Aggregate rows ordered by a string are ordinal on every provider
 [[TASK-909]] (the user's decision). Ordering aggregate results by a string group key or string MIN/MAX followed the
 machine's culture in memory and the collation on SQL: 28–56 of 56 cases wrong per provider (measured; `apple` before

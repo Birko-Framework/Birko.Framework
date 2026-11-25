@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Stores
     /// </summary>
     /// <typeparam name="DB">The type of database connector, must inherit from <see cref="AbstractConnector"/>.</typeparam>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class AsyncDataBaseBulkStore<DB, T> : AsyncDataBaseStore<DB, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>
+    public class AsyncDataBaseBulkStore<DB, T> : AsyncDataBaseStore<DB, T>, IAsyncBulkStore<T>, IAsyncAggregatableStore<T>, IAsyncSqlBulkStore<T>
         where T : Models.AbstractModel
         where DB : AbstractConnector
     {

@@ -31,6 +31,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\PostgreSQLStoreFactoryOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IPostgreSQLStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\PostgreSQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\PostgreSQLSqlStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\PostgreSQLServiceCollectionExtensions.cs" />
   </ItemGroup>
 </Project>

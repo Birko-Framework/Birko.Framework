@@ -97,6 +97,12 @@ exact either way.
 
 - [Birko.Data.SQL](../Birko.Data.SQL/) - SQL base classes
 
+## Choosing the provider by configuration
+
+`p.AddSqLite()` registers this provider with `SqlStoreFactory.Create` under the name `SqLite` (TASK-988), so code
+that takes an `ISqlStoreFactory` runs on it without naming it. See
+[Birko.Data.SQL — Choosing the provider by configuration](../Birko.Data.SQL/README.md).
+
 ## License
 
 Part of the Birko Framework.

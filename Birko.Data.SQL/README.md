@@ -233,6 +233,34 @@ Key components:
 - [Birko.Data.SQL.SqLite](../Birko.Data.SQL.SqLite/) - SQLite
 - [Birko.Data.TimescaleDB](../Birko.Data.TimescaleDB/) - TimescaleDB
 
+### Choosing the provider by configuration (TASK-988)
+
+`ISqlStoreFactory` hands out async stores and repositories without the code naming its provider, so the same code
+runs on SQLite in tests and PostgreSQL in production. The provider is a name plus a connection string; each provider
+project registers itself, so an app carries only the drivers it adds:
+
+```csharp
+ISqlStoreFactory db = SqlStoreFactory.Create(cfg.Provider, cfg.ConnectionString,
+    p => p.AddSqLite().AddPostgreSQL());          // AddMySQL(), AddMSSql() too
+services.AddSingleton(db);
+
+await db.CreateSchemaAsync(new[] { typeof(Order) });
+IAsyncSqlBulkStore<Order> orders = db.GetAsyncStore<Order>();   // CRUD, bulk, AggregateAsync, Connector
+var repository = db.GetAsyncRepository<Order>();                // AsyncSqlModelRepository<Order>
+db.GetConnector().EnsureColumns(typeof(Order));
+```
+
+| Provider name | Connection string |
+|---|---|
+| `SqLite` | a file path (`data/app.db`), or `Data Source=…;Password=…` |
+| `PostgreSQL` | Npgsql: Host, Port, Database, Username, Password, Timeout, Command Timeout, SSL Mode (Require / Prefer) |
+| `MySQL` | MySqlConnector: Server, Port, Database, User ID, Password, Connection Timeout, SSL Mode (Required / Preferred) |
+| `MSSql` | SqlClient: Data Source (`host` or `host,port`), Initial Catalog, User ID, Password, Encrypt, Trust Server Certificate, MARS, Connect Timeout |
+
+Names match ignoring case. An unregistered name, an empty connection string, and any key the provider's settings
+cannot carry (pooling, a search path, integrated security, a named instance, …) are refused by name rather than
+dropped. The SQLite path is made absolute, so one file is one cached connector, and keeps WAL on first use.
+
 ## Filter-Based Bulk Operations
 
 SQL stores support native filter-based update and delete — single SQL commands instead of per-row operations:
