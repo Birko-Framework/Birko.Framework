@@ -114,8 +114,8 @@ implementations cannot drift; they move together in this story too.
 - [ ] The mixed-size model is identical in `RibbonModels.cs` and `b-ribbon.ts`, landed together
 - [ ] The degrade ladder handles mixed groups and remains a pure function of its arguments
 - [ ] C# unit tests and the playground smoke assert the same numeric table
-- [ ] A consumer can derive a correct `--b-ribbon-panel-height` under mixed sizes, and the rule is
-      written down
+- [x] A consumer can derive a correct `--b-ribbon-panel-height` under mixed sizes, and the rule is
+      written down (TASK-123: `requiredPanelHeight` + README rule, done 2026-11-25)
 - [ ] `AxamlParityTests` / `CssParityTests` green; no token hand-authored on one side
 - [ ] Item size is optional; an item that sets none renders at its group's size
 - [ ] Existing uniform-size ribbons render **byte-identically** — which the fallback makes structural,

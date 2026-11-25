@@ -2,7 +2,7 @@
 id: TASK-123
 parent: STORY-056
 feature: FEATURE-015
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-31
@@ -115,4 +115,6 @@ Birko.Web `task/TASK-123` 4790fee (joins v0.5.7), Playground c521e41.
       clipped row. This is the exact failure Symbio shipped: it looked perfect at 1600px, so a check at
       one comfortable width proves nothing. Do it on both skins.
 
-**Human test passed 2026-11-25** (the user, both skins: "seem to be working"). Awaiting the merge into v0.5.7.
+**Human test passed 2026-11-25** (the user, both skins: "seem to be working"). Merged below.
+
+**Merged 2026-11-25** on the user's word ("merge") into Birko.Web main f6c30c3, local tag v0.5.7 moved onto it (not pushed). On main: Components `tsc` clean, ribbon-mixed 18/18, ribbon-a11y 22/22, category-ribbon 19/19, contextual-ribbon 13/13, verify 0 failing.
