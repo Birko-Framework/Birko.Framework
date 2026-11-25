@@ -2,7 +2,7 @@
 id: TASK-983
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -33,13 +33,31 @@ border's contrast too before deciding they fail.
 
 ## Acceptance criteria
 
-- [ ] Every shipped theme's focus indicator for the token users reaches 3:1 against the adjacent colours, measured.
-- [ ] **The look is chosen by the user from a preview** (2–3 options, e.g. a stronger-alpha ring, a solid 2px ring
+- [x] Every shipped theme's focus indicator for the token users reaches 3:1 against the adjacent colours, measured.
+- [x] **The look is chosen by the user from a preview** (2–3 options, e.g. a stronger-alpha ring, a solid 2px ring
       with a gap, a solid outline) before the tokens change: this restyles every focusable control in every consumer.
-- [ ] The change is made in `tokens.json` and generated; token-parity CI passes.
-- [ ] Playground check measuring the indicator on a representative set (an input, a checkbox, a table sort button, a
+- [x] The change is made in `tokens.json` and generated; token-parity CI passes.
+- [x] Playground check measuring the indicator on a representative set (an input, a checkbox, a table sort button, a
       kanban card) in every theme, red before the change.
-- [ ] CHANGELOG entry naming the visual change.
+- [x] CHANGELOG entry naming the visual change.
+
+## Evidence
+
+**The look: "G", picked by the user 2026-11-25** from a preview page (round 1: solid ring, gap ring, outline, set aside
+as too hard-edged; round 2: halo with edge, deeper halo, blurred glow; G is the blurred glow tightened at the user's
+request). Each ring is `0 0 0 1px <line>, 0 0 4px 1px <glow at 50%>`: the 1px line carries the contrast, the tight glow
+keeps the soft look. Line colours: base #2563eb / #dc2626, dark #3b82f6 / #ef4444, neon #8cffb0 / #ff4466, finstat
+#1c86b8 / #d9482a (its #54b9e8 measured 2.21:1, so the line is a deeper shade; the glow keeps the lighter blue),
+inverse #60a5fa / #f87171 (new: the inherited base ring measured 2.80:1 on its charcoal).
+- Framework `task/TASK-983` 303a7da9 (`tokens.json`, held on a branch so Framework main keeps matching Birko.Web main
+  until the merge); generated into Birko.Web `task/TASK-983` 9310879 (joins v0.5.3), `verify` OK (5 CSS + 6 AXAML; the
+  AXAML carries no focus rings). DesignTokens tests 59/59 against the two branches.
+- Playground e552414 `focus-ring-check` 24/24: in base, dark, neon, finstat and an inverse area on base and on finstat,
+  the ring's and the danger ring's solid line measure 3.64–15.53:1 against the page and the secondary surface; a real
+  Tab onto `b-checkbox` and into `b-input` draws the token. **Red** 12/24 on Birko.Web main (1.23–2.04:1).
+- verify 0 failing (twice); keyboard-check 244/244; theme-roundtrip 11/11.
+- Not covered: Windows high-contrast mode drops box-shadows (as before); an `outline: 2px solid transparent` fallback
+  was offered and not chosen.
 
 ## Out of scope
 
