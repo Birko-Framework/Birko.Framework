@@ -83,7 +83,7 @@ Framework (main): `RibbonItem.Size` (nullable `RibbonGroupSize`), `RibbonGroup.L
 Large layout, for the flyout; refuses a Popup item size, a layout for Popup, an unknown item id, a Popup start). Web
 `task/TASK-120` c8f2d65 (starts v0.5.6): `RibbonItem.size?: RibbonItemSize`, `RibbonGroup.layouts?`, `ribbonItemSizes` in
 `ribbon-scaling.ts`, exported; the `RibbonGroupSize` mirror comment rewritten for the new shape. Same names, casing apart.
-- `RibbonItemSizingTests` (21 cases incl. the Word Clipboard group: no sizes at every step, the anchor at every step,
+- `RibbonItemSizingTests` (20 cases incl. the Word Clipboard group: no sizes at every step, the anchor at every step,
   the clamp, a declared Small layout keeping Paste Large, the start, five refusals); `Birko.Xaml.Core.Tests` 108/108.
   Playground 02813b0 `ribbon-scaling-smoke` asserts the same cases for `ribbonItemSizes`: 65/65.
 - **No new token:** nothing renders yet; TASK-122 adds only what its render step reads. So `verify` and the parity
