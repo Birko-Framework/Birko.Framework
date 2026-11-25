@@ -2,7 +2,7 @@
 id: TASK-982
 parent: EPIC-001
 feature: null
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -32,13 +32,27 @@ whether they are equally faint on their own backgrounds before choosing between 
 
 ## Acceptance criteria
 
-- [ ] `button.dead:focus-visible` shows a ring at least as visible as `b-button`'s, with 3:1 contrast against the dead
+- [x] `button.dead:focus-visible` shows a ring at least as visible as `b-button`'s, with 3:1 contrast against the dead
       chip and the page background, in light and dark (and the other shipped themes).
-- [ ] The other users of the faint ring tokens are measured and either fixed in the same change or filed, with the
+- [x] The other users of the faint ring tokens are measured and either fixed in the same change or filed, with the
       numbers.
-- [ ] Playground check measuring the focused vs unfocused contrast of the dead button in both themes, red before the
+- [x] Playground check measuring the focused vs unfocused contrast of the dead button in both themes, red before the
       change.
-- [ ] CHANGELOG entry.
+- [x] CHANGELOG entry.
+
+## Evidence
+
+Birko.Web `task/TASK-982` 084b3a2 (joins the unpushed v0.5.3), Playground 99c4c17. All from builds that printed
+"✓ Built". `button.dead:focus-visible` is now `outline: 2px solid currentColor; outline-offset: 2px` (b-button has no
+focus rule of its own, so its clear ring is the browser's default 2px outline; this matches it in weight and keeps
+the danger colour).
+- `sync-dead-focus-check` 15/15: in light, dark, neon, finstat and inverse, Tab reaches the button, the ring is solid
+  2px, and it has 4.55–7.88:1 against the chip and 5.56–7.62:1 against the page. **Red** 5/15 on Birko.Web main
+  (`outline: none`, only the box-shadow wash).
+- verify 0 failing; keyboard-check 244/244; Components `tsc` clean.
+- The shared ring tokens, measured against the page (a 3px wash composited on `--b-bg`): `--b-focus-ring` 1.23:1
+  (base), 1.41:1 (dark), 1.26:1 (finstat), 1.99:1 (neon); `--b-focus-ring-danger` 1.26:1 (base), 1.31:1 (dark). All
+  below 3:1, and about 35 components use them: filed as [[TASK-983]], since changing them restyles every control.
 
 ## Out of scope
 
