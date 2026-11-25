@@ -60,5 +60,9 @@ the danger colour).
 
 ## Human test plan
 
-- [ ] In Reps (or the Playground `b-sync-status` card with a dead count), Tab to the "N not saved" button in light and
+- [x] In Reps (or the Playground `b-sync-status` card with a dead count), Tab to the "N not saved" button in light and
       dark: the focus ring is plainly visible on the pink chip.
+  - _Run 2026-11-25 by Reps (built against task/TASK-982 084b3a2, desktop Chromium, a real server-refused set):_ a
+    real Tab from the brand link focuses `button.dead` (`:focus-visible`); light draws a solid 2px rgb(202,35,35)
+    outline, dark a solid 2px rgb(248,113,113), both 2px offset; in screenshots focused vs unfocused the ring is
+    plainly visible in both themes. Enter still opens Reps' list. Merge waits for the user's word.
