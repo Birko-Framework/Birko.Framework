@@ -2,7 +2,7 @@
 id: TASK-982
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -66,3 +66,6 @@ the danger colour).
     real Tab from the brand link focuses `button.dead` (`:focus-visible`); light draws a solid 2px rgb(202,35,35)
     outline, dark a solid 2px rgb(248,113,113), both 2px offset; in screenshots focused vs unfocused the ring is
     plainly visible in both themes. Enter still opens Reps' list. Merge waits for the user's word.
+
+**Merged 2026-11-25** on the user's word ("merge") into Birko.Web main 7e7ef37 as part of v0.5.3 (CHANGELOG conflict
+with TASK-981 resolved, both kept; the unpushed tag moved). On main after TASK-983 too: `sync-dead-focus-check` 15/15.

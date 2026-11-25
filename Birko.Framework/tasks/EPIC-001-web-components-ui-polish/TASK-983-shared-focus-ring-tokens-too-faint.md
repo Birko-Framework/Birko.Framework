@@ -2,7 +2,7 @@
 id: TASK-983
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -66,3 +66,9 @@ inverse #60a5fa / #f87171 (new: the inherited base ring measured 2.80:1 on its c
 ## Human test plan
 
 - [ ] Tab through a Symbio form and list page in light and dark: every focused control is plainly marked.
+
+**Signed off and merged 2026-11-25** (the user: "it looks good", then "merge", after tabbing through the Playground
+built from task/TASK-983). Framework main cb1e154d (`tokens.json`) and Birko.Web main 75a972f together, as part of
+v0.5.3 (the unpushed tag moved). On main: DesignTokens `verify` OK and tests 59/59; `focus-ring-check` 24/24,
+`sync-dead-focus-check` 15/15, `split-transition-check` 26/26, `overlay-footer-check` 8/8, keyboard-check 244/244,
+verify 0 failing. The Symbio step above is still open: it needs Symbio rebuilt from Birko.Web main.
