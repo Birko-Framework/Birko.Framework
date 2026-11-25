@@ -38,7 +38,7 @@ that only reads and writes is backend-neutral once it has a store; what is missi
       settings cannot carry (rule 41), as the SQL providers do.
 - [x] What a backend can do beyond CRUD and bulk (aggregation, schema / index creation, views) is reached through
       capability interfaces the caller checks (`store is IAsyncAggregatableStore<T>`), never assumed.
-- [ ] Tests: the same store suite runs on InMemory (or JSON) offline and on each live NoSQL backend under its
+- [x] Tests: the same store suite runs on InMemory (or JSON) offline and on each live NoSQL backend under its
       `BIRKO_*` variable (skipped when unset, required under `BIRKO_REQUIRE_LIVE`), and on SQLite through the same
       interface.
 - [x] READMEs and the projects' CLAUDE.md; Recent Updates entry.
@@ -100,7 +100,8 @@ Built 2026-11-25 (one commit with this file).
 - **Tests:** `tests/Birko.Data.StoreFactory.Tests` 26/26: the suite offline on InMemory, JSON, XML, SQLite; backend
   choice and refusals; every backend's parsing; **live** on MongoDB 7, Elasticsearch 7.17.25 and RavenDB (Docker,
   `birko-live-*`). Elasticsearch needs a refresh between write and search (near-real-time), done as the store
-  contract's Settle. **Cosmos DB live not run yet** (the emulator is the user's to start). Solution builds; no new
+  contract's Settle. **Cosmos DB live** 2026-11-26 on the pinned emulator (sha256:09dcd04e, Gateway mode): all 26 with
+  `BIRKO_REQUIRE_LIVE=1` and all four live variables set, so none skipped. Solution builds; no new
   nullable warnings in the new files.
 
 ## Out of scope
