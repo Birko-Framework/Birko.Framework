@@ -13,5 +13,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncInMemoryStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\InMemoryStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncInMemoryStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\InMemoryStoreFactory.cs" />
   </ItemGroup>
 </Project>

@@ -144,6 +144,12 @@ MongoDB stores support native filter-based update and delete:
 - All operations respect `TransactionContext` when set, else the session a `MongoDbUnitOfWork` publishes for the store's
   database in the same async flow (TASK-700): stores on that database join the unit of work, as on SQL
 
+## Choosing it by configuration (TASK-990)
+
+`p.AddMongoDB()` registers this backend with `StoreFactory.Create` under the name `MongoDB`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes MongoDB's own `mongodb://…/database` string, passed to the driver verbatim. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## License
 
 Part of the Birko Framework.

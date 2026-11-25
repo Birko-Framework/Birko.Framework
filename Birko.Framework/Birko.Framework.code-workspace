@@ -1037,6 +1037,10 @@
 			"path": "../tests/Birko.Data.SQL.Providers.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.StoreFactory.Tests",
+			"path": "../tests/Birko.Data.StoreFactory.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.MSSql.Tests",
 			"path": "../tests/Birko.Data.SQL.MSSql.Tests"
 		},

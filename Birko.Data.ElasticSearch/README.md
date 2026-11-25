@@ -224,6 +224,12 @@ ElasticSearch stores support native filter-based update and delete:
 - Predicates also accept ternaries, `??`, and column arithmetic (the latter via a guarded Painless script
   query) — see [CLAUDE.md § Filter translation](CLAUDE.md) for the full supported surface and its caveats.
 
+## Choosing it by configuration (TASK-990)
+
+`p.AddElasticSearch()` registers this backend with `StoreFactory.Create` under the name `ElasticSearch`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes `Url=…;IndexPrefix=…`. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## License
 
 Part of the Birko Framework.

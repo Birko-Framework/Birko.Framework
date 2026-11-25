@@ -68,5 +68,14 @@ namespace Birko.Data.SQL.SqLite.Stores
         /// <summary>Adds the <c>SqLite</c> provider: the connection string is a file path or <c>Data Source=…</c>.</summary>
         public static SqlStoreProviders AddSqLite(this SqlStoreProviders providers)
             => providers.Add(SqLiteSqlStoreFactory.Name, SqLiteSqlStoreFactory.FromConnectionString);
+
+        /// <summary>
+        /// Adds this provider to the backend-neutral registry (TASK-990), so <see cref="Birko.Data.Stores.StoreFactory"/>
+        /// can choose it beside the NoSQL backends: the connection string is a file path or <c>Data Source=…</c>, as for <see cref="SqlStoreFactory"/>.
+        /// </summary>
+        public static Birko.Data.Stores.StoreProviders AddSqLite(this Birko.Data.Stores.StoreProviders providers)
+            => providers.Add<SqLiteSettings>(SqLiteSqlStoreFactory.Name,
+                cs => SqLiteSqlStoreFactory.FromConnectionString(SqlStoreFactory.RequireConnectionString(SqLiteSqlStoreFactory.Name, cs)).SqLiteSettings,
+                settings => new SqLiteSqlStoreFactory(settings));
     }
 }

@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### One store factory for SQL and NoSQL backends, chosen by configuration (2026-11-25)
+[[TASK-990]], the user's widening of TASK-988. `StoreFactory.Create(backend, connectionString, p => p.AddInMemory().AddSqLite().AddMongoDB())`
+returns an `IStoreFactory` (Birko.Data.Stores) handing out `IAsyncBulkStore<T>`; `GetAsyncRepository<T>()` comes from
+Birko.Data.Repositories. Backends: InMemory, JSON, XML, the four SQL providers (an `ISqlStoreFactory` is now an
+`IStoreFactory` and an `ISchemaStoreFactory`), MongoDB, Elasticsearch, RavenDB, Cosmos DB; InfluxDB waits (TASK-910).
+Each parses its own string into its `Settings` and refuses unknown keys; `Create(settings, …)` picks by settings type.
+Non-SQL factories keep one store per type (the store holds the data or its own client).
 ### One SQL store factory for any provider, chosen by configuration (2026-11-25)
 [[TASK-988]], asked for by DraCode. `SqlStoreFactory.Create(provider, connectionString, p => p.AddSqLite().AddPostgreSQL())`
 returns an `ISqlStoreFactory` handing out async stores (`IAsyncSqlBulkStore<T>`: bulk, aggregation, connector),
@@ -365,16 +372,6 @@ mode failed instead of reading on the fly, and answered `false` when the databas
 type-keyed `BulkUpdate` / `BulkDelete` with a key column named like `User` rewrote or deleted every row (measured, all
 four providers). The probe now answers missing and reports real errors; the bulk paths run TASK-872's check; Auto mode
 forgets a view a read reports dropped. Found: [[TASK-917]] (base `CREATE OR REPLACE VIEW` fails on SQLite and SQL Server).
-### Rules give one answer for null, `Like` and enum/Guid values, wherever they run (2026-11-11)
-[[TASK-882]] (the user's decisions). A rule comparing a non-nullable column with null, a `Like`, or an enum/Guid value
-given as text answered differently in memory, compiled and in SQL (up to 331 of 693 measured cases per provider). All
-three now give the C# answer; rule string operators ignore case exactly (`OrdinalIgnoreCase`) on every runner, SQL
-included; a `Like` with an interior `%` is refused by name ([[TASK-915]] to support it).
-### InfluxDB request timeout is a setting (2026-11-11)
-[[TASK-908]] (the user's decision). Every InfluxDB read or aggregate over ~100k points failed at the client's fixed 10 s
-timeout (measured: 10.05 s); reading 100k points takes ~50 s because each entity is its own series ([[TASK-910]]). New
-`Settings.RequestTimeout` (default: the URL's `timeout`, else 10 s; the consumer's value wins), applied at one funnel;
-a value that breaks the client, or one set alongside a URL timeout, is refused.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

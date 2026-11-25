@@ -2,7 +2,7 @@
 id: TASK-990
 parent: EPIC-019
 feature: null
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -28,20 +28,20 @@ that only reads and writes is backend-neutral once it has a store; what is missi
 
 ## Acceptance criteria
 
-- [ ] One backend-neutral factory interface (e.g. `IStoreFactory`) hands out `IAsyncBulkStore<T>` stores and an
+- [x] One backend-neutral factory interface (e.g. `IStoreFactory`) hands out `IAsyncBulkStore<T>` stores and an
       `AbstractAsyncBulkRepository<T>` over them, without the caller naming the backend. `ISqlStoreFactory` extends it,
       keeping its SQL-only part (connector, `CreateSchemaAsync`), so TASK-988's callers do not change.
-- [ ] One `Create(backend, connectionString, providers)` picks the backend by name from those registered; each backend
+- [x] One `Create(backend, connectionString, providers)` picks the backend by name from those registered; each backend
       project registers itself (`AddMongoDB()`, `AddElasticSearch()`, …), as the SQL providers do; the shared project
       references none of them.
-- [ ] Each NoSQL backend parses its own connection string into its settings type and refuses, by name, anything its
+- [x] Each NoSQL backend parses its own connection string into its settings type and refuses, by name, anything its
       settings cannot carry (rule 41), as the SQL providers do.
-- [ ] What a backend can do beyond CRUD and bulk (aggregation, schema / index creation, views) is reached through
+- [x] What a backend can do beyond CRUD and bulk (aggregation, schema / index creation, views) is reached through
       capability interfaces the caller checks (`store is IAsyncAggregatableStore<T>`), never assumed.
 - [ ] Tests: the same store suite runs on InMemory (or JSON) offline and on each live NoSQL backend under its
       `BIRKO_*` variable (skipped when unset, required under `BIRKO_REQUIRE_LIVE`), and on SQLite through the same
       interface.
-- [ ] READMEs and the projects' CLAUDE.md; Recent Updates entry.
+- [x] READMEs and the projects' CLAUDE.md; Recent Updates entry.
 
 ## Open decisions (settle before building)
 
@@ -72,6 +72,36 @@ that only reads and writes is backend-neutral once it has a store; what is missi
   No new project reference.
 - **Schema / indexes:** an optional `ISchemaStoreFactory` capability (`CreateSchemaAsync(types)`) the caller checks
   for; SQL has it, a NoSQL backend has it only where its store can ensure its own schema.
+
+## Evidence
+
+Built 2026-11-25 (one commit with this file).
+- **Birko.Data.Stores:** `IStoreFactory` (Backend, Settings, `GetAsyncStore<T>`), `ISchemaStoreFactory`, `StoreProviders`
+  (`Add<TSettings>(name, parse, create)`, a name twice refused), `StoreFactory.Create(backend, connectionString, …)` and
+  `Create(settings, …)`, `StoreFactory.ParseKeys` (unknown keys refused by name), `SettingsStoreFactory<TSettings>`,
+  `FileStoreFolders`. **Birko.Data.Repositories:** `AsyncStoreRepository<T>` and `GetAsyncRepository<T>(this IStoreFactory)`.
+- **SQL:** `ISqlStoreFactory : ISchemaStoreFactory` (its `Settings` / `GetAsyncStore` now `new`, the neutral ones
+  explicit); each provider also has `AddX(this StoreProviders)`; `SqlStoreFactory.Create` and its callers unchanged
+  (Birko.Data.SQL.Providers.Tests 61/61).
+- **Backends:** `InMemoryStoreFactory`, `JsonStoreFactory`, `XmlStoreFactory` (a folder; each type its own file named by
+  full type name), `MongoDBStoreFactory` (own URI verbatim, database from its path), `ElasticSearchStoreFactory`
+  (`Url;IndexPrefix`), `RavenDBStoreFactory` (`Url;Database`), `CosmosDBStoreFactory` (own string + `Database`, optional
+  `ConnectionMode`; container per type, a fixed container refused).
+- **Found while building (measured):** every non-SQL factory keeps **one store per type**. InMemory, JSON and XML keep
+  the data in the store object (two instances do not see each other's writes), and the MongoDB, RavenDB and Cosmos DB
+  stores build their own client in `SetSettings` (a `MongoClient`, `DocumentStore`, `CosmosClient` per call otherwise).
+  Two defects the tests caught, red first: `MongoServerAddress.ToString()` is the type name, so every MongoDB string got
+  one `Location` and therefore one client-cache id; and matching settings by derivation sent a RavenDB `Settings` to
+  InMemory (every settings class derives from `Birko.Configuration.Settings`), so those base types now match only
+  exactly. A `Birko.Data.StoreFactory` namespace hides the class from code under `Birko.Data.*`, so backend code
+  writes it in full; the test project keeps that namespace to hold it.
+- **Schema:** SQL only. The NoSQL stores create their database / index / container on first use (MongoDB, RavenDB,
+  Elasticsearch seen live) and do not claim `ISchemaStoreFactory`.
+- **Tests:** `tests/Birko.Data.StoreFactory.Tests` 26/26: the suite offline on InMemory, JSON, XML, SQLite; backend
+  choice and refusals; every backend's parsing; **live** on MongoDB 7, Elasticsearch 7.17.25 and RavenDB (Docker,
+  `birko-live-*`). Elasticsearch needs a refresh between write and search (near-real-time), done as the store
+  contract's Settle. **Cosmos DB live not run yet** (the emulator is the user's to start). Solution builds; no new
+  nullable warnings in the new files.
 
 ## Out of scope
 

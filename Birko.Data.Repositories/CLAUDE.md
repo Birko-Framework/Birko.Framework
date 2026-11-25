@@ -43,3 +43,11 @@ When making major changes to this project, update this CLAUDE.md to reflect new 
 
 ### Test Requirements
 Every new public functionality must have corresponding unit tests.
+
+## Store factory repositories (TASK-990)
+
+`AsyncStoreRepository<T>` is an async bulk repository over any backend's store, and
+`StoreFactoryRepositoryExtensions.GetAsyncRepository<T>(this IStoreFactory)` hands one out. It lives here, not in
+Birko.Data.Stores, because this project depends on Stores and not the reverse. A SQL factory's own
+`GetAsyncRepository` (an instance method returning `AsyncSqlModelRepository<T>`) still wins where the static type is
+`ISqlStoreFactory`.

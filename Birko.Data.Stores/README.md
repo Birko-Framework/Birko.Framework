@@ -131,6 +131,51 @@ foreach (var row in results)
 
 **Key types:** `AggregateFunction` (enum), `AggregateField` (record), `AggregateQuery<T>`, `AggregateResult`, `AggregateHelper` (LINQ fallback), `TimeIntervalParser`, `OrderByHelper`.
 
+## Choosing the backend by configuration (TASK-990)
+
+`IStoreFactory` hands out async stores without the code naming its backend, SQL or not, so the same code runs on
+InMemory or SQLite in tests and on PostgreSQL, MongoDB or Cosmos DB in production. The backend is a name plus a
+connection string; each backend project registers itself, so an app carries only the drivers it adds:
+
+```csharp
+IStoreFactory db = StoreFactory.Create(cfg.Backend, cfg.ConnectionString,
+    p => p.AddInMemory().AddSqLite().AddPostgreSQL().AddMongoDB());
+services.AddSingleton(db);
+
+if (db is ISchemaStoreFactory schema) await schema.CreateSchemaAsync(new[] { typeof(Order) });  // SQL tables
+IAsyncBulkStore<Order> orders = db.GetAsyncStore<Order>();
+var repository = db.GetAsyncRepository<Order>();           // Birko.Data.Repositories: AsyncStoreRepository<Order>
+if (orders is IAsyncAggregatableStore<Order> aggregates) { /* … */ }
+
+// Or from the backend's own settings object; its type picks the backend.
+IStoreFactory mongo = StoreFactory.Create(new Birko.Data.MongoDB.Stores.Settings("db-host", "app"), p => p.AddMongoDB());
+```
+
+| Backend name | Registered by | Connection string |
+|---|---|---|
+| `InMemory` | `AddInMemory()` | none (empty) |
+| `Json` / `Xml` | `AddJson()` / `AddXml()` | a folder (`data/store`) or `Path=…`; each type is its own file, `{full type name}.json` / `.xml` |
+| `SqLite`, `PostgreSQL`, `MySQL`, `MSSql` | `AddSqLite()`, … | as for [`SqlStoreFactory`](../Birko.Data.SQL/README.md) |
+| `MongoDB` | `AddMongoDB()` | MongoDB's own, `mongodb://…/database` or `mongodb+srv://…/database`, passed to the driver verbatim |
+| `ElasticSearch` | `AddElasticSearch()` | `Url=http://host:9200;IndexPrefix=app`; each type is the index `{prefix}_{type}` |
+| `RavenDB` | `AddRavenDB()` | `Url=http://host:8080;Database=app` (a client certificate goes on a `DocumentStore`, not in a string) |
+| `CosmosDB` | `AddCosmosDB()` | Cosmos DB's own `AccountEndpoint=…;AccountKey=…` plus `Database=…`, optionally `ConnectionMode=Gateway`; each type is its own container |
+
+- **Refused by name, never dropped:** an unregistered backend (the message lists the registered ones), a name registered
+  twice, a missing required part, and any key the backend's settings cannot carry (rule 41).
+- **One store per type** for every non-SQL backend: InMemory, JSON and XML keep the data in the store object (two
+  instances would not see each other's writes), and MongoDB, RavenDB and Cosmos DB stores each build their own client.
+  A SQL backend answers a new store each time over its cached connector.
+- **`Create(settings, …)`** picks the backend registered for the settings' type, or for a backend settings type it
+  derives from (TimescaleDB's settings pick PostgreSQL). The shared base types in `Birko.Configuration` (`Settings`,
+  which InMemory, JSON and XML all take) match only exactly, and are refused when more than one registered backend takes
+  them: use the string form there.
+- **Schema:** `ISchemaStoreFactory` is a capability to check for. The SQL backends have it; the NoSQL ones create their
+  database, index or container on first use and do not claim it.
+- InfluxDB is not a backend here yet: its point layout is still open (TASK-910).
+- Names are matched ignoring case. Declare a namespace other than `Birko.Data.StoreFactory` in your own code, or write
+  `Birko.Data.Stores.StoreFactory`: inside `Birko.Data.*` a namespace of that name hides the class.
+
 ## Usage
 
 This is a shared project (`.shproj`). Import it in your `.csproj`:

@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-11 — Rules give one answer for null, `Like` and enum/Guid values, wherever they run
+[[TASK-882]] (the user's decisions). A rule comparing a non-nullable column with null, a `Like`, or an enum/Guid value
+given as text answered differently in memory, compiled and in SQL (up to 331 of 693 measured cases per provider). All
+three now give the C# answer; rule string operators ignore case exactly (`OrdinalIgnoreCase`) on every runner, SQL
+included; a `Like` with an interior `%` is refused by name ([[TASK-915]] to support it).
+
+## 2026-11-11 — InfluxDB request timeout is a setting
+[[TASK-908]] (the user's decision). Every InfluxDB read or aggregate over ~100k points failed at the client's fixed 10 s
+timeout (measured: 10.05 s); reading 100k points takes ~50 s because each entity is its own series ([[TASK-910]]). New
+`Settings.RequestTimeout` (default: the URL's `timeout`, else 10 s; the consumer's value wins), applied at one funnel;
+a value that breaks the client, or one set alongside a URL timeout, is refused.
+
 ## 2026-11-11 — SQL GROUP BY on a string makes the groups C# makes
 [[TASK-911]]. SQL Server and MySQL grouped strings by collation, silently merging keys C# keeps apart (`Zebra`/`zebra`,
 `ß`/`ss`, `"a "`/`"a"`; 20 keys became 13 and 14, counts and sums added across them; measured), in store aggregates and

@@ -19,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncJsonSeparateBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncJsonSeparateStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncJsonStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\BatchSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBatchBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBatchStore.cs" />

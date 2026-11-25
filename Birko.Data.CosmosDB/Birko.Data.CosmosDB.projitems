@@ -19,6 +19,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncCosmosDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDBStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosTransactionScopeException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosInListChunking.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosFilterRewrite.cs" />

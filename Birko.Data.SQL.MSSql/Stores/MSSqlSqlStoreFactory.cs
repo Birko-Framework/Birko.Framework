@@ -76,5 +76,14 @@ namespace Birko.Data.SQL.MSSql.Stores
         /// <summary>Adds the <c>MSSql</c> provider: the connection string is a SqlClient one.</summary>
         public static SqlStoreProviders AddMSSql(this SqlStoreProviders providers)
             => providers.Add(MSSqlSqlStoreFactory.Name, MSSqlSqlStoreFactory.FromConnectionString);
+
+        /// <summary>
+        /// Adds this provider to the backend-neutral registry (TASK-990), so <see cref="Birko.Data.Stores.StoreFactory"/>
+        /// can choose it beside the NoSQL backends: the connection string is a SQL Server connection string, as for <see cref="SqlStoreFactory"/>.
+        /// </summary>
+        public static Birko.Data.Stores.StoreProviders AddMSSql(this Birko.Data.Stores.StoreProviders providers)
+            => providers.Add<MSSqlSettings>(MSSqlSqlStoreFactory.Name,
+                cs => MSSqlSqlStoreFactory.FromConnectionString(SqlStoreFactory.RequireConnectionString(MSSqlSqlStoreFactory.Name, cs)).MSSqlSettings,
+                settings => new MSSqlSqlStoreFactory(settings));
     }
 }

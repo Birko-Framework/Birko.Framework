@@ -232,3 +232,9 @@ sort keeps the server's order and reorders the rows that share a second, reading
 whole. A value stored with an offset is exact when the offset is the reader's own. Refused with
 `NotSupportedException` before any request: a comparison, list or sort of a `DateTimeOffset` member, a member of a
 stored DateTime (`x.T.Year`), and a DateTime computed from a member (`x.T.AddDays(1)`).
+
+## Choosing it by configuration (TASK-990)
+
+`p.AddCosmosDB()` registers this backend with `StoreFactory.Create` under the name `CosmosDB`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes `AccountEndpoint=…;AccountKey=…;Database=…` (optionally `ConnectionMode=Gateway`); each type is its own container. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).

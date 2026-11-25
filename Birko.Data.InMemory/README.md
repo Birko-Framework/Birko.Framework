@@ -56,6 +56,12 @@ the store is drop-in compatible with file/SQL stores in shared wiring; they are 
   without breaking enumeration.
 - All data is discarded on `Destroy()` / `DestroyAsync()`.
 
+## Choosing it by configuration (TASK-990)
+
+`p.AddInMemory()` registers this backend with `StoreFactory.Create` under the name `InMemory`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes no connection string. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## License
 
 MIT — see [License.md](License.md).

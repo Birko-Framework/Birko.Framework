@@ -31,6 +31,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IBaseRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AsyncStoreRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IBulkRepository.cs" />

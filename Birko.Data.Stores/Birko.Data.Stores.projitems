@@ -11,6 +11,9 @@
   <Import Project="$(MSBuildThisFileDirectory)..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" Condition="'$(BirkoConfigurationProjitemsImported)' != 'true'" />
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)FileStoreFolders.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncBulkStore.cs" />

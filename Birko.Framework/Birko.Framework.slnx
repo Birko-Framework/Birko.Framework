@@ -205,6 +205,7 @@
     <Project Path="../tests/Birko.Data.SQL.SqLite.Tests/Birko.Data.SQL.SqLite.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.SqLite.View.Tests/Birko.Data.SQL.SqLite.View.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.Providers.Tests/Birko.Data.SQL.Providers.Tests.csproj" />
+    <Project Path="../tests/Birko.Data.StoreFactory.Tests/Birko.Data.StoreFactory.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.MSSql.Tests/Birko.Data.SQL.MSSql.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.MSSql.View.Tests/Birko.Data.SQL.MSSql.View.Tests.csproj" />
     <Project Path="../tests/Birko.Data.SQL.MySQL.Tests/Birko.Data.SQL.MySQL.Tests.csproj" />

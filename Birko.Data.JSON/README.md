@@ -78,6 +78,12 @@ store.SetSettings(settings);
 
 Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore (file-based storage has no native filter-based bulk operations).
 
+## Choosing it by configuration (TASK-990)
+
+`p.AddJson()` registers this backend with `StoreFactory.Create` under the name `Json`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes a folder (or `Path=…`); each type is its own file there, named by its full type name. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## License
 
 Part of the Birko Framework.

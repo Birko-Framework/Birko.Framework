@@ -261,6 +261,11 @@ Names match ignoring case. An unregistered name, an empty connection string, and
 cannot carry (pooling, a search path, integrated security, a named instance, …) are refused by name rather than
 dropped. The SQLite path is made absolute, so one file is one cached connector, and keeps WAL on first use.
 
+The same providers register with the backend-neutral `StoreFactory` too (TASK-990): `p.AddSqLite()` on its
+`StoreProviders` lets one configuration choose SQLite, PostgreSQL or MongoDB. An `ISqlStoreFactory` is an
+`IStoreFactory` and an `ISchemaStoreFactory`, so code written against the neutral interface takes it unchanged. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## Filter-Based Bulk Operations
 
 SQL stores support native filter-based update and delete — single SQL commands instead of per-row operations:

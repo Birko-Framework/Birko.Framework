@@ -59,5 +59,14 @@ namespace Birko.Data.SQL.MySQL.Stores
         /// <summary>Adds the <c>MySQL</c> provider: the connection string is a MySqlConnector one.</summary>
         public static SqlStoreProviders AddMySQL(this SqlStoreProviders providers)
             => providers.Add(MySQLSqlStoreFactory.Name, MySQLSqlStoreFactory.FromConnectionString);
+
+        /// <summary>
+        /// Adds this provider to the backend-neutral registry (TASK-990), so <see cref="Birko.Data.Stores.StoreFactory"/>
+        /// can choose it beside the NoSQL backends: the connection string is a MySQL connection string, as for <see cref="SqlStoreFactory"/>.
+        /// </summary>
+        public static Birko.Data.Stores.StoreProviders AddMySQL(this Birko.Data.Stores.StoreProviders providers)
+            => providers.Add<MySqlSettings>(MySQLSqlStoreFactory.Name,
+                cs => MySQLSqlStoreFactory.FromConnectionString(SqlStoreFactory.RequireConnectionString(MySQLSqlStoreFactory.Name, cs)).MySqlSettings,
+                settings => new MySQLSqlStoreFactory(settings));
     }
 }

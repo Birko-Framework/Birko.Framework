@@ -19,6 +19,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlSeparateBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlSeparateStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncXmlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\BatchSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlBatchBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\XmlBatchStore.cs" />

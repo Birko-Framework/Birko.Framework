@@ -126,6 +126,12 @@ there is a double (measured: a stored `98765432109876543.21m` reads `98765432109
 
 Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Native RavenDB `PatchByQueryOperation` support may be added in a future release.
 
+## Choosing it by configuration (TASK-990)
+
+`p.AddRavenDB()` registers this backend with `StoreFactory.Create` under the name `RavenDB`, so code that takes an
+`IStoreFactory` runs on it without naming it. It takes `Url=…;Database=…`. The factory keeps one store per type. See
+[Birko.Data.Stores — Choosing the backend by configuration](../Birko.Data.Stores/README.md).
+
 ## License
 
 Part of the Birko Framework.

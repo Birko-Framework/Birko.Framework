@@ -59,5 +59,14 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
         /// <summary>Adds the <c>PostgreSQL</c> provider: the connection string is an Npgsql one.</summary>
         public static SqlStoreProviders AddPostgreSQL(this SqlStoreProviders providers)
             => providers.Add(PostgreSQLSqlStoreFactory.Name, PostgreSQLSqlStoreFactory.FromConnectionString);
+
+        /// <summary>
+        /// Adds this provider to the backend-neutral registry (TASK-990), so <see cref="Birko.Data.Stores.StoreFactory"/>
+        /// can choose it beside the NoSQL backends: the connection string is a PostgreSQL connection string, as for <see cref="SqlStoreFactory"/>.
+        /// </summary>
+        public static Birko.Data.Stores.StoreProviders AddPostgreSQL(this Birko.Data.Stores.StoreProviders providers)
+            => providers.Add<PostgreSqlSettings>(PostgreSQLSqlStoreFactory.Name,
+                cs => PostgreSQLSqlStoreFactory.FromConnectionString(SqlStoreFactory.RequireConnectionString(PostgreSQLSqlStoreFactory.Name, cs)).PostgreSqlSettings,
+                settings => new PostgreSQLSqlStoreFactory(settings));
     }
 }

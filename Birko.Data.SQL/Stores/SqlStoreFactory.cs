@@ -7,6 +7,7 @@ using Birko.Configuration;
 using Birko.Data.Models;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Repositories;
+using Birko.Data.Stores;
 
 namespace Birko.Data.SQL.Stores
 {
@@ -66,6 +67,16 @@ namespace Birko.Data.SQL.Stores
         }
 
         /// <summary>
+        /// <paramref name="connectionString"/>, or a refusal naming <paramref name="provider"/> when it is empty: what a
+        /// provider's registration with the shared <see cref="StoreProviders"/> checks first (TASK-990), as
+        /// <see cref="Create"/> does for <see cref="SqlStoreProviders"/>.
+        /// </summary>
+        public static string RequireConnectionString(string provider, string? connectionString)
+            => string.IsNullOrWhiteSpace(connectionString)
+                ? throw new ArgumentException($"A connection string is required for SQL provider '{provider}'.", nameof(connectionString))
+                : connectionString;
+
+        /// <summary>
         /// Refuses a connection string with a key outside <paramref name="allowed"/> (compared ignoring case, spaces and
         /// underscores), naming the keys. A provider's settings can express only some of its driver's keys; one it would
         /// drop (pooling, a search path, integrated security, …) is refused rather than silently lost (rule 41).
@@ -101,6 +112,10 @@ namespace Birko.Data.SQL.Stores
         /// <inheritdoc />
         public string Provider { get; }
 
+        string IStoreFactory.Backend => Provider;
+
+        ISettings IStoreFactory.Settings => Settings;
+
         /// <inheritdoc />
         public PasswordSettings Settings { get; }
 
@@ -112,6 +127,8 @@ namespace Birko.Data.SQL.Stores
 
         /// <inheritdoc />
         public IAsyncSqlBulkStore<T> GetAsyncStore<T>() where T : AbstractModel => NewStore<T>();
+
+        IAsyncBulkStore<T> IStoreFactory.GetAsyncStore<T>() => GetAsyncStore<T>();
 
         /// <inheritdoc />
         public AsyncSqlModelRepository<T> GetAsyncRepository<T>() where T : AbstractModel => new(GetAsyncStore<T>());
