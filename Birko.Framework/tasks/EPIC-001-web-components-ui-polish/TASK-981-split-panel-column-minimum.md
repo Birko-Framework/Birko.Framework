@@ -74,3 +74,7 @@ still loads. Birko.Web 53adcdf; Playground 2bad042 (`split-transition-check` 26/
 `layout-persist-smoke` updated to rem, 35/35). **Merged 2026-11-25** into Birko.Web main 4dc4e0c as part of v0.5.3
 (the unpushed tag moved); on main split 26/26, overlay-footer 8/8, keyboard 244/244 (243 on one run, then 244 twice),
 verify 0 failing. DraCode's handler must accept rem (its TASK-197).
+  - _Re-run 2026-11-25 by DraCode on Birko.Web main 4dc4e0c (rem):_ PASS. DraCode's `split-resize` handler now converts
+    rem at the real root font size (14 px there; the Shift step measured 56 px = 4rem). Drags past either minimum (tabs
+    320 px, chat 280 px) stop there while dragged, no gap, nothing moves after the drop; Home, End and the arrows stop at
+    the same limits; the stored layout reads `20rem`. DraCode e2e 187/187.
