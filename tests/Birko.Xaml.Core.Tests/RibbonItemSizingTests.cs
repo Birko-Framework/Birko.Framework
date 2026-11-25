@@ -126,4 +126,84 @@ public class RibbonItemSizingTests
 
         act.Should().Throw<ArgumentException>().WithMessage("*starting step cannot be Popup*");
     }
+
+    // ── TASK-121: layouts never get roomier at a tighter step ───────────────────────────────────
+
+    [Fact]
+    public void A_declared_layout_that_makes_an_item_roomier_at_a_tighter_step_is_refused()
+    {
+        var g = Clipboard(new Dictionary<S, IReadOnlyDictionary<string, S>> { [S.Small] = new Dictionary<string, S> { ["cut"] = S.Large } });
+
+        var act = () => RibbonItemSizing.SizesAt(g, S.Medium, S.Medium);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*'cut' is Large, Medium, Large*same or get smaller*");
+    }
+
+    // ── TASK-121: the ladder over mixed groups — the width of a step is its resolved layout's ──
+
+    /// <summary>
+    /// The Clipboard group's widths as a renderer would measure its resolved layouts (start Medium): Medium
+    /// {Paste L, rest M} 140, Small {Paste M, rest S} 90, Popup 40; Large {all L} 200.
+    /// </summary>
+    private static RibbonGroupMetrics Mixed(int priority = 0, S min = S.Popup) => new()
+    {
+        Widths = new Dictionary<S, double> { [S.Large] = 200, [S.Medium] = 140, [S.Small] = 90, [S.Popup] = 40 },
+        ScalingPriority = priority,
+        MinSize = min,
+    };
+
+    private static RibbonGroupMetrics Uniform(int priority = 0) => new()
+    {
+        Widths = new Dictionary<S, double> { [S.Large] = 100, [S.Medium] = 60, [S.Small] = 30, [S.Popup] = 10 },
+        ScalingPriority = priority,
+    };
+
+    [Theory]
+    [InlineData(400, "Medium,Medium")]
+    [InlineData(200, "Medium,Medium")]
+    [InlineData(199, "Medium,Small")]
+    [InlineData(170, "Medium,Small")]
+    [InlineData(169, "Medium,Popup")]
+    [InlineData(150, "Medium,Popup")]
+    [InlineData(149, "Small,Popup")]
+    [InlineData(100, "Small,Popup")]
+    [InlineData(99, "Popup,Popup")]
+    public void A_mixed_group_degrades_through_its_resolved_layouts_least_important_first(double available, string expected)
+    {
+        var chosen = RibbonScaling.Resolve(new[] { Mixed(priority: 10), Uniform(priority: 0) }, available);
+
+        string.Join(",", chosen).Should().Be(expected);
+    }
+
+    [Fact]
+    public void The_pass_is_a_pure_function_whatever_ran_before()
+    {
+        var groups = new[] { Mixed(priority: 10), Uniform(priority: 0) };
+        var first = RibbonScaling.Resolve(groups, 160);
+        RibbonScaling.Resolve(groups, 1000);
+        RibbonScaling.Resolve(groups, 1);
+        var again = RibbonScaling.Resolve(groups, 160);
+
+        again.Should().Equal(first);
+    }
+
+    [Fact]
+    public void A_boundary_sweep_resolves_the_same_in_both_directions()
+    {
+        var groups = new[] { Mixed(priority: 10), Uniform(priority: 0) };
+        var up = new Dictionary<int, string>();
+        for (int w = 60; w <= 260; w++) up[w] = string.Join(",", RibbonScaling.Resolve(groups, w));
+        for (int w = 260; w >= 60; w--) string.Join(",", RibbonScaling.Resolve(groups, w)).Should().Be(up[w], $"at {w}px");
+    }
+
+    [Fact]
+    public void MinSize_on_a_mixed_group_is_breached_least_important_first_rather_than_overflowing()
+    {
+        // The mixed group is the less important one but floored at Small: the other gives everything before the floor
+        // goes (100px: Small + Popup fits), and at 99px the floor gives way rather than the row overflowing.
+        var groups = new[] { Mixed(priority: 0, min: S.Small), Uniform(priority: 10) };
+
+        string.Join(",", RibbonScaling.Resolve(groups, 100)).Should().Be("Small,Popup");
+        string.Join(",", RibbonScaling.Resolve(groups, 99)).Should().Be("Popup,Popup");
+    }
 }

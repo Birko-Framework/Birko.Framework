@@ -10,7 +10,13 @@ namespace Birko.Xaml.Core.Ribbon;
 /// </remarks>
 public sealed class RibbonGroupMetrics
 {
-    /// <summary>Rendered width at each variant. A variant absent from the map is treated as unavailable.</summary>
+    /// <summary>
+    /// Rendered width at each variant. A variant absent from the map is read as the nearest roomier one measured.
+    /// With per-item sizes (TASK-121, FEATURE-015 D14) the key is still the group's <b>step</b>, and the width is that of
+    /// the step's resolved layout (<see cref="RibbonItemSizing.SizesAt"/>), so a group still has at most four widths and
+    /// the pass below is unchanged. Layouts never get roomier at a tighter step (refused otherwise), which keeps the
+    /// roomier-fallback an over-estimate.
+    /// </summary>
     public required IReadOnlyDictionary<RibbonGroupSize, double> Widths { get; init; }
 
     /// <summary>Importance — a <b>lower</b> value degrades <b>first</b>. See <see cref="RibbonGroup.ScalingPriority"/>.</summary>

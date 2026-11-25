@@ -30,8 +30,15 @@ public static class RibbonItemSizing
     /// </summary>
     /// <exception cref="ArgumentException">
     /// An item size or a declared size of <see cref="RibbonGroupSize.Popup"/>, a layout declared for the Popup step, a
-    /// layout naming an item the group does not have, or a <paramref name="start"/> of Popup.
+    /// layout naming an item the group does not have, a <paramref name="start"/> of Popup, or layouts that make an item
+    /// roomier at a tighter step (see the remarks on monotony).
     /// </exception>
+    /// <remarks>
+    /// <b>Monotony (TASK-121).</b> Every item is the same size or smaller at each tighter step (Large → Medium → Small).
+    /// <see cref="RibbonScaling"/> reads a missing width as the nearest <em>roomier</em> step's, which over-estimates only
+    /// while no tighter layout is wider; the anchor rule is monotone by construction, so only a declared layout can
+    /// break it, and that is refused rather than letting the row "fit" by accident.
+    /// </remarks>
     public static IReadOnlyList<RibbonGroupSize> SizesAt(RibbonGroup group, RibbonGroupSize step, RibbonGroupSize start)
     {
         ArgumentNullException.ThrowIfNull(group);
@@ -39,9 +46,28 @@ public static class RibbonItemSizing
         if (start == RibbonGroupSize.Popup)
             throw new ArgumentException("A group's starting step cannot be Popup: the ladder starts groups at Large, Medium or Small.", nameof(start));
 
-        var at = step == RibbonGroupSize.Popup ? RibbonGroupSize.Large : step;
-        var declared = group.Layouts != null && group.Layouts.TryGetValue(at, out var layout) ? layout : null;
+        var large = Resolve(group, RibbonGroupSize.Large, start);
+        var medium = Resolve(group, RibbonGroupSize.Medium, start);
+        var small = Resolve(group, RibbonGroupSize.Small, start);
+        for (int i = 0; i < large.Length; i++)
+        {
+            if (medium[i] < large[i] || small[i] < medium[i])
+                throw new ArgumentException(
+                    $"Group '{group.Label}': item '{group.Items[i].Id}' is {large[i]}, {medium[i]}, {small[i]} at the Large, Medium and "
+                    + "Small steps; an item may only stay the same or get smaller at a tighter step.");
+        }
 
+        return step switch
+        {
+            RibbonGroupSize.Medium => medium,
+            RibbonGroupSize.Small => small,
+            _ => large, // Large, and Popup's flyout
+        };
+    }
+
+    private static RibbonGroupSize[] Resolve(RibbonGroup group, RibbonGroupSize at, RibbonGroupSize start)
+    {
+        var declared = group.Layouts != null && group.Layouts.TryGetValue(at, out var layout) ? layout : null;
         var sizes = new RibbonGroupSize[group.Items.Count];
         for (int i = 0; i < sizes.Length; i++)
         {
