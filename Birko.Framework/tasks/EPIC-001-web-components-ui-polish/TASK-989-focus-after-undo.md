@@ -2,7 +2,7 @@
 id: TASK-989
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -54,9 +54,16 @@ the Components README (`focusRow`).
 
 ## Human test plan
 
-- [ ] On Symbio HR → Positions, keyboard only: delete a position, Enter on Undo; focus is on the restored row and the
+- [x] On Symbio HR → Positions, keyboard only: delete a position, Enter on Undo; focus is on the restored row and the
       arrow keys keep working from there.
 
 **Merged 2026-11-25** on the user's word ("also merge 989") into Birko.Web main 9a87f73, tagged v0.5.5. On main:
 Components and Shell `tsc` clean, keyboard-check 249/249, table-rows-keyboard-check 17/17, verify 0 failing. Stays at
 verify until the Symbio step above is run (it needs Symbio rebuilt from v0.5.5).
+  - _Run 2026-11-25 by the Symbio session_ (UI rebuilt from Birko.Web 9a87f73 / v0.5.5, tenant acme, 4 positions),
+    keyboard only, focus read from the deep active element after each key: Tab to a row, ArrowDown, Enter opens the
+    detail, Tab ×5 to Delete, Enter deletes with focus on the toast's Undo, Enter on Undo puts focus on the restored row
+    "Keyboard test B" (outlined); ArrowDown then reaches A and ArrowUp ×2 reaches C. Never `<body>`. PASS. Noted, not a
+    failure: the detail panel's buttons come after the table's pager in Tab order (5 Tabs from a row to Delete).
+
+**Closed 2026-11-25.**
