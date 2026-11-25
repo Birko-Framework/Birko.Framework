@@ -2,7 +2,7 @@
 id: TASK-981
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -66,3 +66,11 @@ minimum wins, otherwise the master's; a width is never negative. Both attributes
     frame for 400 ms after the drop keeps the width (nothing springs back); Home / End give 320 / 1064 and 1104 / 280,
     and the arrows do not pass a limit. Two new DraCode e2e tests (red without the attributes: 184 / 120 px) pass;
     DraCode suite 187/187. Merge waits for the user's word; DraCode's change waits for it on main.
+
+**Changed before merge, on the user's word ("switch 981 to rem then merge"; Birko.Web mostly uses rem):** the default
+minimum is 7.5rem (120px at a 16px root), a drag or a key commits the width in rem to two decimals (`split-resize` and
+`persist-key` give `{ master: '1fr', detail: '22.86rem' }`), and the keys step 1rem / 4rem. A px width saved before
+still loads. Birko.Web 53adcdf; Playground 2bad042 (`split-transition-check` 26/26, red 15/26 on main;
+`layout-persist-smoke` updated to rem, 35/35). **Merged 2026-11-25** into Birko.Web main 4dc4e0c as part of v0.5.3
+(the unpushed tag moved); on main split 26/26, overlay-footer 8/8, keyboard 244/244 (243 on one run, then 244 twice),
+verify 0 failing. DraCode's handler must accept rem (its TASK-197).
