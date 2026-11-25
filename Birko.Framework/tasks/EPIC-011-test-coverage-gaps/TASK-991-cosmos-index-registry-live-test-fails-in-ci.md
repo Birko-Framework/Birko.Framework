@@ -52,13 +52,24 @@ e731446d passed on the old image and failed on the new one. What the new emulato
 log had no message (`-v q`). Every `dotnet test` in `live-tests.yml` now adds `--logger "console;verbosity=minimal"`, so
 a failing test prints its assertion and stack while the build stays quiet; pushed and the workflow run once to read it.
 
+**Reproduced with the message (live-tests run 45612185103, Framework d68b1aec, image c274ac17):** the test's own raw
+`SELECT * FROM c` on the `Rows` container, issued right after `CosmosDBIndexManager.CreateAsync` replaced its indexing
+policy, fails with `CosmosException` **500 InternalServerError, "Internal error occurred (-2147418113)"** from the
+emulator gateway (the POST to `.../colls/Rows/docs`). Birko's code is not in that call, and a server error is never a
+valid answer to a query, so it is the emulator build, not the index manager and not the test's timing. 606 of 607
+Cosmos tests pass on it; every other live job passes.
+
+**Fixed by pinning** the emulator to the last good build by digest (`@sha256:09dcd04e…`), with this reason in
+`live-tests.yml` beside the pin and how to unpin (run the current `vnext-preview` locally against this test). No
+retry, no skip. The test is unchanged.
+
 ## Acceptance criteria
 
 - [x] `live-tests.yml` prints a failing test's message and stack in every job (e.g. `--logger "console;verbosity=normal"`
       or a TRX upload), without flooding the log with passing tests.
-- [ ] The failure is reproduced (CI rerun with the message, or locally against the same emulator image) and its
+- [x] The failure is reproduced (CI rerun with the message, or locally against the same emulator image) and its
       cause named: emulator version, ordering / state, or a real defect in the index manager.
-- [ ] Fixed at the cause: the test waits for what it asserts, or the index manager is fixed, or the emulator image is
+- [x] Fixed at the cause: the test waits for what it asserts, or the index manager is fixed, or the emulator image is
       pinned to a known-good version with the reason recorded. No retry loop or skip that hides it.
 - [ ] Three consecutive green `live-tests` runs on main.
 

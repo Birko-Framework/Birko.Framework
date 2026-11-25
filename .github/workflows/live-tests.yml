@@ -146,9 +146,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # PINNED by digest (TASK-991, 2026-11-25). vnext-preview is a moving tag; the build published around 2026-11-24
+      # (sha256:c274ac17c19a5f74…) answers a plain `SELECT * FROM c` with 500 "Internal error occurred (-2147418113)"
+      # right after a container's indexing policy is replaced, which CosmosDBIndexManagerRegistryLiveTests does. A
+      # server error is never a valid answer, and Birko's code is not in that call, so it is the emulator. Every run on
+      # the build below passed (2026-11-19 .. 23). Unpin by trying the current vnext-preview locally against that test.
       - name: Start the Cosmos emulator
         run: |
-          docker run -d --name cosmos -p 8081:8081 -e PROTOCOL=http             mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview
+          docker run -d --name cosmos -p 8081:8081 -e PROTOCOL=http             mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator@sha256:09dcd04e7149975f0427e6cb09781681f407fc74d01e54fc9d6410c36795cda3
           for i in $(seq 1 60); do
             docker logs cosmos 2>&1 | grep -q 'Gateway=OK' && { echo "cosmos ready"; exit 0; }
             sleep 5
