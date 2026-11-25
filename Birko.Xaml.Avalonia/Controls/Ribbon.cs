@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -1338,6 +1339,9 @@ public partial class Ribbon : ContentControl
         Rect RectOf(Control b) => b.TranslatePoint(default, frame) is { } p ? new Rect(p, b.Bounds.Size) : default;
         var a = RectOf(from);
         double ax = a.X + a.Width / 2, ay = a.Y + a.Height / 2;
+        // A Large command of a mixed group spans the rows (TASK-122): sideways from it, measure from its top row, so
+        // Right lands on the top of the next column (Cut beside Paste), as in Office and b-ribbon.
+        bool spansRows = dir is Key.Left or Key.Right && from.Classes.Contains("mixed-large");
         Control? best = null;
         double bestScore = double.PositiveInfinity;
         foreach (var b in stops)
@@ -1345,7 +1349,7 @@ public partial class Ribbon : ContentControl
             if (ReferenceEquals(b, from)) continue;
             var r = RectOf(b);
             if (r.Width == 0 && r.Height == 0) continue;
-            double dx = r.X + r.Width / 2 - ax, dy = r.Y + r.Height / 2 - ay;
+            double dx = r.X + r.Width / 2 - ax, dy = r.Y + r.Height / 2 - (spansRows ? a.Y + System.Math.Min(a.Height, r.Height) / 2 : ay);
             double score;
             if (dir is Key.Left or Key.Right)
             {
@@ -1479,14 +1483,19 @@ public partial class Ribbon : ContentControl
     {
         if (size == RibbonGroupSize.Popup) return BuildChunk(group, groupKey: groupKey);
 
-        Control items = size == RibbonGroupSize.Large
+        // A mixed group (TASK-122, FEATURE-015 D13 / D14) draws its step's resolved layout, one size per command; any
+        // other group is drawn as it always was, so a ribbon that sets no item size and no layout is unchanged.
+        bool mixed = IsMixed(group);
+        Control items = mixed
+            ? MixedColumns(group.Items, RibbonItemSizing.SizesAt(group, size, GroupStart(group)), perColumn: 3, onInvoke, groupKey)
+            : size == RibbonGroupSize.Large
             ? Row(group.Items, size, onInvoke, wrapItems, groupKey)
             : Columns(group.Items, size, perColumn: 3, onInvoke, groupKey);
         // Centred over the group's name when the name is the wider of the two (a Small group's icons under
         // "Records"), so the space splits evenly instead of all sitting before the next divider (TASK-751, as
         // b-ribbon since TASK-746). A Large row keeps its commands at the top, as b-ribbon's flex-start does.
         items.HorizontalAlignment = HorizontalAlignment.Center;
-        if (size == RibbonGroupSize.Large) items.VerticalAlignment = VerticalAlignment.Top;
+        if (size == RibbonGroupSize.Large && !mixed) items.VerticalAlignment = VerticalAlignment.Top;
 
         var label = new TextBlock
         {
@@ -1611,6 +1620,67 @@ public partial class Ribbon : ContentControl
             if (!spanning && items[i].Field is null) item.VerticalAlignment = VerticalAlignment.Stretch;
             grid.Children.Add(item);
         }
+        return grid;
+    }
+
+    /// <summary>Whether a group uses per-item sizes or declared layouts (TASK-122); only such a group is drawn as mixed.</summary>
+    private static bool IsMixed(RibbonGroup group) =>
+        group.Items.Any(i => i.Size is not null) || group.Layouts is { Count: > 0 };
+
+    /// <summary>
+    /// The step the ladder starts <paramref name="group"/> at: the ribbon's preferred step, made roomier by the group's
+    /// floor, exactly as <see cref="RibbonScaling.Resolve"/> starts it. An anchored item size is an offset from it (D13).
+    /// </summary>
+    private RibbonGroupSize GroupStart(RibbonGroup group)
+    {
+        var start = group.MinSize < PreferredGroupSize ? group.MinSize : PreferredGroupSize;
+        return start == RibbonGroupSize.Popup ? RibbonGroupSize.Small : start;
+    }
+
+    /// <summary>
+    /// A mixed group's commands (TASK-122), each at its own size: a Large one takes a column of its own across every
+    /// row (Office's big Paste); the others stack <paramref name="perColumn"/> to a column in equal rows, as
+    /// <see cref="Columns"/> does, as b-ribbon's mixed grid does. A Large command is tagged <c>mixed-large</c> so the
+    /// arrow keys measure sideways from its top row.
+    /// </summary>
+    private Control MixedColumns(
+        IReadOnlyList<RibbonItem> items, IReadOnlyList<RibbonGroupSize> sizes, int perColumn, System.Action? onInvoke, string? groupKey)
+    {
+        var grid = new Grid();
+        for (int r = 0; r < perColumn; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Star));
+        int nextRow = 0, nextColumn = 0;
+        for (int i = 0; i < items.Count; i++)
+        {
+            var size = sizes[i];
+            var item = BuildItem(items[i], size, onInvoke, groupKey);
+            int row, column, span;
+            if (size == RibbonGroupSize.Large)
+            {
+                if (nextRow > 0) { nextColumn++; nextRow = 0; }
+                (row, column, span) = (0, nextColumn++, perColumn);
+                item.Classes.Add("mixed-large");
+                foreach (var b in item.GetLogicalDescendants().OfType<Button>()) b.Classes.Add("mixed-large");
+                // Across the rows, its content at the top: b-ribbon's grid stretches the spanning command the same way.
+                item.VerticalAlignment = VerticalAlignment.Stretch;
+                if (item is ContentControl cc) cc.VerticalContentAlignment = VerticalAlignment.Top;
+            }
+            else
+            {
+                (row, column, span) = (nextRow, nextColumn, 1);
+                if (++nextRow >= perColumn) { nextRow = 0; nextColumn++; }
+                item.VerticalAlignment = VerticalAlignment.Stretch;
+            }
+            Grid.SetRow(item, row);
+            Grid.SetColumn(item, column);
+            if (span > 1) Grid.SetRowSpan(item, span);
+            int c = column, rr = row;
+            if (c > 0 || rr > 0)
+                SizedBy(item, MarginProperty, s => new Thickness(c > 0 ? s.D("BRibbonItemGap") : 0, rr > 0 ? s.D("BRibbonRowGap") : 0, 0, 0),
+                    "BRibbonItemGap", "BRibbonRowGap");
+            grid.Children.Add(item);
+        }
+        int columns = nextRow > 0 ? nextColumn + 1 : nextColumn;
+        for (int c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         return grid;
     }
 

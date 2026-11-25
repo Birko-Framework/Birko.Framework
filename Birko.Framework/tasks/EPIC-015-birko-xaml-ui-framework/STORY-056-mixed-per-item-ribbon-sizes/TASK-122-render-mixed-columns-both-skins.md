@@ -2,7 +2,7 @@
 id: TASK-122
 parent: STORY-056
 feature: FEATURE-015
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-07-31
@@ -61,18 +61,45 @@ that; assert the name is a string a user would recognise.
 
 ## Acceptance criteria
 
-- [ ] A group renders one large item beside a column of three small ones, on **both** skins
-- [ ] The Clipboard example (large Paste + stacked Cut/Copy/Format Painter) renders correctly in the
+- [x] A group renders one large item beside a column of three small ones, on **both** skins
+- [x] The Clipboard example (large Paste + stacked Cut/Copy/Format Painter) renders correctly in the
       playground and the Avalonia gallery
-- [ ] Uniform-size groups are **byte-identical** to today — no visual diff, asserted by the screenshot
+- [x] Uniform-size groups are **byte-identical** to today — no visual diff, asserted by the screenshot
       baseline where one exists
-- [ ] Mixed groups degrade through the ladder and collapse to `popup` losslessly
-- [ ] No measurement is taken from a control with `IsVisible = false`
-- [ ] Every item has a recognisable accessible name at every size, including icon-only `small`
-- [ ] Keyboard arrow navigation reaches every item in a mixed group, in visual order
-- [ ] Focus survives `Rebuild()`; imperative state is re-established after a re-render
-- [ ] Web listeners bound in `onUpdated`
-- [ ] Playground verifier green; `Birko.Xaml.Avalonia.Tests` green
+- [x] Mixed groups degrade through the ladder and collapse to `popup` losslessly
+- [x] No measurement is taken from a control with `IsVisible = false`
+- [x] Every item has a recognisable accessible name at every size, including icon-only `small`
+- [x] Keyboard arrow navigation reaches every item in a mixed group, in visual order
+- [x] Focus survives `Rebuild()`; imperative state is re-established after a re-render
+- [x] Web listeners bound in `onUpdated`
+- [x] Playground verifier green; `Birko.Xaml.Avalonia.Tests` green
+
+## Evidence
+
+**Web** (Birko.Web `task/TASK-120` e259f89, v0.5.6 with TASK-120 / 121): a group with an item `size` or `layouts` is drawn
+*mixed*: `_renderGroup` renders `ribbonItemSizes(group, step, start)`, the group carries `mixed` and `data-step` instead of
+a `size-*` class, and each command a `item-large|medium|small` class on its own root (a split button on both its frame
+and its main part). CSS: three equal grid rows, a Large command `grid-row: 1 / -1` with the Large look; the Large split
+stacking rules extended to it; the Small gap tightening counts `mixed[data-step=small]`. Any other group takes the old
+code path and the same markup, byte for byte. `nearestInDirection` measures Left / Right from a mixed Large command's
+top row, so Right from Paste is Cut (was Copy, its middle row). No listener added (rendering only); measurement
+unchanged (each step through `_renderGroup`).
+**Avalonia** (Framework main): `IsMixed` groups build each step with `MixedColumns` from `RibbonItemSizing.SizesAt` (a
+Large command a column of its own across the star rows, stretched, content at the top; the rest three to a column, each
+at its own size); `mixed-large` class and the same top-row rule in `NearestInDirection`. Variants still prebuilt and
+parked off-screen (never `IsVisible = false`); names via `Describe`, unchanged; no imperative state added.
+**Demos:** the Playground gallery ribbon and the Avalonia gallery's demo ribbon both show Word's Clipboard mixed (Paste
+large split + Cut / Copy / Format Painter); Gallery c8c476d, Playground 25b5fe7.
+- Playground `ribbon-mixed-check` 13/13: Paste spans the rows (85 of 85 px) with Cut / Copy / Format Painter stacked
+  beside it at Medium; a uniform group keeps `size-medium` and no sized commands; names at every step; Right, Down,
+  Down, Left walk Paste > Cut > Copy > Format Painter > Paste; Small step (400 px): Paste Medium with its label, the
+  rest icons, named; Popup (330 px) lossless, flyout holds all four; a 900 → 200 → 900 px sweep resolves the same at
+  every width. **Red** 5/11 with TASK-122's b-ribbon change set aside. verify 0 failing; keyboard-check 249/249;
+  ribbon-a11y 22/22; category-ribbon 19/19; contextual-ribbon 13/13; a11y-name 43 OK; Components `tsc` clean.
+- `RibbonMixedSizeTests` (Avalonia headless, 5): layout, uniform group unchanged, arrow order, names and a lossless
+  collapse across a 1000 → 260 px sweep, no variant hidden from measurement. **Red** 2/5 (layout, arrows) with the
+  `Ribbon.cs` change set aside. `Birko.Xaml.Avalonia.Tests` 447/447 (incl. `RibbonSizeTests`: no literal size);
+  `Birko.Xaml.Core.Tests` 121/121; the gallery builds.
 
 ## Out of scope
 
