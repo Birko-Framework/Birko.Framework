@@ -2,7 +2,7 @@
 id: TASK-979
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-24
@@ -52,7 +52,7 @@ Birko.Web `task/TASK-979` 44471c1 (joins the unpushed v0.5.3), Playground 04621e
 
 ## Human test plan
 
-- [ ] In DraCode, after Birko.Web main has it: focusing the chat panel widens it smoothly and leaving it narrows it
+- [x] In DraCode, after Birko.Web main has it: focusing the chat panel widens it smoothly and leaving it narrows it
       smoothly; dragging the divider follows the pointer without lag; with Windows "Show animations" off (reduced
       motion) the width changes at once.
 
@@ -69,3 +69,9 @@ and the arrow keys resize the detail, and the drop commits `{ master: '1fr', det
 those sizes changes nothing. `split-transition-check` 15/15 (Playground 7d1d13e), red 12/15 against 3e56111 (the
 strip measured: 490 + 20 + 300 of 960 px); verify 0 failing; keyboard-check 244/244. Waiting for DraCode to re-run
 step 2. Not changed: the drag clamps to 120 px per column, not to a consumer's own minimum (DraCode clamps at drop).
+
+**DraCode's re-run 2026-11-25 (Birko.Web 0b3e085): PASS, closed.** Step 2: during a mouse drag the detail column
+filled to the panel's right edge at every step (0 px gap over 8 steps each way), its left edge tracking the pointer;
+steps 1 and 3 still pass (~170 ms widen/narrow; reduced motion changes the width in one frame). DraCode's own
+`split-resize` handler still reads `sizes.master` as px and now gets `'1fr'`, so it restores the stored width: its
+TASK-197, not Birko's. The consumer minimum DraCode needs (320 px) is filed as [[TASK-981]].
