@@ -60,12 +60,19 @@ error or a 5xx and still backs off to `retryMaxMs`. That is how Reps implements 
 
 ## Human test plan
 
-- [ ] In the Playground gallery's `b-sync-status` card (or a page binding a fake source with a dead count), check the
+- [x] In the Playground gallery's `b-sync-status` card (or a page binding a fake source with a dead count), check the
       dead state in light and dark themes: readable red, visibly a button, keyboard-focusable, and the event fires on
       Enter as well as on a tap.
-  - _Partly run 2026-11-24 on Android (Reps on a Mi A2 Lite, Chrome 152, a real dead write):_ the button reads
+  - _Run 2026-11-24 on Android (Reps on a Mi A2 Lite, Chrome 152, a real dead write):_ the button reads
     "1 neuložené", red and readable in dark and in light, sits beside the other top-bar controls, and a real tap
-    dispatched `b-sync-dead` (Reps opened its list). Not checked: keyboard focus and Enter, so the step stays open.
+    dispatched `b-sync-dead` (Reps opened its list).
+  - _Keyboard, run 2026-11-25 in desktop Chromium (Reps on its local Testing host, a real server-refused set):_ real
+    Tab presses reach `button.dead` in document order, after the brand link; Enter opens Reps' list, Space opens it
+    too, and Escape returns focus to the button.
+    **Found:** the focus indicator is faint. It is `outline: none` plus a 3px box-shadow at 15% red, so on the pink
+    chip in light mode the focused and unfocused states are hard to tell apart; `b-button` shows a clear ring
+    beside it. Not a failure of this step, but it is below the 3:1 a focus indicator needs, so it needs a
+    follow-up task.
 
 ## Implementation plan
 
