@@ -100,6 +100,15 @@ public sealed class RibbonItem
 
     /// <summary>Makes this command a small input, like Office's font name and size (TASK-762, as b-ribbon's TASK-741).</summary>
     public RibbonField? Field { get; init; }
+
+    /// <summary>
+    /// This command's own size (TASK-120, FEATURE-015 D13): <see cref="RibbonGroupSize.Large"/>,
+    /// <see cref="RibbonGroupSize.Medium"/> or <see cref="RibbonGroupSize.Small"/>, never <see cref="RibbonGroupSize.Popup"/>.
+    /// It is an <b>anchor</b>: the item keeps its offset from the group's starting step as the group degrades
+    /// ("Paste is one step bigger than the rest"). <c>null</c> (the default): the item follows its group, as before.
+    /// Resolved by <see cref="RibbonItemSizing"/>, mirrored by b-ribbon's <c>size</c>.
+    /// </summary>
+    public RibbonGroupSize? Size { get; init; }
 }
 
 /// <summary>What kind of box a <see cref="RibbonField"/> is.</summary>
@@ -261,6 +270,16 @@ public sealed class RibbonGroup
     /// further.
     /// </summary>
     public RibbonGroupSize MinSize { get; init; } = RibbonGroupSize.Popup;
+
+    /// <summary>
+    /// Declared layouts (TASK-120, FEATURE-015 D14): for a step (<see cref="RibbonGroupSize.Large"/>,
+    /// <see cref="RibbonGroupSize.Medium"/> or <see cref="RibbonGroupSize.Small"/>), the size of each listed item by
+    /// <see cref="RibbonItem.Id"/>. A listed item takes that size at that step; an unlisted one, or any item at a step
+    /// with no layout, takes the anchor rule. Office's "Paste stays Large while the rest shrink" is a layout for the
+    /// tighter step. <c>null</c> (the default): every step comes from the anchor rule. Mirrored by b-ribbon's
+    /// <c>layouts</c>.
+    /// </summary>
+    public IReadOnlyDictionary<RibbonGroupSize, IReadOnlyDictionary<string, RibbonGroupSize>>? Layouts { get; init; }
 
     /// <summary>
     /// Office's dialog launcher (TASK-756, as b-ribbon's <c>launcher</c>): a small corner arrow at the group's bottom

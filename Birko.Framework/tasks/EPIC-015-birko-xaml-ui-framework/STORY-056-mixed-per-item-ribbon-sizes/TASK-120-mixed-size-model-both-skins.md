@@ -2,7 +2,7 @@
 id: TASK-120
 parent: STORY-056
 feature: FEATURE-015
-status: todo
+status: verify
 priority: P1
 assignee: ai
 created: 2026-07-31
@@ -59,22 +59,38 @@ against TASK-122 before minting a token nothing reads.
 
 ## Acceptance criteria
 
-- [ ] `RibbonModels.cs` and `b-ribbon.ts` carry the same model, added in one change
-- [ ] Names match across skins (allowing for `PascalCase` vs `camelCase`)
-- [ ] The `b-ribbon.ts` "mirrors `RibbonGroupSize` … keep the two in step" comment is updated to
+- [x] `RibbonModels.cs` and `b-ribbon.ts` carry the same model, added in one change
+- [x] Names match across skins (allowing for `PascalCase` vs `camelCase`)
+- [x] The `b-ribbon.ts` "mirrors `RibbonGroupSize` … keep the two in step" comment is updated to
       describe the new shape
-- [ ] Group-level `RibbonGroupSize` still works unchanged — the uniform case is the default
-- [ ] Per-item size is **optional**; an item that sets none resolves to its group's size
-- [ ] The fallback is resolved by **one mirrored function per skin**, called by both renderers and by
+- [x] Group-level `RibbonGroupSize` still works unchanged — the uniform case is the default
+- [x] Per-item size is **optional**; an item that sets none resolves to its group's size
+- [x] The fallback is resolved by **one mirrored function per skin**, called by both renderers and by
       the ladder — not re-implemented at each render site
-- [ ] That function is unit-tested on both sides against the same cases, including the
+- [x] That function is unit-tested on both sides against the same cases, including the
       default/cap/anchor rule TASK-119 chose
-- [ ] Any new token is defined in `tokens.json` and reaches CSS **and** AXAML by regeneration
-- [ ] `Birko.DesignTokens` `verify` passes both the CSS and the AXAML drift gate
-- [ ] `AxamlParityTests` / `CssParityTests` green
-- [ ] A model-level unit test constructs the Clipboard example (large Paste + stacked
+- [x] Any new token is defined in `tokens.json` and reaches CSS **and** AXAML by regeneration
+- [x] `Birko.DesignTokens` `verify` passes both the CSS and the AXAML drift gate
+- [x] `AxamlParityTests` / `CssParityTests` green
+- [x] A model-level unit test constructs the Clipboard example (large Paste + stacked
       Cut/Copy/Format Painter) on both sides
-- [ ] No rendering change yet — this task is the model only, and existing ribbons are byte-identical
+- [x] No rendering change yet — this task is the model only, and existing ribbons are byte-identical
+
+## Evidence
+
+Framework (main): `RibbonItem.Size` (nullable `RibbonGroupSize`), `RibbonGroup.Layouts` (step → item id → size) and
+`RibbonItemSizing.SizesAt(group, step, start)`, the one place the D13 anchor and D14 layouts are resolved (Popup → the
+Large layout, for the flyout; refuses a Popup item size, a layout for Popup, an unknown item id, a Popup start). Web
+`task/TASK-120` c8f2d65 (starts v0.5.6): `RibbonItem.size?: RibbonItemSize`, `RibbonGroup.layouts?`, `ribbonItemSizes` in
+`ribbon-scaling.ts`, exported; the `RibbonGroupSize` mirror comment rewritten for the new shape. Same names, casing apart.
+- `RibbonItemSizingTests` (21 cases incl. the Word Clipboard group: no sizes at every step, the anchor at every step,
+  the clamp, a declared Small layout keeping Paste Large, the start, five refusals); `Birko.Xaml.Core.Tests` 108/108.
+  Playground 02813b0 `ribbon-scaling-smoke` asserts the same cases for `ribbonItemSizes`: 65/65.
+- **No new token:** nothing renders yet; TASK-122 adds only what its render step reads. So `verify` and the parity
+  gates are unchanged (no `tokens.json` edit); `Birko.Xaml.Avalonia.Tests` 442/442 (incl. the parity tests).
+- No renderer touched: existing ribbons are unchanged; Playground verify 0 failing; Components `tsc` clean.
+- **D13 / D14 make TASK-121 small:** the ladder keeps four widths per group; the renderer measures each step's
+  resolved layout (TASK-122).
 
 ## Out of scope
 

@@ -44,6 +44,13 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
   (`ScalingPriority = 0`, `MinSize = Popup`) reproduce pre-TASK-098 rendering exactly. The fields are
   consumed by the degrade pass below. Keep in step with the `RibbonGroupSize` / `RibbonGroup` mirror in
   web `b-ribbon.ts` — the two are designed together, never retrofitted one side at a time.
+- **Mixed item sizes (STORY-056/TASK-120, FEATURE-015 D13 / D14):** `RibbonItem.Size` (nullable; Large / Medium /
+  Small, never Popup) is an **anchor**, an offset from the group's starting step that moves with the group;
+  `RibbonGroup.Layouts` declares, per step, sizes for listed items by id, overriding the anchor. Resolved in ONE
+  place, `RibbonItemSizing.SizesAt(group, step, start)` (Popup → the Large layout, for the flyout); it refuses a Popup
+  item size, a layout for Popup, a layout naming an unknown item. Mirrored by `ribbonItemSizes` in web
+  `ribbon-scaling.ts`, asserted case for case by `ribbon-scaling-smoke`. No item size and no layout: every item is at
+  its group's step, as before. Not rendered yet (TASK-122); the ladder keeps four widths per group (TASK-121).
 - **Ribbon scaling policy (STORY-049/TASK-099):** `Ribbon.RibbonScaling.Resolve(groups, available,
   preferred, gap)` + `Ribbon.RibbonGroupMetrics`. Given each group's width per variant, its priority and
   its floor, it picks a variant per group so the row fits, degrading the **least important first, one step
