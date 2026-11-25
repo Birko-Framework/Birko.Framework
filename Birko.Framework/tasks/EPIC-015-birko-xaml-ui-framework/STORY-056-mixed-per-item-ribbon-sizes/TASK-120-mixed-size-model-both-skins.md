@@ -2,7 +2,7 @@
 id: TASK-120
 parent: STORY-056
 feature: FEATURE-015
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-07-31
@@ -102,3 +102,5 @@ Large layout, for the flyout; refuses a Popup item size, a layout for Popup, an 
 
 N/A — covered by automated tests. Nothing is visible yet; the parity gates and the model test are the
 whole verification surface.
+
+**Merged 2026-11-25** on the user's word ("merge") into Birko.Web main d6bc75c with TASK-120 / 121 / 122 together, tagged v0.5.6 (one branch, one tag); Framework halves on main (latest 062fd053). On main: Components `tsc` clean, `ribbon-mixed-check` 13/13, `ribbon-scaling-smoke` 79/79, keyboard-check 249/249, ribbon-a11y 22/22, category-ribbon 19/19, contextual-ribbon 13/13, verify 0 failing. Closed: its human test plan is N/A.
