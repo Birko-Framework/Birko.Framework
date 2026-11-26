@@ -3,7 +3,7 @@ id: TASK-599
 parent: STORY-038
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — add this line while the task is blocked, keeping its status; /tasks unblock removes it
 priority: P1
 assignee: ai
@@ -106,7 +106,7 @@ palette decision with a visual consequence in two consumers, so it should be *ch
 
 ## Human test plan
 
-- [ ] Read a `danger` and a `warning` badge on a real phone in **both** themes, in daylight. The measurement
+- [x] Read a `danger` and a `warning` badge on a real phone in **both** themes, in daylight. The measurement
       settles compliance; a human settles whether it now reads as *urgent* rather than merely legible — a
       contrast fix that makes danger look like a neutral chip has passed the number and failed the purpose.
   - **Not run 2026-11-24** (needs a real phone in daylight). On a desktop screen the same day, by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3: danger and warning
@@ -115,7 +115,7 @@ palette decision with a visual consequence in two consumers, so it should be *ch
   - **Run 2026-11-26 by the user on a phone** (Playground over Tailscale, Birko.Web v0.5.7): every badge readable, but
     "warning is subtle and danger would probably be more red". Passed the number, failed the purpose, so the colours
     changed (below). The step stays open for a re-read of the new colours on the phone.
-- [ ] Re-read the new danger and warning badges (option B) on the phone, both themes, in daylight: they read as urgent.
+- [x] Re-read the new danger and warning badges (option B) on the phone, both themes, in daylight: they read as urgent.
 
 ## Decision 2026-11-26 (the user)
 
@@ -167,3 +167,5 @@ and a warning badge read on a phone, in daylight, both themes).
   before until it adds the new tokens, so nothing changes for it on upgrade; adopting the fix means copying the new
   tokens into its fork. The visual change (darker badge text, dark text on toasts) is unassessed in Symbio.
 - Reps needs no change for the badges, which the components own; its TASK-123 can re-measure against v0.1.10.
+
+**Merged 2026-11-26** on the user's word ("merge", given after the branch build was offered for the phone re-read with "if they read as urgent, say merge") into Birko.Web main c2943f1; local tag v0.5.7 moved onto it (not pushed). On main: Components `tsc` clean, DesignTokens `verify` clean against the real Web checkout, device-fix-check 261/261, verify 0 failing. Done; the wider question is [[TASK-993]].
