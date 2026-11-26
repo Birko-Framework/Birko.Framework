@@ -2,7 +2,7 @@
 id: TASK-994
 parent: STORY-038
 feature: null
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-26
@@ -60,7 +60,7 @@ diffs, menus, stats) stays open.
 - [x] The dead chip measured in every theme, with its margin decided (A leaves it at 4.55:1 in light).
 - [x] The gap closed: the chip's pairs measured by `device-fix-check` (rendered, every theme), so a component painting a
       base colour on its tint is caught; red before the fix.
-- [ ] Reps told the result for its TASK-123.
+- [x] Reps told the result for its TASK-123.
 
 ## Evidence 2026-11-26
 
@@ -85,3 +85,5 @@ Birko.Web `task/TASK-994` 8bcbd12 (starts v0.5.8), Playground f0c4a1c.
       legible.
 
 **Merged 2026-11-26** on the user's word ("merge", after the Playground Sync status card got Offline / Pending / Not saved controls, Playground 27bdafb, and was offered for the phone check) into Birko.Web main 89673b6 (the merge commit, amended with [skip ci] at push), tagged **v0.5.8** and pushed 2026-11-26. On main: Components `tsc` clean, device-fix-check 301/301, verify 0 failing. Stays at verify until Reps is told on push and re-measures for its TASK-123.
+
+**Done 2026-11-26.** Reps re-measured on v0.5.8 (89673b6), as rendered in desktop Chromium against its Testing host with a real offline state, a held in-flight send and a real refused write: offline 6.84 / 6.85, syncing 4.56 / 4.59, not saved 5.42 / 8.80 (light / dark), identical to ours. Reps copies tokens.css and themes/dark.css at build, so the badge tokens arrive with their dark values; its E2E 252/252 in both lanes, no Reps code change; its TASK-123 unblocked (Reps b9f2020), only its own phone check left.
