@@ -2,7 +2,7 @@
 id: TASK-992
 parent: EPIC-001
 feature: null
-status: verify
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-25
@@ -77,10 +77,16 @@ does not move focus. `deepActiveElement` moved to `pages/focus-utils.ts`, shared
 
 ## Human test plan
 
-- [ ] On Symbio HR → Positions, keyboard only: open a position with Enter, reach Delete in the fewest keys the chosen
+- [x] On Symbio HR → Positions, keyboard only: open a position with Enter, reach Delete in the fewest keys the chosen
       option promises, close the panel, focus is back on the row.
 
 **Merged 2026-11-25** on the user's word ("merge") into Birko.Web main 77f5e15, tagged v0.5.7 locally (not pushed; the
 next Birko.Web work joins v0.5.7 and moves the tag until it is pushed). On main: Shell `tsc` clean,
 `table-rows-keyboard-check` 23/23, keyboard-check 249/249, verify 0 failing. Stays at verify until the Symbio step
 above is run (it needs Symbio rebuilt from v0.5.7 once that is pushed).
+
+**Symbio step passed 2026-11-26** (the Symbio session, Symbio built from Birko.Web v0.5.7 c2943f1 against the Testing API,
+one Playwright run with focus traced through shadow roots): Enter on a focused row opens it and focus moves to the panel's
+first action (`b-button#btn-detail-edit`); one Tab reaches `#btn-detail-delete`; Escape hides the panel and focus is back on
+the opened row; the close button (focused, Enter) does the same; a mouse click opens the panel and focus stays on the row.
+Done.

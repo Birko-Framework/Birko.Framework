@@ -169,3 +169,9 @@ and a warning badge read on a phone, in daylight, both themes).
 - Reps needs no change for the badges, which the components own; its TASK-123 can re-measure against v0.1.10.
 
 **Merged 2026-11-26** on the user's word ("merge", given after the branch build was offered for the phone re-read with "if they read as urgent, say merge") into Birko.Web main c2943f1; local tag v0.5.7 moved onto it (not pushed). On main: Components `tsc` clean, DesignTokens `verify` clean against the real Web checkout, device-fix-check 261/261, verify 0 failing. Done; the wider question is [[TASK-993]].
+
+**Consumers, 2026-11-26.** Symbio (built from v0.5.7): no badge overrides; the Blocked (danger) badge on the customers list
+reads well in light and dark (screenshots). The four new tokens tripped Symbio's own token-parity guard (its TASK-1131,
+"4 Birko base tokens not in Symbio css/tokens.css"); Symbio now carries the light and dark values in its token copy (a fork
+of ours: without the dark values, dark would inherit the light tint). A consumer that keeps such a copy must add new base
+tokens per theme. Reps renders no `b-badge`: its remaining defect is `b-sync-status`, filed as [[TASK-994]].
