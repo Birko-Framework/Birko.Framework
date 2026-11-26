@@ -1,7 +1,7 @@
 ---
 id: STORY-056
 parent: EPIC-015
-status: planned
+status: done
 created: 2026-07-31
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Web.Components, Birko.DesignTokens]
 ---
@@ -110,15 +110,16 @@ implementations cannot drift; they move together in this story too.
 
 ## Acceptance criteria
 
-- [ ] A single group can render one large item beside a column of three small ones, on **both** skins
-- [ ] The mixed-size model is identical in `RibbonModels.cs` and `b-ribbon.ts`, landed together
-- [ ] The degrade ladder handles mixed groups and remains a pure function of its arguments
-- [ ] C# unit tests and the playground smoke assert the same numeric table
+- [x] A single group can render one large item beside a column of three small ones, on **both** skins (TASK-122)
+- [x] The mixed-size model is identical in `RibbonModels.cs` and `b-ribbon.ts`, landed together (TASK-120)
+- [x] The degrade ladder handles mixed groups and remains a pure function of its arguments (TASK-121: run twice from
+      different prior state, same answer; a 60 → 260 → 60 px sweep resolves identically both ways)
+- [x] C# unit tests and the playground smoke assert the same numeric table (TASK-121)
 - [x] A consumer can derive a correct `--b-ribbon-panel-height` under mixed sizes, and the rule is
       written down (TASK-123: `requiredPanelHeight` + README rule, done 2026-11-25)
-- [ ] `AxamlParityTests` / `CssParityTests` green; no token hand-authored on one side
-- [ ] Item size is optional; an item that sets none renders at its group's size
-- [ ] Existing uniform-size ribbons render **byte-identically** — which the fallback makes structural,
+- [x] `AxamlParityTests` / `CssParityTests` green; no token hand-authored on one side (TASK-120, TASK-122)
+- [x] Item size is optional; an item that sets none renders at its group's size (TASK-120)
+- [x] Existing uniform-size ribbons render **byte-identically** — which the fallback makes structural,
       not merely tested
 
 ## Out of scope
@@ -131,3 +132,9 @@ implementations cannot drift; they move together in this story too.
 ## Human test plan
 
 N/A at story level — each task carries its own.
+
+**Closed 2026-11-26.** All six tasks done (TASK-119 decision, TASK-120 model, TASK-121 ladder, TASK-122 rendering,
+TASK-123 panel height, TASK-124 comment); shipped in Birko.Web v0.5.6 (120–122) and v0.5.7 (123–124), human tests run by
+the user on the Playground and the Avalonia gallery. Uniform byte-identity: TASK-120 (model only, existing ribbons
+unchanged) and TASK-122 (uniform groups keep their size class and no per-command classes, screenshot-asserted).
+Follow-up outside the story: Symbio TASK-1133 (its clipping spec for mixed groups).
