@@ -112,3 +112,7 @@ Built 2026-11-25 (one commit with this file).
 
 - [ ] In a consumer (DraCode or the Sandbox), switch one store set between SQLite, PostgreSQL and MongoDB by
       configuration alone; reads and writes work on each.
+
+**2026-11-26:** DraCode acknowledged; the switch test is its TASK-200, not yet picked by its user. It will report pass/fail
+for TASK-988 and TASK-990 then (PostgreSQL via Docker, MongoDB if it can start one). Symbio was told about the factory the
+same day (FYI, optional adoption; a first-hand switch test there would also count).

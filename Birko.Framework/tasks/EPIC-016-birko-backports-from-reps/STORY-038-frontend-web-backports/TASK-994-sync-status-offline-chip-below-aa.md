@@ -2,7 +2,7 @@
 id: TASK-994
 parent: STORY-038
 feature: null
-status: todo
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-26
@@ -30,6 +30,9 @@ composited backgrounds):
 | offline chip, `--b-color-warning` on `--b-color-warning-light` | **2.86:1** | **4.22:1** |
 | dead chip, `--b-color-danger-text` on `--b-color-danger-light` | 4.55:1 | 5.40:1 |
 
+The **syncing** chip has the same defect (found 2026-11-26 while preparing the options): `--b-color-info` on
+`--b-color-info-light`, **3.29:1** light, **3.64:1** dark.
+
 TASK-599's October fix moved `b-badge`, `b-stat` and the shell items to the `-text` tokens but missed this chip. Neither
 gate caught it: the DesignTokens contrast gate never measures `--b-color-warning` on its tint (the chip's pair is not a
 declared pair), and `device-fix-check` 3b renders only badges and toasts. The dead chip passes in light by only 0.05.
@@ -42,13 +45,35 @@ declared pair), and `device-fix-check` 3b renders only badges and toasts. The de
   and matches the urgent badges. But that moves sync status onto the badge's stronger colours, which is the question
   [[TASK-993]] holds open; decide it there or here, not twice.
 
+## Decision 2026-11-26 (the user)
+
+Shown side by side in both themes with measured contrast (artifact "Sync Chip Contrast"). The user asked whether the chips
+could use the badge colours, and chose that, **option B**: each chip looks exactly like the badge of the same meaning.
+Offline = the warning badge (`--b-badge-warning-*`), Failed = the danger badge (`--b-badge-danger-*`), Syncing = the info
+badge (`--b-color-info-text` on `--b-color-info-light`, as `b-badge` paints info). A lost: just over AA (4.56–4.60), and the
+failed chip would have kept its 0.05 margin. For sync status this settles part of [[TASK-993]]; the rest of TASK-993 (banners,
+diffs, menus, stats) stays open.
+
 ## Acceptance criteria
 
-- [ ] The offline chip's text is AA in every theme, as rendered.
-- [ ] The dead chip measured in every theme, with its margin decided (A leaves it at 4.55:1 in light).
-- [ ] The gap closed: the chip's pairs measured by `device-fix-check` (rendered, every theme), so a component painting a
+- [x] The offline and syncing chips' text is AA in every theme, as rendered.
+- [x] The dead chip measured in every theme, with its margin decided (A leaves it at 4.55:1 in light).
+- [x] The gap closed: the chip's pairs measured by `device-fix-check` (rendered, every theme), so a component painting a
       base colour on its tint is caught; red before the fix.
 - [ ] Reps told the result for its TASK-123.
+
+## Evidence 2026-11-26
+
+Birko.Web `task/TASK-994` 8bcbd12 (starts v0.5.8), Playground f0c4a1c.
+- `b-sync-status`: offline reads `--b-badge-warning-*`, syncing `--b-color-info-text` on `--b-color-info-light`, "not saved"
+  `--b-badge-danger-*`, each falling back to the shared pair. No token changes.
+- Worse than reported, found by the new check on main: in finstat the offline chip was **1.54:1** and syncing **1.84:1**;
+  dark and inverse failed too (offline 4.22, syncing 3.64).
+- `device-fix-check` 3b'': renders the chip online with pending and dead writes, then with the page offline, in light,
+  dark, neon, finstat and inverse; each part must be AA and paint exactly what the `b-badge` of the same meaning paints.
+  301/301 on the branch; **red** 20/301 on Birko.Web main. Components `tsc` clean. `verify` 0 failing on the branch (an
+  earlier run of navigation timeouts was the machine: an endpoint scanner and the WSL VM at ~90% CPU, main timed out the
+  same way).
 
 ## Out of scope
 
