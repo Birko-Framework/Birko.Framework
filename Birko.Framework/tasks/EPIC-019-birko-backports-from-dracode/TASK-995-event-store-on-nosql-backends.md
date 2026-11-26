@@ -53,6 +53,30 @@ itself, a unique violation translated to `EventStoreConcurrencyException`, and `
 - **The factory hook:** an `IEventStoreFactory` capability (`factory is IEventStoreFactory`) or an extension that maps the
   configured backend to its event store; and whether the SQL providers answer it with `SqlEventStore`.
 
+## Measured 2026-11-26 (before deciding)
+
+A temporary probe through TASK-990's `IStoreFactory` (not committed), live servers in Docker:
+
+1. **Sequential:** create an entity with a caller-set Guid, then create another with the same Guid. On **every** backend
+   (InMemory, JSON, XML, SQLite, MongoDB, Elasticsearch, RavenDB, Cosmos DB) `CreateAsync` keeps the caller's Guid and the
+   second create throws `Birko.Data.Exceptions.StoreUniqueViolationException` ("Create never overwrites"); one row, the
+   first, remains. No backend upserts.
+2. **Race:** two independent factories create the same Guid at the same instant, 20 rounds per backend.
+
+   | Backend | one winner | both "won" | loser's exception |
+   |---|---|---|---|
+   | SQLite (one file), MongoDB, Elasticsearch, RavenDB, Cosmos DB | **20/20** | 0 | `StoreUniqueViolationException` |
+   | JSON, XML (one folder, two factories = two processes) | 19/20 | **1** (a write silently lost) | `UnauthorizedAccessException` (file lock) |
+
+   The database backends refuse a duplicate atomically on the server. The file stores are safe within one process only
+   (each factory keeps its own in-memory copy of the file); InMemory is single-process by nature.
+
+**What this means for the decisions:** option (a) works on every database backend with no backend-specific code: a
+**deterministic Guid derived from (aggregate, version)** (a name-based UUID) makes a second writer's create fail natively,
+and `StoreUniqueViolationException` translates to `EventStoreConcurrencyException`. `SqlEventStore` already reads only
+through the generic store API (filtered reads ordered by version), so one generic event store over `IAsyncBulkStore` is
+mostly its code without the SQL unique index. `Birko.Data.EventSourcing` already references `Birko.Data.Stores`.
+
 ## Acceptance criteria
 
 - [ ] Decisions above recorded, with the per-backend duplicate behaviour measured, not assumed.
