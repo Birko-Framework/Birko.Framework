@@ -84,4 +84,4 @@ Birko.Web `task/TASK-994` 8bcbd12 (starts v0.5.8), Playground f0c4a1c.
 - [x] Take Reps (or the Playground) offline: read the offline chip on a phone in both themes; it reads as a warning and is
       legible.
 
-**Merged 2026-11-26** on the user's word ("merge", after the Playground Sync status card got Offline / Pending / Not saved controls, Playground 27bdafb, and was offered for the phone check) into Birko.Web main 2c44ccb, tagged **v0.5.8** locally (not pushed). On main: Components `tsc` clean, device-fix-check 301/301, verify 0 failing. Stays at verify until Reps is told on push and re-measures for its TASK-123.
+**Merged 2026-11-26** on the user's word ("merge", after the Playground Sync status card got Offline / Pending / Not saved controls, Playground 27bdafb, and was offered for the phone check) into Birko.Web main 89673b6 (the merge commit, amended with [skip ci] at push), tagged **v0.5.8** and pushed 2026-11-26. On main: Components `tsc` clean, device-fix-check 301/301, verify 0 failing. Stays at verify until Reps is told on push and re-measures for its TASK-123.
