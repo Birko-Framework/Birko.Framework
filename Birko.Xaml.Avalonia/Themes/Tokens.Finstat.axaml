@@ -19,6 +19,10 @@
       <Color x:Key="BBackdropBg">#66000000</Color>
       <Color x:Key="BBackdropBgLight">#26000000</Color>
       <Color x:Key="BBackdropOverlay">#0F000000</Color>
+      <Color x:Key="BBadgeDangerBg">#FCDFD7</Color>
+      <Color x:Key="BBadgeDangerText">#B3391A</Color>
+      <Color x:Key="BBadgeWarningBg">#FDF0CF</Color>
+      <Color x:Key="BBadgeWarningText">#8B6712</Color>
       <Color x:Key="BBg">#FFFFFF</Color>
       <Color x:Key="BBgElevated">#FFFFFF</Color>
       <Color x:Key="BBgSecondary">#F3F2F0</Color>

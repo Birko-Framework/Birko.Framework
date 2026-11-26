@@ -11,6 +11,10 @@
   <SolidColorBrush x:Key="BBackdropBgBrush" Color="{DynamicResource BBackdropBg}" />
   <SolidColorBrush x:Key="BBackdropBgLightBrush" Color="{DynamicResource BBackdropBgLight}" />
   <SolidColorBrush x:Key="BBackdropOverlayBrush" Color="{DynamicResource BBackdropOverlay}" />
+  <SolidColorBrush x:Key="BBadgeDangerBgBrush" Color="{DynamicResource BBadgeDangerBg}" />
+  <SolidColorBrush x:Key="BBadgeDangerTextBrush" Color="{DynamicResource BBadgeDangerText}" />
+  <SolidColorBrush x:Key="BBadgeWarningBgBrush" Color="{DynamicResource BBadgeWarningBg}" />
+  <SolidColorBrush x:Key="BBadgeWarningTextBrush" Color="{DynamicResource BBadgeWarningText}" />
   <SolidColorBrush x:Key="BBgBrush" Color="{DynamicResource BBg}" />
   <SolidColorBrush x:Key="BBgElevatedBrush" Color="{DynamicResource BBgElevated}" />
   <SolidColorBrush x:Key="BBgSecondaryBrush" Color="{DynamicResource BBgSecondary}" />

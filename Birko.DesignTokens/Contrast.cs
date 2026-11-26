@@ -229,6 +229,11 @@ public static class Contrast
             pairs.Add(new(PairKind.TintText, "--b-text", $"--b-color-{name}-light", "b-stale-banner, b-sync-status"));
             pairs.Add(new(PairKind.TintBadge, $"--b-color-{name}-text", $"--b-color-{name}-light", "b-badge, b-stat"));
         }
+        // TASK-599: b-badge's danger and warning have their own, stronger pair.
+        foreach (var name in new[] { "warning", "danger" })
+        {
+            pairs.Add(new(PairKind.TintBadge, $"--b-badge-{name}-text", $"--b-badge-{name}-bg", "b-badge danger / warning"));
+        }
         pairs.Add(new(PairKind.FillText, "--b-text-on-primary", "--b-color-primary", "b-button, pickers, b-option-group"));
         pairs.Add(new(PairKind.FillText, "--b-text-on-primary", "--b-color-primary-hover", "b-button hover"));
         foreach (var name in Fills)

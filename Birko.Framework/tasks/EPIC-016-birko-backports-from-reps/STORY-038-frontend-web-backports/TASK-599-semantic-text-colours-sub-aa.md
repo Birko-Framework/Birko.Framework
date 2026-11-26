@@ -112,6 +112,33 @@ palette decision with a visual consequence in two consumers, so it should be *ch
   - **Not run 2026-11-24** (needs a real phone in daylight). On a desktop screen the same day, by the agent at the user's request, in Chrome with real clicks and keys, Playground built from Birko.Web main v0.5.3: danger and warning
     badges measure 4.55 and 4.58 in light, 5.40 and 4.60 in dark, and side by side with a neutral Draft chip danger
     still reads red and urgent in both themes.
+  - **Run 2026-11-26 by the user on a phone** (Playground over Tailscale, Birko.Web v0.5.7): every badge readable, but
+    "warning is subtle and danger would probably be more red". Passed the number, failed the purpose, so the colours
+    changed (below). The step stays open for a re-read of the new colours on the phone.
+- [ ] Re-read the new danger and warning badges (option B) on the phone, both themes, in daylight: they read as urgent.
+
+## Decision 2026-11-26 (the user)
+
+Four options were shown side by side in both themes with measured contrast (artifact "Badge Urgency Options"): A today's
+pale tint, **B a stronger tint with a deeper text**, C a solid fill for danger and warning, D B plus a border and a shape.
+The user picked **B, for the badge only for now**; whether the shared tokens (diffs, banners, menus, stats) should move the
+same way is deferred to [[TASK-993]]. C lost as too loud for a busy table and, as a token change, would have turned every
+removed diff line solid red; D's border and shape are left for TASK-993 to weigh.
+
+## Evidence 2026-11-26
+
+Birko.Web `task/TASK-599` d536f8a (joins v0.5.7), Playground 26d987b, Framework (this commit).
+- New tokens in Birko.DesignTokens `tokens.json`: `--b-badge-{danger,warning}-{bg,text}`. Light `#fecaca`/`#a11a1a` (5.42:1) and
+  `#fde68a`/`#7c3a03` (6.84:1); dark `#5f1a1a`/`#fecaca` (8.80:1) and `#5c3d06`/`#fcd34d` (6.85:1); neon, finstat and inverse
+  point them at their own `--b-color-*-light` / `-text`, so they look as before. `b-badge` reads them, falling back to the
+  shared pair. The shared tokens and every other component are unchanged. Generated CSS + AXAML; `verify` clean; the
+  contrast gate gained the two badge pairs (296 pairs, none under 4.5:1); DesignTokens tests 59/59; Avalonia 448/448
+  (the Avalonia badge has no danger / warning variant yet, so nothing there paints the new pair).
+- `device-fix-check` 261/261: danger and warning badges paint exactly the new pair in light and dark, keep each other
+  theme's own pair, and the shared tokens keep their values. **Red** 4/261 on Birko.Web main. `verify` 0 failing,
+  Components `tsc` clean.
+- **Push order:** the Framework's token tests compare `tokens.json` with Birko.Web's CSS, so the Framework commit must not
+  reach CI before this branch is merged into Birko.Web main.
 
 ## Implementation plan
 
