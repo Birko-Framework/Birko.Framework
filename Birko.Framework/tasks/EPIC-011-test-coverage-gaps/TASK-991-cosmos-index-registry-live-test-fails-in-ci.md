@@ -2,7 +2,7 @@
 id: TASK-991
 parent: EPIC-011
 feature: null
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-11-25
@@ -71,7 +71,7 @@ retry, no skip. The test is unchanged.
       cause named: emulator version, ordering / state, or a real defect in the index manager.
 - [x] Fixed at the cause: the test waits for what it asserts, or the index manager is fixed, or the emulator image is
       pinned to a known-good version with the reason recorded. No retry loop or skip that hides it.
-- [ ] Three consecutive green `live-tests` runs on main.
+- [x] Three consecutive green `live-tests` runs on main: 45614672152 (push, d84c34e2, 2026-11-25), 45799559503 (schedule, d84c34e2, 2026-11-26) and 45880985872 (push, 4e39d3a4, 2026-11-26, the TASK-990 push with its new live suites), all on the pinned emulator digest 09dcd04e.
 
 ## Out of scope
 
@@ -80,3 +80,5 @@ retry, no skip. The test is unchanged.
 ## Human test plan
 
 - N/A — fully covered by automated tests.
+
+**Done 2026-11-26.** Three consecutive green live-tests runs on main after the pin (above). The pin stays until the vnext-preview emulator is fixed upstream; how to unpin is beside it in `live-tests.yml`.
