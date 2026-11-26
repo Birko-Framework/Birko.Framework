@@ -2,7 +2,7 @@
 id: TASK-122
 parent: STORY-056
 feature: FEATURE-015
-status: verify
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-31
@@ -113,7 +113,7 @@ large split + Cut / Copy / Format Painter); Gallery c8c476d, Playground 25b5fe7.
 - [x] Look at a mixed group in the playground **and** the Avalonia gallery side by side at the same
       window width. The two skins are meant to be one design; a proportion that is subtly wrong on one
       of them is exactly what no assertion catches and what a glance catches immediately.
-- [ ] Tab and arrow through a mixed group with the mouse untouched, on the XAML skin. The
+- [x] Tab and arrow through a mixed group with the mouse untouched, on the XAML skin. The
       accessibility defects in STORY-049 were all in controls whose behaviour was already correct and
       tested, and two of them faked "Tab is broken" reports before anyone suspected styling.
   - _Run 2026-11-25 by the user with the agent:_ the Playground ribbon and the Avalonia gallery's demo ribbon, Clipboard
@@ -124,3 +124,5 @@ large split + Cut / Copy / Format Painter); Gallery c8c476d, Playground 25b5fe7.
     red 32 vs 12 px without it; `Birko.Xaml.Avalonia.Tests` 448/448.
 
 **Merged 2026-11-25** on the user's word ("merge") into Birko.Web main d6bc75c with TASK-120 / 121 / 122 together, tagged v0.5.6 (one branch, one tag); Framework halves on main (latest 062fd053). On main: Components `tsc` clean, `ribbon-mixed-check` 13/13, `ribbon-scaling-smoke` 79/79, keyboard-check 249/249, ribbon-a11y 22/22, category-ribbon 19/19, contextual-ribbon 13/13, verify 0 failing. Stays at verify until the keyboard step above (Tab and arrows on the XAML skin, mouse untouched) is run.
+
+**Human test passed 2026-11-26** (the user: "121 and 122 i confirm to work"): Tab and arrows through the gallery's mixed Clipboard group, mouse untouched. Done.

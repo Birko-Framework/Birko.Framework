@@ -2,7 +2,7 @@
 id: TASK-121
 parent: STORY-056
 feature: FEATURE-015
-status: verify
+status: done
 priority: P1
 assignee: ai
 created: 2026-07-31
@@ -104,9 +104,11 @@ breaks it is refused in both skins, so a missing measurement cannot make the row
 
 ## Human test plan
 
-- [ ] Drag the playground window slowly across a degrade boundary in both directions and confirm no
+- [x] Drag the playground window slowly across a degrade boundary in both directions and confirm no
       flicker or oscillation. Automated tests cover the pure function, but the failure this guards
       appeared as visible thrash at one specific width, and a human dragging is still the fastest way
       to notice a boundary the table did not sample.
 
 **Merged 2026-11-25** on the user's word ("merge") into Birko.Web main d6bc75c with TASK-120 / 121 / 122 together, tagged v0.5.6 (one branch, one tag); Framework halves on main (latest 062fd053). On main: Components `tsc` clean, `ribbon-mixed-check` 13/13, `ribbon-scaling-smoke` 79/79, keyboard-check 249/249, ribbon-a11y 22/22, category-ribbon 19/19, contextual-ribbon 13/13, verify 0 failing. Stays at verify until the drag test above is run (Playground or gallery, slowly across a step, both ways).
+
+**Human test passed 2026-11-26** (the user: "121 and 122 i confirm to work"): the Playground ribbon and the Avalonia gallery dragged slowly across the steps both ways, no flicker or oscillation. Done.
