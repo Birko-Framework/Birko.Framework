@@ -2,7 +2,7 @@
 id: TASK-995
 parent: EPIC-019
 feature: null
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-11-26
@@ -76,6 +76,96 @@ A temporary probe through TASK-990's `IStoreFactory` (not committed), live serve
 and `StoreUniqueViolationException` translates to `EventStoreConcurrencyException`. `SqlEventStore` already reads only
 through the generic store API (filtered reads ordered by version), so one generic event store over `IAsyncBulkStore` is
 mostly its code without the SQL unique index. `Birko.Data.EventSourcing` already references `Birko.Data.Stores`.
+
+## Decisions (the user)
+
+1. **Duplicates: a deterministic event id from (aggregate, version)** (2026-11-26). A second writer's create of that id
+   fails natively on every database backend (measured above).
+2. **Backends: every database backend, plus InMemory for tests** (2026-11-26). JSON and XML are out: they lost a write
+   across two processes. Their READMEs say so.
+3. **Shape: one generic event store, with per-platform overrides, the way the stores work** (2026-11-27). One interface,
+   one working default over any `IAsyncBulkStore`, and a backend gets its own project only when it needs native
+   behaviour. That means `.SQL` now, and others only where a measurement shows the default fails.
+
+4. **A batch on a backend without transactions: options 1 and 2** (2026-11-27). Where a backend has native atomicity,
+   its override uses it: RavenDB session, Cosmos DB transactional batch, MongoDB transaction on a replica set. Elsewhere
+   (MongoDB standalone, Elasticsearch, InMemory), the default deletes its own partial batch on a conflict, and the README
+   documents that a crash partway through a batch can leave its first events stored.
+5. **A SQL factory answers `SqlEventStore`** (2026-11-27). It keeps a batch in one transaction. No existing data
+   constrains this: DraCode confirmed its SQLite databases are test-only (and its history is already unreadable after a
+   reload, DraCode TASK-226), and the user said the history in its local `koboldlair.db` can be thrown away. DraCode
+   TASK-228 needs no migration step.
+
+## Implementation plan (draft, for the user's review before building)
+
+**Step 0: measure before writing code.** Two facts the design depends on, measured per backend through the factory:
+- What a bulk `CreateAsync` with a duplicate in the middle leaves behind: nothing, a prefix, or everything except the
+  duplicate. This decides how the default makes a batch all-or-nothing (open point A).
+- Whether a read made right after a create sees the new row. Elasticsearch is expected to miss it until a refresh. If
+  it does, `GetVersion` returns a stale value and the next append conflicts with itself.
+
+**Step 1: `Birko.Data.EventSourcing` (generic, no backend references).**
+- `Models/EventRecord.cs`: an `AbstractModel` with `DomainEventModel`'s fields. Its `Guid` is
+  `EventRecord.IdFor(aggregate, version)`, a name-based UUID (v5, RFC 9562) under a fixed Birko namespace. The event's
+  own id is a separate field.
+- `Stores/AbstractAsyncEventStore.cs`: implements `IAsyncEventStore`. The public methods are non-virtual (rule 12):
+  - they validate (null event, empty batch, a version below 1);
+  - they translate `StoreUniqueViolationException` into `EventStoreConcurrencyException`, naming the
+    (aggregate, version);
+  - they call the protected `*Core` seams: `AppendRangeCoreAsync`, `ReadCoreAsync(aggregate, from?, to?)`,
+    `GetVersionCoreAsync` and `ReadAllFromCoreAsync`.
+- `Stores/AsyncStoreEventStore.cs`: the default, over `IAsyncBulkStore<EventRecord>`.
+  - Reads use a filter ordered by version.
+  - `GetVersion` reads the highest version: ordered descending, limit 1.
+  - A batch is appended in version order. On a conflict, the events this batch already wrote are deleted by their
+    ids before the exception is thrown (see open point A).
+- `Stores/EventStoreFactoryExtensions.cs`: `factory.GetEventStore(o => o.AddSql())`. The overrides are registered at
+  the composition root, as the backends are (`p => p.AddSqLite()`). Neither side can reference the other, and nothing
+  is held in process-wide state (rule 36). It returns a backend's registered override when there is one, otherwise the
+  default over `factory.GetAsyncStore<EventRecord>()`. Application code never names a backend.
+
+**Step 2: `Birko.Data.EventSourcing.SQL`, the first override.** `SqlEventStore<DB>` derives from
+`AbstractAsyncEventStore`. Its behaviour is unchanged (out of scope): one transaction per batch, its own unique index,
+`MAX(Version)` and the `__Events` table. `o.AddSql()` makes any SQL factory (`ISqlStoreFactory`) answer with it, over
+the factory's connector (open point B).
+
+**Step 3: other overrides, only where measured.** Each one is its own `Birko.Data.EventSourcing.<Backend>`, as `.SQL`
+is.
+- Elasticsearch is expected: it needs a refresh on append, if step 0 shows the stale read.
+- Cosmos DB is possible: a transactional batch, partitioned by aggregate, would make a batch natively atomic (open
+  point A).
+- A backend for which the default passes the contract suite gets no project.
+
+**Step 4: one contract suite for every implementation.** The suite is
+`tests/Shared/EventSourcing/EventStoreContract.cs`, an abstract test class with a `NewStore()` factory. It covers:
+- append and read back in order;
+- reads up to and from a version, the current version (0 when empty), and all events from a time;
+- a duplicate version refused with `EventStoreConcurrencyException`;
+- a conflicting batch leaving nothing behind;
+- DraCode's two-writers test: two independent factories (two clients) race on one aggregate for N rounds, and each
+  version ends with exactly one event.
+
+Where it runs:
+- InMemory, SQLite and the default over SQLite, in CI;
+- `SqlEventStore` on PostgreSQL, MySQL and SQL Server, live;
+- MongoDB, Elasticsearch, RavenDB and Cosmos DB, live under their `BIRKO_*_HOST` variables.
+
+`SqlEventStore`'s existing tests stay.
+
+**Step 5: docs, then DraCode.** Write READMEs and CLAUDE.md files for both projects (JSON and XML marked
+single-process) and a Recent Updates entry, then tell DraCode how to call it.
+
+**Open points (the user decides before building):**
+- **A. An all-or-nothing batch on a backend without transactions** (MongoDB standalone, Elasticsearch). The default
+  deletes what it wrote when a later event in the batch conflicts. A process that crashes partway can still leave the
+  first events of a batch stored. They are valid, contiguous versions, but they record part of one command.
+  Options:
+  - accept and document this;
+  - use native atomicity where a backend has it (RavenDB session, Cosmos DB transactional batch, MongoDB on a replica
+    set);
+  - refuse a multi-event batch on backends that cannot be atomic.
+- **B. Which store a SQL factory answers.** `SqlEventStore` keeps the `__Events` table, so DraCode's existing history
+  stays readable. The default would start a new table, and that history would need migrating.
 
 ## Acceptance criteria
 
