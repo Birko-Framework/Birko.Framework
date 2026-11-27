@@ -44,7 +44,8 @@ A version twice in one batch is named before any round trip.
 
 - Collection `EventRecords`, document id = the record's name-based Guid. Database creation is safe when several clients
   start together ([[TASK-996]]).
-- Reads are index queries, so they wait for non-stale results, as every Birko RavenDB read does (`RavenIndexWait`).
+- Reads are index queries. Every Birko RavenDB write waits for the indexes before it returns (`RavenIndexWait`, TASK-828),
+  so an append is visible to the next read.
 - Tests: `tests/Birko.Data.EventSourcing.RavenDB.Tests`, the shared contract, live under `BIRKO_RAVEN_URL`.
 
 ## Maintenance

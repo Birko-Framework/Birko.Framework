@@ -129,12 +129,22 @@ public override IEnumerable<KeyValuePair<Customer, Guid>> CreateAll(IEnumerable<
 }
 ```
 
-## Index wait (TASK-828)
+## Index wait (TASK-828, TASK-999) and request retries (TASK-998)
 
-Every session the stores and `RavenDbUnitOfWork` open goes through `Stores/RavenIndexWait.Apply`, which sets
-`WaitForIndexesAfterSaveChanges(15 s, throwOnTimeout: false)`: a write returns once the indexes include it, so a query
-after it reads it. **Open a new store session through `RavenIndexWait.Apply`**, never `_documentStore.OpenSession()`
-directly, or that path is eventually consistent again. `Task828IndexWaitTests` asserts every write batch carries the wait.
+A write returns once the indexes include it, so a query after it reads it (TASK-828). Every save, in both stores and in
+`RavenDbUnitOfWork.CommitAsync`, goes through **`RavenIndexWait.SaveChanges` / `SaveChangesAsync(session, collection,
+ct)`**. Never call `session.SaveChanges` directly, or that path loses both the wait and the retry. Each save:
+
+1. is sent **without** a server-side wait. The old `WaitForIndexesAfterSaveChanges` was sometimes cancelled by the server
+   after it had committed the batch, and the client then reported an applied write as failed (TASK-999);
+2. is sent through `RavenQueryRetry`, which resends a refusal that applied nothing (TASK-998);
+3. then waits, as a separate request: the index statistics, then an empty query that waits, for each stale index over the
+   store's collection (every collection for a unit of work), within 15 s.
+
+The wait **never throws**: the write is applied by then. Every query runs through `RavenQueryRetry` too.
+`RavenIndexWait.Apply` no longer changes a session; it is kept so sessions open in one place.
+`Task828IndexWaitTests` asserts every write batch carries no server-side wait, is followed by the separate wait, and
+reports the write as applied when that wait fails.
 
 ## Server-side PropertyUpdate (TASK-827)
 

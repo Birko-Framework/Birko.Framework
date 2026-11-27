@@ -122,7 +122,8 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
         _session = null;
         try
         {
-            await session.SaveChangesAsync(ct);
+            // TASK-999: the save, then a separate wait for every stale index (a unit of work spans collections).
+            await Stores.RavenIndexWait.SaveChangesAsync(session, null, ct);
         }
         catch
         {

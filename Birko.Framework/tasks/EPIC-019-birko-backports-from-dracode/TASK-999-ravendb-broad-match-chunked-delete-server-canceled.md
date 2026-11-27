@@ -2,7 +2,7 @@
 id: TASK-999
 parent: EPIC-019
 feature: null
-status: in-progress
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-27
@@ -62,10 +62,39 @@ cancellation is not known (rule 54: recorded, not adopted).
 
 ## Acceptance criteria
 
-- [ ] Reproduce it, alone or under a matched concurrency shape (rule 11). Measure the batch size and duration at which
-      the server cancels, and check it against a commit before 2026-11-27.
-- [ ] Establish whether a cancelled `SaveChanges` applied anything. Then either size the delete chunks under the
-      server's limit, or document the limit, with a regression test that fails first.
+The two criteria below were written before the measurement and assumed a batch-size limit. The server stack showed
+no such limit: the batch commits, and only the index wait after it is cancelled. They are answered as follows.
+
+- [x] ~~Reproduce it alone or under a matched shape; measure the batch size at which the server cancels.~~ Not
+      reproducible on demand (four hypotheses falsified, above); the stack places it in the post-commit wait, not the
+      batch, so there is no batch-size limit to measure. Recorded, not adopted (rule 54).
+- [x] Establish whether a cancelled `SaveChanges` applied anything: **yes, all of it**: the cancellation is in
+      `WaitForIndexesAsync`, after `ExecuteInternalAsync` committed the batch. So no chunk sizing; the fix is that the
+      wait can no longer fail the write.
+- [x] A write whose index wait fails is reported as applied: the save is sent without a server-side wait, then a
+      separate wait follows that never throws (the user's decision, "Separate the wait"). Regression tests
+      `A_write_whose_index_wait_fails_is_reported_as_applied` (async: create, delete, create) and its sync twin fail the
+      wait request on purpose; under the old mechanism the wait was inside the save, so the same failure failed the
+      write.
+- [x] TASK-828's guarantee kept: `Task828IndexWaitTests` asserts every write batch (stores, both sync and async, and
+      the unit of work) carries no server-side wait and is followed by the separate wait; the computed-set contract
+      (reads its own writes) passes.
+
+## Done 2026-11-27
+
+- `RavenIndexWait.SaveChanges` / `SaveChangesAsync(session, collection, ct)`: the save through `RavenQueryRetry`
+  (TASK-998), then the index statistics and an empty waiting query per stale index over the collection (every
+  collection for a unit of work), within 15 s; every exception in the wait is swallowed. `Apply` no longer changes a
+  session. All 9 async and 7 sync store saves and `RavenDbUnitOfWork.CommitAsync` go through it.
+- **Full RavenDB live suite: 469/469 in 4 of 4 runs** (12 m 52 s – 14 m 32 s), against the broad-match delete failing in
+  2 of 4 before. Not proof, since the cause of the cancellation is unknown: at the old 50% rate, four clean runs by
+  chance is about 6%.
+- Cost: each save adds one index-statistics request, plus one waiting query per stale index over the collection.
+- Symbio.Birko builds (scratch output).
+- Not changed: `Birko.Data.Localization.RavenDB` (`RavenLocalizedWriteBoundary`) and `Birko.Data.Migrations.RavenDB`
+  open their own sessions and never used `RavenIndexWait`, before or after.
+- Spec drift: `docs/specs/backend-store-implementations.md` and `docs/specs/unit-of-work-and-transactions.md` still
+  describe `WaitForIndexesAfterSaveChanges`; they are generated, and update at the next `/specs regen`.
 
 ## Out of scope
 

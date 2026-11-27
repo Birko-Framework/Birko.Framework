@@ -107,8 +107,10 @@ await indexManager.CreateFromTaskAsync<Orders_ByCustomer>();
 Every write the stores make (and a `RavenDbUnitOfWork` commit) waits for the indexes to include it before returning
 (`RavenIndexWait`, TASK-828), so a query that follows a write sees it, as on every other provider. RavenDB answers a
 query from an index that may lag the documents; without the wait, a query on a value just written missed a document
-under load (measured). The cost is on the write. The wait gives up after 15 seconds **without throwing**: the write is
-already applied, and reporting it as failed would invite a retry that repeats it.
+under load (measured). The cost is on the write: after the save, one request for the index statistics, plus one waiting
+query per stale index over the collection. The wait is a separate request after the save (TASK-999). It gives up after
+15 seconds and **never throws**: the write is already applied, and reporting it as failed would invite a retry that
+repeats it.
 
 ## Server-side PropertyUpdate
 

@@ -216,7 +216,7 @@ public class AsyncRavenDBStore<T>
         await session.StoreAsync(data, string.Empty, IdOf(data.Guid.Value), ct);
         try
         {
-            await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+            await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
         }
         catch (Raven.Client.Exceptions.ConcurrencyException ex)
         {
@@ -319,7 +319,7 @@ public class AsyncRavenDBStore<T>
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
         RavenTrackedCopy.Into(data, existingItem);
-        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+        await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -359,7 +359,7 @@ public class AsyncRavenDBStore<T>
             update(item);
             try
             {
-                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+                await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
                 return item;
             }
             catch (Raven.Client.Exceptions.ConcurrencyException)
@@ -389,7 +389,7 @@ public class AsyncRavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         session.Delete(IdOf(data.Guid.Value));
-        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+        await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
     }
 
     #endregion
@@ -456,7 +456,7 @@ public class AsyncRavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
-        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+        await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
 
         return data.Guid.Value;
     }
@@ -572,7 +572,7 @@ public class AsyncRavenDBStore<T>
             }
             try
             {
-                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+                await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
             }
             catch (Raven.Client.Exceptions.ConcurrencyException ex)
             {
@@ -621,7 +621,7 @@ public class AsyncRavenDBStore<T>
 
             if (Session == null)
             {
-                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+                await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
             }
         }
         finally
@@ -657,7 +657,7 @@ public class AsyncRavenDBStore<T>
 
             if (Session == null)
             {
-                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+                await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
             }
         }
         finally
@@ -715,6 +715,9 @@ public class AsyncRavenDBStore<T>
     }
 
     #endregion
+
+    // The collection this store writes, so a save waits only for the indexes over it (TASK-999).
+    private string? IndexedCollection => _documentStore?.Conventions.GetCollectionName(typeof(T));
 
     #region Database Utilities
 
@@ -813,7 +816,7 @@ public class AsyncRavenDBStore<T>
             session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
         try
         {
-            await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
+            await RavenIndexWait.SaveChangesAsync(session, IndexedCollection, ct).ConfigureAwait(false);
         }
         catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
         {

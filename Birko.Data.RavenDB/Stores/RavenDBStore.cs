@@ -209,7 +209,7 @@ public class RavenDBStore<T>
         session.Store(data, string.Empty, IdOf(data.Guid.Value));
         try
         {
-            RavenQueryRetry.Run(() => session.SaveChanges());
+            RavenIndexWait.SaveChanges(session, IndexedCollection);
         }
         catch (Raven.Client.Exceptions.ConcurrencyException ex)
         {
@@ -323,7 +323,7 @@ public class RavenDBStore<T>
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
         RavenTrackedCopy.Into(data, existingItem);
-        RavenQueryRetry.Run(() => session.SaveChanges());
+        RavenIndexWait.SaveChanges(session, IndexedCollection);
     }
 
     /// <inheritdoc />
@@ -339,7 +339,7 @@ public class RavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         session.Delete(IdOf(data.Guid.Value));
-        RavenQueryRetry.Run(() => session.SaveChanges());
+        RavenIndexWait.SaveChanges(session, IndexedCollection);
     }
 
     #endregion
@@ -469,7 +469,7 @@ public class RavenDBStore<T>
             }
             try
             {
-                RavenQueryRetry.Run(() => session.SaveChanges());
+                RavenIndexWait.SaveChanges(session, IndexedCollection);
             }
             catch (Raven.Client.Exceptions.ConcurrencyException ex)
             {
@@ -515,7 +515,7 @@ public class RavenDBStore<T>
 
             if (Session == null)
             {
-                RavenQueryRetry.Run(() => session.SaveChanges());
+                RavenIndexWait.SaveChanges(session, IndexedCollection);
             }
         }
         finally
@@ -548,7 +548,7 @@ public class RavenDBStore<T>
 
             if (Session == null)
             {
-                RavenQueryRetry.Run(() => session.SaveChanges());
+                RavenIndexWait.SaveChanges(session, IndexedCollection);
             }
         }
         finally
@@ -561,6 +561,9 @@ public class RavenDBStore<T>
     }
 
     #endregion
+
+    // The collection this store writes, so a save waits only for the indexes over it (TASK-999).
+    private string? IndexedCollection => _documentStore?.Conventions.GetCollectionName(typeof(T));
 
     #region Database Utilities
 
@@ -633,7 +636,7 @@ public class RavenDBStore<T>
             session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
         try
         {
-            RavenQueryRetry.Run(() => session.SaveChanges());
+            RavenIndexWait.SaveChanges(session, IndexedCollection);
         }
         catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
         {
