@@ -90,17 +90,28 @@ namespace Birko.Data.ElasticSearch.Stores
         {
             _initDescriptor = indexDescriptor;
             var indexName = GetIndexName();
-            if (!Connector!.Indices.Exists(indexName).Exists)
+            // TASK-997: another client may be creating this index at the same moment (app instances starting together). Its
+            // index is then listed before its shards can answer, and a create from here is refused with
+            // resource_already_exists_exception; either way this store waits until the index is ready (measured: a search
+            // in between fails with "all shards failed"). A ready index answers at once. Any other create failure throws.
+            if (Connector!.Indices.Exists(indexName).Exists)
             {
-                var response = Connector!.Indices.Create(indexName, indexDescriptor);
-
-                if (!response.IsValid || response.OriginalException != null)
-                {
-                    throw new InvalidOperationException(
-                        $"Failed to create index {indexName}. DebugInfo: {response.DebugInformation}",
-                        response.OriginalException);
-                }
+                ElasticSearchStoreHelper.WaitForIndexReady(Connector!, indexName);
+                return;
             }
+            var response = Connector!.Indices.Create(indexName, indexDescriptor);
+            if (ElasticSearchStoreHelper.IndexAlreadyExists(response))
+            {
+                ElasticSearchStoreHelper.WaitForIndexReady(Connector!, indexName);
+                return;
+            }
+            if (!response.IsValid || response.OriginalException != null)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create index {indexName}. DebugInfo: {response.DebugInformation}",
+                    response.OriginalException);
+            }
+            ElasticSearchStoreHelper.WaitForIndexReady(Connector!, indexName);
         }
 
 

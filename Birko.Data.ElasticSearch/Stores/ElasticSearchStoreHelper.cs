@@ -14,6 +14,72 @@ namespace Birko.Data.ElasticSearch.Stores
     internal static class ElasticSearchStoreHelper
     {
         /// <summary>
+        /// Whether an index create failed only because the index already exists (TASK-997): another client created it
+        /// between this store's existence check and its create. Read from the server's error type, nothing else.
+        /// </summary>
+        public static bool IndexAlreadyExists(Nest.CreateIndexResponse response)
+            => response.ServerError?.Error?.Type == "resource_already_exists_exception";
+
+        /// <summary>How long a store waits for an index another client is creating to answer (TASK-997).</summary>
+        public static readonly TimeSpan ConcurrentCreateWait = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Waits until an index another client may be creating can answer a search (TASK-997). Measured on a single node:
+        /// the index is listed, and its health reads yellow, a moment before its shard serves a search. A count in that
+        /// window fails with "all shards failed" (<c>no_shard_available_action_exception</c>). So this waits for yellow and
+        /// then retries a count while that is its only error, up to <see cref="ConcurrentCreateWait"/>. A ready index
+        /// answers at once.
+        /// </summary>
+        public static void WaitForIndexReady(Nest.IElasticClient client, string indexName)
+        {
+            var until = DateTime.UtcNow + ConcurrentCreateWait;
+            RequireHealth(client.Cluster.Health(indexName, h => h
+                .WaitForStatus(Elasticsearch.Net.WaitForStatus.Yellow)
+                .Timeout(ConcurrentCreateWait)), indexName);
+            while (true)
+            {
+                var count = client.Count<object>(c => c.Index(indexName));
+                if (!ShardNotYetAvailable(count, indexName, until)) return;
+                System.Threading.Thread.Sleep(50);
+            }
+        }
+
+        /// <inheritdoc cref="WaitForIndexReady"/>
+        public static async System.Threading.Tasks.Task WaitForIndexReadyAsync(Nest.IElasticClient client, string indexName, System.Threading.CancellationToken ct)
+        {
+            var until = DateTime.UtcNow + ConcurrentCreateWait;
+            RequireHealth(await client.Cluster.HealthAsync(indexName, h => h
+                .WaitForStatus(Elasticsearch.Net.WaitForStatus.Yellow)
+                .Timeout(ConcurrentCreateWait), ct).ConfigureAwait(false), indexName);
+            while (true)
+            {
+                var count = await client.CountAsync<object>(c => c.Index(indexName), ct).ConfigureAwait(false);
+                if (!ShardNotYetAvailable(count, indexName, until)) return;
+                await System.Threading.Tasks.Task.Delay(50, ct).ConfigureAwait(false);
+            }
+        }
+
+        private static void RequireHealth(Nest.ClusterHealthResponse health, string indexName)
+        {
+            if (health.IsValid && !health.TimedOut) return;
+            throw new InvalidOperationException(
+                $"Index {indexName} did not become ready within {ConcurrentCreateWait.TotalSeconds:0} s. "
+                + $"DebugInfo: {health.DebugInformation}", health.OriginalException);
+        }
+
+        // True while the count failed only because the new shard cannot serve yet, and there is time left; false when it
+        // answered. Any other failure, or the deadline, throws.
+        private static bool ShardNotYetAvailable(Nest.CountResponse count, string indexName, DateTime until)
+        {
+            if (count.IsValid) return false;
+            var notYet = count.ServerError?.Error?.RootCause?.Any(c => c.Type == "no_shard_available_action_exception") == true;
+            if (notYet && DateTime.UtcNow < until) return true;
+            throw new InvalidOperationException(
+                $"Index {indexName} could not answer a search within {ConcurrentCreateWait.TotalSeconds:0} s. "
+                + $"DebugInfo: {count.DebugInformation}", count.OriginalException);
+        }
+
+        /// <summary>
         /// Resolves the ElasticSearch index name for <paramref name="type"/> from the store settings,
         /// applying the ElasticSearch naming rules (see <see cref="SanitizeIndexName"/>).
         /// </summary>

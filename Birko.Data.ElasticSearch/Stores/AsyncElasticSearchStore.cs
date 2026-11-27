@@ -95,17 +95,28 @@ namespace Birko.Data.ElasticSearch.Stores
             var indexName = GetIndexName();
             var existsResponse = await Connector.Indices.ExistsAsync(indexName, null, ct);
 
-            if (!existsResponse.Exists)
+            // TASK-997: another client may be creating this index at the same moment (app instances starting together). Its
+            // index is then listed before its shards can answer, and a create from here is refused with
+            // resource_already_exists_exception; either way this store waits until the index is ready (measured: a search
+            // in between fails with "all shards failed"). A ready index answers at once. Any other create failure throws.
+            if (existsResponse.Exists)
             {
-                var response = await Connector.Indices.CreateAsync(indexName, indexDescriptor, ct);
-
-                if (!response.IsValid || response.OriginalException != null)
-                {
-                    throw new InvalidOperationException(
-                        $"Failed to create index {indexName}. DebugInfo: {response.DebugInformation}",
-                        response.OriginalException);
-                }
+                await ElasticSearchStoreHelper.WaitForIndexReadyAsync(Connector, indexName, ct).ConfigureAwait(false);
+                return;
             }
+            var response = await Connector.Indices.CreateAsync(indexName, indexDescriptor, ct);
+            if (ElasticSearchStoreHelper.IndexAlreadyExists(response))
+            {
+                await ElasticSearchStoreHelper.WaitForIndexReadyAsync(Connector, indexName, ct).ConfigureAwait(false);
+                return;
+            }
+            if (!response.IsValid || response.OriginalException != null)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create index {indexName}. DebugInfo: {response.DebugInformation}",
+                    response.OriginalException);
+            }
+            await ElasticSearchStoreHelper.WaitForIndexReadyAsync(Connector, indexName, ct).ConfigureAwait(false);
         }
 
 
