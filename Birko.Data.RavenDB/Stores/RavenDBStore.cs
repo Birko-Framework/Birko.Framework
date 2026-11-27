@@ -583,17 +583,15 @@ public class RavenDBStore<T>
     }
 
     /// <summary>
-    /// Create the database if it doesn't exist.
+    /// Create the database if it doesn't exist, and wait until it answers.
     /// </summary>
+    /// <remarks>TASK-996: safe when other clients create the same database at the same moment; see
+    /// <see cref="RavenDatabaseBootstrap"/>.</remarks>
     public void EnsureDatabaseExists()
     {
         var dbName = _documentStore?.Database;
-        if (!string.IsNullOrEmpty(dbName) && !DatabaseExists())
-        {
-            _documentStore!.Maintenance.Server.SendAsync(
-                new CreateDatabaseOperation(new DatabaseRecord(dbName))
-            ).GetAwaiter().GetResult();
-        }
+        if (string.IsNullOrEmpty(dbName)) return;
+        RavenDatabaseBootstrap.EnsureReady(_documentStore!, dbName);
     }
 
     #endregion
