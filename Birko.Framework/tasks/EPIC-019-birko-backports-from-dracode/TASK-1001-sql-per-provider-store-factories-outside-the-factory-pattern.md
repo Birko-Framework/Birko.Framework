@@ -122,8 +122,9 @@ DI extension in `Extensions/`, which is now empty. Their `.projitems` entries an
   | Sync.Sql | 9/9 |
   | Tenant | 94/94 |
 
-- Not run: the PostgreSQL, MySQL and SQL Server live round-trips, which skipped because no SQL server was running
-  locally. CI's live job runs them.
+- Live, on the local Docker servers (`birko-live-pg`, `-mysql`, `-mssql`) with `BIRKO_REQUIRE_LIVE=1`: SQL.Providers
+  58/58, including the PostgreSQL, MySQL and SQL Server round-trips on the TASK-988 factories; SQL.Views 4051/4051
+  (3 min 15 s, against 25 s without servers).
 - Symbio.Birko, DraCode.Birko and Birko.Sandbox build.
 - `spec-links --check` agrees.
 - Spec drift: `docs/specs/backend-store-implementations.md` still lists the removed files and a `SqLiteStoreFactory`
