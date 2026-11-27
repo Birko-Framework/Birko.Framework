@@ -37,6 +37,8 @@ Birko.Data.EventSourcing + Birko.Data.ElasticSearch
      append; TASK-995's per-platform overrides, registered with factory.GetEventStore(o => o.AddX()))
 Birko.Data.EventSourcing + Birko.Data.RavenDB
   -> Birko.Data.EventSourcing.RavenDB (RavenDBEventStore — a batch in one session, all or nothing)
+Birko.Data.EventSourcing + Birko.Data.MongoDB
+  -> Birko.Data.EventSourcing.MongoDB (MongoDBEventStore — a batch in one transaction where the server has them)
 
 Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
@@ -167,6 +169,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **Birko.Data.EventSourcing.SQL** - SQL `IAsyncEventStore` (SqlEventStore<DB> over any SQL provider — `__Events` table, unique (aggregate, version), typed `EventStoreConcurrencyException`)
 - **Birko.Data.EventSourcing.ElasticSearch** - Elasticsearch `IAsyncEventStore` (ElasticSearchEventStore: the default store over `EventRecord` plus an index refresh per append, so a reader sees an append as soon as it returns)
 - **Birko.Data.EventSourcing.RavenDB** - RavenDB `IAsyncEventStore` (RavenDBEventStore: the default store over `EventRecord`, but a batch is saved in one session, so it is stored whole or not at all, even across a crash)
+- **Birko.Data.EventSourcing.MongoDB** - MongoDB `IAsyncEventStore` (MongoDBEventStore: on a replica set or sharded cluster a batch is one transaction, joining the caller's `MongoDbUnitOfWork` when there is one; on a standalone server the default store)
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
 - **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
 - **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
@@ -328,7 +331,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Data.TimescaleDB.Tests, Birko.Data.InfluxDB.Tests, Birko.Data.JSON.Tests
 - Birko.Data.Views.Tests
 - Birko.Validation.Tests, Birko.Data.Sync.Tests
-- Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests, Birko.Data.EventSourcing.SQL.Tests, Birko.Data.EventSourcing.ElasticSearch.Tests, Birko.Data.EventSourcing.RavenDB.Tests
+- Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests, Birko.Data.EventSourcing.SQL.Tests, Birko.Data.EventSourcing.ElasticSearch.Tests, Birko.Data.EventSourcing.RavenDB.Tests, Birko.Data.EventSourcing.MongoDB.Tests
 - Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests, Birko.Communication.SSE.AspNetCore.Tests
 - Birko.Data.Migrations.SQL.Tests, Birko.Data.XML.Tests
 - Birko.Caching.Tests

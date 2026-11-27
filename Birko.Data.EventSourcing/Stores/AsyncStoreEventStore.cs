@@ -93,13 +93,24 @@ namespace Birko.Data.EventSourcing.Stores
         /// atomically and does not say which event conflicted: a version twice in the batch, else one already stored, else
         /// the first event.
         /// </summary>
+        /// <remarks>
+        /// Only for the exception's message. When the append ran inside a caller's transaction that the conflict aborted,
+        /// the lookup can be refused too; it then falls back to the first event rather than replace the concurrency
+        /// exception, as <c>SqlEventStore</c>'s lookup does.
+        /// </remarks>
         protected async Task<(Guid AggregateGuid, long Version)> FindConflictAsync(IReadOnlyList<IEvent> batch, CancellationToken ct)
         {
             if (DuplicateInBatch(batch) is { } duplicate) return duplicate;
-            foreach (var e in batch)
+            try
             {
-                var id = EventRecord.IdFor(e.AggregateGuid, e.Version);
-                if (await Store.CountAsync(r => r.Guid == id, ct).ConfigureAwait(false) > 0) return (e.AggregateGuid, e.Version);
+                foreach (var e in batch)
+                {
+                    var id = EventRecord.IdFor(e.AggregateGuid, e.Version);
+                    if (await Store.CountAsync(r => r.Guid == id, ct).ConfigureAwait(false) > 0) return (e.AggregateGuid, e.Version);
+                }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
             }
             return (batch[0].AggregateGuid, batch[0].Version);
         }

@@ -114,7 +114,7 @@ jobs:
         run: |
           fail=0
           for p in Birko.Data.MongoDB.Tests Birko.Data.MongoDB.Views.Tests Birko.Data.Migrations.MongoDB.Tests \
-                   Birko.Workflow.MongoDB.Tests Birko.BackgroundJobs.MongoDB.Tests; do
+                   Birko.Workflow.MongoDB.Tests Birko.BackgroundJobs.MongoDB.Tests Birko.Data.EventSourcing.MongoDB.Tests; do
             dotnet test "tests/$p" --nologo -v q --logger "console;verbosity=minimal" || { echo "::error::$p failed"; fail=1; }
           done
           exit $fail
@@ -188,7 +188,12 @@ jobs:
       - name: Run RavenDB suites
         env:
           BIRKO_RAVEN_URL: http://localhost:8080
-        run: dotnet test tests/Birko.Data.RavenDB.Tests --nologo -v q --logger "console;verbosity=minimal"
+        run: |
+          fail=0
+          for p in Birko.Data.RavenDB.Tests Birko.Data.EventSourcing.RavenDB.Tests; do
+            dotnet test "tests/$p" --nologo -v q --logger "console;verbosity=minimal" || { echo "::error::$p failed"; fail=1; }
+          done
+          exit $fail
 
   redis:
     name: Redis (unverified fixture)

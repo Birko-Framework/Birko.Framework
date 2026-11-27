@@ -226,13 +226,31 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
   contract passes live, 10 of 10.
 - **2026-11-27, Cosmos DB and MongoDB checked against decision 4.**
   - **MongoDB:** the store joins a session's transaction (`IAsyncTransactionalStore<T, IClientSessionHandle>`), on a
-    replica set only. A one-node replica set was started for testing (`birko-live-mongo-rs`, port 27018; connect with
-    `directConnection=true`), with the user's OK.
+    replica set only. Correction: the existing `birko-live-mongo` (and CI's) is already a one-node replica set. The
+    container started for testing with the user's OK was turned into a **standalone** server (`birko-live-mongo-standalone`,
+    port 27018), so the path without transactions is tested too.
   - **Cosmos DB:** a transaction covers one logical partition, and the Cosmos stores partition every document on its own
     id (TASK-614, TASK-240), so no batch of events can be atomic through the store. The user asked which design is
     better as a pattern. Recommended: an own Cosmos event store with a container partitioned by aggregate. That gives an
     atomic batch per aggregate, and a single-partition read of a stream and of its current version, where the default
     store fans out across all partitions. A batch that mixes aggregates is refused. Awaiting the user's confirmation.
+- **2026-11-27, the MongoDB event store** (`Birko.Data.EventSourcing.MongoDB`). `MongoDBEventStore` decides per append:
+  - inside the caller's MongoDB transaction, it joins it;
+  - on a server with transactions (asked once with `hello`), the batch is one transaction of its own;
+  - on a standalone server, it is the default store.
+
+  Measured while building:
+  - two first transactions creating the collection implicitly collide at commit, so the collection is created before
+    any transaction;
+  - two transactions inserting one `_id` get a `TransientTransactionError` write conflict, not a duplicate key, so the
+    transaction is retried (at most 10 times) and the retry meets the duplicate key;
+  - the conflict lookup is refused inside the aborted transaction, so it runs after the rollback.
+
+  The contract passes on the replica set and on the standalone server, plus the caller's-transaction test: 21 of 21,
+  5 runs in a row. Registered with `o.AddMongoDB()`. `live-tests.yml` now runs the MongoDB and RavenDB event store
+  projects.
+- **Noted:** `RavenDBEventStoreContractTests` failed 1 of 10 once, in 8 runs, and the failing test was not captured. A
+  15-run loop with full output is in progress.
 
 ## Acceptance criteria
 
