@@ -49,6 +49,8 @@ public abstract class AlwaysFalseGroupContract
     private static readonly int[] Empty = Array.Empty<int>();
     private static readonly int? Nul = null;
     private static readonly bool Off = false;
+    private static readonly bool On = true;
+    private static readonly int[]? NoneArray = null;
 
     /// <summary>Filters that mean every row: a destructive statement refuses them, a read returns every row.</summary>
     public static readonly IReadOnlyDictionary<string, Expression<Func<AlwaysFalseRow, bool>>> EveryRow =
@@ -67,6 +69,8 @@ public abstract class AlwaysFalseGroupContract
             ["!(empty.Contains(A) && A > 0) && !(Score > nul && A > 1)"] = x => !(Empty.Contains(x.A) && x.A > 0) && !(x.Score > Nul && x.A > 1),
             ["!(A > 0 && off)"] = x => !(x.A > 0 && Off),
             ["!(!(!(empty.Contains(A) && A > 0)) && A > 1)"] = x => !(!(!(Empty.Contains(x.A) && x.A > 0)) && x.A > 1),
+            // TASK-1011: a null array is an empty span under C# 14's span-bound Contains.
+            ["!none.Contains(A) (null array)"] = x => !NoneArray!.Contains(x.A),
         };
 
     /// <summary>Filters that hold an always-false term but still constrain: every operation affects what C# matches.</summary>
@@ -74,6 +78,9 @@ public abstract class AlwaysFalseGroupContract
         new Dictionary<string, Expression<Func<AlwaysFalseRow, bool>>>
         {
             ["!(A > 3 || empty.Contains(A))"] = x => !(x.A > 3 || Empty.Contains(x.A)),
+            // TASK-1012: an always-true group under a NOT matches nothing; the parser dropped the NOT, so this read every row
+            // (the bare `!(A > 3 || on)` matches no row, which this list cannot hold; the corpus in Birko.Data.SQL.Tests has it).
+            ["A > 4 || !(A > 3 || on)"] = x => x.A > 4 || !(x.A > 3 || On),
             ["!(A > 3 || Score > nul)"] = x => !(x.A > 3 || x.Score > Nul),
             ["empty.Contains(A) || A > 4"] = x => Empty.Contains(x.A) || x.A > 4,
             ["Score > nul || A > 4"] = x => x.Score > Nul || x.A > 4,

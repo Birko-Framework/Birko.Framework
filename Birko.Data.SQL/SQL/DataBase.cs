@@ -585,9 +585,11 @@ namespace Birko.Data.SQL
         /// It asks the condition tree that read will execute
         /// (<see cref="Connectors.AbstractConnectorBase.WouldTargetEveryRow"/>), not the expression
         /// (<c>BoundedFilterGuard</c> / <c>PredicateScope</c>), so the read path and the connector's destructive funnels
-        /// share one reduction. The expression-level guard does not know an ordering against <c>null</c>, which the
-        /// parser folds to always-false: measured on all four SQL providers, <c>Update(x =&gt; !(x.Score &gt; nul), action)</c>
-        /// rewrote 6 of 6 rows while <c>Delete</c> with the same filter refused.
+        /// share one reduction. When this was written the expression-level guard did not know an ordering against
+        /// <c>null</c>, which the parser folds to always-false: measured on all four SQL providers,
+        /// <c>Update(x =&gt; !(x.Score &gt; nul), action)</c> rewrote 6 of 6 rows while <c>Delete</c> with the same filter
+        /// refused. TASK-865 taught it since, and <c>Task1002ScopeReductionCorpusTests</c> asks one corpus of both
+        /// reductions, so a form learnt by one and not the other fails there (TASK-1002).
         /// </remarks>
         public static void RequireBoundedFilter(LambdaExpression? filter, string operation, string entityName, string allRowsDoor)
         {
@@ -619,7 +621,7 @@ namespace Birko.Data.SQL
                     {
                         if (boolVal)
                         {
-                            return Array.Empty<Conditions.Condition>();
+                            return AlwaysTrue(parent);
                         }
                         else
                         {
@@ -721,7 +723,7 @@ namespace Birko.Data.SQL
                         if (leftBool.HasValue && rightBool.HasValue)
                         {
                             bool r = isAnd ? (leftBool.Value && rightBool.Value) : (leftBool.Value || rightBool.Value);
-                            return r ? Array.Empty<Conditions.Condition>() : new[] { MakeFalseCondition(parent) };
+                            return r ? AlwaysTrue(parent) : new[] { MakeFalseCondition(parent) };
                         }
 
                         Conditions.Condition? leftCond = null, rightCond = null;
@@ -744,20 +746,20 @@ namespace Birko.Data.SQL
                         if (leftIsConst && rightIsConst)
                         {
                             bool r = isAnd ? (leftVal && rightVal) : (leftVal || rightVal);
-                            return r ? Array.Empty<Conditions.Condition>() : new[] { MakeFalseCondition(parent) };
+                            return r ? AlwaysTrue(parent) : new[] { MakeFalseCondition(parent) };
                         }
                         if (leftIsConst)
                         {
                             if (isAnd && leftVal) return ReturnSingleSubCondition(parent, rightCond!);
                             if (isAnd && !leftVal) return new[] { MakeFalseCondition(parent) };
-                            if (isOR && leftVal) return Array.Empty<Conditions.Condition>();
+                            if (isOR && leftVal) return AlwaysTrue(parent);
                             if (isOR && !leftVal) return ReturnSingleSubCondition(parent, rightCond!);
                         }
                         if (rightIsConst)
                         {
                             if (isAnd && rightVal) return ReturnSingleSubCondition(parent, leftCond!);
                             if (isAnd && !rightVal) return new[] { MakeFalseCondition(parent) };
-                            if (isOR && rightVal) return Array.Empty<Conditions.Condition>();
+                            if (isOR && rightVal) return AlwaysTrue(parent);
                             if (isOR && !rightVal) return ReturnSingleSubCondition(parent, leftCond!);
                         }
 
@@ -1462,13 +1464,31 @@ namespace Birko.Data.SQL
             }
             // An empty condition (no Name, no SubConditions, no Values) means the
             // sub-expression returned Array.Empty (constant true) and the parent
-            // was never populated. Treat it as constant true.
+            // was never populated. Treat it as constant true, or false under a NOT (TASK-1012).
             if (condition.Values == null)
             {
-                value = true;
+                value = !condition.IsNot;
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// The result of a sub-expression that is true of every row: no condition at all, or, when an enclosing NOT is on
+        /// <paramref name="parent"/>, the always-false leaf with that NOT consumed (NOT TRUE is FALSE).
+        /// </summary>
+        /// <remarks>
+        /// TASK-1012: it used to be <c>Array.Empty</c> whatever the parent carried, so the negation was dropped:
+        /// <c>!(x.A &gt; 3 || true)</c>, which matches no row, parsed to "no condition" and a read returned every row
+        /// (measured on SQLite: 6 of 6, C# 0). Destructive writes refused it, since an empty tree is every row to
+        /// <see cref="Connectors.AbstractConnectorBase.WouldTargetEveryRow"/>. The always-false branches already passed
+        /// <paramref name="parent"/> to <see cref="MakeFalseCondition"/>; this is their mirror.
+        /// </remarks>
+        private static Conditions.Condition[] AlwaysTrue(Conditions.Condition? parent)
+        {
+            if (parent?.IsNot != true) return Array.Empty<Conditions.Condition>();
+            parent.IsNot = false;
+            return new[] { MakeFalseCondition(parent) };
         }
 
         /// <summary>

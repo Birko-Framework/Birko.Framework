@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### The two whole-table reductions are pinned to one corpus, which found two bugs (2026-11-27)
+[[TASK-1002]], with [[TASK-1011]] and [[TASK-1012]] it found. One corpus of 40 labelled filters is asked of both scope
+reductions (`PredicateScope` for portable stores, the parsed condition tree for SQL). **TASK-1011 (P1):** C# 14 binds an
+array's `Contains` to `MemoryExtensions`, where a null array is an empty span, so `!none.Contains(x.A)` is every row; the
+portable guard assumed null throws, and InMemory's `Delete` removed 6 of 6 rows with no exception. It now refuses.
+**TASK-1012:** the SQL parser dropped a NOT around an always-true group, so `!(x.A > 3 || true)` read every row (SQLite 6
+of 6, C# 0); writes were refused. The NOT is kept now.
 ### The SQLite store factory refuses an in-memory database (2026-11-27)
 [[TASK-1006]], the user's decision. `:memory:` became the path `<working directory>/:memory:`, and the first operation
 failed with "unable to open database file" (measured on Windows). An in-memory SQLite database lives as long as one
@@ -367,16 +374,6 @@ stays off: its pinned api-version predates the option.
 client's display name, so two vLLM providers both recorded under "vLLM (finstat)" and a limit configured under
 `finstat` never matched (never applied; seen in DraCode's test). New optional `ProviderName` (init) is what they key on
 when set; null keeps `Name`; blank throws. `Name` stays the display name.
-### SQLite on plain PasswordSettings gets WAL too (2026-11-19)
-[[TASK-941]], reported by DraCode. TASK-296's WAL default was applied only when a store got `SqLiteSettings`; with
-plain `PasswordSettings` the file stayed on the rollback journal, and a read could answer empty for a table that had
-rows (DraCode reproduced it deterministically). The connector now applies `SqLiteSettings.DefaultJournalMode` for plain
-settings too. Filed: [[TASK-942]] (a SQLite read still answers empty for a stale "no such table" off WAL).
-### A fresh async XML store loads before its first write (2026-11-17)
-[[TASK-939]], found at TASK-931. `AsyncXmlSeparateStore` never loaded in Init, so a fresh async XML separate or batch
-store whose first call was a write saw an empty store: a batch create left 1 of 6 entities (batch 0 rewritten, every
-other batch file deleted), an update threw not-found and a delete did nothing (measured). Init now loads, as
-`AsyncXmlStore` does. All ten XML and JSON store kinds are tested with each write as the first call.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

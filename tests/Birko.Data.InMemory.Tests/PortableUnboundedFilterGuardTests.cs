@@ -106,6 +106,29 @@ public class PortableUnboundedFilterGuardTests
         store.Read().Should().HaveCount(3);
     }
 
+    private static readonly int[]? NullArray = null;
+
+    /// <summary>
+    /// TASK-1011: a NULL array is an empty span under the span-bound Contains, so <c>!none.Contains(x.Amount)</c> is true
+    /// of every row. PredicateScope said a null collection is never empty, assuming <c>null.Contains</c> throws; measured
+    /// before the fix: Delete left 0 of 6 rows, Update marked 6 of 6, no exception.
+    /// </summary>
+    [Fact]
+    public async Task UnboundedFilter_AsANullArray_IsRefusedToo()
+    {
+        var store = Seeded();
+        FluentActions.Invoking(() => store.Delete(x => !NullArray!.Contains(x.Amount))).Should().Throw<WholeTableWriteException>();
+        FluentActions.Invoking(() => store.Update(x => !NullArray!.Contains(x.Amount), r => r.Name = "X")).Should().Throw<WholeTableWriteException>();
+        store.Read().Should().HaveCount(3).And.OnlyContain(r => r.Name != "X");
+
+        var asyncStore = await SeededAsync();
+        await FluentActions.Awaiting(() => asyncStore.DeleteAsync(x => !NullArray!.Contains(x.Amount))).Should().ThrowAsync<WholeTableWriteException>();
+        (await RowsAsync(asyncStore)).Should().HaveCount(3);
+
+        // A read is not refused: it returns every row, as C# says.
+        store.Read(x => !NullArray!.Contains(x.Amount)).Should().HaveCount(3);
+    }
+
     // ── the defect: the four Update paths InMemory does NOT override, i.e. the base's own ─────────────
 
     [Fact]

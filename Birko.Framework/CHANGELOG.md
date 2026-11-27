@@ -4,6 +4,24 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-19 — SQLite on plain PasswordSettings gets WAL too
+
+[[TASK-941]], reported by DraCode. TASK-296's WAL default was applied only when a store got `SqLiteSettings`; with
+plain `PasswordSettings` the file stayed on the rollback journal, and a read could answer empty for a table that had
+rows (DraCode reproduced it deterministically). The connector now applies `SqLiteSettings.DefaultJournalMode` for plain
+settings too. Filed: [[TASK-942]] (a SQLite read still answers empty for a stale "no such table" off WAL).
+
+---
+
+## 2026-11-17 — A fresh async XML store loads before its first write
+
+[[TASK-939]], found at TASK-931. `AsyncXmlSeparateStore` never loaded in Init, so a fresh async XML separate or batch
+store whose first call was a write saw an empty store: a batch create left 1 of 6 entities (batch 0 rewritten, every
+other batch file deleted), an update threw not-found and a delete did nothing (measured). Init now loads, as
+`AsyncXmlStore` does. All ten XML and JSON store kinds are tested with each write as the first call.
+
+---
+
 ## 2026-11-17 — XML batch stores keep every entity in its batch file
 
 [[TASK-931]]. The XML batch stores loaded their files in `Directory.GetFiles` order (`items-10` before `items-2` on

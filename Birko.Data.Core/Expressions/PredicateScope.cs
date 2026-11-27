@@ -146,6 +146,7 @@ namespace Birko.Data.Expressions
 
             var collection = call.Object ?? (call.Arguments.Count > 0 ? call.Arguments[0] : null);
             if (collection == null) return false;
+            var spanBound = call.Method.DeclaringType == typeof(MemoryExtensions);
 
             // On .NET 9+ an ARRAY `set.Contains(x.Col)` binds to MemoryExtensions.Contains rather than to
             // Enumerable.Contains, so the collection arrives wrapped in an implicit ReadOnlySpan conversion.
@@ -173,10 +174,12 @@ namespace Birko.Data.Expressions
                 return false;
             }
 
-            // A null collection is NOT claimed to be empty. `null.Contains(x)` throws when evaluated and a
-            // driver rejects it at translation, so the operation fails either way — there is nothing to guard,
-            // and modelling it would be modelling a case that never reaches a write.
-            if (value == null) return false;
+            // A null collection: what C# does with it depends on the binding. Enumerable.Contains and an instance
+            // Contains throw on null, so the operation fails and there is nothing to guard. A span-bound Contains
+            // (C# 14 binds an array's Contains to MemoryExtensions) converts a null array to an EMPTY span, so
+            // `!none.Contains(x.A)` is true of every row. TASK-1011: this said "never empty" for both, and
+            // InMemory's Delete(x => !none.Contains(x.A)) removed 6 of 6 rows with no exception (measured).
+            if (value == null) return spanBound;
             if (value is IEnumerable sequence)
             {
                 foreach (var _ in sequence) return false; // stops at the first element
