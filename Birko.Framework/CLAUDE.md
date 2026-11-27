@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### RavenDB start-up retries only the race, and the async store waits without a thread (2026-11-27)
+[[TASK-1004]], [[TASK-1005]], found at the 2026-11-27 spec regen. TASK-996's database-create retry caught every exception,
+so a create that could never succeed took 30 s to fail. It now retries only the two refusals a racing create gets
+(measured: `DatabaseDisabledException` and `ConcurrencyException`), and a refused name fails in 30 ms (was 31 s). The
+async store ran the sync walk, which slept on the caller's thread: its first call returned after 31 s. It now awaits an
+async walk and returns at once. The caller's token still does not stop init, by design (TASK-324).
 ### An unconfigured store's aggregate refuses, like its other reads (2026-11-27)
 [[TASK-1003]], found at the 2026-11-27 spec regen. TASK-812 made every read of a store with no settings refuse, but
 `Aggregate` / `AggregateAsync` on InfluxDB and MongoDB, and the async JSON and XML stores, still answered an empty list
@@ -371,11 +377,6 @@ other batch file deleted), an update threw not-found and a delete did nothing (m
 Windows, file-system order on Linux) and renumbered the batches by it on the next save, so a save that failed partway
 lost an entity (measured: 11 of 12) and the TASK-721 test was flaky on Linux CI. They now load in batch order
 (`RecordFiles.ListByIndex`). Found: [[TASK-939]] (P1, a fresh async XML batch store that writes first wipes the others).
-### A locked SQLite database makes a write wait one timeout, not three (2026-11-17)
-[[TASK-938]] (the user's decision). Microsoft.Data.Sqlite already waits on a locked database until the command timeout,
-and TASK-305's retry then repeated that whole wait twice: Symbio measured a write failing after 90 432 ms (3 x 30 s;
-red test: 3.45 s at a 1 s timeout). A busy error after the full wait is no longer retried (`WaitedOutLockTimeout`); an
-early one still is. A lock held past `CommandTimeout` now fails after one timeout; a longer timeout is the knob.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

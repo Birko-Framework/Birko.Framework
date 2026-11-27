@@ -3,7 +3,7 @@ id: TASK-1004
 parent: null
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P3
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -39,12 +39,43 @@ failed. [[TASK-998]]'s `RavenQueryRetry` names its two exceptions; the bootstrap
 
 ## Acceptance criteria
 
-- [ ] Measure which exception(s) the losing create throws when two stores race on a new database (the TASK-996 case), on
+- [x] Measure which exception(s) the losing create throws when two stores race on a new database (the TASK-996 case), on
   the RavenDB version CI runs.
-- [ ] Only those are retried; any other exception from the create surfaces at once.
-- [ ] Red first: a create refused for another reason takes the full 30 s today. For example an authorization failure,
+- [x] Only those are retried; any other exception from the create surfaces at once.
+- [x] Red first: a create refused for another reason takes the full 30 s today. For example an authorization failure,
   or a stubbed maintenance executor.
-- [ ] The TASK-996 race test and the live RavenDB suites still pass.
+- [x] The TASK-996 race test and the live RavenDB suites still pass.
+
+## Evidence 2026-11-27
+
+**Measured, the race:** 10 rounds of 8 clients sending `CreateDatabaseOperation` for one new database (a temporary
+probe, not kept):
+
+| Outcome | Count |
+|---|---|
+| `DatabaseDisabledException` ("unloaded and locked") | 64 |
+| `ConcurrencyException` ("already exists") | 2 |
+| Succeeded | 14 |
+
+Nothing else was thrown.
+
+**Measured, outside the race:**
+- An unreachable server throws `HttpRequestException` and a wrong URL `ClientVersionMismatchException`. Both already
+  fail at the listing, which was never retried.
+- A database name the server will not accept is listed as missing, then refused on create (`InvalidOperationException`,
+  "not permitted"). That is the case the old `catch (Exception)` retried for 30 s.
+
+**Fix:** `RavenDatabaseBootstrap.IsConcurrentCreateRefusal` (`DatabaseDisabledException` or `ConcurrencyException`) is the
+only filter on the create retry. The sync and async walks share it, and they share their spacing through one `Wait`.
+
+**Tests** (`Task1004DatabaseBootstrapLiveTests`), with a store on a refused name:
+
+| | Before | After |
+|---|---|---|
+| Sync | 31.0 s | 30 ms |
+| Async | 31.3 s | 1.45 s |
+
+The TASK-996 race tests (8 stores × 5 rounds, sync and async) still pass.
 
 ## Out of scope
 

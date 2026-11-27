@@ -157,8 +157,10 @@ public class AsyncRavenDBStore<T>
         if (_documentStore == null)
             throw new InvalidOperationException(
                 $"{GetType().Name} has no RavenDB document store: call SetSettings with the store's settings first.");
-        EnsureDatabaseExists();
-        await Task.CompletedTask;
+        // TASK-1005: the async walk, which holds no thread while it waits and honours the token.
+        var dbName = _documentStore.Database;
+        if (!string.IsNullOrEmpty(dbName))
+            await RavenDatabaseBootstrap.EnsureReadyAsync(_documentStore, dbName, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
