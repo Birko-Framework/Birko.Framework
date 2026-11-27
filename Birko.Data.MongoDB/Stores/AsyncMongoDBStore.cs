@@ -629,7 +629,7 @@ namespace Birko.Data.MongoDB.Stores
             CancellationToken ct = default)
         {
             query.ThrowIfStringOrderNotOrdinal($"MongoDB aggregate of {typeof(T).Name}");   // TASK-907: before any data
-            if (Collection == null) return Array.Empty<AggregateResult>();
+            await EnsureInitializedAsync(ct);   // TASK-1003: the TASK-812 gate, as every read; this answered an empty list on an unconfigured store.
 
             // TASK-909: the simple collation, so a collection created with a default collation groups, matches and takes a
             // string $min / $max as the in-memory aggregation does (measured: it followed the collection's collation).

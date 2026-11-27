@@ -350,6 +350,7 @@ namespace Birko.Data.XML.Stores
             AggregateQuery<T> query,
             CancellationToken ct = default)
         {
+            await EnsureInitializedAsync(ct);   // TASK-1003: the TASK-812 gate, as every read; this only loaded, so it answered an empty list on an unconfigured store.
             await EnsureDataLoadedAsync(ct);
             return await AggregateHelper.LinqAggregateAsync(_items.Values, query, ct);
         }

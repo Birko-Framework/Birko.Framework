@@ -710,7 +710,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// </summary>
         public IReadOnlyList<Data.Stores.AggregateResult> Aggregate(Data.Stores.AggregateQuery<T> query)
         {
-            if (Client == null || _settings == null) return Array.Empty<Data.Stores.AggregateResult>();
+            EnsureInitialized();   // TASK-1003: the TASK-812 gate, as every read; this answered an empty list on an unconfigured store.
 
             var data = Read(query.Filter, null, null, null);
             return Data.Stores.AggregateHelper.LinqAggregate(data, query);

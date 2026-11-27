@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### An unconfigured store's aggregate refuses, like its other reads (2026-11-27)
+[[TASK-1003]], found at the 2026-11-27 spec regen. TASK-812 made every read of a store with no settings refuse, but
+`Aggregate` / `AggregateAsync` on InfluxDB and MongoDB, and the async JSON and XML stores, still answered an empty list
+(measured). They now pass the same gate and throw `InvalidOperationException`. The shared `UnconfiguredContract` calls
+an aggregate too, so every backend that runs it is checked.
 ### SQL bulk updates and deletes bind like every other write (2026-11-27)
 [[TASK-1007]], found at the 2026-11-27 spec regen. MySQL, PostgreSQL and SQLite's native `BulkUpdate` / `BulkDelete`
 assigned `.Value` to placeholders, skipping `ConvertParameterValue`, as SQL Server's did before TASK-854. On PostgreSQL a
@@ -371,11 +376,6 @@ lost an entity (measured: 11 of 12) and the TASK-721 test was flaky on Linux CI.
 and TASK-305's retry then repeated that whole wait twice: Symbio measured a write failing after 90 432 ms (3 x 30 s;
 red test: 3.45 s at a 1 s timeout). A busy error after the full wait is no longer retried (`WaitedOutLockTimeout`); an
 early one still is. A lock held past `CommandTimeout` now fails after one timeout; a longer timeout is the knob.
-### SQL views work without the provider View package (2026-11-15)
-[[TASK-917]]. Every consumer runs the base view code, which rendered `CREATE OR REPLACE VIEW` everywhere (SQLite and SQL
-Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
-providers, and inside a PostgreSQL transaction the swallowed error aborted it (`25P02`; all measured). The connector's
-dialect now renders the DDL and a catalogue probe per provider; the View packages keep only their extra features.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

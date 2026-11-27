@@ -816,7 +816,7 @@ namespace Birko.Data.InfluxDB.Stores
             Data.Stores.AggregateQuery<T> query,
             CancellationToken ct = default)
         {
-            if (Client == null || _settings == null) return Array.Empty<Data.Stores.AggregateResult>();
+            await EnsureInitializedAsync(ct);   // TASK-1003: the TASK-812 gate, as every read; this answered an empty list on an unconfigured store.
 
             var data = await ReadAsync(query.Filter, null, null, null, ct);
             return await Data.Stores.AggregateHelper.LinqAggregateAsync(data, query, ct);

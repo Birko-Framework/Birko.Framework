@@ -21,6 +21,8 @@ public class Task812UnconfiguredTests
         await FluentActions.Awaiting(() => store.ReadAsync(Guid.NewGuid())).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => store.CountAsync()).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => store.DeleteAsync(new TestModel { Guid = Guid.NewGuid() })).Should().ThrowAsync<InvalidOperationException>();
+        // TASK-1003: the aggregate answered an empty list.
+        await FluentActions.Awaiting(() => store.AggregateAsync(new Birko.Data.Stores.AggregateQuery<TestModel> { Aggregates = new[] { new Birko.Data.Stores.AggregateField(Birko.Data.Stores.AggregateFunction.Count, "Guid") } })).Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
@@ -31,5 +33,7 @@ public class Task812UnconfiguredTests
         FluentActions.Invoking(() => store.Create(new TestModel())).Should().Throw<InvalidOperationException>();
         FluentActions.Invoking(() => store.Read(Guid.NewGuid())).Should().Throw<InvalidOperationException>();
         FluentActions.Invoking(() => store.Count()).Should().Throw<InvalidOperationException>();
+        // TASK-1003: the aggregate answered an empty list.
+        FluentActions.Invoking(() => store.Aggregate(new Birko.Data.Stores.AggregateQuery<TestModel> { Aggregates = new[] { new Birko.Data.Stores.AggregateField(Birko.Data.Stores.AggregateFunction.Count, "Guid") } })).Should().Throw<InvalidOperationException>();
     }
 }

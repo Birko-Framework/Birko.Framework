@@ -476,7 +476,7 @@ namespace Birko.Data.MongoDB.Stores
         public IReadOnlyList<Data.Stores.AggregateResult> Aggregate(Data.Stores.AggregateQuery<T> query)
         {
             query.ThrowIfStringOrderNotOrdinal($"MongoDB aggregate of {typeof(T).Name}");   // TASK-907: before any data
-            if (Collection == null) return Array.Empty<Data.Stores.AggregateResult>();
+            EnsureInitialized();   // TASK-1003: the TASK-812 gate, as every read; this answered an empty list on an unconfigured store.
 
             // TASK-909: the simple collation, so a collection created with a default collation groups, matches and takes a
             // string $min / $max as the in-memory aggregation does (measured: it followed the collection's collation).

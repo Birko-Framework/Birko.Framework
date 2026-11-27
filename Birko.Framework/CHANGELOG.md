@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-15 — SQL views work without the provider View package
+
+[[TASK-917]]. Every consumer runs the base view code, which rendered `CREATE OR REPLACE VIEW` everywhere (SQLite and SQL
+Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
+providers, and inside a PostgreSQL transaction the swallowed error aborted it (`25P02`; all measured). The connector's
+dialect now renders the DDL and a catalogue probe per provider; the View packages keep only their extra features.
+
+---
+
 ## 2026-11-15 — Tagging refuses a foreign or missing tag on attach
 
 [[TASK-147]] (the user's decision). `AttachTagAsync` / `SetEntityTagsAsync` stored a link to any tag id, so another

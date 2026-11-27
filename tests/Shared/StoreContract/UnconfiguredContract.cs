@@ -42,6 +42,9 @@ public abstract partial class StoreContract<T>
         FluentActions.Invoking(() => store.Read(stored.Guid!.Value)).Should().Throw<InvalidOperationException>();
         FluentActions.Invoking(() => store.Count()).Should().Throw<InvalidOperationException>();
         FluentActions.Invoking(() => store.ReadFirst(x => x.Guid == stored.Guid)).Should().Throw<InvalidOperationException>();
+        // TASK-1003: an aggregate is a read too; several stores answered an empty list (found at the 2026-11-27 spec regen).
+        if (store is IAggregatableStore<T> aggregatable)
+            FluentActions.Invoking(() => aggregatable.Aggregate(new AggregateQuery<T> { Aggregates = new[] { new AggregateField(AggregateFunction.Count, "Guid") } })).Should().Throw<InvalidOperationException>();
     }
 }
 
@@ -72,5 +75,8 @@ public abstract partial class AsyncStoreContract<T>
         await FluentActions.Awaiting(() => store.ReadAsync(stored.Guid!.Value)).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => store.CountAsync()).Should().ThrowAsync<InvalidOperationException>();
         await FluentActions.Awaiting(() => store.ReadFirstAsync(x => x.Guid == stored.Guid)).Should().ThrowAsync<InvalidOperationException>();
+        // TASK-1003: an aggregate is a read too; several stores answered an empty list (found at the 2026-11-27 spec regen).
+        if (store is IAsyncAggregatableStore<T> aggregatable)
+            await FluentActions.Awaiting(() => aggregatable.AggregateAsync(new AggregateQuery<T> { Aggregates = new[] { new AggregateField(AggregateFunction.Count, "Guid") } })).Should().ThrowAsync<InvalidOperationException>();
     }
 }
