@@ -1218,6 +1218,10 @@ Rules are in their original order; `CLAUDE.md` indexes them 1—63.
     it true was `un-prepared`, and it was earned by measuring rather than reasoning** (§ TASK-258). Note the
     mechanism is provider-specific: on MSSql `Prepare()` throws on untyped placeholders, which is why those
     same paths have never worked there.
+    **Follow-up, TASK-1007 (2026-11-27):** the pinned mechanism held for `DateTime` but not for everything else
+    the funnel converts. An enum key reached Npgsql unconverted and the bulk delete threw. Those paths now bind
+    through `AddParameter` on PostgreSQL, MySQL and SQLite too; PostgreSQL stopped preparing them, because a
+    parameter replaced after `Prepare()` matched no row (measured). The test above still pins the unshifted write.
 
 - **A column has ONE meaning, so a type that can mean two things needs an opt-in — and the opt-in promises only
   what the weakest provider can keep.** The pair to the rule above, and only comprehensible with it. A plain

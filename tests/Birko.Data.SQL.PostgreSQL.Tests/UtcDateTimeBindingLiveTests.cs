@@ -327,19 +327,15 @@ public class UtcDateTimeBindingLiveTests : IDisposable
     }
 
     /// <summary>
-    /// The bulk <b>update</b> path binds its values <i>without</i> going through <c>AddParameter</c> — it
-    /// pre-creates parameters with <c>DBNull.Value</c>, calls <c>command.Prepare()</c>, then assigns
-    /// <c>.Value</c> per row — and it is nevertheless correct. `Prepare()` pins each parameter to the target
-    /// column's real type before any value is assigned, so a <c>Kind=Utc</c> value is sent as a
-    /// <c>timestamp</c> and never re-inferred as <c>timestamptz</c>. Measured on a non-UTC server: unshifted.
+    /// The bulk <b>update</b> path does not shift a <c>Kind=Utc</c> value on a non-UTC server. It binds each row
+    /// through <c>AddParameter</c> (TASK-1007), so <c>NormalizeTimestampValue</c> strips the kind as on every
+    /// other parameterised write. Until TASK-1007 it assigned <c>.Value</c> to prepared placeholders instead, and
+    /// <c>Prepare()</c> was what kept it unshifted, by a different mechanism; that path also left an enum key
+    /// unconverted, so it went.
     ///
     /// <para>
-    /// This is pinned rather than argued, for two reasons. It is the <b>only</b> thing making the "every write
-    /// boundary is normalised" claim true for these six binding sites, and it holds by a *different* mechanism
-    /// than the two normalised ones — so if `Prepare()` is ever dropped here, or a seventh binding site is
-    /// added without it, the silent shift returns and nothing else would notice. Note the mechanism is
-    /// provider-specific: on MSSql `Prepare()` throws on untyped placeholders, which is why the bulk
-    /// update/delete paths have never worked there at all.
+    /// Pinned rather than argued: on a UTC server the shift is unobservable, so this non-UTC database is the only
+    /// thing that tells a normalised binding site from one that is not.
     /// </para>
     /// </summary>
     [Fact]
@@ -369,9 +365,8 @@ public class UtcDateTimeBindingLiveTests : IDisposable
             await store.UpdateAsync(new List<StampRow> { loaded }, null, CancellationToken.None);
 
             StoredText("upd", tzDatabase).Should().StartWith("2026-03-15 10:30:00",
-                "the bulk update path binds outside AddParameter, and command.Prepare() is what keeps it "
-              + "correct — if this shifts to 11:30, either Prepare() was removed or a new binding site was "
-              + "added without it, and NormalizeTimestampValue must be wired there too");
+                "the bulk update binds through AddParameter, where NormalizeTimestampValue strips the kind — if this "
+              + "shifts to 11:30, a binding site bypasses AddParameter again (TASK-1007)");
         }
         finally
         {

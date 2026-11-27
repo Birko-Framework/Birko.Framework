@@ -515,17 +515,12 @@ namespace Birko.Data.SQL.Connectors
         /// the normalisation stays here.
         /// </para>
         /// <para>
-        /// <b>Two callers, not every binding site — and the difference is <c>Prepare()</c>.</b> The bulk
-        /// update and delete paths bind their values <i>without</i> coming through <c>AddParameter</c>: they
-        /// pre-create parameters holding <c>DBNull.Value</c>, call <c>command.Prepare()</c>, then assign
-        /// <c>.Value</c> per row. They are correct anyway, and by a different mechanism — <c>Prepare()</c>
-        /// pins each parameter to the target column's real type before any value is assigned, so a
-        /// <c>Kind=Utc</c> value is sent as a <c>timestamp</c> and never re-inferred as <c>timestamptz</c>.
-        /// Measured on a non-UTC server: unshifted, and pinned by
-        /// <c>Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server</c> precisely because it is the only
-        /// thing holding those sites correct. **A new binding site that does not prepare must call this
-        /// helper.** Note the mechanism is provider-specific: on MSSql <c>Prepare()</c> throws on untyped
-        /// placeholders, which is why the bulk update/delete paths have never worked there at all.
+        /// <b>Every parameterised binding site comes through here.</b> The bulk update and delete paths used to
+        /// assign <c>.Value</c> to prepared placeholders, outside <c>AddParameter</c>; <c>Prepare()</c> kept a
+        /// <c>Kind=Utc</c> value unshifted there, but nothing converted an enum, so an enum key threw (TASK-1007,
+        /// measured). They now bind each row through <c>AddParameter</c> too, so this helper and the enum
+        /// conversion reach them. <c>Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server</c> still pins the
+        /// result. Only the binary <c>COPY</c> writer binds outside it, and it normalises explicitly.
         /// </para>
         /// </remarks>
         private static object? NormalizeTimestampValue(object? value)
@@ -778,26 +773,22 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in updateFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    command.Prepare();
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them. The placeholders this replaced held DBNull, were prepared, and had .Value assigned per
+                    // row, which skipped the conversion: an enum key reached Npgsql as a CLR enum and the statement threw (measured). Not
+                    // prepared any more: with a parameter replaced after Prepare(), Npgsql matched no row at all (measured). A Kind=Utc
+                    // DateTime, which Prepare() used to keep unshifted, is now normalised by ConvertParameterValue (TASK-256).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
@@ -855,15 +846,11 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in updateFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    await command.PrepareAsync(ct).ConfigureAwait(false);
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them. The placeholders this replaced held DBNull, were prepared, and had .Value assigned per
+                    // row, which skipped the conversion: an enum key reached Npgsql as a CLR enum and the statement threw (measured). Not
+                    // prepared any more: with a parameter replaced after Prepare(), Npgsql matched no row at all (measured). A Kind=Utc
+                    // DateTime, which Prepare() used to keep unshifted, is now normalised by ConvertParameterValue (TASK-256).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
@@ -871,11 +858,11 @@ namespace Birko.Data.SQL.Connectors
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
@@ -928,17 +915,17 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    command.Prepare();
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them. The placeholders this replaced held DBNull, were prepared, and had .Value assigned per
+                    // row, which skipped the conversion: an enum key reached Npgsql as a CLR enum and the statement threw (measured). Not
+                    // prepared any more: with a parameter replaced after Prepare(), Npgsql matched no row at all (measured). A Kind=Utc
+                    // DateTime, which Prepare() used to keep unshifted, is now normalised by ConvertParameterValue (TASK-256).
 
                     foreach (var model in models)
                     {
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         command.ExecuteNonQuery();
@@ -985,18 +972,18 @@ namespace Birko.Data.SQL.Connectors
                         + " WHERE " + string.Join(" AND ", whereClauses);
                     commandText = command.CommandText;
 
-                    foreach (var field in primaryFields)
-                    {
-                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                    }
-                    await command.PrepareAsync(ct).ConfigureAwait(false);
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them. The placeholders this replaced held DBNull, were prepared, and had .Value assigned per
+                    // row, which skipped the conversion: an enum key reached Npgsql as a CLR enum and the statement threw (measured). Not
+                    // prepared any more: with a parameter replaced after Prepare(), Npgsql matched no row at all (measured). A Kind=Utc
+                    // DateTime, which Prepare() used to keep unshifted, is now normalised by ConvertParameterValue (TASK-256).
 
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

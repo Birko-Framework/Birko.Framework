@@ -854,17 +854,19 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     command.Prepare();
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them; assigning .Value to a placeholder skipped the conversion (see BulkDelete).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
@@ -931,6 +933,8 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     await command.PrepareAsync(ct).ConfigureAwait(false);
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter), as
+                    // every other write binds them; assigning .Value to a placeholder skipped the conversion (see BulkDelete).
 
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
@@ -938,11 +942,11 @@ namespace Birko.Data.SQL.Connectors
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
@@ -1000,12 +1004,16 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     command.Prepare();
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter, which replaces the placeholder at its position
+                    // with a parameter from ConvertParameterValue + CreateParameter, as every other write binds it. Assigning .Value to the
+                    // placeholder skipped that: an enum key reached Npgsql unconverted and the delete threw (measured), as SQL Server's did
+                    // before TASK-854.
 
                     foreach (var model in models)
                     {
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         command.ExecuteNonQuery();
@@ -1057,13 +1065,17 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     await command.PrepareAsync(ct).ConfigureAwait(false);
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter, which replaces the placeholder at its position
+                    // with a parameter from ConvertParameterValue + CreateParameter, as every other write binds it. Assigning .Value to the
+                    // placeholder skipped that: an enum key reached Npgsql unconverted and the delete threw (measured), as SQL Server's did
+                    // before TASK-854.
 
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

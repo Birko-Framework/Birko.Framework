@@ -113,18 +113,16 @@ Common PostgreSQL to .NET type mappings:
 > components of the value as supplied**. `DateTimeKind` is **not persisted**; every read returns
 > `Kind=Unspecified`. Re-attaching the intended `Kind` is the caller's job.
 
-`PostgreSQLConnector.NormalizeTimestampValue` enforces it at both **un-prepared** write boundaries —
-`AddParameter` and the binary `COPY` writer (sync + async) — which is what makes the stored value independent
-of the server's `TimeZone` setting.
+`PostgreSQLConnector.NormalizeTimestampValue` enforces it at both write boundaries, `AddParameter` and the
+binary `COPY` writer (sync + async), which is what makes the stored value independent of the server's
+`TimeZone` setting.
 
-**The bulk update/delete paths are correct without it, by a different mechanism — don't "fix" them, and
-don't copy them.** They bypass `AddParameter`: pre-create parameters holding `DBNull.Value`, call
-`command.Prepare()`, then assign `.Value` per row. `Prepare()` pins each parameter to the target column's
-real type before any value is assigned, so the value is never re-inferred as `timestamptz`. Measured on a
-non-UTC server: unshifted. It is pinned by `Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server`,
-because that `Prepare()` is the only thing holding those six binding sites correct. **A new binding site
-that does not prepare must call the helper.** (Provider note: on MSSql `Prepare()` throws on untyped
-placeholders, which is why those paths have never worked there at all.)
+**The bulk update/delete paths bind through `AddParameter` too (TASK-1007), and are not prepared.** They used
+to assign `.Value` to prepared placeholders holding `DBNull.Value`. `Prepare()` kept a `Kind=Utc` value
+unshifted there, but nothing converted an enum, so an enum key threw `InvalidCastException` (measured).
+`AddParameter` after `Prepare()` was measured too: Npgsql then matched no row at all, so the paths do not
+prepare any more, as on SQL Server (TASK-854). `Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server`
+still pins the unshifted write, now through the helper. **A new binding site goes through `AddParameter`.**
 
 **Both boundaries, because they failed differently and only one said so.** `AddParameter` binds no `DbType`,
 so Npgsql infers `timestamptz` for a `Kind=Utc` value and the server casts it into the timezone-less column

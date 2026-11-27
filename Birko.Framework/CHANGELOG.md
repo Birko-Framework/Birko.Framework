@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-15 — Tagging refuses a foreign or missing tag on attach
+
+[[TASK-147]] (the user's decision). `AttachTagAsync` / `SetEntityTagsAsync` stored a link to any tag id, so another
+tenant's tag or a nonexistent one was accepted and every later read of that entity's tags threw. Both now refuse it
+before writing (`CrossTenantTagAccessException` / `InvalidOperationException`), the set path with one tag listing per
+call (CR-M172's per-tag saving kept). Symbio's tag endpoints pass a client-supplied id through these.
+
+---
+
 ## 2026-11-15 — Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does
 
 [[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path

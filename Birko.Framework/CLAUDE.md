@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### SQL bulk updates and deletes bind like every other write (2026-11-27)
+[[TASK-1007]], found at the 2026-11-27 spec regen. MySQL, PostgreSQL and SQLite's native `BulkUpdate` / `BulkDelete`
+assigned `.Value` to placeholders, skipping `ConvertParameterValue`, as SQL Server's did before TASK-854. On PostgreSQL a
+bulk delete with an enum in its key threw (measured); MySQL and SQLite gave no wrong result. All three now bind through
+`AddParameter`; PostgreSQL stopped preparing those statements, because a parameter replaced after `Prepare()` matched no
+row (measured). A shared `BulkBindingContract` runs on all four providers.
 ### One store factory per SQL provider (2026-11-27)
 [[TASK-1001]], the user's decision. Each SQL provider had two factories: the TASK-988 `{Provider}SqlStoreFactory` (an
 `ISqlStoreFactory`) and an older `{Provider}StoreFactory` with its own options class and `Add*Stores` DI extension,
@@ -370,11 +376,6 @@ early one still is. A lock held past `CommandTimeout` now fails after one timeou
 Server rejected it) and probed by selecting from the name: a same-named TABLE answered "view exists" on all four
 providers, and inside a PostgreSQL transaction the swallowed error aborted it (`25P02`; all measured). The connector's
 dialect now renders the DDL and a catalogue probe per provider; the View packages keep only their extra features.
-### Tagging refuses a foreign or missing tag on attach (2026-11-15)
-[[TASK-147]] (the user's decision). `AttachTagAsync` / `SetEntityTagsAsync` stored a link to any tag id, so another
-tenant's tag or a nonexistent one was accepted and every later read of that entity's tags threw. Both now refuse it
-before writing (`CrossTenantTagAccessException` / `InvalidOperationException`), the set path with one tag listing per
-call (CR-M172's per-tag saving kept). Symbio's tag endpoints pass a client-supplied id through these.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

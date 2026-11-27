@@ -62,6 +62,7 @@
     <Compile Include="..\Shared\StoreContract\RuleLeftoversContract.cs" Link="Shared\RuleLeftoversContract.cs" />
     <Compile Include="..\Shared\StoreContract\CollapsedGroupContract.cs" Link="Shared\CollapsedGroupContract.cs" />
     <Compile Include="..\Shared\StoreContract\StringEqualityLeftoversContract.cs" Link="Shared\StringEqualityLeftoversContract.cs" />
+    <Compile Include="..\Shared\StoreContract\BulkBindingContract.cs" Link="Shared\BulkBindingContract.cs" />
   </ItemGroup>
 
   <Import Project="..\Shared\TestSupport\LiveDatabase.props" />

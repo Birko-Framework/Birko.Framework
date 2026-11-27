@@ -543,14 +543,6 @@ namespace Birko.Data.SQL.Connectors
             return value;
         }
 
-        private object? ConvertPrimaryKeyValue(AbstractField field, object model)
-        {
-            var value = field.Property.GetValue(model);
-            if (value is Guid guid)
-                return guid.ToString();
-            return value;
-        }
-
         #region Native Bulk Operations
 
         public void BulkInsert(Type type, IEnumerable<object> models)
@@ -737,16 +729,18 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.AddWithValue("@PK_" + field.Name.Replace(".", ""), DBNull.Value);
                     }
 
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter: a Guid
+                    // as its string), as every other write binds them. A local copy of the Guid conversion did that here, and it is gone.
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = ConvertFieldValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (command.ExecuteNonQuery() == 0) unmatched.Add(model);
@@ -815,17 +809,19 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.AddWithValue("@PK_" + field.Name.Replace(".", ""), DBNull.Value);
                     }
 
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter: a Guid
+                    // as its string), as every other write binds them. A local copy of the Guid conversion did that here, and it is gone.
                     unmatched.Clear(); // a retried attempt starts over
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in updateFields)
                         {
-                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = ConvertFieldValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@SET_" + field.Name.Replace(".", ""), field.Write(model));
                         }
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) == 0) unmatched.Add(model);
@@ -885,11 +881,13 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.AddWithValue("@PK_" + field.Name.Replace(".", ""), DBNull.Value);
                     }
 
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter: a Guid
+                    // as its string), as every other write binds them. A local copy of the Guid conversion did that here, and it is gone.
                     foreach (var model in models)
                     {
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         command.ExecuteNonQuery();
@@ -943,12 +941,14 @@ namespace Birko.Data.SQL.Connectors
                         command.Parameters.AddWithValue("@PK_" + field.Name.Replace(".", ""), DBNull.Value);
                     }
 
+                    // TASK-1007 (rule 28): each row's values are bound through AddParameter (ConvertParameterValue + CreateParameter: a Guid
+                    // as its string), as every other write binds them. A local copy of the Guid conversion did that here, and it is gone.
                     foreach (var model in models)
                     {
                         ct.ThrowIfCancellationRequested();
                         foreach (var field in primaryFields)
                         {
-                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = ConvertPrimaryKeyValue(field, model) ?? DBNull.Value;
+                            AddParameter(command, "@PK_" + field.Name.Replace(".", ""), field.Property.GetValue(model));
                         }
                         AnnounceCommand(command);
                         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
