@@ -2,7 +2,7 @@
 id: TASK-995
 parent: EPIC-019
 feature: null
-status: in-progress
+status: verify
 priority: P2
 assignee: ai
 created: 2026-11-26
@@ -269,6 +269,9 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
 - **RavenDB flake explained:** the 15-run loop failed 2 times, both "two writers" on its first `GetVersion`, with
   `IndexCreationException`: two clients' first identical query on a new database, and one auto-index request timed out
   after 15 s. It is a store defect, not this task's code, and is filed as [[TASK-998]].
+- **2026-11-27, code complete; awaiting DraCode's human test.** Status `verify`. Every criterion is met. The human test
+  (two writers on MongoDB in DraCode) is DraCode's, in its TASK-228. Found along the way: TASK-996, TASK-997, TASK-998 (all
+  done) and [[TASK-999]] (P3, open).
 
 ## Acceptance criteria
 
@@ -282,7 +285,8 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
       documented in Birko.Data.EventSourcing's README.
 - [x] An event store obtainable from the configured `IStoreFactory` without naming the backend (if decided in).
       `factory.GetEventStore(o => o.AddSql().AddMongoDB()…)`.
-- [ ] READMEs / CLAUDE.md, Recent Updates; DraCode told.
+- [x] READMEs / CLAUDE.md, Recent Updates; DraCode told. Docs at `e3be6dad`; DraCode told 2026-11-27, with usage, the
+      projitems to import and the human test.
 
 ## Out of scope
 
