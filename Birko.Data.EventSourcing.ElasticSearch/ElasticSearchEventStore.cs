@@ -43,6 +43,13 @@ namespace Birko.Data.EventSourcing.ElasticSearch
             }
         }
 
+        /// <inheritdoc />
+        /// <remarks>
+        /// The checks of a batch (is it whole, is a colliding one abandoned, TASK-1000) are searches, which see a write only
+        /// after a refresh.
+        /// </remarks>
+        protected override Task MakeVisibleAsync(CancellationToken ct) => RefreshAsync();
+
         // Not cancellable: the writes it makes visible have happened.
         private async Task RefreshAsync()
         {

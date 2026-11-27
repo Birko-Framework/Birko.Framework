@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### A batch of events cut short by a crash is never read (2026-11-27)
+[[TASK-1000]], the user's ask after TASK-995. The default event store (Elasticsearch, standalone MongoDB, InMemory) writes
+a batch one event at a time, so a process that died partway left the batch's first events readable (measured on all
+three). Each record of a batch of two or more now carries its batch id and size; reads show a batch only when it is
+whole, and the next append clears an incomplete one older than `AbandonedBatchLease` (30 s), behind an abort marker
+that excludes the writer's own last event. A single event is still one write; a 5-event batch on Elasticsearch costs
+about 16 ms more (one refresh, one check).
 ### One event store for every backend, from the store factory (2026-11-27)
 [[TASK-995]], asked for by DraCode. `factory.GetEventStore(o => o.AddSql().AddMongoDB())` returns an `IAsyncEventStore`
 for the configured backend. It follows the store pattern: `AbstractAsyncEventStore` (the contract over `*Core` seams),
@@ -367,11 +374,6 @@ call (CR-M172's per-tag saving kept). Symbio's tag endpoints pass a client-suppl
 when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).
 Only the non-null values are aggregated now. On the gateway query plan (Linux) the emulator still cannot plan an
 aggregate subquery and the read throws; it never answers wrong, and Cosmos has no aggregate-free form to rewrite to.
-### Cosmos DB queries answer the same on Linux; culture-pinned fold contract (2026-11-11)
-[[TASK-919]]. CI (Linux) failed tests that passed on Windows. Cosmos SDK builds query plans locally only on Windows x64
-and asks the gateway on Linux, where TASK-907's astral check counted 0 (a mixed MIN/MAX group was answered, not refused)
-and TASK-899's nested `Count(p)` threw; both now render forms the gateway path reads correctly. The SQL case-fold contract
-assumed the machine's culture and is pinned to sk-SK. Found: [[TASK-920]] (P1, nested SUM/AVG/MAX on the gateway path).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

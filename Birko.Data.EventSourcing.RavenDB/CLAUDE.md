@@ -32,7 +32,8 @@ Birko.Data.EventSourcing.RavenDB/
 ## Key Design Decisions
 
 **Why an override exists.** The default passes the contract on RavenDB. But it writes one event at a time and deletes its
-own events when a later one conflicts, so a crash in between leaves part of a batch stored (TASK-995, decision 4). RavenDB's
+own events when a later one conflicts, so a crash in between leaves part of a batch stored (hidden and cleared later
+since TASK-1000, at the cost of extra checks). RavenDB's
 bulk create saves the whole batch in one `SaveChanges`, one server transaction: a batch with a taken id in the middle
 stored nothing (measured, TASK-995). The user's decision 4 is to use native atomicity where the backend has it.
 

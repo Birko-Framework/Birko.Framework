@@ -30,6 +30,15 @@ xUnit + FluentAssertions
     - a batch whose compensation fails says which events remain;
     - how `GetEventStore` chooses: the default, a matching override, two matching overrides refused, a duplicate
       override name refused, and JSON and XML refused.
+- `CrashedBatchTests.cs` (TASK-1000):
+  - `InMemoryCrashedBatchTests`: the 6 tests of `tests/Shared/EventSourcing/CrashedBatchContract.cs` (a batch cut short by a
+    crash is invisible; within the lease the next append is refused; after it the batch is cleared, by a single event or
+    by a batch; a whole batch is never cleared; a batch over two aggregates shows both or neither), over
+    `CrashingInMemoryStore`, which dies after N creates;
+  - `AbandonedBatchRaceTests`: a writer stalled past the lease whose batch is cleared fails and leaves nothing; a writer
+    whose last event meets an abort marker fails; a marker left behind is cleared at once; a negative lease is refused;
+  - `BatchMarkingCostTests`: a single event is one write with no batch fields; a batch is its events plus one check;
+    reading whole batches costs one query.
 - `EventSourcingStoreWrapperTests` — regression tests for CR-C05 / CR-C06: the Created-event
   `AggregateGuid` must equal the Guid the inner store persists the row under (single, bulk sync, bulk
   async), so `Replay` / `GetHistory` by the persisted Guid find the event.

@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-11 — Cosmos DB queries answer the same on Linux; culture-pinned fold contract
+
+[[TASK-919]]. CI (Linux) failed tests that passed on Windows. Cosmos SDK builds query plans locally only on Windows x64
+and asks the gateway on Linux, where TASK-907's astral check counted 0 (a mixed MIN/MAX group was answered, not refused)
+and TASK-899's nested `Count(p)` threw; both now render forms the gateway path reads correctly. The SQL case-fold contract
+assumed the machine's culture and is pinned to sk-SK. Found: [[TASK-920]] (P1, nested SUM/AVG/MAX on the gateway path).
+
+---
+
 ## 2026-11-11 — Live SQL test runs get their own database
 [[TASK-883]]. Two concurrent runs of a live SQL suite against one server failed ~1570 of 2602 tests each (shared fixed
 table names; measured), and MySQL classes that drop tables raw failed 3 of 8 runs through the shared cached connector.

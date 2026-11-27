@@ -27,3 +27,6 @@ xUnit + FluentAssertions
 ## Coverage
 - On both servers: the 9 contract tests, and the override chosen for a MongoDB factory (the default store without it).
 - On the replica set: an append inside the caller's `MongoDbUnitOfWork` is undone when the caller rolls back.
+- On the standalone server: `MongoDBStandaloneCrashedBatchTests` (TASK-1000), the 6 tests of
+  `tests/Shared/EventSourcing/CrashedBatchContract.cs`, the dying writer being a `MongoDBEventStore` over
+  `CrashingMongoDBStore` (database `birko_task1000_<guid>`).

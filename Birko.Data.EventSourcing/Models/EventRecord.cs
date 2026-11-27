@@ -34,6 +34,26 @@ namespace Birko.Data.EventSourcing.Models
         public Guid? UserGuid { get; set; }
 
         /// <summary>
+        /// The batch this record was appended in, when the batch held more than one event and the backend writes it one event
+        /// at a time (TASK-1000). Null for a single event, for a batch written atomically, and for records stored before.
+        /// </summary>
+        public Guid? BatchGuid { get; set; }
+
+        /// <summary>How many events the batch holds; a batch is visible only once that many of its records are stored.</summary>
+        public int BatchSize { get; set; }
+
+        /// <summary>The record id of the batch's last event: an abort marker takes this id, so it and that event exclude each other.</summary>
+        public Guid? BatchEnd { get; set; }
+
+        /// <summary>When the record was written (UTC), so an incomplete batch can be judged abandoned.</summary>
+        public DateTime? WrittenAt { get; set; }
+
+        /// <summary>
+        /// True on the abort marker that clears an abandoned batch: never an event, and it makes the whole batch invisible.
+        /// </summary>
+        public bool Aborted { get; set; }
+
+        /// <summary>
         /// The record id of (<paramref name="aggregateGuid"/>, <paramref name="version"/>): a name-based UUID, version 5 (RFC 9562,
         /// SHA-1), under a fixed Birko namespace. The same pair always gives the same id, in every process.
         /// </summary>

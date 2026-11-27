@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\EventSourcing\EventStoreContract.cs" Link="Shared\EventStoreContract.cs" />
+    <Compile Include="..\Shared\EventSourcing\CrashedBatchContract.cs" Link="Shared\CrashedBatchContract.cs" />
   </ItemGroup>
 
 </Project>

@@ -9,6 +9,8 @@ event store. An appended event is visible to every reader as soon as the append 
   `EventStoreConcurrencyException`.
 - Reads an aggregate's history (in full, up to a version, or from a version), its current version, and all events from a
   point in time.
+- A batch of events shows all or nothing: a batch cut short by a crash is never read, and is cleared by a later append
+  once it is older than `AbandonedBatchLease` (30 s).
 - Chosen by configuration: the application asks the store factory and never names Elasticsearch.
 
 ## Usage

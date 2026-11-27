@@ -10,8 +10,8 @@ not at all.
   `EventStoreConcurrencyException`.
 - An append of several events is atomic on a replica set or sharded cluster, and joins your own `MongoDbUnitOfWork` when
   one is active, so an entity change and its events commit together.
-- On a standalone server (no transactions) a failed batch removes the events it already wrote; a crash partway can
-  leave them.
+- On a standalone server (no transactions) a failed batch removes the events it already wrote; a batch cut short by a
+  crash is never read, and is cleared by a later append once it is older than `AbandonedBatchLease` (30 s).
 - Chosen by configuration: the application asks the store factory and never names MongoDB.
 
 ## Usage

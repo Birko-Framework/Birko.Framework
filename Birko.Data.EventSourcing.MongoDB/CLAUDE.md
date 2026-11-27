@@ -37,8 +37,8 @@ Birko.Data.EventSourcing.MongoDB/
    events were part of it.
 2. **On a server with transactions:** the batch runs in a transaction of its own (a `MongoDbUnitOfWork` from the store,
    which publishes its session for this flow only, never on the shared store).
-3. **On a standalone `mongod`:** the default one-event-at-a-time append, with compensation. Its crash gap is documented
-   (TASK-995, decision 4).
+3. **On a standalone `mongod`:** the default one-event-at-a-time append, with compensation. A batch a crash cut short is
+   invisible to reads and cleared by a later append after the lease ([[TASK-1000]], in the default store).
 
 Whether the server has transactions is asked once per event store with `hello`: a replica set member answers a
 `setName`, a `mongos` answers `msg: "isdbgrid"`.

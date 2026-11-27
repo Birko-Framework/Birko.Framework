@@ -27,3 +27,5 @@ xUnit + FluentAssertions
     append, a taken version, a conflicting batch keeping nothing, a batch holding one version twice, null and empty
     input, and DraCode's two writers;
   - the override is chosen for an Elasticsearch factory, and the default store is answered without it.
+- `ElasticSearchCrashedBatchTests` (TASK-1000): the 6 tests of `tests/Shared/EventSourcing/CrashedBatchContract.cs`, live,
+  the dying writer being an `ElasticSearchEventStore` over `CrashingElasticSearchStore` (index prefix `birko1000<guid>`).

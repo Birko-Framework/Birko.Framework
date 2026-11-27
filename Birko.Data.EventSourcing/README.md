@@ -53,6 +53,12 @@ catch (EventStoreConcurrencyException)
 | InMemory (tests) | the default `AsyncStoreEventStore` | the default store |
 | JSON, XML | refused: they cannot turn away a write from a second process | — |
 
+**A batch on the default store** (Elasticsearch, a standalone MongoDB, InMemory) is written one event at a time, and a
+failed batch removes what it wrote. A process that dies partway leaves records that no read shows: a batch is visible
+only once all its events are stored (TASK-1000). The next append to those versions clears them once they are older than
+`AbandonedBatchLease` (default 30 s); before that it gets `EventStoreConcurrencyException`, because the batch may belong
+to a writer that is still running. A single event is one write, as before.
+
 ## Usage
 
 ```csharp

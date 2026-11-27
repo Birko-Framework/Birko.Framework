@@ -47,8 +47,9 @@ create answers 409 for a taken id (`op_type=create`, TASK-625). Two clients raci
 
 - The index is `{IndexPrefix}_eventrecord`, like any Elasticsearch store's. It is created on first use, and the creation
   is safe when several clients start together ([[TASK-997]]).
-- A batch is not atomic on Elasticsearch. A conflict deletes this batch's earlier events, but a crash partway can leave
-  them stored (the default store's documented gap, decision 4 of TASK-995).
+- A batch is written one event at a time on Elasticsearch. A conflict deletes this batch's earlier events; a crash partway
+  leaves them stored but invisible, and a later append clears them after the lease ([[TASK-1000]], in the default store).
+  The store's checks of a batch are searches, so `MakeVisibleAsync` refreshes the index before them.
 - Tests: `tests/Birko.Data.EventSourcing.ElasticSearch.Tests`, the shared contract, live under `BIRKO_ES_URL`.
 
 ## Maintenance

@@ -65,8 +65,24 @@ How the default works:
   backend: `StoreUniqueViolationException` becomes `EventStoreConcurrencyException`.
 - **The default appends one event at a time.** When a later event conflicts, it deletes the ones it wrote, then throws. A
   bulk create that meets a taken id leaves nothing, a prefix, or all but one, depending on the backend (measured), so only
-  a sequential append knows what to undo. ⚠ A crash between the write and the undo leaves the batch's first events
-  stored. This is documented, and it is why the transactional backends override the append.
+  a sequential append knows what to undo. The transactional backends override the append.
+- **A batch a crash cut short stays invisible, and is cleared later ([[TASK-1000]], the user's decisions).**
+  - Every record of a batch of two or more carries `BatchGuid`, `BatchSize`, `BatchEnd` (the record id of its last
+    event) and `WrittenAt`. A single event carries none: one write, as before (`BatchMarkingCostTests`).
+  - Reads (`VisibleAsync`) show a batch only when `BatchSize` of its records are stored and none is an abort marker. A
+    batch whose records are all in the page read costs nothing; another one is one lookup. `GetVersion` reads the top
+    16 records and stops at the first visible one, skipping an incomplete batch above it.
+  - An append that collides with an incomplete batch whose newest record is older than `AbandonedBatchLease` (30 s)
+    clears it and retries once. It first creates an **abort marker** (`Aborted = true`) under `BatchEnd`: that create and
+    the writer's own last create exclude each other, so a batch is either completed or cleared, never both. A batch with
+    a marker is cleared at once, whatever the lease.
+  - A failed batch is removed by `BatchGuid` (filter delete), never by record id: once a batch was cleared, its record
+    ids can belong to another writer. After its last create a writer checks that its batch is whole, and fails
+    (`EventStoreConcurrencyException`) rather than report a batch that was cleared under it.
+  - `MakeVisibleAsync` (virtual, no-op) runs before those checks; Elasticsearch refreshes its index there, since the
+    checks are searches.
+  - The lease compares write times from the writers' clocks: clocks further apart than the lease can clear a live batch,
+    whose writer then fails.
 - **`factory.GetEventStore(o => o.AddSql().AddMongoDB()…)`** is an `IStoreFactory` extension. It answers a registered
   override that accepts the factory, otherwise the default over `factory.GetAsyncStore<EventRecord>()`.
   - Overrides are registered at the composition root, like backends: neither side can reference the other, and nothing
@@ -86,7 +102,8 @@ How the default works:
 | JSON, XML | refused: they cannot turn away a write from a second process | — |
 
 The shared contract suite is `tests/Shared/EventSourcing/EventStoreContract.cs` (9 tests, including DraCode's two
-writers). Every implementation's test project subclasses it.
+writers). Every implementation's test project subclasses it. `tests/Shared/EventSourcing/CrashedBatchContract.cs`
+(TASK-1000, 6 tests) runs on the backends that use the default append: InMemory, Elasticsearch and a standalone MongoDB.
 
 `EventStoreConcurrencyException` (`AggregateGuid`, `Version`) is the contract's optimistic-concurrency signal: an append whose (aggregate, version) is already taken. A backend throws it and writes nothing from the batch.
 
