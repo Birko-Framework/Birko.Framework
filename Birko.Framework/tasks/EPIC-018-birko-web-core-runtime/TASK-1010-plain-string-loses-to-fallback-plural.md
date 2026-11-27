@@ -3,7 +3,7 @@ id: TASK-1010
 parent: EPIC-018
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: verify
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P2
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
