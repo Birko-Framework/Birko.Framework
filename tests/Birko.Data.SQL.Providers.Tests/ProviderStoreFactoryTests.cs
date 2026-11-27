@@ -9,14 +9,13 @@ using Birko.Data.SQL.MySQL.Stores;
 using Birko.Data.SQL.PostgreSQL;
 using Birko.Data.SQL.PostgreSQL.Stores;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Birko.Data.SQL.Providers.Tests;
 
 /// <summary>
-/// Cross-provider store-factory + DI backport (EPIC-016 / TASK-042). Construction / settings /
-/// connection-string / DI-registration checks run offline (no server). A live CRUD round-trip per
+/// Cross-provider store factories (EPIC-016 / TASK-042), on the TASK-988 factories since TASK-1001 removed the older
+/// ones and their DI registration. Construction / settings / connection-string checks run offline (no server). A live CRUD round-trip per
 /// provider is opt-in via the family's own <c>BIRKO_{PROVIDER}_HOST</c> gate (<c>BIRKO_MSSQL_HOST</c>,
 /// <c>BIRKO_MYSQL_HOST</c>, <c>BIRKO_PG_HOST</c>) and skipped when it is absent.
 /// </summary>
@@ -48,19 +47,19 @@ public class ProviderStoreFactoryTests
     [Fact]
     public void MSSql_factory_builds_settings_and_connection_string()
     {
-        var factory = new MSSqlStoreFactory(new MSSqlStoreFactoryOptions
+        var factory = new MSSqlSqlStoreFactory(new MSSqlSettings("db.example.net", "AppDb", "sa", "pw", 1433, true)
         {
-            Location = "db.example.net", Name = "AppDb", UserName = "sa", Password = "pw",
-            Port = 1433, MultipleActiveResultSets = true, TrustServerCertificate = true,
+            MultipleActiveResultSets = true, TrustServerCertificate = true,
         });
 
-        factory.Settings.Location.Should().Be("db.example.net");
-        factory.Settings.Name.Should().Be("AppDb");
-        factory.Settings.MultipleActiveResultSets.Should().BeTrue();
-        var cs = factory.Settings.GetConnectionString();
+        // The provider's settings reach the connector whole, not narrowed to PasswordSettings.
+        var settings = factory.GetConnector().Settings.Should().BeOfType<MSSqlSettings>().Which;
+        settings.Location.Should().Be("db.example.net");
+        settings.Name.Should().Be("AppDb");
+        settings.MultipleActiveResultSets.Should().BeTrue();
+        var cs = settings.GetConnectionString();
         cs.Should().Contain("db.example.net").And.Contain("Initial Catalog=AppDb").And.Contain("Multiple Active Result Sets=True");
-        factory.GetAsyncStore<Widget>().Should().NotBeNull();
-        factory.GetConnector().Should().NotBeNull();
+        factory.GetAsyncStore<Widget>().Should().BeOfType<AsyncMSSqlStore<Widget>>();
     }
 
     [Fact]
@@ -84,19 +83,6 @@ public class ProviderStoreFactoryTests
     }
 
     [Fact]
-    public void AddMSSqlStores_registers_a_resolvable_singleton()
-    {
-        var services = new ServiceCollection();
-        services.AddMSSqlStores(o => { o.Location = "h"; o.Name = "d"; o.UserName = "u"; o.Password = "p"; });
-        using var provider = services.BuildServiceProvider();
-
-        var a = provider.GetService<IMSSqlStoreFactory>();
-        a.Should().NotBeNull();
-        a.Should().BeSameAs(provider.GetService<IMSSqlStoreFactory>()); // singleton
-        a!.Settings.Name.Should().Be("d");
-    }
-
-    [Fact]
     public async Task MSSql_live_crud_round_trip()
     {
         var server = Resolve("MSSQL", 1433, "sa", "Birko!Passw0rd");
@@ -105,10 +91,9 @@ public class ProviderStoreFactoryTests
             return;
         }
 
-        var factory = new MSSqlStoreFactory(new MSSqlStoreFactoryOptions
+        var factory = new MSSqlSqlStoreFactory(new MSSqlSettings(server.Host, server.Database, server.User, server.Password, server.Port, true)
         {
-            Location = server.Host, Port = server.Port, Name = server.Database,
-            UserName = server.User, Password = server.Password, TrustServerCertificate = true,
+            TrustServerCertificate = true,
         });
         await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
     }
@@ -118,16 +103,16 @@ public class ProviderStoreFactoryTests
     [Fact]
     public void MySql_factory_builds_settings_and_carries_batch_size()
     {
-        var factory = new MySQLStoreFactory(new MySQLStoreFactoryOptions
+        var factory = new MySQLSqlStoreFactory(new MySqlSettings("mysql.local", "AppDb", "root", "pw", 3306, false)
         {
-            Location = "mysql.local", Name = "AppDb", UserName = "root", Password = "pw", BulkInsertBatchSize = 500,
+            BulkInsertBatchSize = 500,
         });
 
-        factory.Settings.Location.Should().Be("mysql.local");
-        factory.Settings.BulkInsertBatchSize.Should().Be(500);
-        factory.Settings.GetConnectionString().Should().Contain("AppDb");
-        factory.GetAsyncStore<Widget>().Should().NotBeNull();
-        factory.GetConnector().Should().NotBeNull();
+        var settings = factory.GetConnector().Settings.Should().BeOfType<MySqlSettings>().Which;
+        settings.Location.Should().Be("mysql.local");
+        settings.BulkInsertBatchSize.Should().Be(500);
+        settings.GetConnectionString().Should().Contain("AppDb");
+        factory.GetAsyncStore<Widget>().Should().BeOfType<AsyncMySQLStore<Widget>>();
     }
 
     [Fact]
@@ -139,25 +124,8 @@ public class ProviderStoreFactoryTests
             return;
         }
 
-        var factory = new MySQLStoreFactory(new MySQLStoreFactoryOptions
-        {
-            Location = server.Host, Port = server.Port, Name = server.Database,
-            UserName = server.User, Password = server.Password,
-        });
+        var factory = new MySQLSqlStoreFactory(new MySqlSettings(server.Host, server.Database, server.User, server.Password, server.Port, false));
         await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
-    }
-
-    [Fact]
-    public void AddMySqlStores_registers_a_resolvable_singleton()
-    {
-        var services = new ServiceCollection();
-        services.AddMySqlStores(o => { o.Location = "h"; o.Name = "d"; o.UserName = "u"; o.Password = "p"; });
-        using var provider = services.BuildServiceProvider();
-
-        var a = provider.GetService<IMySQLStoreFactory>();
-        a.Should().NotBeNull();
-        a.Should().BeSameAs(provider.GetService<IMySQLStoreFactory>());
-        a!.Settings.Name.Should().Be("d");
     }
 
     // ── PostgreSQL ──────────────────────────────────────────────────────────────
@@ -165,16 +133,16 @@ public class ProviderStoreFactoryTests
     [Fact]
     public void Postgres_factory_builds_settings_and_carries_binary_import()
     {
-        var factory = new PostgreSQLStoreFactory(new PostgreSQLStoreFactoryOptions
+        var factory = new PostgreSQLSqlStoreFactory(new PostgreSqlSettings("pg.local", "AppDb", "postgres", "pw", 5432, false)
         {
-            Location = "pg.local", Name = "AppDb", UserName = "postgres", Password = "pw", UseBinaryImport = false,
+            UseBinaryImport = false,
         });
 
-        factory.Settings.Location.Should().Be("pg.local");
-        factory.Settings.UseBinaryImport.Should().BeFalse();
-        factory.Settings.GetConnectionString().Should().Contain("AppDb");
-        factory.GetAsyncStore<Widget>().Should().NotBeNull();
-        factory.GetConnector().Should().NotBeNull();
+        var settings = factory.GetConnector().Settings.Should().BeOfType<PostgreSqlSettings>().Which;
+        settings.Location.Should().Be("pg.local");
+        settings.UseBinaryImport.Should().BeFalse();
+        settings.GetConnectionString().Should().Contain("AppDb");
+        factory.GetAsyncStore<Widget>().Should().BeOfType<AsyncPostgreSQLStore<Widget>>();
     }
 
     [Fact]
@@ -186,25 +154,8 @@ public class ProviderStoreFactoryTests
             return;
         }
 
-        var factory = new PostgreSQLStoreFactory(new PostgreSQLStoreFactoryOptions
-        {
-            Location = server.Host, Port = server.Port, Name = server.Database,
-            UserName = server.User, Password = server.Password,
-        });
+        var factory = new PostgreSQLSqlStoreFactory(new PostgreSqlSettings(server.Host, server.Database, server.User, server.Password, server.Port, false));
         await RoundTripAsync(factory.GetAsyncStore<RoundTripRow>());
-    }
-
-    [Fact]
-    public void AddPostgreSqlStores_registers_a_resolvable_singleton()
-    {
-        var services = new ServiceCollection();
-        services.AddPostgreSqlStores(o => { o.Location = "h"; o.Name = "d"; o.UserName = "u"; o.Password = "p"; });
-        using var provider = services.BuildServiceProvider();
-
-        var a = provider.GetService<IPostgreSQLStoreFactory>();
-        a.Should().NotBeNull();
-        a.Should().BeSameAs(provider.GetService<IPostgreSQLStoreFactory>());
-        a!.Settings.Name.Should().Be("d");
     }
 
     /// <summary>One provider's live server, as the surrounding suites describe theirs.</summary>

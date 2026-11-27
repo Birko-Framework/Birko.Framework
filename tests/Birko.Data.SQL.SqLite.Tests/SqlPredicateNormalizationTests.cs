@@ -68,7 +68,7 @@ public class SqlPredicateNormalizationTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new NRowMapping());
         registry.ApplyToDatabase();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "norm.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "norm.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(NRow) });
         var store = new AsyncSQLiteStore<NRow>();

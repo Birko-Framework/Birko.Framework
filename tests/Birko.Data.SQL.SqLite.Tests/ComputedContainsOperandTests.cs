@@ -81,7 +81,7 @@ public class ComputedContainsOperandTests : IDisposable
     private async Task<AsyncSQLiteStore<Row>> SeededStore()
     {
         Register();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "computedin.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "computedin.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
 

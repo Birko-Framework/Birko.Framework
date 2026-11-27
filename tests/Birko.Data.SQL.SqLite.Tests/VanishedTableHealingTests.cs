@@ -78,8 +78,7 @@ public class VanishedTableHealingTests : IDisposable
     }
 
     private SqLiteConnector Connector()
-        => (SqLiteConnector)new SqLiteStoreFactory(
-            new SqLiteStoreFactoryOptions { Location = _root, Name = "heal.db" }).GetConnector();
+        => (SqLiteConnector)new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "heal.db")).GetConnector();
 
     /// <summary>
     /// Reads <c>sqlite_master</c> on a connection of its own — the store's own answer is exactly what is

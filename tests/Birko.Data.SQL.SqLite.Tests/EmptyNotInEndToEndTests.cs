@@ -73,7 +73,7 @@ public class EmptyNotInEndToEndTests : IDisposable
     private async Task<AsyncSQLiteStore<Row>> SeededStore()
     {
         Register();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "emptynotin.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "emptynotin.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
 

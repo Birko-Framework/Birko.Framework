@@ -157,7 +157,7 @@ public class AggregateViewDdlTests : IDisposable
     {
         RegisterMappings();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "aggddl.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "aggddl.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(AvPerson), typeof(AvOrder) });
 

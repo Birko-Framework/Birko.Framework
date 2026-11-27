@@ -72,7 +72,7 @@ public class SchemaEscapeCountChannelTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new CRowMapping());
         registry.ApplyToDatabase();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "escapecount.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "escapecount.db"));
         return (SqLiteConnector)factory.GetConnector();
     }
 

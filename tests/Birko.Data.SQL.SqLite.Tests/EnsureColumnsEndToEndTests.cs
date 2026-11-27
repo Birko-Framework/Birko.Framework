@@ -98,7 +98,7 @@ public class EnsureColumnsEndToEndTests : IDisposable
 
     private SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "ensure.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "ensure.db"));
         return (SqLiteConnector)factory.GetConnector();
     }
 

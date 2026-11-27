@@ -37,7 +37,7 @@ public class PropertyUpdateIncrementCachingTests : IDisposable
         Directory.CreateDirectory(_root);
         _settings = new SqLiteSettings(_root, "increment.db");
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "increment.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "increment.db"));
         ((SqLiteConnector)factory.GetConnector()).CreateTable(new[] { typeof(CachedCounter) });
     }
 

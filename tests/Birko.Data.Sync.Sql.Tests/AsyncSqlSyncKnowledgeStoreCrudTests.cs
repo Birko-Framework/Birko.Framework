@@ -33,7 +33,7 @@ public class AsyncSqlSyncKnowledgeStoreCrudTests : IDisposable
     private AsyncSqlSyncKnowledgeStore<SqLiteConnector> NewStore()
     {
         // Create the schema up front against the same db file the store opens (mirrors the SqLite tier).
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "sync.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "sync.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(SqlSyncKnowledgeItem) }); // TASK-058: valid DDL for the dual-key model
 

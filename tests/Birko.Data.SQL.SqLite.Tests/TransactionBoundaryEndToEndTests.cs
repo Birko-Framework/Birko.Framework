@@ -73,7 +73,7 @@ public class TransactionBoundaryEndToEndTests : IDisposable
         registry.Register(new RowMapping());
         registry.ApplyToDatabase();
         var name = dbName ?? $"tx{Interlocked.Increment(ref _seq)}.db";
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = name });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, name));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
         var settings = new SqLiteSettings(_root, name);

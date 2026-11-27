@@ -65,7 +65,7 @@ public class SqlExpressionParityTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new RowMapping());
         registry.ApplyToDatabase();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "parity.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "parity.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
         var store = new AsyncSQLiteStore<Row>();

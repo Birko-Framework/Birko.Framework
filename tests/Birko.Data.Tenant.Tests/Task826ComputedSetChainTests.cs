@@ -79,7 +79,7 @@ public class Task826ComputedSetChainTests : IDisposable
     [Fact]
     public async Task A_rate_change_recomputes_the_current_tenants_live_prices_in_one_statement()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "chain.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "chain.db"));
         ((SqLiteConnector)factory.GetConnector()).CreateTable(new[] { typeof(BasePrice) });
         var store = new AsyncSQLiteStore<BasePrice>();
         store.SetSettings(new SqLiteSettings(_root, "chain.db"));
@@ -115,7 +115,7 @@ public class Task826ComputedSetChainTests : IDisposable
     [Fact]
     public void Sync_chain_recomputes_only_the_current_tenants_rows()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "sync.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "sync.db"));
         ((SqLiteConnector)factory.GetConnector()).CreateTable(new[] { typeof(BasePrice) });
         var store = new SQLiteStore<BasePrice>();
         store.SetSettings(new SqLiteSettings(_root, "sync.db"));

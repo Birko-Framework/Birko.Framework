@@ -83,7 +83,7 @@ public class SqLiteDecimalStorageEndToEndTests : IDisposable
 
     private SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = DbName });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, DbName));
         return (SqLiteConnector)factory.GetConnector();
     }
 

@@ -73,7 +73,7 @@ public class Task636SqlPartialIndexTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new Mapping());
         registry.ApplyToDatabase();
-        var connector = (SqLiteConnector)new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "t636.db" }).GetConnector();
+        var connector = (SqLiteConnector)new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "t636.db")).GetConnector();
         connector.CreateTable(new[] { typeof(T636Currency) });
         _connector = connector;
         return connector;

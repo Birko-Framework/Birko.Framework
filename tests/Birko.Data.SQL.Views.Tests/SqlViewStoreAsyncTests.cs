@@ -77,7 +77,7 @@ public class SqlViewStoreAsyncTests : IDisposable
         registry.Register(new OrderMapping());
         registry.ApplyToDatabase();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "views.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "views.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Person), typeof(Order) });
 

@@ -68,14 +68,14 @@ public class RuleFieldResolutionEndToEndTests : IDisposable
 
     private void CreateSchema()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "rulefield.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "rulefield.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(RRow) });
     }
 
     private SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "rulefield.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "rulefield.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.OnExecute += text => _executed.Add(text);
         return connector;

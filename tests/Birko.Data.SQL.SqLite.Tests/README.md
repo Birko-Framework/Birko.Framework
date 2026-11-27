@@ -4,7 +4,7 @@ xUnit + FluentAssertions tests for [`Birko.Data.SQL.SqLite`](../Birko.Data.SQL.S
 
 ## Coverage
 
-- **`SqLiteStoreFactoryTests`** — `SqLiteStoreFactory` creates a missing database directory eagerly; resolves a relative `Location` against `BaseDirectory` and ignores it for a rooted `Location`; `GetConnector` is wired to the configured on-disk database (creates the table, queried back via `sqlite_master`) and `GetStore<T>` returns a store bound to the same settings; the `AddSqLiteStores` DI extension registers a resolvable singleton `ISqLiteStoreFactory`.
+- **`SqLiteSqlStoreFactoryTests`** — `SqLiteSqlStoreFactory` built from `SqLiteSettings` creates a missing database directory eagerly, and its connector and async stores reach the configured on-disk database (the table is created and queried back via `sqlite_master`). The older `SqLiteStoreFactory` and `AddSqLiteStores` were removed at TASK-1001.
 
 ## Test framework
 

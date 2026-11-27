@@ -82,7 +82,7 @@ public class MissingTableCountEndToEndTests : IDisposable
     private SqLiteConnector ConnectorWithNoTable()
     {
         Register();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "missingcount.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "missingcount.db"));
         return (SqLiteConnector)factory.GetConnector();
     }
 
@@ -152,7 +152,7 @@ public class MissingTableCountEndToEndTests : IDisposable
     public async Task ACountOfATableThatEXISTS_StillCountsItsRows()
     {
         Register();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "missingcount.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "missingcount.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
 
@@ -207,7 +207,7 @@ public class SchemaEscapeDiagnosticTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new EscapeMapping());
         registry.ApplyToDatabase();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "escape.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "escape.db"));
         return (SqLiteConnector)factory.GetConnector();
     }
 

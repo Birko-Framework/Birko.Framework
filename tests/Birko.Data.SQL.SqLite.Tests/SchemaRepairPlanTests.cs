@@ -66,7 +66,7 @@ public class SchemaRepairPlanTests : IDisposable
 
     private SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "repair.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "repair.db"));
         return (SqLiteConnector)factory.GetConnector();
     }
 

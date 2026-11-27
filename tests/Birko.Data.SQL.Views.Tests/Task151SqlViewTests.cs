@@ -86,7 +86,7 @@ public class Task151SqlViewTests : IDisposable
         registry.Register(new OrderMapping());
         registry.ApplyToDatabase();
 
-        var connector = (SqLiteConnector)new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "views.db" }).GetConnector();
+        var connector = (SqLiteConnector)new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "views.db")).GetConnector();
         connector.CreateTable(new[] { typeof(T151Person), typeof(T151Order) });
         for (var i = 1; i <= 3; i++)
         {

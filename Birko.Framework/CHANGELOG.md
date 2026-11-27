@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-15 — Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does
+
+[[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path
+when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).
+Only the non-null values are aggregated now. On the gateway query plan (Linux) the emulator still cannot plan an
+aggregate subquery and the read throws; it never answers wrong, and Cosmos has no aggregate-free form to rewrite to.
+
+---
+
 ## 2026-11-11 — Cosmos DB queries answer the same on Linux; culture-pinned fold contract
 
 [[TASK-919]]. CI (Linux) failed tests that passed on Windows. Cosmos SDK builds query plans locally only on Windows x64

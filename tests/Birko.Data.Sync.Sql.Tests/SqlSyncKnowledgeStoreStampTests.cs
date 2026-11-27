@@ -26,7 +26,7 @@ public class SqlSyncKnowledgeStoreStampTests : IDisposable
 
     private SqlSyncKnowledgeStore<SqLiteConnector> NewStore()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "sync.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "sync.db"));
         ((SqLiteConnector)factory.GetConnector()).CreateTable(new[] { typeof(SqlSyncKnowledgeItem) });
         var store = new SqlSyncKnowledgeStore<SqLiteConnector>();
         store.SetSettings(new SqLiteSettings(_root, "sync.db"));

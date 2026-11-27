@@ -2,7 +2,7 @@
 id: TASK-1001
 parent: EPIC-019
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-11-27
@@ -55,7 +55,12 @@ The older ones implement none of the shared interfaces and hand out sync stores 
 Whether `SqLiteSqlStoreFactory` does the first two is not checked yet. It makes paths absolute and keeps WAL (TASK-988).
 The other three providers' older factories are not surveyed.
 
-## Open decisions (settle with the user before building)
+## Decisions (the user's, 2026-11-27)
+
+- **(c) delete the older factories**, after checking what only they did ("do the checks and delete the older
+  factories"). What went with them is listed under Done; none of it had a consumer.
+
+## Options as filed
 
 - **Fate of the older factories:**
   - (a) mark them `[Obsolete]`, pointing to `SqlStoreFactory.Create` / the `*SqlStoreFactory`, and keep them working;
@@ -68,13 +73,61 @@ The other three providers' older factories are not surveyed.
 
 ## Acceptance criteria
 
-- [ ] Decisions recorded.
-- [ ] Each provider has one store factory, or the second one is visibly obsolete and points to the first.
-- [ ] Nothing the older factories did is lost without a decision, each with a test: directory creation, `BaseDirectory`,
+- [x] Decisions recorded.
+- [x] Each provider has one store factory, or the second one is visibly obsolete and points to the first.
+- [x] Nothing the older factories did is lost without a decision, each with a test: directory creation, `BaseDirectory`,
       sync stores, DI registration.
-- [ ] Every SQL test project and the consumer aggregators (Symbio.Birko, DraCode.Birko, Sandbox) build; the affected
+- [x] Every SQL test project and the consumer aggregators (Symbio.Birko, DraCode.Birko, Sandbox) build; the affected
       suites pass; docs updated (`Birko.Data.SQL/CLAUDE.md`'s "the per-provider factories stay", the provider READMEs,
       the SQLite test docs). The `backend-store-implementations` spec changes at the next `/specs regen`.
+
+## Done 2026-11-27
+
+**The checks, before deleting:**
+
+| What the older factory did | TASK-988 factory | Outcome |
+|---|---|---|
+| SQLite: create a missing database directory | `SqLiteSqlStoreFactory` does it too | kept, tested (`SqLiteSqlStoreFactoryTests.Constructor_creates_missing_directory`) |
+| SQLite: resolve a relative `Location` against `BaseDirectory` | no; `FromConnectionString` makes a relative path absolute against the working directory | removed; a host combines the path before building the settings |
+| SQLite: sync `GetStore<T>()` | no; `ISqlStoreFactory` hands out async stores | removed; construct `SQLiteStore<T>` with the settings |
+| PostgreSQL / MySQL / SQL Server: settings, async store, connector | the same, built from the provider's settings or a connection string | kept; the provider tests now check the connector gets the provider's full settings (`UseBinaryImport`, `BulkInsertBatchSize`, MARS) |
+| `Add{SqLite,PostgreSql,MySql,MSSql}Stores` DI registration | none: `Birko.Data.SQL` stays free of DI by design (TASK-988) | removed; an app registers the factory itself |
+| Options classes (`…StoreFactoryOptions`) | the provider's settings class carries the same values | removed |
+
+No consumer used any of them (measured above).
+
+**Removed:** 16 files: per provider, `I…StoreFactory`, `…StoreFactory` and `…StoreFactoryOptions` in `Stores/`, plus the
+DI extension in `Extensions/`, which is now empty. Their `.projitems` entries and the spec map's source lines went too.
+
+**Tests:**
+- 48 SQLite fixture call sites (in the SQLite, SQL Views, SqLite.View, Caching, Sync.Sql and Tenant tests) moved to `new SqLiteSqlStoreFactory(new SqLiteSettings(dir, file))`, a
+  drop-in: same connector, folder created.
+- `SqLiteStoreFactoryTests` became `SqLiteSqlStoreFactoryTests`, covering folder creation and connector and store wiring.
+- `ProviderStoreFactoryTests`: the settings tests and the three live round-trips moved to the TASK-988 factories; the
+  four DI tests were removed with the extensions.
+- The `Microsoft.Extensions.DependencyInjection` package was dropped from the SQLite and Providers test projects, both
+  of which build without it.
+
+**Verified:**
+- `Birko.Framework.slnx` builds with 0 errors.
+- Suites:
+
+  | Suite | Passed |
+  |---|---|
+  | SQL.SqLite | 3190/3190 |
+  | SQL.Providers | 58/58 |
+  | SQL.Caching | 43/43 |
+  | SQL.Views | 4051/4051 |
+  | SQL.SqLite.View | 10/10 |
+  | Sync.Sql | 9/9 |
+  | Tenant | 94/94 |
+
+- Not run: the PostgreSQL, MySQL and SQL Server live round-trips, which skipped because no SQL server was running
+  locally. CI's live job runs them.
+- Symbio.Birko, DraCode.Birko and Birko.Sandbox build.
+- `spec-links --check` agrees.
+- Spec drift: `docs/specs/backend-store-implementations.md` still lists the removed files and a `SqLiteStoreFactory`
+  scenario. It is generated, and updates at the next `/specs regen`.
 
 ## Out of scope
 

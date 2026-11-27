@@ -58,7 +58,7 @@ public class SqLiteStoreCrudTests : IDisposable
         registry.ApplyToDatabase();
 
         // Create the schema up front against the same db file the store will open.
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "crud.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "crud.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Widget) });
 

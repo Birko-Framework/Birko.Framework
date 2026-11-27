@@ -73,14 +73,14 @@ public class OrderByResolutionTests : IDisposable
 
     private void CreateSchema()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "orderby.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "orderby.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(ORow) });
     }
 
     private SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "orderby.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "orderby.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.OnExecute += text => _executed.Add(text);
         return connector;

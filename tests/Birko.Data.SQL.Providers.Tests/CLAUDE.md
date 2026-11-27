@@ -18,16 +18,14 @@ xUnit + FluentAssertions test project for the cross-provider SQL store-factory +
 
 - `ProviderStoreFactoryTests` — the single test class, with `[Fact]`s grouped per provider over a
   nested `Widget : AbstractModel` fixture:
-  - **MSSql** — `MSSqlStoreFactory` builds `MSSqlSettings` and a connection string (Initial Catalog,
-    MARS) and yields an async store + connector; `MSSqlStore<T>.SetSettings` retains the full
-    `MSSqlSettings` (UserName / MARS survive, regression for TASK-051, not a narrowed
-    `PasswordSettings`); `AddMSSqlStores` registers a resolvable `IMSSqlStoreFactory` singleton.
-  - **MySQL** — `MySQLStoreFactory` builds settings, carries `BulkInsertBatchSize`, and yields an
-    async store + connector; `AddMySqlStores` registers a resolvable `IMySQLStoreFactory` singleton.
-  - **PostgreSQL** — `PostgreSQLStoreFactory` builds settings, carries `UseBinaryImport`, and yields
-    an async store + connector; `AddPostgreSqlStores` registers a resolvable
-    `IPostgreSQLStoreFactory` singleton.
-- The above construction / settings / connection-string / DI-registration checks all run offline
+  - **MSSql** — `MSSqlSqlStoreFactory` built from `MSSqlSettings` hands its connector the full settings
+    (Initial Catalog, MARS) and yields an `AsyncMSSqlStore`; `MSSqlStore<T>.SetSettings` retains the full
+    `MSSqlSettings` (UserName / MARS survive, regression for TASK-051, not a narrowed `PasswordSettings`).
+  - **MySQL** — `MySQLSqlStoreFactory` keeps `BulkInsertBatchSize` on the connector's settings and yields an
+    `AsyncMySQLStore`.
+  - **PostgreSQL** — `PostgreSQLSqlStoreFactory` keeps `UseBinaryImport` and yields an `AsyncPostgreSQLStore`.
+  - The older `*StoreFactory` classes and their `Add*Stores` DI tests were removed with them at TASK-1001.
+- The above construction / settings / connection-string checks all run offline
   (no server). The three live CRUD round-trips (`{MSSql,MySql,PostgreSql}_live_crud_round_trip`, via
   the `Resolve` helper) are opt-in per provider on the **same env-var group every other SQL suite in
   the tree reads** — `BIRKO_MSSQL_HOST`, `BIRKO_MYSQL_HOST`, `BIRKO_PG_HOST`, each with optional

@@ -54,7 +54,7 @@ public class AsyncConnectorLockAndCancellationTests : IDisposable
         registry.Register(new WidgetMapping());
         registry.ApplyToDatabase();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "app.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "app.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Widget) });
         return connector;

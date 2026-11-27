@@ -952,7 +952,12 @@ registers the result itself. Each provider's `FromConnectionString` is the one p
 refuses, through `SqlStoreFactory.RequireOnlyKeys`, every key its settings cannot carry (rule 41). Stores come out as
 `IAsyncSqlBulkStore<T>` (bulk + aggregation + connector; `AsyncDataBaseBulkStore` implements it), repositories as
 `AsyncSqlModelRepository<T>`, because `AsyncDataBaseModelRepository<TConnector, T>` needs the connector type. SQL
-only: NoSQL stores already share `IAsyncBulkStore<T>`. The per-provider factories (`ISqLiteStoreFactory`, …) stay.
+only: NoSQL stores already share `IAsyncBulkStore<T>`. The older per-provider factories (`ISqLiteStoreFactory`,
+`SqLiteStoreFactoryOptions`, `AddSqLiteStores`, and the same for PostgreSQL, MySQL and SQL Server) were removed at
+[[TASK-1001]]: each provider has one factory, `{Provider}SqlStoreFactory`, built from a connection string or from its
+settings. What went with them: the SQLite `BaseDirectory` option (combine the path before building the settings), the
+sync `GetStore<T>()` (construct `SQLiteStore<T>` with the settings), and the DI extensions (register the factory
+yourself). No consumer used them (measured).
 
 ## Maintenance
 

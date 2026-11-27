@@ -85,7 +85,7 @@ public class SqlEnumInPredicateTests : IDisposable
         var registry = new ModelMapRegistry();
         registry.Register(new ERowMapping());
         registry.ApplyToDatabase();
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "enumin.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "enumin.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(ERow) });
         var store = new AsyncSQLiteStore<ERow>();

@@ -53,7 +53,7 @@ public class PrimitiveTypeRoundTripTests : IDisposable
 
     private AsyncSQLiteStore<PrimRow> NewStore()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "prim.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "prim.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(PrimRow) });
 

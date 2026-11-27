@@ -116,7 +116,7 @@ public class ViewOrderByResolutionTests : IDisposable
         registry.Register(new VOrderMapping());
         registry.ApplyToDatabase();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "vorder.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "vorder.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(VPerson), typeof(VOrder) });
         connector.OnExecute += text => _executed.Add(text);

@@ -52,7 +52,7 @@ public class FilterTranslationTriageTests : IDisposable
 
     private Data.SQL.Connectors.SqLiteConnector Connector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = $"f{++_db}.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, $"f{++_db}.db"));
         var connector = (Data.SQL.Connectors.SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
         foreach (var row in Seed())

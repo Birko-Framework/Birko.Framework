@@ -41,7 +41,7 @@ public class ColumnVersusColumnTests : IDisposable
 
     private Data.SQL.Connectors.SqLiteConnector Seeded()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "cc.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "cc.db"));
         var connector = (Data.SQL.Connectors.SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Row) });
         // same-day: same date, different times. later: Closed a day after Opened. earlier: Closed a day before Opened.

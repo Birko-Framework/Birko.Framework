@@ -54,7 +54,7 @@ public class SqLiteIndexManagerDispatchTests : IDisposable
         registry.Register(new WidgetMapping());
         registry.ApplyToDatabase();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "idx.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "idx.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Widget) });
 

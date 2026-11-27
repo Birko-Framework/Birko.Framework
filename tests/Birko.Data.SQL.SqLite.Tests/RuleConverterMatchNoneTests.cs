@@ -51,7 +51,7 @@ public class RuleConverterMatchNoneTests : IDisposable
 
     private SqLiteConnector SeededConnector()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "matchnone.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "matchnone.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(MRow) });
         var store = new SQLiteStore<MRow>();

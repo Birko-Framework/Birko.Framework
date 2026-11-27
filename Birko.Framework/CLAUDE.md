@@ -296,6 +296,12 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### One store factory per SQL provider (2026-11-27)
+[[TASK-1001]], the user's decision. Each SQL provider had two factories: the TASK-988 `{Provider}SqlStoreFactory` (an
+`ISqlStoreFactory`) and an older `{Provider}StoreFactory` with its own options class and `Add*Stores` DI extension,
+outside the factory pattern. No consumer used the older ones (measured); they are deleted. Gone with them: SQLite's
+`BaseDirectory` option (combine the path yourself), the sync `GetStore<T>()` (construct `SQLiteStore<T>`) and the DI
+extensions (register the factory yourself). Folder creation is kept: `SqLiteSqlStoreFactory` does it.
 ### A batch of events cut short by a crash is never read (2026-11-27)
 [[TASK-1000]], the user's ask after TASK-995. The default event store (Elasticsearch, standalone MongoDB, InMemory) writes
 a batch one event at a time, so a process that died partway left the batch's first events readable (measured on all
@@ -369,11 +375,6 @@ dialect now renders the DDL and a catalogue probe per provider; the View package
 tenant's tag or a nonexistent one was accepted and every later read of that entity's tags threw. Both now refuse it
 before writing (`CrossTenantTagAccessException` / `InvalidOperationException`), the set path with one tag listing per
 call (CR-M172's per-tag saving kept). Symbio's tag endpoints pass a client-supplied id through these.
-### Cosmos DB nested Sum / Average / Min / Max skip nulls as C# does (2026-11-15)
-[[TASK-920]] (the user's decision). A filter like `x.Items.Sum(i => i.Score) > x.A` answered wrongly on every plan path
-when an element held null: Cosmos SUM / AVG of [10, null] are undefined and MIN is null (4 of 12 shapes wrong, measured).
-Only the non-null values are aggregated now. On the gateway query plan (Linux) the emulator still cannot plan an
-aggregate subquery and the read throws; it never answers wrong, and Cosmos has no aggregate-free form to rewrite to.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

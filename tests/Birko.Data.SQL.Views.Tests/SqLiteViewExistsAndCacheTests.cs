@@ -34,7 +34,7 @@ public class SqLiteViewExistsAndCacheTests : IDisposable
 
     private SqLiteConnector NewConnector(string db)
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = db });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, db));
         return (SqLiteConnector)factory.GetConnector();
     }
 

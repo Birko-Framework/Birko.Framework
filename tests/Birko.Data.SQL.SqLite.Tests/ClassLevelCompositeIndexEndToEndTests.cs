@@ -46,7 +46,7 @@ public class ClassLevelCompositeIndexEndToEndTests : IDisposable
 
     private AsyncSQLiteStore<ProductionOrder> NewStore()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "clux.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "clux.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(ProductionOrder) });
 

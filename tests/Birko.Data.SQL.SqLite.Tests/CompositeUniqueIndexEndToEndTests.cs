@@ -55,7 +55,7 @@ public class CompositeUniqueIndexEndToEndTests : IDisposable
 
     private AsyncSQLiteStore<UxDoc> NewStore()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "ux.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "ux.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(UxDoc) }); // emits CREATE UNIQUE INDEX ux_docnum ON UxDocs (TenantGuid, Number)
 

@@ -55,7 +55,7 @@ public class TenantWriteGuardSqLiteEndToEndTests : IDisposable
 
     private AsyncSQLiteStore<TenantDoc> NewStore(string dbName)
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = dbName });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, dbName));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(TenantDoc) });
 

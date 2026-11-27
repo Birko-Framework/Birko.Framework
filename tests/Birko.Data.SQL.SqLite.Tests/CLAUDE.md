@@ -14,7 +14,7 @@ xUnit + FluentAssertions test project for `Birko.Data.SQL.SqLite` (the SQLite st
 
 ## Scope
 
-- `SqLiteStoreFactoryTests` — verifies `SqLiteStoreFactory` + the `AddSqLiteStores` DI extension: eager creation of a missing database directory, relative-location resolution against `BaseDirectory`, rooted locations ignoring `BaseDirectory`, `GetConnector`/`GetStore` wiring against a real on-disk SQLite database, and DI registration of a resolvable singleton `ISqLiteStoreFactory`.
+- `SqLiteSqlStoreFactoryTests` — `SqLiteSqlStoreFactory` built from `SqLiteSettings`: eager creation of a missing database directory, and `GetConnector` / `GetAsyncStore` wired to a real on-disk SQLite database. (The older `SqLiteStoreFactory`, its `BaseDirectory` option and `AddSqLiteStores` were removed at TASK-1001.) Every other test here gets its connector from `new SqLiteSqlStoreFactory(new SqLiteSettings(dir, file))`.
 - `SQLiteViewProbeContractTests` — TASK-901's shared `tests/Shared/StoreContract/ViewProbeContract.cs` (also linked into the PostgreSQL, MySQL and SQL Server test projects, live): the base view-existence probe and Auto mode's cache, which only run here because this project loads `Birko.Data.SQL.View` without `Birko.Data.SQL.SqLite.View` — the composition every consumer uses. Do not add the provider's View package to this project: its catalogue override would replace the probe under test.
 
 ## Conventions

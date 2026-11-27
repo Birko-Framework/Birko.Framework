@@ -72,7 +72,7 @@ public class UnbuildableIndexEndToEndTests : IDisposable
     /// </summary>
     private async Task<SqLiteConnector> SeedDuplicatesAsync()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "badidx.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "badidx.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(LegacyDoc) });
 

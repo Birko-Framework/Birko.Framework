@@ -137,7 +137,7 @@ public class ViewFieldKeyCollisionTests : IDisposable
     {
         RegisterMappings();
 
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "viewkey.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "viewkey.db"));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(VkPerson), typeof(VkOrder) });
 

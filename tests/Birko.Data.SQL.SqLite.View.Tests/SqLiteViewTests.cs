@@ -32,8 +32,7 @@ public class SqLiteViewTests : IDisposable
     }
 
     private SqLiteConnector NewConnector()
-        => (SqLiteConnector)new SqLiteStoreFactory(
-            new SqLiteStoreFactoryOptions { Location = _root, Name = "views.db" }).GetConnector();
+        => (SqLiteConnector)new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "views.db")).GetConnector();
 
     private string ConnectionString() => new SqLiteSettings(_root, "views.db").GetConnectionString();
 

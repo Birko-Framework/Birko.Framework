@@ -28,8 +28,8 @@ public class SchemaDdlTriageTests : IDisposable
     }
 
     private Data.SQL.Connectors.SqLiteConnector Connector()
-        => (Data.SQL.Connectors.SqLiteConnector)new SqLiteStoreFactory(
-            new SqLiteStoreFactoryOptions { Location = _root, Name = $"s{++_db}.db" }).GetConnector();
+        => (Data.SQL.Connectors.SqLiteConnector)new SqLiteSqlStoreFactory(
+            new SqLiteSettings(_root, $"s{++_db}.db")).GetConnector();
 
     private static T Single<T>(Data.SQL.Connectors.SqLiteConnector c)
         => c.Select(typeof(T), (LambdaExpression?)null).Cast<T>().Single();

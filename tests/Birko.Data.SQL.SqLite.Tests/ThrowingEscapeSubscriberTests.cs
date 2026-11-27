@@ -74,8 +74,7 @@ public class ThrowingEscapeSubscriberTests : IDisposable
     }
 
     private SqLiteConnector Connector()
-        => (SqLiteConnector)new SqLiteStoreFactory(
-            new SqLiteStoreFactoryOptions { Location = _root, Name = "throwsub.db" }).GetConnector();
+        => (SqLiteConnector)new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "throwsub.db")).GetConnector();
 
     /// <summary>Create the table so the connector records it, then make it vanish — TASK-286's anomaly.</summary>
     private SqLiteConnector ConnectorWithAVanishedTable()

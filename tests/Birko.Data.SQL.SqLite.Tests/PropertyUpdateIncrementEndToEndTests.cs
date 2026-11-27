@@ -58,7 +58,7 @@ public class PropertyUpdateIncrementEndToEndTests : IDisposable
 
     private void CreateTable()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = DbName });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, DbName));
         var connector = (SqLiteConnector)factory.GetConnector();
         connector.CreateTable(new[] { typeof(Counter) });
     }

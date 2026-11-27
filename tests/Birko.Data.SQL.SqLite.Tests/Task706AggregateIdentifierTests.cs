@@ -51,7 +51,7 @@ public class Task706AggregateIdentifierTests : IDisposable
 
     private SQLiteStore<AggRow> NewStore()
     {
-        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "agg.db" });
+        var factory = new SqLiteSqlStoreFactory(new SqLiteSettings(_root, "agg.db"));
         ((Birko.Data.SQL.Connectors.SqLiteConnector)factory.GetConnector()).CreateTable(new[] { typeof(AggRow) });
         var store = new SQLiteStore<AggRow>();
         store.SetSettings(new SqLiteSettings(_root, "agg.db"));
