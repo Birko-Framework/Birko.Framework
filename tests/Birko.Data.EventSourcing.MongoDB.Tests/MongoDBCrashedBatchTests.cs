@@ -55,7 +55,7 @@ internal sealed class CrashingMongoDBStore : AsyncMongoDBStore<EventRecord>
 /// <summary>
 /// TASK-1000 — a batch cut short by a crash, live on a standalone <c>mongod</c>, where <see cref="MongoDBEventStore"/> has
 /// no transactions and appends one event at a time. Gated on <c>BIRKO_MONGO_STANDALONE_URL</c> (locally
-/// <c>mongodb://localhost:27018/</c>); CI's MongoDB is a replica set and does not set it.
+/// <c>mongodb://localhost:27018/</c>); CI's live-tests MongoDB job starts one and sets it.
 /// </summary>
 public sealed class MongoDBStandaloneCrashedBatchTests : CrashedBatchContract, IDisposable
 {

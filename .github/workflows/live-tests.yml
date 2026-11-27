@@ -107,10 +107,19 @@ jobs:
           docker exec mongo mongosh --quiet --eval 'cfg=rs.conf(); cfg.members[0].host="localhost:27017"; rs.reconfig(cfg,{force:true})'
           for i in $(seq 1 40); do [ "$(docker exec mongo mongosh --quiet --eval 'rs.status().myState' 2>/dev/null | tr -d '\r')" = "1" ] && { echo PRIMARY; break; }; sleep 3; done
 
+      # AND a standalone server (no replica set, so no transactions), for the event store's path
+      # without transactions: its contract and its crash handling (TASK-995, TASK-1000). Without
+      # it, BIRKO_REQUIRE_LIVE turned those 16 tests into failures (run 46014498023).
+      - name: Start a standalone MongoDB
+        run: |
+          docker run -d --name mongo-standalone -p 27018:27017 mongo:7
+          for i in $(seq 1 40); do docker exec mongo-standalone mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && { echo standalone ready; break; }; sleep 3; done
+
       - name: Run MongoDB suites
         env:
           BIRKO_MONGO_HOST: localhost
           BIRKO_MONGO_PORT: '27017'
+          BIRKO_MONGO_STANDALONE_URL: mongodb://localhost:27018/
         run: |
           fail=0
           for p in Birko.Data.MongoDB.Tests Birko.Data.MongoDB.Views.Tests Birko.Data.Migrations.MongoDB.Tests \

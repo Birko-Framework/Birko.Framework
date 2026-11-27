@@ -20,7 +20,7 @@ xUnit + FluentAssertions
 - `MongoDBReplicaSetEventStoreContractTests` is gated on `BIRKO_MONGO_HOST` / `BIRKO_MONGO_PORT`, the replica set every
   MongoDB suite uses (CI's `live-tests.yml` runs this project).
 - `MongoDBStandaloneEventStoreContractTests` is gated on `BIRKO_MONGO_STANDALONE_URL` (locally `mongodb://localhost:27018/`).
-  CI has no standalone server, so it reports SKIPPED there.
+  CI's live-tests MongoDB job starts one on port 27018 and sets it (since TASK-1000).
 - Each test class instance uses its own database (`birko_task995_<guid>`) and drops it on dispose.
 - `NewStoreAsync()` builds a new factory each call, so the concurrency tests race two clients.
 

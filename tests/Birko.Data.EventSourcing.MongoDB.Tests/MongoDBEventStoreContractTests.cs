@@ -64,7 +64,7 @@ public abstract class MongoEventStoreContractBase : EventStoreContract, IDisposa
 /// TASK-995 — the event store contract on a standalone <c>mongod</c>, which has no transactions, so
 /// <see cref="MongoDBEventStore"/> falls back to the default one-event-at-a-time append. Gated on
 /// <c>BIRKO_MONGO_STANDALONE_URL</c>, a connection string without a database (locally <c>mongodb://localhost:27018/</c>).
-/// CI's MongoDB is a replica set, so CI does not set it.
+/// CI's live-tests MongoDB job starts one beside the replica set and sets it.
 /// </summary>
 public sealed class MongoDBStandaloneEventStoreContractTests : MongoEventStoreContractBase
 {
