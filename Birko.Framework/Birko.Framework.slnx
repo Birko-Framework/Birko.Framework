@@ -91,6 +91,7 @@
     <Project Path="../Birko.Data.EventSourcing.ElasticSearch/Birko.Data.EventSourcing.ElasticSearch.shproj" />
     <Project Path="../Birko.Data.EventSourcing.RavenDB/Birko.Data.EventSourcing.RavenDB.shproj" />
     <Project Path="../Birko.Data.EventSourcing.MongoDB/Birko.Data.EventSourcing.MongoDB.shproj" />
+    <Project Path="../Birko.Data.EventSourcing.CosmosDB/Birko.Data.EventSourcing.CosmosDB.shproj" />
     <Project Path="../Birko.Data.Patterns/Birko.Data.Patterns.shproj" />
     <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
@@ -314,6 +315,7 @@
     <Project Path="../tests/Birko.Data.EventSourcing.ElasticSearch.Tests/Birko.Data.EventSourcing.ElasticSearch.Tests.csproj" />
     <Project Path="../tests/Birko.Data.EventSourcing.RavenDB.Tests/Birko.Data.EventSourcing.RavenDB.Tests.csproj" />
     <Project Path="../tests/Birko.Data.EventSourcing.MongoDB.Tests/Birko.Data.EventSourcing.MongoDB.Tests.csproj" />
+    <Project Path="../tests/Birko.Data.EventSourcing.CosmosDB.Tests/Birko.Data.EventSourcing.CosmosDB.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Migrations.RavenDB.Tests/Birko.Data.Migrations.RavenDB.Tests.csproj" />
     <Project Path="../tests/Birko.Data.Sync.RavenDB.Tests/Birko.Data.Sync.RavenDB.Tests.csproj" />
     <Project Path="../tests/Birko.AI.Providers.Tests/Birko.AI.Providers.Tests.csproj" />

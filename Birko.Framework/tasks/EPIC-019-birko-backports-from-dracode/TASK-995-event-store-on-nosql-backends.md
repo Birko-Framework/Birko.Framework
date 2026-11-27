@@ -96,6 +96,11 @@ mostly its code without the SQL unique index. `Birko.Data.EventSourcing` already
    reload, DraCode TASK-226), and the user said the history in its local `koboldlair.db` can be thrown away. DraCode
    TASK-228 needs no migration step.
 
+6. **Cosmos DB gets its own event store, partitioned by aggregate** (2026-11-27). The user asked which design is better as
+   a pattern, and chose the recommended one. It uses its own container (`EventStreams`, `/aggregateGuid`), not the
+   generic store, so an append is one transactional batch and a stream's reads stay within its partition. A batch
+   mixing aggregates is refused.
+
 ## Implementation plan (draft, for the user's review before building)
 
 **Step 0: measure before writing code.** Two facts the design depends on, measured per backend through the factory:
@@ -251,6 +256,19 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
   projects.
 - **Noted:** `RavenDBEventStoreContractTests` failed 1 of 10 once, in 8 runs, and the failing test was not captured. A
   15-run loop with full output is in progress.
+- **2026-11-27, the Cosmos DB event store** (`Birko.Data.EventSourcing.CosmosDB`, decision 6).
+  - `CosmosDBEventStore : AbstractAsyncEventStore`. Container `EventStreams` partitioned on `/aggregateGuid`; a
+    document's id is its version.
+  - An append is one transactional batch. The batch result names the version that conflicted with 409.
+  - A batch mixing aggregates, or over 100 events, is refused.
+  - `ReadAllFrom` filters on UTC ticks.
+  - It uses the factory's client. Registered with `o.AddCosmosDB()`.
+
+  Live: 13 of 13 (9 contract tests plus 4 Cosmos rules), also 3 runs with `AZURE_COSMOS_BYPASS_QUERY_PARSING=true` (CI's
+  Linux query-plan path). `live-tests.yml` runs it.
+- **RavenDB flake explained:** the 15-run loop failed 2 times, both "two writers" on its first `GetVersion`, with
+  `IndexCreationException`: two clients' first identical query on a new database, and one auto-index request timed out
+  after 15 s. It is a store defect, not this task's code, and is filed as [[TASK-998]].
 
 ## Acceptance criteria
 

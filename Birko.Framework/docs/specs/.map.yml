@@ -966,6 +966,7 @@ ignore:
   - "../Birko.Data.EventSourcing.ElasticSearch/**"
   - "../Birko.Data.EventSourcing.RavenDB/**"
   - "../Birko.Data.EventSourcing.MongoDB/**"
+  - "../Birko.Data.EventSourcing.CosmosDB/**"
   - "../Birko.Redis/RedisConnectionManager.cs"
   - "../Birko.Data.ElasticSearch/Extensions/**"
   - "../Birko.Data.ElasticSearch/Highlighting/**"

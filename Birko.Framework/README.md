@@ -105,6 +105,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.EventSourcing.ElasticSearch | Elasticsearch event store (refresh after each append; `o.AddElasticSearch()`) |
 | Birko.Data.EventSourcing.RavenDB | RavenDB event store (a batch saved in one session, all or nothing; `o.AddRavenDB()`) |
 | Birko.Data.EventSourcing.MongoDB | MongoDB event store (a batch in one transaction on a replica set or sharded cluster; `o.AddMongoDB()`) |
+| Birko.Data.EventSourcing.CosmosDB | Cosmos DB event store (container partitioned by aggregate, a batch is one transactional batch; `o.AddCosmosDB()`) |
 | Birko.Data.SQL.Caching | Query caching decorator for SQL stores |
 
 ### Migrations

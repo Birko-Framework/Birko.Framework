@@ -281,6 +281,10 @@
 			"path": "../Birko.Data.EventSourcing"
 		},
 		{
+			"name": "Data.Patterns / Birko.Data.EventSourcing.CosmosDB",
+			"path": "../Birko.Data.EventSourcing.CosmosDB"
+		},
+		{
 			"name": "Data.Patterns / Birko.Data.EventSourcing.ElasticSearch",
 			"path": "../Birko.Data.EventSourcing.ElasticSearch"
 		},
@@ -827,6 +831,10 @@
 		{
 			"name": "Tests / Birko.Data.EventSourcing.Tests",
 			"path": "../tests/Birko.Data.EventSourcing.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.EventSourcing.CosmosDB.Tests",
+			"path": "../tests/Birko.Data.EventSourcing.CosmosDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.EventSourcing.ElasticSearch.Tests",

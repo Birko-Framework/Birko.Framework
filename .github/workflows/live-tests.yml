@@ -166,7 +166,12 @@ jobs:
           # suite already carries in source.
           BIRKO_COSMOS_CONNECTION: 'AccountEndpoint=http://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=='
           BIRKO_COSMOS_CONNECTION_MODE: Gateway
-        run: dotnet test tests/Birko.Data.CosmosDB.Tests --nologo -v q --logger "console;verbosity=minimal"
+        run: |
+          fail=0
+          for p in Birko.Data.CosmosDB.Tests Birko.Data.EventSourcing.CosmosDB.Tests; do
+            dotnet test "tests/$p" --nologo -v q --logger "console;verbosity=minimal" || { echo "::error::$p failed"; fail=1; }
+          done
+          exit $fail
 
   # UNVERIFIED FIXTURES (2026-09-18)
   # The three jobs below were written from the suites' env vars, NOT from a measured local run the
