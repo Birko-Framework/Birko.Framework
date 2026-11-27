@@ -3,7 +3,7 @@ id: TASK-1010
 parent: EPIC-018
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: todo
+status: verify
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P2
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -35,13 +35,19 @@ plural forms for the key.
 
 ## Acceptance criteria
 
-- [ ] Red first, a Core test (or a Playground i18n smoke): locale cs with a string, fallback sk with plural forms, `count`
+- [x] Red first, a Core test (or a Playground i18n smoke): locale cs with a string, fallback sk with plural forms, `count`
   5. Today it returns the sk form.
-- [ ] `t()` resolves per locale in chain order. For each locale, a plural object is used with the count's category (else
+- [x] `t()` resolves per locale in chain order. For each locale, a plural object is used with the count's category (else
   `other`), and a string is used as is. The first locale that has the key in either shape wins.
-- [ ] A plural object missing the count's category and `other` falls through to the next locale, as today.
-- [ ] Existing i18n smokes pass (`i18n-chain-smoke`, `locale-switch-check`, `i18n-gaps-check`).
-- [ ] CHANGELOG: correct the v0.5.9 claim in the new version's entry.
+- [x] A plural object missing the count's category and `other` falls through to the next locale, as today.
+- [x] Existing i18n smokes pass (`i18n-chain-smoke`, `locale-switch-check`, `i18n-gaps-check`).
+- [x] CHANGELOG: correct the v0.5.9 claim in the new version's entry.
+
+## Evidence 2026-11-27
+
+Red first: the two plain-string cases in the Playground's `i18n-chain-smoke` failed on main, rendering "5 položiek" and
+"1 položka" (22/24). Built on `task/TASK-1010` (v0.5.10): `i18n-chain-smoke` 24/24, `verify.mjs` 0 failing, `locale-switch-check`
+47/47, `i18n-gaps-check` 10/10, `locale-keys-check` 23/23, Core `tsc --noEmit` clean.
 
 ## Out of scope
 
