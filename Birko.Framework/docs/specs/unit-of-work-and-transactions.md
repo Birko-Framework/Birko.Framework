@@ -1,7 +1,7 @@
 ---
 area: unit-of-work-and-transactions
-generated-at: fc4c807731169e50b7c842f593690ca7f53e0a1a
-generated-on: 2026-11-07
+generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
+generated-on: 2026-11-27
 sources:
   - ../Birko.Data.CosmosDB/UnitOfWork/CosmosDbUnitOfWork.cs
   - ../Birko.Data.ElasticSearch/UnitOfWork/ElasticSearchUnitOfWork.cs
@@ -22,11 +22,11 @@ sources:
   - ../Birko.Data.Stores/RetryableWrite.cs
 # source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
+# Evidence pass ran 2026-11-27 over 439 feature-linked tasks: 187 resolved, 252 did not -
+# polyrepo-era `pr:` values that are not commits of this repo, or no reachable commit whose subject leads with the
+# task id; 2 tasks the state gate refuses have commits leading with their id. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 259
+shaped-by-unresolved: 252
 ---
 # Unit of work and transactional store boundaries
 
@@ -855,10 +855,15 @@ an `IDocumentStore` (null → `ArgumentNullException`), with `FromStore<T>(Async
 `InvalidOperationException("Store DocumentStore is not initialized. Call SetSettings() first.")` when the
 store has no document store. `BeginAsync` SHALL open an async session with
 `TransactionMode = TransactionMode.ClusterWide` without contacting the server, through `RavenIndexWait.Apply`
-(`WaitForIndexesAfterSaveChanges(15 s, throwOnTimeout: false)`), so a committed unit of work is visible to the
-index-backed queries that follow it (TASK-828, the user's decision); `IsActive` SHALL be
-whether a session is held; `CommitAsync` SHALL await `SaveChangesAsync(ct)` and dispose and drop the session
-whatever the outcome; a failed commit SHALL propagate the driver's exception unchanged and make the first
+(which returns the session unchanged); `IsActive` SHALL be
+whether a session is held; `CommitAsync` SHALL save through `RavenIndexWait.SaveChangesAsync(session, null, ct)` and
+dispose and drop the session whatever the outcome. That save SHALL send `SaveChangesAsync(ct)` without a server-side
+index wait, sending it again only on a refusal that applied nothing (`IndexCreationException`, up to 3 attempts;
+`DatabaseDisabledException`, for up to 30 s), and SHALL then wait separately, so a committed unit of work is visible to
+the index-backed queries that follow it (TASK-828, TASK-999, the user's decisions): one index-statistics request, then,
+for each stale index of any collection, an empty query that waits for it to be non-stale, within 15 s in all. The wait
+SHALL not be cancellable and SHALL never throw, so a commit whose wait times out or fails still returns as applied; a
+failed commit SHALL propagate the driver's exception unchanged and make the first
 `RollbackAsync` that follows a no-op, as on every other backend (TASK-658). `RollbackAsync` SHALL dispose and drop the
 session without saving.
 
@@ -883,8 +888,16 @@ session without saving.
 
 - **Given** an `AsyncRavenDBStore<T>` enlisted in an active `RavenDbUnitOfWork`, which creates a document named `in-uow`
 - **When** `CommitAsync()` runs and the store then reads `x => x.Name == "in-uow"` outside the unit of work
-- **Then** every batch the commit sent asked the server to wait for the indexes (`waitForIndexesTimeout=`), and the
-  query returns the document (`tests/Birko.Data.RavenDB.Tests/Stores/Task828IndexWaitTests.cs`)
+- **Then** no batch the commit sent carries a server-side wait (`waitForIndexesTimeout=`), every batch is followed by
+  the separate wait (an index-statistics request), and the query returns the document
+  (`tests/Birko.Data.RavenDB.Tests/Stores/Task828IndexWaitTests.cs`)
+
+#### Scenario: A failed index wait does not fail the commit (TASK-999)
+
+- **Given** an active `RavenDbUnitOfWork` whose save is applied, but whose index-statistics request or waiting query
+  fails or times out (or whose token is cancelled after the save)
+- **When** `CommitAsync()` is called
+- **Then** it returns normally, `IsActive` is `false` and the session is disposed; a query may briefly miss the write
 
 ### Requirement: Document-store sessions are published per flow through AmbientSession
 

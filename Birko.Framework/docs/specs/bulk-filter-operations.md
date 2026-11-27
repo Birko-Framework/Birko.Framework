@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
-generated-on: 2026-11-07
+generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
+generated-on: 2026-11-27
 sources:
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
@@ -20,10 +20,13 @@ sources:
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase_ColumnNames.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
   - ../Birko.Data.SQL/SQL/Connectors/InListChunkPlanner.cs
+  - ../Birko.Data.SQL/SQL/Connectors/RejectedColumnNames.cs
+  - ../Birko.Data.SQL/SQL/Connectors/SetClauses.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
   - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
@@ -39,11 +42,11 @@ sources:
 # source-commits: omitted — since the monorepo migration (TASK-457) every source above is inside this
 # repo, so `generated-at` covers them (regen step 5c). The old per-sibling shas no longer resolve here.
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-12 over 325 feature-linked tasks: 59 resolved, 266 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 9 of those are refused by the state gate (todo/cancelled). Earlier entries kept append-only.
+# Evidence pass ran 2026-11-27 over 439 feature-linked tasks: 187 resolved, 252 did not -
+# polyrepo-era `pr:` values that are not commits of this repo, or no reachable commit whose subject leads with the
+# task id; 2 tasks the state gate refuses have commits leading with their id. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 266
+shaped-by-unresolved: 252
 ---
 # Bulk filter-based Update/Delete and Read semantics
 
@@ -183,6 +186,18 @@ writes run in one boundary; each provider names `MaxCommandParameters`), **TASK-
 edited at the fix**: `InListChunkPlanner.cs` is a source. TASK-832 (`DataBase.GetGeneratedQuery` linear) touched no
 source of this area. The count and aggregate funnels that also plan chunks (`AbstractConnector_SelectCount`,
 `AbstractConnector_Aggregate`) are reached by no glob here and are specified only through the planner's rules.
+
+Delta regen at `3fcf0271` over the sources changed since `1f673fde`: **TASK-861** (the constant reduction is
+three-valued, `ConstantTruth`; the SQL bulk stores' action-path guard asks the parsed condition tree through
+`DataBase.RequireBoundedFilter`), **TASK-849** / **TASK-895** / **TASK-859** (the IN-list planner reads an update's
+written columns from `SetClauses`, splits an exact string list and an `IN … OR c IS NULL` group), **TASK-852** /
+**TASK-854** (a re-bound parameter is re-created), **TASK-870** (a SQLite integer increment is range-checked),
+**TASK-888** (MySQL's computed division guards its divisor), **TASK-891** (the funnels refuse a rejected column name),
+**TASK-867** (MongoDB folds an ordering against null after its guards) and **TASK-851** (ElasticSearch's per-index terms
+limit). The same sources also changed for index creation (TASK-997), aggregation (TASK-878, TASK-886, TASK-892,
+TASK-907, TASK-909, TASK-911), `OnException` / `OnExecute` (TASK-894, TASK-875), native bulk writes (TASK-901), lock
+retries (TASK-938), the SQLite journal mode (TASK-941) and the store factory interface (TASK-988); none of those
+changes a requirement here.
 
 ## Requirements
 
@@ -710,6 +725,10 @@ be the reference every provider's translation stores.
 - **When** `ApplyTo` runs, or the SQLite statement executes
 - **Then** `ApplyTo` throws `DivideByZeroException`; on SQLite `birko_decimal_div` throws, which fails the whole
   statement, so no row — including the rows whose divisor was not zero — is changed
+- **And** every server provider fails the statement too: PostgreSQL and SQL Server raise their own division-by-zero
+  error, and MySQL — which answers a division by zero with NULL unless its `sql_mode` is strict — evaluates the
+  guarded divisor's `LENGTH(UUID_TO_BIN('<division by zero text>'))`, an error naming the cause, whatever the session's
+  `sql_mode` (TASK-888)
 
 ### Requirement: A computed set never shares a column with another assignment of the same update
 
@@ -787,9 +806,19 @@ fragments and by the connector's own non-expression SET rendering.
 - **When** `Update(filter, updates)` is called
 - **Then** the fragment is `Amount = birko_decimal_add(Amount, @SETAmount)` — `SqLiteConnector` overrides
   `IncrementExpression` for a decimal column, because SQLite's own `+` goes through a double (TASK-513); every
-  other column, and every other provider, keeps `col + @SETcol`
+  other provider keeps `col + @SETcol`, and so does a SQLite `float` / `double` column; a SQLite integer column is
+  range-checked (next scenario)
 - **And** on the async store the fragment is rendered by the sync `Connector` even when the statement runs on
   the `AsyncConnector`
+
+#### Scenario: A SQLite integer increment that leaves the property's range fails the statement
+
+- **Given** a SQLite store and `Increment(x => x.Hits, 1)` on an `int` property (any `short`, `int` or `long`)
+- **When** `Update(filter, updates)` is called
+- **Then** the fragment is `Hits = birko_checked_int(Hits + @SETHits, <min>, <max>)` with the C# type's range
+  (TASK-870), so a row at `int.MaxValue` fails the statement and nothing is written — as on the server providers and
+  as `ApplyTo`'s checked addition throws `OverflowException`. Before, SQLite stored 2147483648 with no error and every
+  later read of the row threw; a `float` / `double` column keeps `col + @SETcol`
 
 #### Scenario: A null assignment value becomes DBNull
 
@@ -878,8 +907,9 @@ the async bulk store the fragment SHALL be rendered by the sync `Connector`, as 
 `ToEven` emulated, because every server dialect's `ROUND` rounds half away from zero — a value whose scaled form
 `value * 10^digits` lies exactly `0.5` from its `ComputedTruncate` (`TRUNC(…)` by default) goes to the even
 neighbour, and any other value is `ROUND(value, digits)`. The dialects SHALL override: PostgreSQL divides
-`CAST(left AS NUMERIC(60,28)) / right`; MySQL divides `CAST(left AS DECIMAL(65,26)) / right` and truncates with
-`TRUNCATE(v, 0)`; SQL Server divides `CAST(left AS DECIMAL(38,20)) / CAST(right AS DECIMAL(28,8))`, narrows the value
+`CAST(left AS NUMERIC(60,28)) / right`; MySQL divides `CAST(left AS DECIMAL(65,26))` by the divisor guarded as in a
+filter (`FragmentDialect.Divisor`: `CASE WHEN right = 0 THEN <an expression that raises an error> ELSE right END`,
+TASK-888) and truncates with `TRUNCATE(v, 0)`; SQL Server divides `CAST(left AS DECIMAL(38,20)) / CAST(right AS DECIMAL(28,8))`, narrows the value
 to `DECIMAL(32,12)` before the half-even test, and truncates with `ROUND(v, 0, 1)`; SQLite renders every step
 through C# `decimal` functions — `birko_decimal_add` / `_sub` / `_mul` / `_div` and
 `birko_decimal_round(value, digits, awayFromZero ? 1 : 0)` — registered on each connection, because SQLite's own
@@ -928,7 +958,11 @@ as a `BigDecimal` expression (each column parsed from its stored text, each cons
 throw unless that by-query write ran to completion (`ElasticSearchStoreHelper.RequireComplete`, shared with
 `Delete(filter)`'s `DeleteByQuery`). Both backends run their filter guards first and return without writing
 when the update has no assignments. MongoDB also returns without writing when its collection is missing;
-an ElasticSearch store with no client does not return silently (TASK-153) — see the scenario below.
+an ElasticSearch store with no client does not return silently (TASK-153) — see the scenario below. MongoDB SHALL,
+after its filter guards and before the driver renders the filter, fold every lifted ordering against null to the
+`false` C# defines it as (`NullOrderingFold.Rewrite`, TASK-867), on its destructive writes as on its reads and counts.
+ElasticSearch SHALL translate a by-query write's filter with the terms limit its settings declare for `T`'s index
+(`IndexSettings.MaxTermsCount`, else the process-wide `ElasticSearch.MaxTermsCount`; TASK-851).
 
 #### Scenario: MongoDB renders a set and an increment in one UpdateMany
 
@@ -973,6 +1007,17 @@ an ElasticSearch store with no client does not return silently (TASK-153) — se
 - **When** the update is translated
 - **Then** it throws `ArgumentException("Unable to resolve property from expression: …")`
 
+#### Scenario: MongoDB folds an ordering against null after the guard
+
+- **Given** a `MongoDBStore<T>` / `AsyncMongoDBStore<T>`, a nullable `Score`, a captured `int? nul = null`, and the
+  filter `x => x.Score > nul || x.A > 4`
+- **When** `Update(filter, updates)` / `Delete(filter)` (or an async twin) is called
+- **Then** `RequireFilter` and `RequireBoundedFilter` run on the filter as given, then the fold reduces it to
+  `x => x.A > 4`, so only those documents are written or deleted — the driver renders `Score > null` as an ordering
+  that matches documents C# would not (TASK-867)
+- **And** `x => !(x.Score > nul)` is refused by `RequireBoundedFilter` before the fold, which would otherwise turn it
+  into the constant `true` that reads as the explicit all-rows synonym
+
 #### Scenario: ElasticSearch renders `=` for a set and `+=` for an increment
 
 - **Given** an `ElasticSearchStore<T>` and `new PropertyUpdate<T>().Set(x => x.Name, "n").Increment(x => x.Count, 1)`
@@ -1014,6 +1059,15 @@ an ElasticSearch store with no client does not return silently (TASK-153) — se
   `StoreException`; a timeout throws `StoreException` even when the response is otherwise valid (TASK-502) —
   the store used to discard the response, so a contended increment could be lost silently. The write is still
   partial: documents before the conflict stay written and the caller decides
+
+#### Scenario: ElasticSearch translates a by-query filter with its index's terms limit
+
+- **Given** an ElasticSearch store whose settings hold an `IndexSettings` entry for `T`'s full type name with
+  `MaxTermsCount` set, and a filter `x => ids.Contains(x.Count)`
+- **When** `Update(filter, updates)` / `Delete(filter)` (or an async twin) is called
+- **Then** `ParseRequiredFilterQuery(filter, IndexMaxTermsCount)` translates it with that limit, read per call from the
+  store's own settings (TASK-851) — a list longer than the limit is sent as several `terms` queries in one request; a
+  store with no such entry passes null and the translator uses the process-wide `ElasticSearch.MaxTermsCount`
 
 #### Scenario: ElasticSearch refuses a selector that is not a property
 
@@ -1117,6 +1171,14 @@ constrains nothing SHALL NOT be rendered as a constant: a tautology such as `1 =
 A tree that reduces to always-**false** SHALL NOT be refused: it targets no rows, so it renders its
 `1 = 0` and the statement is issued. The refusal fires on "everything", never on "nothing".
 
+The reduction SHALL be three-valued (`AbstractConnectorBase.ConstantTruth`, TASK-861): each node is always-true,
+always-false or row-dependent. The leaf it starts from is an `IN` with no values, which is false — the empty
+`Contains`, `_ => false` and an ordering against a null value are all represented that way — and its `IsNot` inverts
+it. A group reduces by Kleene logic (`X AND FALSE` is FALSE, `X OR TRUE` is TRUE, `X AND TRUE` and `X OR FALSE` are
+`X`) and its `IsNot` then inverts a constant, so a negated always-false group is always-true and refused. A group that
+reduces to always-false renders `1 = 0`; a row-dependent group drops the constant children that do not decide it (TRUE
+under AND, FALSE under OR).
+
 `AddRequiredWhere` SHALL be separate from `AddWhere` rather than a flag on it, because reads share
 `AddWhere` and a null filter on a read legitimately means read-everything.
 
@@ -1126,9 +1188,9 @@ A tree that reduces to always-**false** SHALL NOT be refused: it targets no rows
   has no branch for — for example the `InvocationExpression` of `x => pred(x)` over a captured
   `Func<T,bool>`, which `ExpressionNormalizer` cannot funcletize because it references the parameter
 - **When** `Delete(filter)` or `Update(filter, PropertyUpdate<T>)` is called
-- **Then** the parse falls through to `Array.Empty<Condition>()`, `WouldTargetEveryRow` returns true, and
-  `WholeTableWriteException` is thrown before any connection is opened — no statement is issued and no
-  row is touched
+- **Then** the parser refuses the node it has no rule for (`RequireTranslatableNode`, TASK-308) with
+  `NotSupportedException`, unwrapped, naming the node type and never its values, before any connection is
+  opened — no statement is issued and no row is touched; the same predicate on a read is refused the same way
 
 #### Scenario: A null filter is refused at the store boundary, before the connector
 
@@ -1197,6 +1259,16 @@ A tree that reduces to always-**false** SHALL NOT be refused: it targets no rows
 - **Then** the statement is issued carrying `WHERE 1 = 0` and no row is deleted — it is neither refused
   nor widened into a whole-table write
 
+#### Scenario: A negated group holding an always-false term is refused
+
+- **Given** a SQL bulk store and the predicate `x => !(empty.Contains(x.A) && x.A > 0)` with `empty` empty — or
+  `x => !(x.Score > nul && x.A > 0)` with a null `nul`
+- **When** `Delete(filter)` or `Update(filter, PropertyUpdate<T>)` (or an async twin) is called
+- **Then** the inner AND group reduces to always-false, its negation to always-true, `WouldTargetEveryRow` returns
+  true and `WholeTableWriteException` is thrown before a transaction opens (TASK-861) — before, the reduction tracked
+  only "always true", the statement carried the non-empty `WHERE NOT (1 = 0 AND …)`, which is true of every row, and
+  delete and update wrote every row with no exception on all four SQL providers (measured, 6 of 6)
+
 ### Requirement: Every-row destructive writes are reachable only through an explicit door
 
 The system SHALL keep a deliberate whole-table delete/update possible, through exactly two spellings:
@@ -1253,12 +1325,18 @@ A filter being **non-null** does not make it bounded. The system SHALL refuse a 
 operation whose predicate covers every entity, unless every entity was requested explicitly, and SHALL
 decide that on the **LINQ expression** — before any backend translates it — via
 `Birko.Data.Expressions.BoundedFilterGuard.Require`, backed by
-`Birko.Data.Expressions.PredicateScope`.
+`Birko.Data.Expressions.PredicateScope` — except on the SQL bulk stores, which decide it on the condition tree their
+read will execute (below).
 
-The rule SHALL have exactly **one implementation**. `BoundedFilterGuard` is that implementation, and every
-declaration site is a thin forwarder that supplies only the thing which genuinely differs — the name of the
-all-rows door **this** caller offers. Three sites forward to it: `AbstractBulkStore<T>.RequireBoundedFilter`,
-its twin on `AbstractAsyncBulkStore<T>`, and the private `RequireBoundedFilter` on each SQL bulk store.
+The rule SHALL have exactly **one implementation** per store hierarchy, and every declaration site is a thin
+forwarder that supplies only the thing which genuinely differs — the name of the all-rows door **this** caller
+offers. Two sites forward to `BoundedFilterGuard`: `AbstractBulkStore<T>.RequireBoundedFilter` and its twin on
+`AbstractAsyncBulkStore<T>`. The private `RequireBoundedFilter` on each SQL bulk store forwards instead to
+`DataBase.RequireBoundedFilter` (TASK-861), which passes a null filter and an explicit all-rows filter
+(`IsExplicitAllRows`) and otherwise refuses when the connector funnels' own `WouldTargetEveryRow` holds for
+`ParseConditionExpression(filter)` — so the SQL action path and the SQL destructive funnels share one reduction. While
+the SQL stores asked `BoundedFilterGuard`, which did not then know an ordering against null, `Update(x => !(x.Score >
+nul), action)` rewrote 6 of 6 rows on all four SQL providers while `Delete` with the same filter refused (measured).
 Re-inlining the checks at any of them SHALL NOT be done: the rule previously had two implementations and one
 uncovered hierarchy, which is exactly how the defect below survived.
 
@@ -1323,6 +1401,17 @@ emptiness varies per entity), a null collection, or a collection it cannot evalu
 - **Then** each throws `WholeTableWriteException` and all three rows keep their original values — before
   the guard was wired into this hierarchy the call rewrote **3 of 3** rows and threw nothing
 - **And** the async refusal names `UpdateAllAsync(updates)` while the sync one names `UpdateAll(updates)`
+
+#### Scenario: The SQL action path refuses what the SQL funnels refuse
+
+- **Given** a SQL bulk store holding six rows and the filter `x => !(x.Score > nul)` with a null `nul`, or
+  `x => !(empty.Contains(x.A) && x.A > 0)` with `empty` empty
+- **When** `Update(filter, action)` / `UpdateAsync(filter, action, ct)` is called
+- **Then** `DataBase.RequireBoundedFilter` parses the filter, `WouldTargetEveryRow` finds the tree always-true and
+  `WholeTableWriteException` is thrown before the read, so no row is rewritten — the same answer `Delete(filter)` gets
+  from the connector (TASK-861)
+- **And** `x => true` is still let through as the explicit door, and a filter the parser cannot translate throws the
+  parser's `NotSupportedException` from the guard instead of from the read
 
 #### Scenario: The other four SQL overloads are refused by the connector rather than by this guard
 
@@ -1472,6 +1561,24 @@ delegation SHALL be pinned by a test.
   overrides SHALL therefore call `RequireBoundedFilter` themselves. A null check is not a scope check —
   the same distinction that separates `RequireFilter` from `RequireBoundedFilter` everywhere else
 
+### Requirement: A SQL statement naming a column the provider rejects is refused before anything runs
+
+The SQL connector's read, delete and update funnels SHALL refuse with `NotSupportedException`, before the whole-table
+guard, the IN-list planner or any connection, a statement whose SET targets or filter columns (at any depth, bare or
+qualified by its table; value fragments excluded) include a name the provider rejects as a column (TASK-891). The
+overloads taking a `Type` or a `Tables.Table` SHALL check every column of that table (TASK-872).
+
+#### Scenario: A filter on a reserved-word column is refused by name
+
+- **Given** a table Birko did not build with a column `User` on PostgreSQL or SQL Server (`CURRENT_USER` on MySQL,
+  `CURRENT_DATE` on SQLite), and a delete or update through the connector by table name, `Tables.Table` or `Type`,
+  filtering `User = 'postgres'`
+- **When** it is called, sync or async
+- **Then** `NotSupportedException` names the column and no row changes — before, the bare column was read as the value
+  function (`current_user`), so the write hit 2 of 2 rows that matched nothing in C# (measured on all four providers)
+- **And** a SQL bulk store's own filtered writes pass the check, because its lazy initialisation has already refused an
+  entity with such a column
+
 ### Requirement: A SQL IN list past the provider's parameter limit is split into chunks or refused
 
 The SQL connector's read, delete and update funnels (`Select` / `SelectAsync`, `Delete` / `DeleteAsync`,
@@ -1495,10 +1602,20 @@ it leaves as the statement's overhead (tenant, soft delete, SET values, limit), 
 A list SHALL be splittable only when it is reached from the root through AND alone (no root term after the first joins
 with OR, no enclosing group is OR or negated), is not a `NOT IN`, not column-to-column and not empty; its non-null values
 are all one type among Guid, the integral and floating numerics, `decimal`, enums, `bool`, `DateTime`, `DateTimeOffset`,
-`DateOnly`, `TimeOnly`, `TimeSpan`; no date/time value carries sub-microsecond ticks; `DateTime` kinds do not mix; and no
-instant appears at two offsets. A string or `char` list SHALL never be split (a case- or accent-insensitive collation can
-make two C# strings one value). A sorted or paged read SHALL not be split (`SortOrPageReason`), and an update SHALL not
-split a list on a column its SET writes (`WrittenColumns`, compared without qualifier or quotes).
+`DateOnly`, `TimeOnly`, `TimeSpan`, and `string` when the condition compares `StringComparison.Ordinal`; no date/time value
+carries sub-microsecond ticks; `DateTime` kinds do not mix; and no instant appears at two offsets. The one OR group that
+SHALL split is `IN(L) OR c IS NULL` over one operand — what the parser writes for a list holding `null` (TASK-859) —
+whose `IS NULL` leg SHALL go with the first chunk only, so a NULL row is matched once; `NOT IN(L) OR c IS NULL` is still
+a `NOT IN`. A string list SHALL be split only when it compares `Ordinal` — every list the expression parser and the rule
+converter build (TASK-873 / TASK-895), so a row equals at most one of its distinct values; a string list built by hand,
+which compares by the column's collation, and a `char` list SHALL never be split (a case- or accent-insensitive
+collation can make two C# strings one value). A sorted or paged read SHALL not be split (`SortOrPageReason`). An update
+SHALL not split a list whose operand reads any column its SET writes — the written columns read from the update's own
+field list (`SetClauses.WrittenBy`: each name on the value path, the column each `SetClauses` clause was added with on
+the expression path; TASK-849), matched case-insensitively against every identifier the operand names
+(`InListChunkPlanner.Identifiers`, which skips string literals and parameter names and over-approximates), so a value
+fragment such as `x.Score + 0` counts — and SHALL split none of the lists of an update whose SET clauses were handed in
+already rendered, whose written columns are therefore not known.
 
 `MaxCommandParameters` SHALL be `int.MaxValue` on the base, 2098 on SQL Server (2100 less `sp_executesql`'s two),
 32766 on SQLite and 65535 on PostgreSQL (inherited by TimescaleDB) and MySQL.
@@ -1527,8 +1644,8 @@ SHALL be non-virtual (rule 12); the per-statement seam is the `protected virtual
 
 #### Scenario: A list that cannot be split is refused past the limit, before anything runs
 
-- **Given** a statement past `MaxCommandParameters` whose list is a `NOT IN`, sits beside an OR, holds strings, or
-  belongs to a sorted or paged read
+- **Given** a statement past `MaxCommandParameters` whose list is a `NOT IN`, sits beside an OR, holds strings compared
+  by the column's collation (a condition built by hand), or belongs to a sorted or paged read
 - **When** the read, count, delete or update is called
 - **Then** `NotSupportedException` naming the operation, the count, the maximum and the column is thrown, no statement
   is executed and no row changes
@@ -1548,13 +1665,37 @@ SHALL be non-virtual (rule 12); the per-statement seam is the `protected virtual
 - **And when** the same update is past the maximum
 - **Then** it is refused ("the update writes the filtered column …") and nothing is written
 - **And** an update that writes a different column is still chunked
+- **And** the same holds when the list's operand is a value fragment that reads the written column —
+  `scores.Contains(x.Score + 0)`, `x.Score * 1`, a `CASE` or a two-column fragment — with a `Set`, an `Increment` or a
+  `Compute`, on the store's `PropertyUpdate` path and the connector's `Update<T,P>` expression overloads alike
+  (TASK-849): before, the planner compared the operand's text as one bare column name, so such a list was chunked and
+  the update applied twice to a row a chunk moved
+- **And** an update whose SET clauses reach the connector already rendered, as a plain `IDictionary<int, string>` on
+  the expression path, is never split: it runs as one statement within the maximum and is refused past it
+
+#### Scenario: An exact string list past the chunk size is split
+
+- **Given** a filter `x => names.Contains(x.Name)` with `names` holding 1500 distinct strings (the parser marks the
+  list `Ordinal`)
+- **When** a read, delete or update is called
+- **Then** it runs as two chunks of distinct ordinal values and answers what one statement would (TASK-895) — before,
+  every string list was refused past the maximum
+
+#### Scenario: A list that held null splits with its NULL leg in the first chunk only
+
+- **Given** a filter `x => ids.Contains(x.Ref)` over a nullable `Ref` whose `ids` holds `null` and 1500 other values,
+  which the parser writes as `Ref IN (…) OR Ref IS NULL`
+- **When** the statement is chunked
+- **Then** the first chunk carries `IN (slice 1) OR Ref IS NULL` and every later chunk the `IN` alone, so a NULL row
+  is matched once — a count counts it once, an update applies once
 
 ### Requirement: SQL parameter binding is one non-virtual funnel with per-provider conversion
 
 `AbstractConnectorBase.AddParameter` SHALL be non-virtual (TASK-836, rule 12): it converts the value through
 `protected virtual ConvertParameterValue` (base: `NormalizeParameterValue`; a provider override calls the base first),
-overwrites the value of a name the command already holds — never adding it twice, which the multi-row insert relies on —
-and otherwise adds `CreateParameter(command, name, value)` (`DBNull` for null). SQLite's conversion SHALL bind a Guid as
+replaces a name the command already holds with a newly created `CreateParameter(command, name, value)` at the same
+position — never adding it twice, which the multi-row insert relies on, and so a re-bound value is typed as a new one is
+(TASK-852) — and otherwise adds `CreateParameter(command, name, value)` (`DBNull` for null). SQLite's conversion SHALL bind a Guid as
 its string, PostgreSQL's SHALL strip `DateTimeKind`, and SQL Server's `CreateParameter` SHALL type a `DateTime` as
 `DateTime2`; MySQL uses the base. A name `SqlBuilderContext` generated SHALL skip the lookup (`AddUniqueParameter`,
 internal), so rendering an `IN` list of n values costs no n linear `Contains` scans.
@@ -1564,7 +1705,20 @@ internal), so rendering an `IN` list of n values costs no n linear `Contains` sc
 - **Given** a filter `ids.Contains(x.Col)` with n values
 - **When** the statement is built
 - **Then** each generated parameter is added without `Parameters.Contains`, while a re-bound name through
-  `AddParameter` still overwrites the existing parameter's value
+  `AddParameter` still replaces the existing parameter rather than adding a second one
+
+#### Scenario: A re-bound parameter is typed like a new one
+
+- **Given** a SQL Server multi-row insert whose nullable `DateTime` column is null in the first row and
+  `…:15.1234567` in the second
+- **When** the second row re-binds the name through `AddParameter`
+- **Then** a new parameter from `CreateParameter` (typed `DateTime2`) takes the old one's position, so the value is
+  stored with all seven fractional digits — before TASK-852 only `Value` was reassigned, the first row's inferred
+  `datetime` type was kept, and `.1234567` was stored as `.1233333`
+- **And** SQL Server's native `BulkUpdate` / `BulkDelete` bind every row's SET and key values through `AddParameter`
+  too (TASK-854), where they used to build `new SqlParameter(name, DBNull.Value)` placeholders and assign `.Value`:
+  `BulkUpdate` stored `.1234567` as `.1233333`, and a `BulkDelete` on a composite key holding a `DateTime` deleted
+  nothing (measured)
 
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 

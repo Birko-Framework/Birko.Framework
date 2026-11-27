@@ -1,22 +1,29 @@
 ---
 area: backend-store-implementations
-generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
-generated-on: 2026-11-07
+generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
+generated-on: 2026-11-27
 sources:
   - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Repositories/CosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Stores/AsyncCosmosDBStore.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosChunkedWriteException.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosDBStore.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosDBStoreFactory.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosDateTimeOrder.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosFilterRewrite.DateTime.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosFilterRewrite.TimeSpan.cs
+  - ../Birko.Data.CosmosDB/Stores/CosmosFilterRewrite.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosInListChunking.cs
   - ../Birko.Data.CosmosDB/Stores/CosmosTransactionScopeException.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
+  - ../Birko.Data.ElasticSearch/Aggregation/StoreAggregatePlan.cs
   - ../Birko.Data.ElasticSearch/Repositories/AsyncElasticSearchModelRepository.cs
   - ../Birko.Data.ElasticSearch/Repositories/AsyncElasticSearchRepository.cs
   - ../Birko.Data.ElasticSearch/Repositories/ElasticSearchModelRepository.cs
   - ../Birko.Data.ElasticSearch/Repositories/ElasticSearchRepository.cs
   - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
+  - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreFactory.cs
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStoreHelper.cs
   - ../Birko.Data.ElasticSearch/Stores/MappingDrift.cs
   - ../Birko.Data.ElasticSearch/Stores/MappingRepairPlan.cs
@@ -47,6 +54,7 @@ sources:
   - ../Birko.Data.JSON/Stores/JsonSeparateBulkStore.cs
   - ../Birko.Data.JSON/Stores/JsonSeparateStore.cs
   - ../Birko.Data.JSON/Stores/JsonStore.cs
+  - ../Birko.Data.JSON/Stores/JsonStoreFactory.cs
   - ../Birko.Data.JSON/Stores/StoredKeyGuard.cs
   - ../Birko.Data.MongoDB/Repositories/AsyncMongoDBModelRepository.cs
   - ../Birko.Data.MongoDB/Repositories/AsyncMongoDBRepository.cs
@@ -55,6 +63,7 @@ sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/IMongoConnectedStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
+  - ../Birko.Data.MongoDB/Stores/MongoDBStoreFactory.cs
   - ../Birko.Data.MongoDB/Stores/MongoPropertyUpdateTranslator.cs
   - ../Birko.Data.MongoDB/Stores/Settings.cs
   - ../Birko.Data.RavenDB/Repositories/AsyncRavenDBModelRepository.cs
@@ -65,9 +74,12 @@ sources:
   - ../Birko.Data.RavenDB/Stores/IRavenConnectedStore.cs
   - ../Birko.Data.RavenDB/Stores/RavenAmbientKey.cs
   - ../Birko.Data.RavenDB/Stores/RavenDBStore.cs
+  - ../Birko.Data.RavenDB/Stores/RavenDBStoreFactory.cs
+  - ../Birko.Data.RavenDB/Stores/RavenDatabaseBootstrap.cs
   - ../Birko.Data.RavenDB/Stores/RavenDocumentId.cs
   - ../Birko.Data.RavenDB/Stores/RavenIndexWait.cs
   - ../Birko.Data.RavenDB/Stores/RavenPropertyUpdatePatch.cs
+  - ../Birko.Data.RavenDB/Stores/RavenQueryRetry.cs
   - ../Birko.Data.RavenDB/Stores/RavenTrackedCopy.cs
   - ../Birko.Data.RavenDB/Stores/Settings.cs
   - ../Birko.Data.SQL.MSSql/Repositories/AsyncMSSqlModelRepository.cs
@@ -75,41 +87,39 @@ sources:
   - ../Birko.Data.SQL.MSSql/Repositories/MSSqlModelRepository.cs
   - ../Birko.Data.SQL.MSSql/Repositories/MSSqlRepository.cs
   - ../Birko.Data.SQL.MSSql/Stores/AsyncMSSqlStore.cs
-  - ../Birko.Data.SQL.MSSql/Stores/IMSSqlStoreFactory.cs
   - ../Birko.Data.SQL.MSSql/Stores/MSSqlSettings.cs
+  - ../Birko.Data.SQL.MSSql/Stores/MSSqlSqlStoreFactory.cs
   - ../Birko.Data.SQL.MSSql/Stores/MSSqlStore.cs
-  - ../Birko.Data.SQL.MSSql/Stores/MSSqlStoreFactory.cs
-  - ../Birko.Data.SQL.MSSql/Stores/MSSqlStoreFactoryOptions.cs
   - ../Birko.Data.SQL.MySQL/Repositories/AsyncMySQLModelRepository.cs
   - ../Birko.Data.SQL.MySQL/Repositories/AsyncMySQLRepository.cs
   - ../Birko.Data.SQL.MySQL/Repositories/MySQLModelRepository.cs
   - ../Birko.Data.SQL.MySQL/Repositories/MySQLRepository.cs
   - ../Birko.Data.SQL.MySQL/Stores/AsyncMySQLStore.cs
-  - ../Birko.Data.SQL.MySQL/Stores/IMySQLStoreFactory.cs
+  - ../Birko.Data.SQL.MySQL/Stores/MySQLSqlStoreFactory.cs
   - ../Birko.Data.SQL.MySQL/Stores/MySQLStore.cs
-  - ../Birko.Data.SQL.MySQL/Stores/MySQLStoreFactory.cs
-  - ../Birko.Data.SQL.MySQL/Stores/MySQLStoreFactoryOptions.cs
   - ../Birko.Data.SQL.MySQL/Stores/MySqlSettings.cs
   - ../Birko.Data.SQL.PostgreSQL/Repositories/AsyncPostgreSQLModelRepository.cs
   - ../Birko.Data.SQL.PostgreSQL/Repositories/AsyncPostgreSQLRepository.cs
   - ../Birko.Data.SQL.PostgreSQL/Repositories/PostgreSQLModelRepository.cs
   - ../Birko.Data.SQL.PostgreSQL/Repositories/PostgreSQLRepository.cs
   - ../Birko.Data.SQL.PostgreSQL/Stores/AsyncPostgreSQLStore.cs
-  - ../Birko.Data.SQL.PostgreSQL/Stores/IPostgreSQLStoreFactory.cs
+  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLSqlStoreFactory.cs
   - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStore.cs
-  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStoreFactory.cs
-  - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSQLStoreFactoryOptions.cs
   - ../Birko.Data.SQL.PostgreSQL/Stores/PostgreSqlSettings.cs
   - ../Birko.Data.SQL.SqLite/Repositories/AsyncSqLiteModelRepository.cs
   - ../Birko.Data.SQL.SqLite/Repositories/AsyncSqLiteRepository.cs
   - ../Birko.Data.SQL.SqLite/Repositories/SqLiteModelRepository.cs
   - ../Birko.Data.SQL.SqLite/Repositories/SqLiteRepository.cs
   - ../Birko.Data.SQL.SqLite/Stores/AsyncSQLiteStore.cs
-  - ../Birko.Data.SQL.SqLite/Stores/ISqLiteStoreFactory.cs
   - ../Birko.Data.SQL.SqLite/Stores/SQLiteStore.cs
   - ../Birko.Data.SQL.SqLite/Stores/SqLiteSettings.cs
-  - ../Birko.Data.SQL.SqLite/Stores/SqLiteStoreFactory.cs
-  - ../Birko.Data.SQL.SqLite/Stores/SqLiteStoreFactoryOptions.cs
+  - ../Birko.Data.SQL.SqLite/Stores/SqLiteSqlStoreFactory.cs
+  - ../Birko.Data.SQL/Stores/IAsyncSqlBulkStore.cs
+  - ../Birko.Data.SQL/Stores/ISqlStoreFactory.cs
+  - ../Birko.Data.SQL/Stores/SqlStoreFactory.cs
+  - ../Birko.Data.Stores/FileStoreFolders.cs
+  - ../Birko.Data.Stores/IStoreFactory.cs
+  - ../Birko.Data.Stores/StoreFactory.cs
   - ../Birko.Data.TimescaleDB/Repositories/AsyncTimescaleDBModelRepository.cs
   - ../Birko.Data.TimescaleDB/Repositories/TimescaleDBModelRepository.cs
   - ../Birko.Data.TimescaleDB/Stores/AsyncTimescaleDBStore.cs
@@ -133,13 +143,14 @@ sources:
   - ../Birko.Data.XML/Stores/XmlSeparateBulkStore.cs
   - ../Birko.Data.XML/Stores/XmlSeparateStore.cs
   - ../Birko.Data.XML/Stores/XmlStore.cs
+  - ../Birko.Data.XML/Stores/XmlStoreFactory.cs
 # source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
+# Evidence pass ran 2026-11-27 over 439 feature-linked tasks: 187 resolved, 252 did not -
+# polyrepo-era `pr:` values that are not commits of this repo, or no reachable commit whose subject leads with the
+# task id; 2 tasks the state gate refuses have commits leading with their id. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 259
+shaped-by-unresolved: 252
 ---
 # Backend store implementations and where they diverge from the store contract
 
@@ -223,6 +234,52 @@ composed `Settings.GetConnectionString` SHALL percent-encode the user name, pass
 - **When** `GetConnectionString()` is called
 - **Then** the credentials read `u:p%40ss%2Fw%3Frd@` before the host
 
+### Requirement: InfluxDB's request timeout is a setting
+
+The system SHALL build every InfluxDB client from `Settings.GetClientOptions()`, which applies `Settings.RequestTimeout` to
+each HTTP request. `null` (the default) SHALL leave the connection string's `timeout` (milliseconds) or the client's own
+10 s default; a value that is not positive or exceeds 4,294,967,294 ms SHALL be refused by the setter with
+`ArgumentOutOfRangeException`, `Timeout.InfiniteTimeSpan` meaning no timeout; and a `RequestTimeout` set while the
+connection string also carries a `timeout` SHALL throw `InvalidOperationException` when the client is built, rather than
+pick one (TASK-908: a read over ~100k points took 45-50 s and failed at the 10 s default, measured).
+
+#### Scenario: Two timeouts given (TASK-908)
+
+- **Given** InfluxDB `Settings` with `RequestTimeout = 60 s` and a connection string `http://host:8086?timeout=30000`
+- **When** a store's client is built
+- **Then** `InvalidOperationException` names both timeouts
+
+#### Scenario: A zero timeout (TASK-908)
+
+- **Given** InfluxDB `Settings`
+- **When** `RequestTimeout` is set to `TimeSpan.Zero`
+- **Then** `ArgumentOutOfRangeException` is thrown
+
+### Requirement: Elasticsearch and RavenDB stores starting together on a new index or database all start
+
+The system SHALL make Elasticsearch initialization treat an index that exists, or a create refused with
+`resource_already_exists_exception` (another client created it in between), as found, and in every case, a create of
+its own included, wait until the index answers: a cluster health wait for yellow with a 30 s timeout, then a count
+retried every 50 ms while its only failure is `no_shard_available_action_exception`, until 30 s have passed; a health
+timeout, any other count failure, or the deadline throws `InvalidOperationException`, as any other create failure does
+(TASK-997). RavenDB initialization (`EnsureDatabaseExists`, through `RavenDatabaseBootstrap.EnsureReady`) SHALL, while the
+database is not listed, send a create and retry a refused one (any exception) after a pause of 50 ms, doubled while under 1 s,
+plus up to 50 ms of jitter; then send a statistics request, retried the same way while it throws
+`DatabaseDisabledException`; both within 30 s, after which the last failure is thrown (TASK-996: concurrent creates were
+refused, one with eight clients at once refusing them all, and a listed database could still be loading, measured).
+
+#### Scenario: Two Elasticsearch stores initializing on a new index (TASK-997)
+
+- **Given** two app instances whose stores initialize at the same moment on an index that does not exist
+- **When** the second one's create is refused with `resource_already_exists_exception`
+- **Then** it waits until the index answers a count, and its first query does not fail with "all shards failed"
+
+#### Scenario: RavenDB stores starting together on a new database (TASK-996)
+
+- **Given** several RavenDB stores initializing at once on a database that does not exist
+- **When** the server refuses their creates as "already exists" or "unloaded and locked"
+- **Then** each retries until the database is listed and answers a statistics request, and every store starts
+
 ### Requirement: Read by identifier takes a backend fast path that may skip the lazy-initialization gate
 
 The system SHALL implement `Read(Guid)` / `ReadAsync(Guid)` per backend as follows:
@@ -254,11 +311,16 @@ The system SHALL answer filtered reads and counts on Elasticsearch from the sear
 any single-item or bulk write, so a write is visible to them only after the index refreshes. `ReadRealtime(Async)(guid)`
 SHALL use a realtime GET (`.Realtime()`), set `Guid` from the id when the source lacks it, return `null` on 404 and throw
 `InvalidOperationException` on any other failure. On RavenDB, filtered reads and counts SHALL be `session.Query<T>()`
-(index-backed, no wait for non-stale results), while `ReadRealtime(Async)` is the load by id. Every session a RavenDB
-store opens itself, sync and async, SHALL go through `RavenIndexWait.Apply`, which sets
-`WaitForIndexesAfterSaveChanges(RavenIndexWait.Timeout = 15 s, throwOnTimeout: false)`: a write returns only once the
-indexes include it, so a filtered read or count after it sees it, as on the other providers. A wait that times out SHALL
-return without throwing (the write is applied; a query may still briefly miss it). A session the caller supplies
+(index-backed, no wait for non-stale results), while `ReadRealtime(Async)` is the load by id. Every save a RavenDB store
+makes on a session it opened itself, sync and async, SHALL go through `RavenIndexWait.SaveChanges(Async)`: the save is
+sent on its own, with no server-side wait, and then, as a separate step, the store reads the index statistics and, for
+each stale index covering its collection (`Conventions.GetCollectionName(typeof(T))`), runs an empty query that waits for
+non-stale results, all within `RavenIndexWait.Timeout` (15 s): a write returns only once the indexes include it, so a
+filtered read or count after it sees it, as on the other providers. The wait SHALL never throw and is not cancellable: a
+timeout or a failed wait returns (the write is applied; a query may still briefly miss it), so an applied write is never
+reported as failed (TASK-999, the user's decision: the wait used to be the server's own, inside the save, and under the
+full suite's load the server cancelled it after committing, so the client reported the write as failed, measured in 2 of
+4 full runs). `RavenIndexWait.Apply` returns the session unchanged. A session the caller supplies
 (`TransactionContext`, or an ambient one) SHALL be used as given; the store applies no wait to it. Decided 2026-11-07 by
 the user (TASK-828: under suite load an update applied to all 6 documents while a query on the value it wrote returned
 5, measured); pinned by `tests/Birko.Data.RavenDB.Tests/Stores/Task828IndexWaitTests.cs`.
@@ -279,7 +341,28 @@ the user (TASK-828: under suite load an update applied to all 6 documents while 
 
 - **Given** an `AsyncRavenDBStore<T>` (or `RavenDBStore<T>`) with no `TransactionContext`, holding 6 documents
 - **When** a filtered update writes `Code = "done"` to all 6 and `ReadAsync(x => x.Code == "done")` runs right after
-- **Then** all 6 come back, because the update's session waited for the indexes before returning (a query could return 5)
+- **Then** all 6 come back, because the update waited for the indexes after its save, before returning (a query could return 5)
+
+#### Scenario: A RavenDB write whose index wait fails (TASK-999)
+
+- **Given** an `AsyncRavenDBStore<T>` (or `RavenDBStore<T>`) with no `TransactionContext`
+- **When** a write's save is applied and the index wait that follows times out or fails
+- **Then** the write returns without throwing
+
+### Requirement: RavenDB sends a request again when the server refused it having applied nothing
+
+The system SHALL run every query of the RavenDB stores (filtered reads, first, count, the aggregate's read) and every
+`SaveChanges` of a session they opened through `RavenQueryRetry`, which sends the request again on two refusals that
+apply nothing (TASK-998): `IndexCreationException` (an auto index not created in time on a new database), at once, up to
+3 attempts in all; and `DatabaseDisabledException` (a database briefly unloaded and locked by another client's create),
+after a pause of 50 ms doubled while under 1 s, until 30 s from the first attempt. Any other exception, and the last
+attempt's, SHALL be thrown. A load by id is not retried.
+
+#### Scenario: A query whose auto index times out (TASK-998)
+
+- **Given** a RavenDB store on a new database under concurrent load
+- **When** a filtered read throws `IndexCreationException` once
+- **Then** the query is sent again and its answer returned
 
 ### Requirement: Duplicate-create refusal is detected per backend, and InfluxDB has none
 
@@ -613,6 +696,11 @@ characters (SC3020). The system SHALL, in `CosmosDBStore<T>` and `AsyncCosmosDBS
   is within 524,288 characters; past it, `NotSupportedException` is thrown before any request, naming the operation,
   the value count, the length, the limit and the reason (under OR, NOT IN, under NOT, nested, non-scalar type, or sort /
   limit / offset), never the values.
+- The `absent OR IN` the null semantics make of a list holding `null`, or of a list tested against a non-nullable member
+  (TASK-899), splits as a plain AND-conjunct IN does: its absent leg goes with the leading chunk only (the chunk holding
+  the member type's default is moved first), so the chunks stay disjoint.
+- An aggregate's filter is planned as a sorted read is: never split, one query within 524,288 characters, and past it
+  refused with the reason that groups and aggregates cannot be combined across chunks (TASK-876).
 - A single value whose query alone exceeds the limit SHALL throw `NotSupportedException` naming its approximate
   length, not the value; a chunk still over the limit because the rest of the filter is too long throws the general
   refusal.
@@ -656,6 +744,158 @@ characters (SC3020). The system SHALL, in `CosmosDBStore<T>` and `AsyncCosmosDBS
 - **When** a filtered read runs
 - **Then** `NotSupportedException` is thrown before any request, naming the lengths and not the value
 
+#### Scenario: A long list holding null (TASK-899)
+
+- **Given** 20,000 values and `null` in `codes.Contains(x.Code)` on a nullable `Code`
+- **When** `ReadAsync` runs
+- **Then** the list is split, only the first chunk also matches a null or missing `Code`, and each document comes back once
+
+### Requirement: Elasticsearch splits a long terms list at its index's declared limit
+
+The system SHALL pass each Elasticsearch store's terms limit to the filter translator per call: its index's
+`IndexSettings.MaxTermsCount` (matched by the type's full name) when declared, otherwise the process-wide
+`ElasticSearch.MaxTermsCount` default (TASK-851). The limit is declared, not read from the index; nothing shared is
+written.
+
+#### Scenario: An index with a lower terms limit (TASK-851)
+
+- **Given** an Elasticsearch store whose `IndexSettings` for its type declare `MaxTermsCount = 1000`
+- **When** `ReadAsync(x => ids.Contains(x.Guid))` runs with 2,500 ids
+- **Then** the query is a should of three terms queries of at most 1000 terms, while another index keeps the default
+
+### Requirement: An ordering against null matches nothing on MongoDB, Cosmos DB and RavenDB
+
+The system SHALL fold a lifted ordering against null (`x.Score > nul` with `nul` null) to the `false` C# defines it as
+(`NullOrderingFold`) before the filter reaches the driver: on MongoDB in every filtered read, count, `ReadFirst`, and in
+the filtered `Delete` / `Update(filter, PropertyUpdate<T>)` after their scope guards; on Cosmos DB in its filter
+pre-pass; on RavenDB in `RavenFilterRewriter`. A RavenDB filter that folds to `false` entirely SHALL be answered without a
+query (no entity, an empty list, `0`, or the aggregate of no rows), since RavenDB refuses a constant predicate (TASK-867:
+RavenDB matched every non-null `Score`, Cosmos DB missed rows under `!`, measured).
+
+#### Scenario: A RavenDB read with an ordering against null (TASK-867)
+
+- **Given** an `AsyncRavenDBStore<T>` whose documents hold `Score` values and nulls, and `int? nul = null`
+- **When** `ReadAsync(x => x.Score > nul)` runs
+- **Then** an empty list is returned without a query
+
+### Requirement: Cosmos DB filters answer null and missing members as C# does
+
+The system SHALL prepare every Cosmos DB filter (reads, counts, the reads behind filtered writes, an aggregate's WHERE)
+with `CosmosFilterRewrite.Prepare`, refusing a shape no rendering answers as C# with `NotSupportedException` before any
+request. Its null semantics (TASK-896, TASK-899) SHALL:
+- render `== null` as null-or-missing (`NOT IS_DEFINED(x) OR IS_NULL(x)`) and `!= null` / `HasValue` as has-a-value;
+- guard a comparison of a nullable operand with has-a-value wherever an undefined result would change the answer (under
+  an odd number of `!`, inside a conditional's test or a comparison of booleans); `!=` is the guarded equality negated,
+  and two nullable operands are also equal when both are null or missing;
+- read `??` and `GetValueOrDefault` as has-a-value ? value : fallback, and a list holding `null` as null-or-missing OR
+  IN the other values;
+- read a non-nullable member the document omits as its type's default: against a value, `NOT IS_DEFINED(m) OR test`
+  where the default passes the test; in a computed operand or against another member, `IS_DEFINED(m) ? m : default`;
+- rewrite nested predicates (`Any`, `Where`, `Count`, `First`, …) the same way, positive inside; `All(p)` as
+  `!Any(!p)`; a nested count as the length of an array, never a COUNT subquery, which the gateway query plan (every
+  client but Windows x64) rejected (TASK-919);
+- aggregate only the non-null values in a nested `Sum` / `Average` / `Min` / `Max` (TASK-920); on the gateway query plan
+  such a subquery still cannot be planned, and the read throws.
+
+#### Scenario: A negated comparison over a nullable member (TASK-896)
+
+- **Given** documents with `Score` 10, 30, `null`, and one that omits `Score`
+- **When** `ReadAsync(x => !(x.Score > 20))` runs on a Cosmos DB store
+- **Then** the documents with 10, `null` and no `Score` come back, as C# answers
+
+#### Scenario: A non-nullable member the document omits (TASK-899)
+
+- **Given** a document written without its `int A`
+- **When** `ReadAsync(x => x.A == 0)` runs
+- **Then** that document comes back
+
+#### Scenario: A nested Sum over nullable values (TASK-920)
+
+- **Given** a document whose `Items` hold scores 10 and `null`, and `A = 5`
+- **When** `ReadAsync(x => x.Items.Sum(i => i.Score) > x.A)` runs (local query plan)
+- **Then** the document comes back (Cosmos DB's SUM of [10, null] was undefined)
+
+### Requirement: Cosmos DB string comparisons are ordinal or refused
+
+The system SHALL, in a Cosmos DB filter, translate `string.IsNullOrEmpty`, and translate an ordinal comparison
+(`string.CompareOrdinal(a, b)` or `string.Compare(a, b, StringComparison.Ordinal)`) of a member against a value, compared
+with 0, with null ordered first as in C#. It SHALL refuse with `NotSupportedException`, before any request,
+`string.IsNullOrWhiteSpace` (Cosmos DB's `TRIM` keeps U+00A0, U+0085 and U+001C), a culture-sensitive or ignore-case
+comparison (`string.Compare(a, b)`, `CompareTo`, …), a comparison of two members or of a computed operand, a comparison
+result compared with anything but 0, and a compared value holding a character at or above U+D800, where Cosmos DB's
+code-point order and .NET's UTF-16 order can disagree (TASK-896).
+
+#### Scenario: A culture comparison (TASK-896)
+
+- **Given** a Cosmos DB store
+- **When** `ReadAsync(x => string.Compare(x.Code, "c2") > 0)` runs
+- **Then** `NotSupportedException` is thrown before any request, pointing to `string.CompareOrdinal`
+
+### Requirement: Cosmos DB compares a stored DateTime by its wall-clock key
+
+The system SHALL compare a `DateTime` read from a Cosmos DB document by its wall-clock key, the stored text's first 19
+characters and its fraction padded to seven digits, and a caller's value by the same key computed from its ticks, so its
+kind does not matter, never by the stored text (TASK-902: the serializer writes as many fraction digits as needed and a
+kind-dependent suffix, and 71 of 84 shapes answered other rows, measured). Against a value, `==`, `<`, `<=`, `>`, `>=`
+SHALL be preceded by a text range on the member covering the value's second, which the index can serve. `Equals`,
+`DateTime.Compare` / `CompareTo` compared with 0, a list's `Contains` (a list of keys) and a `.Date` compared with
+another member SHALL be translated. The system SHALL refuse with `NotSupportedException`, before any request, a
+comparison or list of a `DateTimeOffset` member, a member of a stored `DateTime` or `DateTimeOffset` (`Year`, `Ticks`, …)
+other than those `.Date` forms, a `DateTime` computed from a member, and a `Compare` result compared with anything but 0.
+A stored offset is assumed to be the reader's own.
+
+#### Scenario: Fraction digits and kinds (TASK-902)
+
+- **Given** documents storing `…T10:00:00Z` and `…T10:00:00.5Z`
+- **When** `ReadAsync(x => x.At < new DateTime(…, 10, 0, 0, 500))` runs
+- **Then** only the first comes back (by text, `"…00.5Z"` sorts before `"…00Z"`)
+
+#### Scenario: A DateTimeOffset comparison (TASK-902)
+
+- **Given** a Cosmos DB store with a `DateTimeOffset` member `O`
+- **When** a filter compares `O` with a value
+- **Then** `NotSupportedException` is thrown before any request
+
+### Requirement: Cosmos DB orders a stored TimeSpan by its sign and magnitude
+
+The system SHALL split an ordering (`<`, `<=`, `>`, `>=`) of a `TimeSpan` read from a Cosmos DB document by sign (the
+stored text below `"0"` is negative) and compare a fixed-width 23-character magnitude key computed from the stored text,
+a negative value by the reverse of its magnitude; a caller's value is keyed in C# (TASK-905: the constant format orders
+neither the day count nor negative values as the value; 68 of 124 shapes answered other rows, measured). Equality against
+a value and a list's `Contains` SHALL keep their rendering (the text is canonical); two members compared for equality
+SHALL compare their texts. `Equals`, `TimeSpan.Compare` / `CompareTo` compared with 0 SHALL become comparisons. A member of a stored
+`TimeSpan` (`Ticks`, `TotalSeconds`, …), arithmetic on one, any other `TimeSpan` method over one, and a `Compare` result
+compared with anything but 0 SHALL be refused with `NotSupportedException` before any request.
+
+#### Scenario: A day count against hours (TASK-905)
+
+- **Given** documents storing `1.02:03:04` and `23:00:00`
+- **When** `ReadAsync(x => x.Span > TimeSpan.FromHours(24))` runs
+- **Then** only the first comes back (by text it sorted before the second)
+
+### Requirement: A Cosmos DB read sorted by a DateTime orders within each second as C# does
+
+The system SHALL, for a Cosmos DB read sorted by a `DateTime` member (not chunked), read with the caller's sort and then
+reorder each run of rows that agree on the earlier sort keys and on that member's second: the `DateTime` by its ticks,
+a later string key ordinally. On a paged read, a run at the page's start (with an offset) or at its full end SHALL be read
+whole with a second query, and where one run covers the page the rows after it are read too, to place the page within
+the run; if the documents changed between the reads, the page's own rows, sorted, are returned (TASK-902: within one
+second the server ordered `"…00"`, `"…00+01:00"`, `"…00.0000001Z"`, `"…00.5Z"`, `"…00Z"`, measured). A sort by a
+`DateTimeOffset` or a `TimeSpan` member SHALL be refused with `NotSupportedException` before any request (TASK-902,
+TASK-905).
+
+#### Scenario: Sorting by a DateTime within one second (TASK-902)
+
+- **Given** documents at `10:00:00.5`, `10:00:00` and `10:00:01` (UTC)
+- **When** `ReadAsync(null, OrderBy<T>.By(x => x.At))` runs
+- **Then** they come back as `10:00:00`, `10:00:00.5`, `10:00:01` (the server sent `10:00:00.5` first)
+
+#### Scenario: Sorting by a TimeSpan (TASK-905)
+
+- **Given** a Cosmos DB store
+- **When** a read is sorted by a `TimeSpan` member
+- **Then** `NotSupportedException` is thrown before any request
+
 ### Requirement: RavenDB sessions copy onto tracked documents and save only at commit
 
 The system SHALL, on RavenDB, address documents as `{collection}/{guid}`; inside a unit-of-work session store, update
@@ -680,6 +920,36 @@ ambient session, so they do not see a transaction's uncommitted writes.
 - **When** `AggregateAsync(query)` runs
 - **Then** the uncommitted document is not counted (`AsyncMongoDBStore.cs:596`)
 
+### Requirement: Store aggregates answer as the in-memory aggregation, by backend
+
+The system SHALL run a store's `Aggregate` / `AggregateAsync` as follows:
+- Elasticsearch, RavenDB and Cosmos DB initialize the store first, as a read does (TASK-886: on a fresh store the
+  aggregate failed, or answered nothing on Cosmos DB).
+- MongoDB and Cosmos DB refuse a string `Min` / `Max` asked in a `StringComparison` other than `Ordinal` with
+  `NotSupportedException` before reading anything (TASK-907); MongoDB runs the pipeline with the simple collation, whatever
+  the collection's default (TASK-909).
+- Cosmos DB renders the query's filter as its reads do (the same pre-pass, then the read's `Where`; TASK-876: the filter
+  was dropped and the whole container aggregated).
+- RavenDB reads the filtered documents in one query, after `RavenFilterRewriter`, and aggregates them client-side with
+  `AggregateHelper.LinqAggregate(Async)` for every GROUP BY shape (TASK-877: one GROUP BY field sent a facet query,
+  which RavenDB refuses; TASK-868: the filter skipped the rewrite).
+- InfluxDB always reads the filtered rows and aggregates them in memory (TASK-906: a native Flux query, used for one
+  aggregate and no filter, answered otherwise in 24 of 27 cases, measured).
+- Elasticsearch reads its composite aggregation page by page, 1000 groups per request.
+Cosmos DB and Elasticsearch order and page the rows in memory, ordering strings by the query's `StringComparison`.
+
+#### Scenario: A filtered Cosmos DB aggregate (TASK-876)
+
+- **Given** a Cosmos DB store and an `AggregateQuery<T>` with a filter matching half the items
+- **When** `AggregateAsync` runs
+- **Then** only the matching items are aggregated
+
+#### Scenario: A RavenDB aggregate grouped by one field (TASK-877)
+
+- **Given** an `AsyncRavenDBStore<T>`
+- **When** `AggregateAsync` runs with one GROUP BY field
+- **Then** the documents are read with one query and grouped in memory, and no facet query is sent
+
 ### Requirement: File stores keep the caller's instances and differ in how they persist
 
 The system SHALL, on the JSON and XML stores, keep entities in a non-concurrent `Dictionary<Guid, T>` holding the
@@ -690,7 +960,10 @@ caller's own instances (no copy on write or read), and persist as follows:
 - JSON separate-file: rewrite every entity's file on every write and delete matching files not in memory.
 - XML separate-file: write only the touched entity's file.
 - XML batch: write every batch, then delete the batch files no longer written (they were deleted first, so a failed
-  write lost them all: measured). Atomic per file, not across files.
+  write lost them all: measured). Atomic per file, not across files. The batch files are loaded in batch-number order
+  (`RecordFiles.ListByIndex`: `items-2` before `items-10`), so a save writes every entity back into the file it came from
+  (TASK-931: they loaded in file-system order and were renumbered by it, so a save failing partway lost an entity,
+  measured: 11 of 12).
 - JSON and XML batch stores: require `BatchSettings`, refusing plain `Settings` with `InvalidDataException`.
 - every JSON and XML separate and batch store, sync and async, keeps its files directly in `Location` (TASK-811: the
   sync `JsonSeparateStore` and `JsonBatchStore` used `Location/Name/` — the single-file store's data-file path — so a
@@ -704,7 +977,10 @@ caller's own instances (no copy on write or read), and persist as follows:
 
 Every loader SHALL skip a null record (the async JSON, the sync and async single-file XML and the XML and async JSON batch
 loaders threw `NullReferenceException`: measured). The async JSON and XML stores SHALL load from disk once (`_loaded`),
-again after `Destroy`; the async JSON stores re-read whenever they held no rows (measured: 4 reads for 3 calls).
+again after `Destroy`; the async JSON stores re-read whenever they held no rows (measured: 4 reads for 3 calls). The
+async XML separate and batch stores SHALL load in `InitCoreAsync`, before their first operation, a write included
+(TASK-939: a fresh store whose first call was a write saw an empty store, measured: a batch create left 1 of 6 entities,
+an update threw not-found and a delete did nothing).
 
 #### Scenario: Mutating an entity after creating it in a JSON store
 
@@ -724,6 +1000,12 @@ again after `Destroy`; the async JSON stores re-read whenever they held no rows 
 - **When** `Destroy` runs
 - **Then** the store's files are deleted, `keep.txt` and the directory stay, and nothing throws
 
+#### Scenario: A fresh async XML batch store whose first call is a write (TASK-939)
+
+- **Given** an `AsyncXmlBatchStore<T>` directory holding entities in several batch files, and a new store on it
+- **When** its first call is a bulk create
+- **Then** the stored entities are loaded first, and every batch file still holds its entities after the save
+
 ### Requirement: Backend repositories destroy their store twice
 
 The system SHALL, in the MongoDB, InfluxDB, Cosmos DB, RavenDB, SQLite, PostgreSQL, MySQL and SQL Server repositories,
@@ -737,13 +1019,53 @@ the store, and then destroy or drop the unwrapped store a second time. The Times
 - **Then** the database delete runs once through the base and again on the unwrapped store
   (`AsyncRavenDBModelRepository.cs:69-72`)
 
-### Requirement: SQL store factories hand out async stores, except SQLite
+### Requirement: Each SQL provider has one store factory, chosen by configuration
 
-The system SHALL have the PostgreSQL, MySQL and SQL Server factories return the async store from `GetAsyncStore<T>()`,
-and the SQLite factory return the sync `SQLiteStore<T>` from `GetStore<T>()`, after creating the database directory.
+The system SHALL have one store factory per SQL provider, `SqLiteSqlStoreFactory`, `PostgreSQLSqlStoreFactory`,
+`MySQLSqlStoreFactory` and `MSSqlSqlStoreFactory` (each a `SqlStoreFactory<TConnector>`), registered under `SqLite`,
+`PostgreSQL`, `MySQL` and `MSSql` with `SqlStoreFactory.Create` and with `StoreFactory.Create` (`AddSqLite()`, …).
+`GetAsyncStore<T>()` SHALL return a new async provider store on the factory's settings at every call; no factory hands
+out a sync store. `FromConnectionString` SHALL accept only the keys the provider's settings carry, in any of the
+driver's spellings, and SHALL refuse with `ArgumentException` any other key (named), a missing host, an SSL / encrypt
+mode other than required or preferred (PostgreSQL `Require` / `Prefer`, MySQL `Required` / `Preferred`, SQL Server
+`Encrypt=True` / `False`), a SQL Server named instance and `Persist Security Info=True`. SQLite SHALL take a file path, or
+`Data Source` / `Filename` with an optional `Password`, made absolute, and its factory creates the folder when
+constructed. The older per-provider factories (`SqLiteStoreFactory` and its peers, with their options and DI
+extensions) no longer exist (TASK-1001).
 
-#### Scenario: Getting a store from the SQLite factory
+#### Scenario: Getting stores from the SQLite factory (TASK-988)
 
-- **Given** a `SqLiteStoreFactory`
-- **When** a store is requested
-- **Then** a sync `SQLiteStore<T>` is returned (`SqLiteStoreFactory.cs:47`)
+- **Given** `SqlStoreFactory.Create("SqLite", "data/app.db", p => p.AddSqLite())`
+- **When** `GetAsyncStore<T>()` is called twice
+- **Then** each call returns a new `AsyncSQLiteStore<T>` on the absolute path of `data/app.db`, whose folder exists
+
+#### Scenario: A key the settings cannot carry (TASK-988)
+
+- **Given** the PostgreSQL connection string `Host=h;Database=d;Pooling=false`
+- **When** `SqlStoreFactory.Create("PostgreSQL", …, p => p.AddPostgreSQL())` runs
+- **Then** `ArgumentException` names `Pooling`, and no factory is returned
+
+### Requirement: Each non-SQL backend has a store factory holding one store per type
+
+The system SHALL give MongoDB, Elasticsearch, RavenDB, Cosmos DB, JSON and XML a factory registered with
+`StoreFactory.Create` under `MongoDB`, `ElasticSearch`, `RavenDB`, `CosmosDB`, `Json` and `Xml` (`AddMongoDB()`, …),
+which parses its own connection string into its `Settings`, refusing any other key (compared ignoring case, spaces and
+underscores) and a missing part with `ArgumentException`, and whose `GetAsyncStore<T>()` returns the same async store for
+a type every time, since each store holds its data or builds its own client (TASK-990). The strings: MongoDB its own
+`mongodb://` / `mongodb+srv://` URL, used verbatim, naming the database in its path; Elasticsearch
+`Url=http(s)://…;IndexPrefix=…`; RavenDB `Url=http(s)://…;Database=…`; Cosmos DB `AccountEndpoint=…;AccountKey=…;Database=…`
+and optionally `ConnectionMode=Direct|Gateway`, its factory refusing a `Settings.UserName` (one container for every type);
+JSON and XML a folder path or `Path=…`, made absolute and created, each type an `AsyncJsonStore<T>` / `AsyncXmlStore<T>`
+on `{type full name}.json` / `.xml` there.
+
+#### Scenario: A MongoDB connection string without a database (TASK-990)
+
+- **Given** `mongodb://host:27017`
+- **When** `StoreFactory.Create("MongoDB", …, p => p.AddMongoDB())` runs
+- **Then** `ArgumentException` asks for the database in the connection string's path
+
+#### Scenario: One JSON store per type (TASK-990)
+
+- **Given** a factory from `StoreFactory.Create("Json", "data/json", p => p.AddJson())`
+- **When** `GetAsyncStore<Customer>()` is called twice
+- **Then** the same `AsyncJsonStore<Customer>` is returned, on the file named by `Customer`'s full name plus `.json` in the absolute `data/json`

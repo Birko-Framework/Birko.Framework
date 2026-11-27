@@ -1,19 +1,23 @@
 ---
 area: store-decorator-composition
-generated-at: 50828c68d6f35ca2096600381c2d0c4481132330
-generated-on: 2026-10-21
+generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
+generated-on: 2026-11-27
 sources:
   - ../Birko.Data.Composition/StoreWrapperBuilder.cs
   - ../Birko.Data.EventSourcing/Events/DomainEvent.cs
   - ../Birko.Data.EventSourcing/Events/EventStoreConcurrencyException.cs
   - ../Birko.Data.EventSourcing/Events/IEvent.cs
   - ../Birko.Data.EventSourcing/Events/IEventStore.cs
+  - ../Birko.Data.EventSourcing/Models/EventRecord.cs
   - ../Birko.Data.EventSourcing/Models/IEventSourced.cs
+  - ../Birko.Data.EventSourcing/Stores/AbstractAsyncEventStore.cs
   - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingBulkStoreWrapper.cs
   - ../Birko.Data.EventSourcing/Stores/AsyncEventSourcingStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/AsyncStoreEventStore.cs
   - ../Birko.Data.EventSourcing/Stores/EventSourcingBulkStoreWrapper.cs
   - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreExtensions.cs
   - ../Birko.Data.EventSourcing/Stores/EventSourcingStoreWrapper.cs
+  - ../Birko.Data.EventSourcing/Stores/EventStoreFactoryExtensions.cs
   - ../Birko.Data.Patterns/Concurrency/AsyncVersionedStoreWrapper.cs
   - ../Birko.Data.Patterns/Concurrency/ConcurrentUpdateException.cs
   - ../Birko.Data.Patterns/Concurrency/IVersioned.cs
@@ -56,11 +60,11 @@ sources:
   - ../Birko.Time.Abstractions/Providers/TestDateTimeProvider.cs
 # source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
+# Evidence pass ran 2026-11-27 over 439 feature-linked tasks: 187 resolved, 252 did not -
+# polyrepo-era `pr:` values that are not commits of this repo, or no reachable commit whose subject leads with the
+# task id; 2 tasks the state gate refuses have commits leading with their id. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 259
+shaped-by-unresolved: 252
 ---
 # Store decorator wrappers and runtime composition
 
@@ -482,14 +486,29 @@ path SHALL also retire a default through `SoftDeleteFilter.Stamp` / `Deletion`: 
 `IDefault`, and `DefaultMarker = null` on an `IDefaultMarker`, in the same write (TASK-638). A row
 the inner store already holds as soft-deleted SHALL keep its original `DeletedAt`: the entity-based paths read
 the stored state first and skip such rows, and the filter path combines the filter with `DeletedAt == null`.
+The entity-based paths SHALL write a stamped memberwise copy of the stored row rather than the caller's instance, so a
+column the caller's instance does not carry survives; the caller's instance is stamped too, and an entity with no
+stored row is written as given, so the inner store reports the missing key (TASK-821).
 `Delete(filter)` SHALL refuse a null filter with `ArgumentNullException` and a filter that reduces to every row
 with `WholeTableWriteException` (via `BoundedFilterGuard`; the explicit `x => true` is accepted).
 
 #### Scenario: Entity delete becomes an update
 
-- **Given** an active entity and a clock reading `2026-06-01T00:00:00Z`
+- **Given** an active entity whose row the inner store holds, and a clock reading `2026-06-01T00:00:00Z`
 - **When** `SoftDeleteStoreWrapper.Delete(data)` is called
-- **Then** `data.DeletedAt` is `2026-06-01T00:00:00Z` and `_innerStore.Update(data)` is invoked — with no `storeDelegate` forwarded — and no row is physically removed
+- **Then** `data.DeletedAt` is `2026-06-01T00:00:00Z` and `_innerStore.Update` is invoked with a copy of the stored row stamped `2026-06-01T00:00:00Z` — with no `storeDelegate` forwarded — and no row is physically removed
+
+#### Scenario: Deleting through a partial instance keeps the stored columns (TASK-821)
+
+- **Given** a stored row with a non-null `Body`, and a fresh instance of it carrying only its `Guid` and the fields a view-model repository's `MapToModel` assigns
+- **When** it is soft-deleted through `Delete(data)`, `DeleteAsync(data)` or the bulk `Delete(items)` / `DeleteAsync(items)`
+- **Then** the inner update writes the stored row with `DeletedAt` set, so `Body` reads back unchanged and a later restore returns the row whole; the instance the inner store returned is not itself modified
+
+#### Scenario: Deleting an entity with no stored row writes the given instance
+
+- **Given** an entity with a `Guid` the inner store does not hold
+- **When** `SoftDeleteStoreWrapper.Delete(data)` is called
+- **Then** `data` itself is stamped and passed to the inner update, which reports the missing key (`EntityNotFoundException` on the stores that throw it)
 
 #### Scenario: Soft-deleting the default retires it
 
@@ -519,7 +538,7 @@ with `WholeTableWriteException` (via `BoundedFilterGuard`; the explicit `x => tr
 
 - **Given** a collection containing an entity whose stored row's `DeletedAt` is already `2026-01-01`, and one active entity
 - **When** `SoftDeleteBulkStoreWrapper.Delete(items)` is called with a clock reading `2026-06-01`
-- **Then** one inner read `x => ids.Contains(x.Guid) && x.DeletedAt != null` finds the deleted row, which is left out; only the active entity is stamped `2026-06-01` and passed to the inner bulk update, and when no item is active no inner update is issued
+- **Then** one inner read `x => ids.Contains(x.Guid)` returns both stored rows; the deleted one is left out, and only the active entity's stored row, copied and stamped `2026-06-01`, is passed to the inner bulk update, and when no item is active no inner update is issued
 
 #### Scenario: One clock reading per bulk delete
 
@@ -1199,6 +1218,174 @@ applies each and then clears the uncommitted list) and return the history with `
 - **Given** an aggregate with three stored events
 - **When** `ReplayAsync(aggregateId)` is called
 - **Then** a new instance from `CreateInstance()` has each event applied in order, its `Version` equals the last event's version (for `EventSourcedAggregate`), and its uncommitted events are empty
+
+### Requirement: Event store contract over Core seams
+
+The system SHALL give every `IAsyncEventStore` built on `AbstractAsyncEventStore` one non-virtual public contract over
+protected `*Core` seams (TASK-995): `AppendAsync` refuses a null event (`ArgumentNullException`) and appends a one-event
+batch; `AppendRangeAsync` refuses a null collection or element (`ArgumentNullException` / `ArgumentException`),
+does nothing for an empty batch, and otherwise hands the batch to `AppendRangeCoreAsync`; the reads map onto
+`ReadCoreAsync` with an open bound where none is given.
+
+#### Scenario: An empty batch writes nothing
+
+- **Given** an event store derived from `AbstractAsyncEventStore`
+- **When** `AppendRangeAsync(new IEvent[0])` is called
+- **Then** it completes without calling `AppendRangeCoreAsync`
+
+#### Scenario: A null event in a batch is refused before anything is written
+
+- **Given** a batch of two events and a null
+- **When** `AppendRangeAsync(batch)` is called
+- **Then** an `ArgumentException` for `events` is thrown and `AppendRangeCoreAsync` is not called
+
+#### Scenario: Version-bounded reads map onto one seam
+
+- **Given** an event store derived from `AbstractAsyncEventStore`
+- **When** `ReadAsync(id)`, `ReadUpToVersionAsync(id, 5)` and `ReadFromVersionAsync(id, 3)` are called
+- **Then** `ReadCoreAsync` is called with bounds `(null, null)`, `(null, 5)` and `(3, null)` respectively
+
+### Requirement: Default event store over any store
+
+The system SHALL store each event, in the default `AsyncStoreEventStore` over any `IAsyncBulkStore<EventRecord>`, as an
+`EventRecord` whose Guid is `EventRecord.IdFor(aggregate, version)` (a name-based v5 UUID, the same in every
+process), creating a batch's records one at a time in order, so a second writer of a
+version hits an existing id: the store's `StoreUniqueViolationException` SHALL surface as `EventStoreConcurrencyException`
+for that event, after the records the batch already created are removed (TASK-995).
+
+#### Scenario: Two writers of one version
+
+- **Given** two `AsyncStoreEventStore` instances, in different processes, over one database-backed store
+- **When** both append an event for aggregate `A` at version 1
+- **Then** both records get the id `IdFor(A, 1)`, the backend refuses the second create, and the second writer gets `EventStoreConcurrencyException` with `AggregateGuid = A` and `Version = 1`
+
+#### Scenario: A conflict part-way through a batch leaves nothing
+
+- **Given** aggregate `A` already holds version 3
+- **When** a batch of versions 2, 3 and 4 is appended
+- **Then** version 2 is created, version 3 is refused, version 2's record is removed again, and `EventStoreConcurrencyException` for version 3 is thrown; version 4 is never written
+
+#### Scenario: A version twice in one batch is a conflict
+
+- **Given** a batch holding two events of aggregate `A` at version 1
+- **When** it is appended to the default store
+- **Then** the second create collides with the batch's own record, which is not cleared, so the first record is removed and `EventStoreConcurrencyException` for version 1 is thrown
+
+#### Scenario: A failure that cannot be undone says what remains
+
+- **Given** a batch whose second create fails and whose removal of the first record fails too
+- **When** the batch is appended
+- **Then** an `InvalidOperationException` naming the remaining `aggregate@version` records is thrown, its inner `AggregateException` carrying both the create failure and the removal failure
+
+#### Scenario: The record id is stable across processes
+
+- **Given** an aggregate Guid and a version
+- **When** `EventRecord.IdFor` is computed in two processes
+- **Then** both return the same RFC 9562 version 5 UUID, derived by SHA-1 from `"{aggregate:D}:{version}"` (invariant culture) under the fixed Birko namespace
+
+### Requirement: Default event store reads
+
+The system SHALL, in `AsyncStoreEventStore`, read an aggregate's events filtered by aggregate and the optional version
+bounds, ordered by version; `ReadAllFromAsync(from)` as the records with `OccurredAt >= from`, ordered by `OccurredAt`,
+then aggregate, then version; and `GetVersionAsync` as the highest visible version, 0 when there is none, scanning the
+aggregate's top 16 records at a time. Every read SHALL leave out abort markers and the records of a batch that
+is not whole (TASK-1000).
+
+#### Scenario: A batch cut short by a crash is not read
+
+- **Given** a writer stored versions 1 to 3 of a 5-event batch for aggregate `A` and then stopped
+- **When** `ReadAsync(A)`, `ReadAllFromAsync(t)` or `GetVersionAsync(A)` is called
+- **Then** none of the three records is returned and the version is that of the last visible event below them (0 when none)
+
+#### Scenario: A whole batch read in one page costs no lookup
+
+- **Given** a whole 3-event batch, all of whose records are among the records a read returned
+- **When** the read filters for visibility
+- **Then** the batch is shown without a further query; a batch only partly among them (as when `ReadUpToVersionAsync` cuts it) is looked up once by batch id and shown when whole
+
+### Requirement: Batch marking and whole-batch verification
+
+The system SHALL, in `AsyncStoreEventStore`, stamp each record with `WrittenAt` (UTC) and mark every record of a batch of
+two or more with a new batch id, the batch size and the record id of its last event; a single event carries no mark and
+stays one write. A failed marked batch SHALL remove its records by batch id, never by record id, and a marked batch
+SHALL check after its last create that it is whole, failing with `EventStoreConcurrencyException` on its last event
+otherwise (TASK-1000).
+
+#### Scenario: A batch cleared under its writer is not reported as success
+
+- **Given** a writer slower than `AbandonedBatchLease` between two events of its batch, whose batch another append clears as abandoned
+- **When** its last create succeeds
+- **Then** the completeness check finds the batch not whole, its remaining records are removed by batch id, and `EventStoreConcurrencyException` for the batch's last event is thrown, wrapping an `InvalidOperationException` saying the batch was cleared
+
+#### Scenario: Removal by batch id spares another writer's version
+
+- **Given** a writer's batch was cleared and another writer then took one of its versions
+- **When** the first writer's batch fails and is compensated
+- **Then** only records carrying the first writer's batch id are deleted, so the other writer's event stays
+
+### Requirement: Abandoned batches cleared after a lease
+
+The system SHALL, when an `AsyncStoreEventStore` create collides with a record of another batch that is not whole and
+whose newest record is at least `AbandonedBatchLease` old (default 30 s; a negative value throws
+`ArgumentOutOfRangeException`), store an abort marker under that batch's last-event id, delete the batch by batch id and
+create once more. A collision with an unbatched event, a whole batch, a younger batch or the writer's own batch SHALL be
+a conflict (TASK-1000).
+
+#### Scenario: An append after the lease repairs the stream
+
+- **Given** an incomplete batch of aggregate `A` (versions 1 to 3 of 5) whose newest record was written more than 30 s ago
+- **When** another writer appends version 1 for `A`
+- **Then** an abort marker is created under the id of the batch's version 5, the batch's records are deleted, and the new version 1 is created
+
+#### Scenario: A batch inside the lease is a conflict
+
+- **Given** an incomplete batch whose newest record was written 5 s ago
+- **When** another writer appends one of its versions
+- **Then** nothing is cleared and the append fails with `EventStoreConcurrencyException`
+
+#### Scenario: The marker and the last event exclude each other
+
+- **Given** an abandoned-looking batch whose writer creates its last event while another writer is clearing it
+- **When** the marker's create is refused because the last event's id now exists
+- **Then** the batch is judged again once; if it is whole the append is a conflict, and if it still is not, nothing is cleared and the append is a conflict while the original writer's completeness check fails
+
+#### Scenario: A batch already marked aborted is removed
+
+- **Given** a batch holding an abort marker whose records were not all deleted
+- **When** an append collides with one of its records
+- **Then** the batch's records are deleted by batch id and the create is retried
+
+### Requirement: Event store chosen from the store factory
+
+The system SHALL return, from `factory.GetEventStore(o => …)`, the one registered override matching the
+factory, else `AsyncStoreEventStore` over `factory.GetAsyncStore<EventRecord>()`. It SHALL refuse a null factory
+(`ArgumentNullException`), two matching overrides (`InvalidOperationException` naming them) and the default on the `Json`
+and `Xml` backends (`NotSupportedException`). `EventStoreOverrides.Add` SHALL refuse a blank name, a null delegate and a
+name already registered, ignoring case (TASK-995).
+
+#### Scenario: A registered override wins
+
+- **Given** a store factory for the SQL backend and `o => o.AddSql()`
+- **When** `factory.GetEventStore(o => o.AddSql())` is called
+- **Then** the SQL override's event store is returned, not `AsyncStoreEventStore`
+
+#### Scenario: No override falls back to the default store
+
+- **Given** an InMemory store factory and no overrides
+- **When** `factory.GetEventStore()` is called
+- **Then** an `AsyncStoreEventStore` over the factory's `IAsyncBulkStore<EventRecord>` is returned
+
+#### Scenario: File backends are refused
+
+- **Given** a store factory whose `Backend` is `Json` or `Xml` (any case) and no matching override
+- **When** `factory.GetEventStore()` is called
+- **Then** a `NotSupportedException` says the backend cannot refuse a second writer of one version across processes
+
+#### Scenario: Overrides are per call
+
+- **Given** two calls of `GetEventStore` with different override registrations
+- **When** each is resolved
+- **Then** each sees only its own registrations; nothing is kept process-wide
 
 ### Requirement: Telemetry instrumentation wrappers
 

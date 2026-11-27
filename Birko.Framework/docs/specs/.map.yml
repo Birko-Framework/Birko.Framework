@@ -479,6 +479,11 @@ areas:
       - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
       - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
       - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs
+      # TASK-849 / TASK-891: the update's written columns and the rejected-column check the funnels run. The spec
+      # already described both (found unmapped at the 2026-11-27 regen; the user's decision)
+      - ../Birko.Data.SQL/SQL/Connectors/SetClauses.cs
+      - ../Birko.Data.SQL/SQL/Connectors/RejectedColumnNames.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase_ColumnNames.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries
@@ -618,6 +623,15 @@ areas:
       - ../Birko.Data.SQL.PostgreSQL/Repositories/*.cs
       - ../Birko.Data.SQL.SqLite/Stores/*.cs
       - ../Birko.Data.SQL.SqLite/Repositories/*.cs
+      # TASK-988 / TASK-990: the store factories (this spec has their requirements) and the Elasticsearch aggregate
+      # plan (store aggregates). Found unmapped at the 2026-11-27 regen; the user's decision
+      - ../Birko.Data.Stores/StoreFactory.cs
+      - ../Birko.Data.Stores/IStoreFactory.cs
+      - ../Birko.Data.Stores/FileStoreFolders.cs
+      - ../Birko.Data.SQL/Stores/SqlStoreFactory.cs
+      - ../Birko.Data.SQL/Stores/ISqlStoreFactory.cs
+      - ../Birko.Data.SQL/Stores/IAsyncSqlBulkStore.cs
+      - ../Birko.Data.ElasticSearch/Aggregation/StoreAggregatePlan.cs
 
   - name: settings-configuration-chain
     title: Settings inheritance chain and connection-string contract
