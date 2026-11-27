@@ -188,6 +188,29 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
 - **B. Which store a SQL factory answers.** `SqlEventStore` keeps the `__Events` table, so DraCode's existing history
   stays readable. The default would start a new table, and that history would need migrating.
 
+## Progress
+
+- **2026-11-27, steps 1–2 done** (`7c2ce67c`). These now exist:
+  - `AbstractAsyncEventStore`;
+  - `AsyncStoreEventStore` with `EventRecord` (name-based v5 ids, checked against the RFC example);
+  - `factory.GetEventStore(o => …)` with `EventStoreOverrides`;
+  - `SqlEventStore` rebased, behaviour unchanged, with `o.AddSql()`;
+  - `tests/Shared/EventSourcing/EventStoreContract.cs`, 9 tests.
+
+  The contract passes on InMemory and on `SqlEventStore` over SQLite. `SqlEventStore`'s 26 existing tests still pass.
+- **2026-11-27, the default store against the live NoSQL servers** (a temporary run, not committed):
+
+  | Backend | contract (9) | what failed |
+  |---|---|---|
+  | MongoDB (standalone) | **9/9** | — |
+  | Cosmos DB | **9/9** | — (the batch compensation keeps nothing) |
+  | RavenDB | 8/9 | two writers: `Database … already exists!` when two clients create a new database at once, [[TASK-996]] |
+  | Elasticsearch | 3/9 | 5 tests read their own write too early (expected, step 0); two writers: `resource_already_exists_exception` when two clients create a new index at once, [[TASK-997]] |
+
+  TASK-996 and TASK-997 are defects in the stores and predate this task: any two app instances starting together on a
+  fresh database or index hit them. Each is filed as its own task, and the contract on RavenDB and Elasticsearch waits
+  on them.
+
 ## Acceptance criteria
 
 - [ ] Decisions above recorded, with the per-backend duplicate behaviour measured, not assumed.
