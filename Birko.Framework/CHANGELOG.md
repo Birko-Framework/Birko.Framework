@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-17 — XML batch stores keep every entity in its batch file
+
+[[TASK-931]]. The XML batch stores loaded their files in `Directory.GetFiles` order (`items-10` before `items-2` on
+Windows, file-system order on Linux) and renumbered the batches by it on the next save, so a save that failed partway
+lost an entity (measured: 11 of 12) and the TASK-721 test was flaky on Linux CI. They now load in batch order
+(`RecordFiles.ListByIndex`). Found: [[TASK-939]] (P1, a fresh async XML batch store that writes first wipes the others).
+
+---
+
 ## 2026-11-17 — A locked SQLite database makes a write wait one timeout, not three
 
 [[TASK-938]] (the user's decision). Microsoft.Data.Sqlite already waits on a locked database until the command timeout,

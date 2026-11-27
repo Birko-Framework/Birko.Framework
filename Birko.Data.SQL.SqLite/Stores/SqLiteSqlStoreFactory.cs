@@ -48,9 +48,24 @@ namespace Birko.Data.SQL.SqLite.Stores
             }
             if (string.IsNullOrWhiteSpace(path) || string.IsNullOrEmpty(Path.GetFileName(path)))
                 throw new ArgumentException($"SQLite needs a database file path; got '{connectionString}'.", nameof(connectionString));
+            // TASK-1006, the user's decision: an in-memory database lives only as long as one connection, and the connector
+            // opens one per operation, so it cannot work here. It used to become the path "<working directory>/:memory:".
+            if (IsInMemory(path))
+                throw new ArgumentException(
+                    $"SQLite cannot be used in-memory through the store factory ('{connectionString}'): each operation opens its "
+                    + "own connection, and an in-memory database is lost when its connection closes. Use the InMemory backend, "
+                    + "or a database file path (a temporary file for tests).", nameof(connectionString));
 
             var full = Path.GetFullPath(path);
             return new SqLiteSqlStoreFactory(new SqLiteSettings(Path.GetDirectoryName(full) ?? string.Empty, Path.GetFileName(full), password));
+        }
+
+        /// <summary><c>:memory:</c>, or a <c>file::memory:</c> URI (with or without a query), in any case.</summary>
+        private static bool IsInMemory(string dataSource)
+        {
+            var source = dataSource.Trim();
+            return source.Equals(":memory:", StringComparison.OrdinalIgnoreCase)
+                || source.StartsWith("file::memory:", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <inheritdoc />

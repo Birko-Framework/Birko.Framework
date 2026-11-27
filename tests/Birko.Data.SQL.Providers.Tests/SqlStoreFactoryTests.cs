@@ -128,6 +128,27 @@ public class SqlStoreFactoryTests
         ((string)command.ExecuteScalar()!).Should().Be("wal");
     }
 
+    /// <summary>
+    /// TASK-1006, the user's decision: an in-memory data source is refused when the factory is created. It was made
+    /// into the path <c>&lt;working directory&gt;/:memory:</c>; on Windows the first operation then failed with "SQLite
+    /// Error 14: unable to open database file" (measured), and on Linux that is a legal file name. An in-memory SQLite
+    /// database lives only as long as one connection, and the connector opens one per operation.
+    /// </summary>
+    [Theory]
+    [InlineData(":memory:")]
+    [InlineData(" :MEMORY: ")]
+    [InlineData("Data Source=:memory:")]
+    [InlineData("Filename=:memory:")]
+    [InlineData("Data Source=file::memory:")]
+    [InlineData("Data Source=file::memory:?cache=shared")]
+    [InlineData("file::memory:")]
+    public void SQLite_refuses_an_in_memory_data_source(string connectionString)
+    {
+        var act = () => SqlStoreFactory.Create("SqLite", connectionString, All);
+
+        act.Should().Throw<ArgumentException>().WithMessage("*in-memory*InMemory backend*file path*");
+    }
+
     [Fact]
     public void SQLite_one_file_is_one_connector_however_the_path_is_written()
     {

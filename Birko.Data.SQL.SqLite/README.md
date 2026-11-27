@@ -53,8 +53,11 @@ public class CustomerStore : SqLiteStore<Customer>
 
 ```
 Data Source=path/to/database.db;    -- File-based
-Data Source=:memory:;               -- In-memory
 ```
+
+An in-memory database (`:memory:`) is not supported: each operation opens its own connection, and an in-memory SQLite
+database is lost when its connection closes. The store factory refuses it; use the InMemory backend, or a temporary
+database file in tests.
 
 ## Timestamps — two kinds of `DateTime` column
 

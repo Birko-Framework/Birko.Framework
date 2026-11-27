@@ -39,10 +39,9 @@ Connection string format:
 Data Source=path/to/database.db;
 ```
 
-Or in-memory:
-```
-Data Source=:memory:;
-```
+**Not in-memory.** `:memory:` (and `file::memory:`) is refused by the store factory (TASK-1006): every operation opens its
+own connection, and an in-memory SQLite database is gone when its connection closes. Use the InMemory backend, or a
+temporary database file in tests.
 
 ## Implementation
 

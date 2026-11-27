@@ -296,6 +296,11 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### The SQLite store factory refuses an in-memory database (2026-11-27)
+[[TASK-1006]], the user's decision. `:memory:` became the path `<working directory>/:memory:`, and the first operation
+failed with "unable to open database file" (measured on Windows). An in-memory SQLite database lives as long as one
+connection, and the connector opens one per operation, so `FromConnectionString` now refuses it at once, naming the
+InMemory backend and a file path instead. The SQLite README and CLAUDE.md had advertised it.
 ### RavenDB start-up retries only the race, and the async store waits without a thread (2026-11-27)
 [[TASK-1004]], [[TASK-1005]], found at the 2026-11-27 spec regen. TASK-996's database-create retry caught every exception,
 so a create that could never succeed took 30 s to fail. It now retries only the two refusals a racing create gets
@@ -372,11 +377,6 @@ settings too. Filed: [[TASK-942]] (a SQLite read still answers empty for a stale
 store whose first call was a write saw an empty store: a batch create left 1 of 6 entities (batch 0 rewritten, every
 other batch file deleted), an update threw not-found and a delete did nothing (measured). Init now loads, as
 `AsyncXmlStore` does. All ten XML and JSON store kinds are tested with each write as the first call.
-### XML batch stores keep every entity in its batch file (2026-11-17)
-[[TASK-931]]. The XML batch stores loaded their files in `Directory.GetFiles` order (`items-10` before `items-2` on
-Windows, file-system order on Linux) and renumbered the batches by it on the next save, so a save that failed partway
-lost an entity (measured: 11 of 12) and the TASK-721 test was flaky on Linux CI. They now load in batch order
-(`RecordFiles.ListByIndex`). Found: [[TASK-939]] (P1, a fresh async XML batch store that writes first wipes the others).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh
