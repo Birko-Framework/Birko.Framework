@@ -13,5 +13,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\DomainEventModel.cs" />
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)SqlEventStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SqlEventStoreOverrides.cs" />
   </ItemGroup>
 </Project>

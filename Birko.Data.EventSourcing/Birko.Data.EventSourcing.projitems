@@ -19,6 +19,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncEventSourcingBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingStoreExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\EventRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncEventStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncStoreEventStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\EventStoreFactoryExtensions.cs" />
     <!-- EventSourcingRepositoryExtensions.cs excluded: depends on Birko.Data.ViewModel (IViewModelRepository).
          Consumers needing event-sourced ViewModel repos can include this file explicitly. -->
   </ItemGroup>

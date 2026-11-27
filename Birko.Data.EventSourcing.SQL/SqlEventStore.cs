@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Configuration;
 using Birko.Data.EventSourcing.Events;
 using Birko.Data.EventSourcing.SQL.Models;
+using Birko.Data.EventSourcing.Stores;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
@@ -13,7 +15,8 @@ using Birko.Data.Stores;
 namespace Birko.Data.EventSourcing.SQL
 {
     /// <summary>
-    /// SQL-backed <see cref="IAsyncEventStore"/> on any provider (SQLite, PostgreSQL, SQL Server, MySQL). Events
+    /// SQL-backed <see cref="IAsyncEventStore"/> on any provider, the SQL override of <see cref="AbstractAsyncEventStore"/>
+    /// (TASK-995; a SQL <c>IStoreFactory</c> answers it from <c>GetEventStore(o => o.AddSql())</c>) (SQLite, PostgreSQL, SQL Server, MySQL). Events
     /// live in the <c>__Events</c> table, one row each.
     /// </summary>
     /// <typeparam name="DB">The SQL connector type (SqLiteConnector, PostgreSQLConnector, …).</typeparam>
@@ -38,7 +41,7 @@ namespace Birko.Data.EventSourcing.SQL
     /// it, so committing the rest would apply the write without the events that describe it.
     /// </para>
     /// </remarks>
-    public class SqlEventStore<DB> : IAsyncEventStore
+    public class SqlEventStore<DB> : AbstractAsyncEventStore
         where DB : AbstractConnector
     {
         private readonly AsyncDataBaseBulkStore<DB, DomainEventModel> _store;
@@ -61,22 +64,10 @@ namespace Birko.Data.EventSourcing.SQL
         public AsyncDataBaseBulkStore<DB, DomainEventModel> Store => _store;
 
         /// <inheritdoc />
-        public Task AppendAsync(IEvent @event, CancellationToken cancellationToken = default)
+        /// <remarks>One transaction for the whole batch; a taken (aggregate, version) rolls it back and throws
+        /// <see cref="EventStoreConcurrencyException"/>.</remarks>
+        protected override async Task AppendRangeCoreAsync(IReadOnlyList<IEvent> batch, CancellationToken cancellationToken)
         {
-            if (@event == null) throw new ArgumentNullException(nameof(@event));
-            return AppendRangeAsync(new[] { @event }, cancellationToken);
-        }
-
-        /// <inheritdoc />
-        /// <exception cref="EventStoreConcurrencyException">An event's (aggregate, version) is already taken —
-        /// nothing from the batch is written.</exception>
-        public async Task AppendRangeAsync(IEnumerable<IEvent> events, CancellationToken cancellationToken = default)
-        {
-            if (events == null) throw new ArgumentNullException(nameof(events));
-            var batch = events.ToList();
-            if (batch.Count == 0) return;
-            if (batch.Any(e => e == null)) throw new ArgumentException("An event in the batch is null.", nameof(events));
-
             await EnsureUniqueIndexAsync(cancellationToken).ConfigureAwait(false);
             var models = batch.Select(DomainEventModel.FromEvent).ToList();
 
@@ -101,20 +92,21 @@ namespace Birko.Data.EventSourcing.SQL
         }
 
         /// <inheritdoc />
-        public async Task<IEnumerable<IEvent>> ReadAsync(Guid aggregateId, CancellationToken cancellationToken = default)
-            => ToEvents(await _store.ReadAsync(e => e.AggregateGuid == aggregateId, ByVersion, ct: cancellationToken).ConfigureAwait(false));
-
-        /// <inheritdoc />
-        public async Task<IEnumerable<IEvent>> ReadUpToVersionAsync(Guid aggregateId, long maxVersion, CancellationToken cancellationToken = default)
-            => ToEvents(await _store.ReadAsync(e => e.AggregateGuid == aggregateId && e.Version <= maxVersion, ByVersion, ct: cancellationToken).ConfigureAwait(false));
-
-        /// <inheritdoc />
-        public async Task<IEnumerable<IEvent>> ReadFromVersionAsync(Guid aggregateId, long fromVersion, CancellationToken cancellationToken = default)
-            => ToEvents(await _store.ReadAsync(e => e.AggregateGuid == aggregateId && e.Version >= fromVersion, ByVersion, ct: cancellationToken).ConfigureAwait(false));
+        protected override async Task<IEnumerable<IEvent>> ReadCoreAsync(Guid aggregateId, long? fromVersion, long? toVersion, CancellationToken cancellationToken)
+        {
+            Expression<Func<DomainEventModel, bool>> filter = (fromVersion, toVersion) switch
+            {
+                (null, null) => e => e.AggregateGuid == aggregateId,
+                ({ } from, null) => e => e.AggregateGuid == aggregateId && e.Version >= from,
+                (null, { } to) => e => e.AggregateGuid == aggregateId && e.Version <= to,
+                ({ } from, { } to) => e => e.AggregateGuid == aggregateId && e.Version >= from && e.Version <= to,
+            };
+            return ToEvents(await _store.ReadAsync(filter, ByVersion, ct: cancellationToken).ConfigureAwait(false));
+        }
 
         /// <inheritdoc />
         /// <remarks>One <c>MAX(Version)</c> query over the aggregate's rows; 0 when it has none.</remarks>
-        public async Task<long> GetVersionAsync(Guid aggregateId, CancellationToken cancellationToken = default)
+        protected override async Task<long> GetVersionCoreAsync(Guid aggregateId, CancellationToken cancellationToken)
         {
             var rows = await _store.AggregateAsync(new AggregateQuery<DomainEventModel>
             {
@@ -126,8 +118,7 @@ namespace Birko.Data.EventSourcing.SQL
         }
 
         /// <inheritdoc />
-        /// <remarks>Events with <c>OccurredAt &gt;= from</c>, oldest first, then by aggregate and version.</remarks>
-        public async Task<IEnumerable<IEvent>> ReadAllFromAsync(DateTime from, CancellationToken cancellationToken = default)
+        protected override async Task<IEnumerable<IEvent>> ReadAllFromCoreAsync(DateTime from, CancellationToken cancellationToken)
             => ToEvents(await _store.ReadAsync(
                 e => e.OccurredAt >= from,
                 OrderBy<DomainEventModel>.By(e => e.OccurredAt).ThenBy(e => e.AggregateGuid).ThenBy(e => e.Version),
@@ -160,7 +151,7 @@ namespace Birko.Data.EventSourcing.SQL
         // Which (aggregate, version) collided: one already stored, else a duplicate inside the batch itself. Only
         // for the message — when this append joined a caller's boundary, PostgreSQL has aborted that transaction
         // and refuses the lookup, so a failed lookup falls back rather than replacing the concurrency exception.
-        private async Task<(Guid AggregateGuid, long Version)> FindConflictAsync(List<IEvent> batch, CancellationToken ct)
+        private async Task<(Guid AggregateGuid, long Version)> FindConflictAsync(IReadOnlyList<IEvent> batch, CancellationToken ct)
         {
             try
             {
@@ -175,9 +166,7 @@ namespace Birko.Data.EventSourcing.SQL
             catch (Exception) when (!ct.IsCancellationRequested)
             {
             }
-            var duplicate = batch.GroupBy(e => (e.AggregateGuid, e.Version)).FirstOrDefault(g => g.Count() > 1);
-            var first = duplicate?.First() ?? batch[0];
-            return (first.AggregateGuid, first.Version);
+            return DuplicateInBatch(batch) ?? (batch[0].AggregateGuid, batch[0].Version);
         }
     }
 }

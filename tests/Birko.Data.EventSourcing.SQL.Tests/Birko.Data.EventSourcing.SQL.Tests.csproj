@@ -41,11 +41,13 @@
   <Import Project="..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
+  <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.EventSourcing.SQL\Birko.Data.EventSourcing.SQL.projitems" Label="Shared" />
 
   <ItemGroup>
     <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
+    <Compile Include="..\Shared\EventSourcing\EventStoreContract.cs" Link="Shared\EventStoreContract.cs" />
   </ItemGroup>
 
   <Import Project="..\Shared\TestSupport\LiveDatabase.props" />

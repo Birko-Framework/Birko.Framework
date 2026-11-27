@@ -25,4 +25,7 @@
   <Import Project="..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
+  <ItemGroup>
+    <Compile Include="../Shared/EventSourcing/EventStoreContract.cs" Link="Shared/EventStoreContract.cs" />
+  </ItemGroup>
 </Project>
