@@ -4,6 +4,19 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-11 — Live SQL test runs get their own database
+[[TASK-883]]. Two concurrent runs of a live SQL suite against one server failed ~1570 of 2602 tests each (shared fixed
+table names; measured), and MySQL classes that drop tables raw failed 3 of 8 runs through the shared cached connector.
+Each test process now creates and drops its own database (`tests/Shared/TestSupport/LiveDatabase.cs`, one producer);
+interfering classes take a dedicated one. Concurrent pairs pass on PostgreSQL, MySQL, SQL Server and TimescaleDB.
+
+## 2026-11-11 — SQL view probe answers "missing"; type-keyed bulk writes refuse reserved columns
+[[TASK-901]]. Without the provider View package (how every consumer runs), `ViewExists` threw on a missing view, so Auto
+mode failed instead of reading on the fly, and answered `false` when the database was unreachable; the connector's
+type-keyed `BulkUpdate` / `BulkDelete` with a key column named like `User` rewrote or deleted every row (measured, all
+four providers). The probe now answers missing and reports real errors; the bulk paths run TASK-872's check; Auto mode
+forgets a view a read reports dropped. Found: [[TASK-917]] (base `CREATE OR REPLACE VIEW` fails on SQLite and SQL Server).
+
 ## 2026-11-11 — Rules give one answer for null, `Like` and enum/Guid values, wherever they run
 [[TASK-882]] (the user's decisions). A rule comparing a non-nullable column with null, a `Like`, or an enum/Guid value
 given as text answered differently in memory, compiled and in SQL (up to 331 of 693 measured cases per provider). All

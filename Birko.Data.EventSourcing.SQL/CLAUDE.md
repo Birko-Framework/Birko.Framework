@@ -17,8 +17,14 @@ every consumer wrote its own (DraCode's `SqlEventStoreRepository`, SQLite-only, 
 Birko.Data.EventSourcing.SQL/
 ├── Models/
 │   └── DomainEventModel.cs   - one row per event in "__Events"; UNIQUE (AggregateGuid, Version); FromEvent/ToEvent
-└── SqlEventStore.cs          - SqlEventStore<DB> : IAsyncEventStore
+├── SqlEventStore.cs          - SqlEventStore<DB> : AbstractAsyncEventStore (the SQL override, TASK-995)
+└── SqlEventStoreOverrides.cs - o.AddSql(): any ISqlStoreFactory answers SqlEventStore from factory.GetEventStore(...)
 ```
+
+Since TASK-995, `SqlEventStore` is the SQL override in Birko.Data.EventSourcing's event store family. It overrides the
+`*Core` seams of `AbstractAsyncEventStore`, and its behaviour is unchanged. `o.AddSql()` builds it over the factory's
+store of `DomainEventModel`, finding the connector type at run time. It passes the shared contract
+(`SqlEventStoreContractTests`, on SQLite through the factory).
 
 ## Dependencies
 

@@ -4,9 +4,9 @@ Decorator-style event sourcing for Birko stores. Wraps any `IStore<T>` / `IAsync
 the bulk variants) so every Create / Update / Delete also appends a `DomainEvent` to an `IEventStore`.
 Reads pass through to the inner store. Replay APIs rebuild aggregate state from the event stream.
 
-This project ships **interfaces, wrappers, and an aggregate base class only** — no concrete
-`IEventStore` backend, no snapshot store, no built-in projections. Bring your own event-store
-implementation (typically backed by another Birko store, e.g. SQL / Mongo / JSON).
+It also ships the **event store** itself: one `IAsyncEventStore` for whichever backend your `IStoreFactory` is configured
+for, with native versions per backend in the `Birko.Data.EventSourcing.*` projects. It has no snapshot store and no
+built-in projections.
 
 ## Features
 
@@ -23,6 +23,35 @@ implementation (typically backed by another Birko store, e.g. SQL / Mongo / JSON
 - Birko.Configuration
 - Birko.Serialization (`ISerializer`; defaults to `SystemJsonSerializer`)
 - Birko.Time (`IDateTimeProvider`; defaults to `SystemDateTimeProvider`)
+
+## The event store
+
+```csharp
+var factory = StoreFactory.Create(config["Store:Backend"], config["Store:ConnectionString"], p => p
+    .AddSqLite().AddPostgreSQL().AddMongoDB());
+
+IAsyncEventStore events = factory.GetEventStore(o => o.AddSql().AddMongoDB());
+
+var next = await events.GetVersionAsync(aggregateId) + 1;
+try
+{
+    await events.AppendAsync(new DomainEvent(aggregateId, next, "Renamed", json));
+}
+catch (EventStoreConcurrencyException)
+{
+    // another writer took this version first, in this or another process: reload and retry
+}
+```
+
+| Backend | Event store | A batch of events |
+|---|---|---|
+| SQLite, PostgreSQL, MySQL, SQL Server | `SqlEventStore<DB>` (Birko.Data.EventSourcing.SQL, `o.AddSql()`) | one transaction |
+| MongoDB | `MongoDBEventStore` (Birko.Data.EventSourcing.MongoDB, `o.AddMongoDB()`) | one transaction on a replica set or sharded cluster; the default store on a standalone server |
+| RavenDB | `RavenDBEventStore` (Birko.Data.EventSourcing.RavenDB, `o.AddRavenDB()`) | one session |
+| Cosmos DB | `CosmosDBEventStore` (Birko.Data.EventSourcing.CosmosDB, `o.AddCosmosDB()`) | one transactional batch, one aggregate per batch |
+| Elasticsearch | `ElasticSearchEventStore` (Birko.Data.EventSourcing.ElasticSearch, `o.AddElasticSearch()`) | the default store, plus an index refresh per append |
+| InMemory (tests) | the default `AsyncStoreEventStore` | the default store |
+| JSON, XML | refused: they cannot turn away a write from a second process | — |
 
 ## Usage
 
@@ -90,7 +119,7 @@ raising per-entity events (no native UpdateByQuery / filter-delete optimization)
   backend's responsibility.
 - Only `"Created"` / `"Updated"` / `"Deleted"` are emitted; custom event types require raising via
   `eventStore.Append` directly or a custom wrapper.
-- Not included: a concrete `IEventStore`, a snapshot store, and projections. See `CLAUDE.md` for the
+- Not included: a sync event store implementation, a snapshot store, and projections. See `CLAUDE.md` for the
   full component/architecture notes and `Birko.EventBus.EventSourcing` for replay/event-bus glue.
 
 ## Related Projects

@@ -272,12 +272,14 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
 
 ## Acceptance criteria
 
-- [ ] Decisions above recorded, with the per-backend duplicate behaviour measured, not assumed.
-- [ ] MongoDB event store with the full `IAsyncEventStore` contract; a concurrent same-version append is refused with
+- [x] Decisions above recorded, with the per-backend duplicate behaviour measured, not assumed. Decisions 1–6, step 0, and every backend measured.
+- [x] MongoDB event store with the full `IAsyncEventStore` contract; a concurrent same-version append is refused with
       `EventStoreConcurrencyException` across two processes (or two clients), live under `BIRKO_MONGO_HOST`.
+      `MongoDBEventStore`: 21 of 21 on a replica set and a standalone server, including two writers racing as two clients.
 - [ ] Every other backend that is in passes the same contract suite (shared with `SqlEventStore`'s tests); one that is
       out says so in its README.
-- [ ] An event store obtainable from the configured `IStoreFactory` without naming the backend (if decided in).
+- [x] An event store obtainable from the configured `IStoreFactory` without naming the backend (if decided in).
+      `factory.GetEventStore(o => o.AddSql().AddMongoDB()…)`.
 - [ ] READMEs / CLAUDE.md, Recent Updates; DraCode told.
 
 ## Out of scope

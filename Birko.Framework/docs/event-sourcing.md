@@ -38,31 +38,41 @@ Periodic state snapshot for performance — avoids replaying the entire event hi
 
 ## Event Store
 
-```csharp
-// Sync
-public class EventStore<T> where T : AbstractModel
-{
-    IEnumerable<Event> GetEvents(Guid entityId);
-    void AppendEvent(Event @event);
-}
+`IAsyncEventStore` (Birko.Data.EventSourcing) appends events with per-aggregate versions and reads them back:
+- an aggregate's history: all of it, up to a version, or from a version;
+- its current version;
+- every event from a point in time.
 
-// Async
-public class AsyncEventStore<T> where T : AbstractModel
-{
-    Task<IEnumerable<Event>> GetEventsAsync(Guid entityId, CancellationToken ct = default);
-    Task AppendEventAsync(Event @event, CancellationToken ct = default);
-}
-```
+A second writer of a version that is already taken, in this process or another, gets
+`EventStoreConcurrencyException`, and nothing from its batch is kept.
 
-## Event-Sourced Repository
+Get one for whichever backend is configured, without naming it in application code:
 
 ```csharp
-// Sync
-public class EventSourcedRepository<T> where T : AbstractModel { }
-
-// Async
-public class AsyncEventSourcedRepository<T> where T : AbstractModel { }
+var factory = StoreFactory.Create(backend, connectionString, p => p.AddSqLite().AddMongoDB().AddCosmosDB());
+IAsyncEventStore events = factory.GetEventStore(o => o.AddSql().AddMongoDB().AddCosmosDB());
 ```
+
+It follows the store pattern:
+- `AbstractAsyncEventStore` is the contract.
+- `AsyncStoreEventStore` is a default over any store. Its concurrency comes from a record id derived from aggregate and
+  version.
+- Each backend that does better natively has its own version:
+
+| Backend | Event store | A batch of events |
+|---|---|---|
+| SQLite, PostgreSQL, MySQL, SQL Server | `SqlEventStore<DB>` (Birko.Data.EventSourcing.SQL, `o.AddSql()`) | one transaction |
+| MongoDB | `MongoDBEventStore` (Birko.Data.EventSourcing.MongoDB, `o.AddMongoDB()`) | one transaction on a replica set or sharded cluster; the default store on a standalone server |
+| RavenDB | `RavenDBEventStore` (Birko.Data.EventSourcing.RavenDB, `o.AddRavenDB()`) | one session |
+| Cosmos DB | `CosmosDBEventStore` (Birko.Data.EventSourcing.CosmosDB, `o.AddCosmosDB()`) | one transactional batch, one aggregate per batch |
+| Elasticsearch | `ElasticSearchEventStore` (Birko.Data.EventSourcing.ElasticSearch, `o.AddElasticSearch()`) | the default store, plus an index refresh per append |
+| InMemory (tests) | the default `AsyncStoreEventStore` | the default store |
+| JSON, XML | refused: they cannot turn away a write from a second process | — |
+
+## Store wrappers
+
+`.WithEventSourcing(eventStore)` wraps any Birko store, so each Create, Update and Delete also appends a `DomainEvent`
+(`EventSourcingStoreWrapper` and its async and bulk variants). `Replay` and `GetHistory` rebuild an aggregate.
 
 ## Usage
 

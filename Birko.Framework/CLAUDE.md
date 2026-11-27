@@ -296,6 +296,17 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### One event store for every backend, from the store factory (2026-11-27)
+[[TASK-995]], asked for by DraCode. `factory.GetEventStore(o => o.AddSql().AddMongoDB())` returns an `IAsyncEventStore`
+for the configured backend. It follows the store pattern: `AbstractAsyncEventStore` (the contract over `*Core` seams),
+the default `AsyncStoreEventStore` over any store, and native versions in `Birko.Data.EventSourcing.{SQL, MongoDB,
+RavenDB, CosmosDB, ElasticSearch}`. A record id derived from (aggregate, version) makes every backend refuse a second
+writer (measured); SQL, RavenDB, MongoDB (replica set) and Cosmos DB (container partitioned by aggregate) write a batch
+atomically. JSON and XML are refused. One shared contract suite, live on every backend. Found: [[TASK-998]].
+### RavenDB and Elasticsearch stores starting together on a new database all start (2026-11-27)
+[[TASK-996]], [[TASK-997]], found at TASK-995. Two app instances starting at once on a fresh RavenDB database or
+Elasticsearch index failed: the second create threw, and a store that found the other's half-created database or index
+failed its first query. Init now retries a refused database create and waits until the database or index answers (30 s).
 ### One store factory for SQL and NoSQL backends, chosen by configuration (2026-11-25)
 [[TASK-990]], the user's widening of TASK-988. `StoreFactory.Create(backend, connectionString, p => p.AddInMemory().AddSqLite().AddMongoDB())`
 returns an `IStoreFactory` (Birko.Data.Stores) handing out `IAsyncBulkStore<T>`; `GetAsyncRepository<T>()` comes from
@@ -361,17 +372,6 @@ aggregate subquery and the read throws; it never answers wrong, and Cosmos has n
 and asks the gateway on Linux, where TASK-907's astral check counted 0 (a mixed MIN/MAX group was answered, not refused)
 and TASK-899's nested `Count(p)` threw; both now render forms the gateway path reads correctly. The SQL case-fold contract
 assumed the machine's culture and is pinned to sk-SK. Found: [[TASK-920]] (P1, nested SUM/AVG/MAX on the gateway path).
-### Live SQL test runs get their own database (2026-11-11)
-[[TASK-883]]. Two concurrent runs of a live SQL suite against one server failed ~1570 of 2602 tests each (shared fixed
-table names; measured), and MySQL classes that drop tables raw failed 3 of 8 runs through the shared cached connector.
-Each test process now creates and drops its own database (`tests/Shared/TestSupport/LiveDatabase.cs`, one producer);
-interfering classes take a dedicated one. Concurrent pairs pass on PostgreSQL, MySQL, SQL Server and TimescaleDB.
-### SQL view probe answers "missing"; type-keyed bulk writes refuse reserved columns (2026-11-11)
-[[TASK-901]]. Without the provider View package (how every consumer runs), `ViewExists` threw on a missing view, so Auto
-mode failed instead of reading on the fly, and answered `false` when the database was unreachable; the connector's
-type-keyed `BulkUpdate` / `BulkDelete` with a key column named like `User` rewrote or deleted every row (measured, all
-four providers). The probe now answers missing and reports real errors; the bulk paths run TASK-872's check; Auto mode
-forgets a view a read reports dropped. Found: [[TASK-917]] (base `CREATE OR REPLACE VIEW` fails on SQLite and SQL Server).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

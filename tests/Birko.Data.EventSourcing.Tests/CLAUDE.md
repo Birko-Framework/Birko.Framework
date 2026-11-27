@@ -16,11 +16,20 @@ xUnit + FluentAssertions
 ## Scope & conventions
 - The inner store under test is `Birko.Data.InMemory` (`InMemoryStore<T>` / `AsyncInMemoryStore<T>`) —
   the canonical test double — so tests exercise the real create → event-append → persist path.
-- `IEventStore` / `IAsyncEventStore` are backed by a small in-memory test double defined in the test
-  class (no concrete event store ships in the framework yet).
+- The wrapper tests back `IEventStore` / `IAsyncEventStore` with a small in-memory test double defined in the test
+  class, so they exercise the wrapper alone.
 - Test entities implement `AbstractModel` + `IEventSourced`.
+- The event store contract (`tests/Shared/EventSourcing/EventStoreContract.cs`, TASK-995) is linked here and runs on the
+  default `AsyncStoreEventStore` over an InMemory factory.
 
 ## Coverage
+- `GenericEventStoreTests.cs` (TASK-995):
+  - `InMemoryEventStoreContractTests`: the 9 contract tests;
+  - `GenericEventStoreTests`:
+    - the record id is RFC 9562 v5, checked against the RFC's example, and is stable per (aggregate, version);
+    - a batch whose compensation fails says which events remain;
+    - how `GetEventStore` chooses: the default, a matching override, two matching overrides refused, a duplicate
+      override name refused, and JSON and XML refused.
 - `EventSourcingStoreWrapperTests` — regression tests for CR-C05 / CR-C06: the Created-event
   `AggregateGuid` must equal the Guid the inner store persists the row under (single, bulk sync, bulk
   async), so `Replay` / `GetHistory` by the persisted Guid find the event.

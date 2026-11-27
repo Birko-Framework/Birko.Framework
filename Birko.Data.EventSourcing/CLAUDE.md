@@ -21,7 +21,11 @@ Events/
   IEventStore.cs           — IEventStore + IAsyncEventStore (append + read by aggregate/version/time)
 Models/
   IEventSourced.cs         — IEventSourced contract + EventSourcedAggregate base class
+  EventRecord.cs           — one stored event for the generic event store; id = name-based UUID of (aggregate, version)
 Stores/
+  AbstractAsyncEventStore.cs     — base of every IAsyncEventStore: non-virtual contract, *Core seams (TASK-995)
+  AsyncStoreEventStore.cs        — the default event store over any IAsyncBulkStore<EventRecord>
+  EventStoreFactoryExtensions.cs — factory.GetEventStore(o => …) + EventStoreOverrides
   EventSourcingStoreWrapper.cs           — sync IStore<T> wrapper
   AsyncEventSourcingStoreWrapper.cs      — async IAsyncStore<T> wrapper
   EventSourcingBulkStoreWrapper.cs       — sync IBulkStore<T> wrapper (extends sync wrapper)
@@ -46,7 +50,43 @@ The event-store contract consumed by the wrappers. Members:
 - `GetVersion(Guid)` — current aggregate version (0 if none)
 - `ReadAllFrom(DateTime)` — global tail-read by time
 
-Async variants take a `CancellationToken`. No concrete implementation lives here — `SqlEventStore<DB>` is in Birko.Data.EventSourcing.SQL.
+Async variants take a `CancellationToken`.
+
+### The event stores (TASK-995): one interface, a generic default, per-platform overrides
+They are shaped like the store hierarchy, by the user's decision:
+- `AbstractAsyncEventStore` holds the non-virtual public contract, checking arguments once, over protected `*Core` seams.
+- `AsyncStoreEventStore` is a working default over **any** `IAsyncBulkStore<EventRecord>`.
+- A backend whose native behaviour is better gets its own `Birko.Data.EventSourcing.<Backend>` project, which overrides
+  the seams.
+
+How the default works:
+- **Concurrency without a backend index.** `EventRecord.Guid = EventRecord.IdFor(aggregate, version)` (RFC 9562 v5), so a
+  second writer of one version creates an id that already exists, and every store refuses it. Measured on every database
+  backend: `StoreUniqueViolationException` becomes `EventStoreConcurrencyException`.
+- **The default appends one event at a time.** When a later event conflicts, it deletes the ones it wrote, then throws. A
+  bulk create that meets a taken id leaves nothing, a prefix, or all but one, depending on the backend (measured), so only
+  a sequential append knows what to undo. ⚠ A crash between the write and the undo leaves the batch's first events
+  stored. This is documented, and it is why the transactional backends override the append.
+- **`factory.GetEventStore(o => o.AddSql().AddMongoDB()…)`** is an `IStoreFactory` extension. It answers a registered
+  override that accepts the factory, otherwise the default over `factory.GetAsyncStore<EventRecord>()`.
+  - Overrides are registered at the composition root, like backends: neither side can reference the other, and nothing
+    is process-wide.
+  - Two overrides that accept one factory are refused, by name.
+  - JSON and XML are refused, because they are single-process only (measured).
+- `FindConflictAsync` (protected) names the conflicting version, for overrides whose backend refuses a batch as a whole.
+
+| Backend | Event store | A batch of events |
+|---|---|---|
+| SQLite, PostgreSQL, MySQL, SQL Server | `SqlEventStore<DB>` (Birko.Data.EventSourcing.SQL, `o.AddSql()`) | one transaction |
+| MongoDB | `MongoDBEventStore` (Birko.Data.EventSourcing.MongoDB, `o.AddMongoDB()`) | one transaction on a replica set or sharded cluster; the default store on a standalone server |
+| RavenDB | `RavenDBEventStore` (Birko.Data.EventSourcing.RavenDB, `o.AddRavenDB()`) | one session |
+| Cosmos DB | `CosmosDBEventStore` (Birko.Data.EventSourcing.CosmosDB, `o.AddCosmosDB()`) | one transactional batch, one aggregate per batch |
+| Elasticsearch | `ElasticSearchEventStore` (Birko.Data.EventSourcing.ElasticSearch, `o.AddElasticSearch()`) | the default store, plus an index refresh per append |
+| InMemory (tests) | the default `AsyncStoreEventStore` | the default store |
+| JSON, XML | refused: they cannot turn away a write from a second process | — |
+
+The shared contract suite is `tests/Shared/EventSourcing/EventStoreContract.cs` (9 tests, including DraCode's two
+writers). Every implementation's test project subclasses it.
 
 `EventStoreConcurrencyException` (`AggregateGuid`, `Version`) is the contract's optimistic-concurrency signal: an append whose (aggregate, version) is already taken. A backend throws it and writes nothing from the batch.
 
@@ -133,7 +173,7 @@ var store = raw.WithEventSourcing(eventStore, clock);
 - Bulk filter-based `Update(filter, …)` / `Delete(filter)` are read-modify-write internally so that per-aggregate events can be emitted. Do not expect native UpdateByQuery performance.
 
 ## Not Included (Plan If Needed)
-- Concrete `IEventStore` implementation — pick a Birko store and adapt it.
+- A sync `IEventStore` implementation: only the async contract is implemented (TASK-995).
 - Snapshot store — not modeled here despite earlier docs mentioning it.
 - Projections / read-model fan-out — see `Birko.EventBus.EventSourcing` for replay/event-bus glue (`DomainEventPublished`, `EventReplayService`, `EventStoreEventBus`).
 
