@@ -88,6 +88,22 @@ namespace Birko.Data.EventSourcing.Stores
             }
         }
 
+        /// <summary>
+        /// Which (aggregate, version) a batch refused as a whole collided on, for an override whose backend writes a batch
+        /// atomically and does not say which event conflicted: a version twice in the batch, else one already stored, else
+        /// the first event.
+        /// </summary>
+        protected async Task<(Guid AggregateGuid, long Version)> FindConflictAsync(IReadOnlyList<IEvent> batch, CancellationToken ct)
+        {
+            if (DuplicateInBatch(batch) is { } duplicate) return duplicate;
+            foreach (var e in batch)
+            {
+                var id = EventRecord.IdFor(e.AggregateGuid, e.Version);
+                if (await Store.CountAsync(r => r.Guid == id, ct).ConfigureAwait(false) > 0) return (e.AggregateGuid, e.Version);
+            }
+            return (batch[0].AggregateGuid, batch[0].Version);
+        }
+
         /// <inheritdoc />
         protected override async Task<IEnumerable<IEvent>> ReadCoreAsync(Guid aggregateId, long? fromVersion, long? toVersion, CancellationToken ct)
         {

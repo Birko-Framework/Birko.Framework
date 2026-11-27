@@ -964,6 +964,7 @@ ignore:
   # per-backend bodies with no cross-backend contract of their own
   - "../Birko.Data.EventSourcing.SQL/**"
   - "../Birko.Data.EventSourcing.ElasticSearch/**"
+  - "../Birko.Data.EventSourcing.RavenDB/**"
   - "../Birko.Redis/RedisConnectionManager.cs"
   - "../Birko.Data.ElasticSearch/Extensions/**"
   - "../Birko.Data.ElasticSearch/Highlighting/**"

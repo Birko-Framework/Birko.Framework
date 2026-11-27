@@ -285,6 +285,10 @@
 			"path": "../Birko.Data.EventSourcing.ElasticSearch"
 		},
 		{
+			"name": "Data.Patterns / Birko.Data.EventSourcing.RavenDB",
+			"path": "../Birko.Data.EventSourcing.RavenDB"
+		},
+		{
 			"name": "Data.Patterns / Birko.Data.EventSourcing.SQL",
 			"path": "../Birko.Data.EventSourcing.SQL"
 		},
@@ -823,6 +827,10 @@
 		{
 			"name": "Tests / Birko.Data.EventSourcing.ElasticSearch.Tests",
 			"path": "../tests/Birko.Data.EventSourcing.ElasticSearch.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.EventSourcing.RavenDB.Tests",
+			"path": "../tests/Birko.Data.EventSourcing.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.EventSourcing.SQL.Tests",

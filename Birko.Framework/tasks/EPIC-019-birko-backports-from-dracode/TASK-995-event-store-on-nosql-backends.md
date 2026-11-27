@@ -220,6 +220,19 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
   The new project is registered in the `.slnx`, the workspace, the Sandbox aggregator, the spec map, `CLAUDE-projects.md`,
   the README and `docs/dependencies.md`. Fixed along the way: `Birko.Data.EventSourcing.SQL` and its tests were missing
   from the workspace. A sweep now finds every project in both lists.
+- **2026-11-27, the RavenDB event store** (`Birko.Data.EventSourcing.RavenDB`). `RavenDBEventStore` writes a batch with one
+  bulk create, a single `SaveChanges`, so it is all or nothing even across a crash. The conflicting version is found
+  afterwards with `AsyncStoreEventStore.FindConflictAsync`, a new shared helper. Registered with `o.AddRavenDB()`. The
+  contract passes live, 10 of 10.
+- **2026-11-27, Cosmos DB and MongoDB checked against decision 4.**
+  - **MongoDB:** the store joins a session's transaction (`IAsyncTransactionalStore<T, IClientSessionHandle>`), on a
+    replica set only. A one-node replica set was started for testing (`birko-live-mongo-rs`, port 27018; connect with
+    `directConnection=true`), with the user's OK.
+  - **Cosmos DB:** a transaction covers one logical partition, and the Cosmos stores partition every document on its own
+    id (TASK-614, TASK-240), so no batch of events can be atomic through the store. The user asked which design is
+    better as a pattern. Recommended: an own Cosmos event store with a container partitioned by aggregate. That gives an
+    atomic batch per aggregate, and a single-partition read of a stream and of its current version, where the default
+    store fans out across all partitions. A batch that mixes aggregates is refused. Awaiting the user's confirmation.
 
 ## Acceptance criteria
 

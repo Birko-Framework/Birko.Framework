@@ -103,6 +103,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.EventSourcing | Event sourcing pattern; one event store for any backend from the store factory (`factory.GetEventStore()`) |
 | Birko.Data.EventSourcing.SQL | SQL event store (`SqlEventStore<DB>`, any SQL provider; `o.AddSql()`) |
 | Birko.Data.EventSourcing.ElasticSearch | Elasticsearch event store (refresh after each append; `o.AddElasticSearch()`) |
+| Birko.Data.EventSourcing.RavenDB | RavenDB event store (a batch saved in one session, all or nothing; `o.AddRavenDB()`) |
 | Birko.Data.SQL.Caching | Query caching decorator for SQL stores |
 
 ### Migrations

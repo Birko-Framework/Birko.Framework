@@ -225,6 +225,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.EventSourcing** | Birko.Data.Core, Birko.Data.Stores, Birko.Serialization |
 | **Birko.Data.EventSourcing.SQL** | Birko.Data.EventSourcing, Birko.Data.SQL |
 | **Birko.Data.EventSourcing.ElasticSearch** | Birko.Data.EventSourcing, Birko.Data.ElasticSearch |
+| **Birko.Data.EventSourcing.RavenDB** | Birko.Data.EventSourcing, Birko.Data.RavenDB |
 | **Birko.Data.Processors** | Birko.Helpers |
 | **Birko.Data.Localization** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.Localization.SQL** | Birko.Data.Localization, Birko.Models.SQL, Birko.Data.SQL |
