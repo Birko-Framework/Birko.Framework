@@ -100,7 +100,9 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
 | Birko.Data.Tagging | Entity tagging system (tenant-scoped tags, polymorphic junction) |
 | Birko.Data.Views | Unified fluent view builder (cross-platform views, projections, aggregations) |
-| Birko.Data.EventSourcing | Event sourcing pattern |
+| Birko.Data.EventSourcing | Event sourcing pattern; one event store for any backend from the store factory (`factory.GetEventStore()`) |
+| Birko.Data.EventSourcing.SQL | SQL event store (`SqlEventStore<DB>`, any SQL provider; `o.AddSql()`) |
+| Birko.Data.EventSourcing.ElasticSearch | Elasticsearch event store (refresh after each append; `o.AddElasticSearch()`) |
 | Birko.Data.SQL.Caching | Query caching decorator for SQL stores |
 
 ### Migrations

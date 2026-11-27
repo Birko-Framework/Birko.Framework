@@ -210,6 +210,16 @@ single-process) and a Recent Updates entry, then tell DraCode how to call it.
   TASK-996 and TASK-997 are defects in the stores and predate this task: any two app instances starting together on a
   fresh database or index hit them. Each is filed as its own task, and the contract on RavenDB and Elasticsearch waits
   on them.
+- **2026-11-27, TASK-996 and TASK-997 fixed** (`3a5a0ce2`, `f243fd67`). Stores that start together on a new RavenDB
+  database or Elasticsearch index now all start.
+- **2026-11-27, the Elasticsearch event store** (`Birko.Data.EventSourcing.ElasticSearch`). `ElasticSearchEventStore` is
+  the default store plus an index refresh after every append, including after a failed batch's compensation. It is
+  registered with `o.AddElasticSearch()`, which matches `ElasticSearchStoreFactory`. The contract passes live, 10 of 10
+  (9 contract tests plus the override choice). Without the override, 5 of the 9 failed.
+
+  The new project is registered in the `.slnx`, the workspace, the Sandbox aggregator, the spec map, `CLAUDE-projects.md`,
+  the README and `docs/dependencies.md`. Fixed along the way: `Birko.Data.EventSourcing.SQL` and its tests were missing
+  from the workspace. A sweep now finds every project in both lists.
 
 ## Acceptance criteria
 

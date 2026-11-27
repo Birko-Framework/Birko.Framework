@@ -963,6 +963,7 @@ ignore:
   - "../Birko.Telemetry/**"
   # per-backend bodies with no cross-backend contract of their own
   - "../Birko.Data.EventSourcing.SQL/**"
+  - "../Birko.Data.EventSourcing.ElasticSearch/**"
   - "../Birko.Redis/RedisConnectionManager.cs"
   - "../Birko.Data.ElasticSearch/Extensions/**"
   - "../Birko.Data.ElasticSearch/Highlighting/**"

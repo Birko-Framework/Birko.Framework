@@ -223,6 +223,8 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.Aggregates** | Birko.Data.Core, Birko.Data.Stores, Birko.Helpers |
 | **Birko.Data.Tenant** | Birko.Data.Core, Birko.Data.Stores, Birko.Serialization |
 | **Birko.Data.EventSourcing** | Birko.Data.Core, Birko.Data.Stores, Birko.Serialization |
+| **Birko.Data.EventSourcing.SQL** | Birko.Data.EventSourcing, Birko.Data.SQL |
+| **Birko.Data.EventSourcing.ElasticSearch** | Birko.Data.EventSourcing, Birko.Data.ElasticSearch |
 | **Birko.Data.Processors** | Birko.Helpers |
 | **Birko.Data.Localization** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.Localization.SQL** | Birko.Data.Localization, Birko.Models.SQL, Birko.Data.SQL |
