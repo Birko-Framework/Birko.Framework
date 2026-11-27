@@ -104,6 +104,27 @@ mostly its code without the SQL unique index. `Birko.Data.EventSourcing` already
 - Whether a read made right after a create sees the new row. Elasticsearch is expected to miss it until a refresh. If
   it does, `GetVersion` returns a stale value and the next append conflicts with itself.
 
+**Step 0 measured (2026-11-27).** A temporary probe (not committed) ran through the factory, against live servers in Docker:
+
+| Backend | read right after a create | bulk create [2, 3, duplicate of 1, 4] leaves |
+|---|---|---|
+| InMemory, SQLite, RavenDB | sees it | **nothing** (all-or-nothing) |
+| MongoDB | sees it | **2, 3** (ordered insert, stops at the duplicate) |
+| Cosmos DB | sees it | **2, 3, 4** (everything but the duplicate) |
+| Elasticsearch | **does not see it** (0 rows, no top version) | **2, 3, 4** |
+
+Every backend threw `StoreUniqueViolationException`. A descending, limit-1 read answers the top version wherever the row
+is visible. What this changes in the plan:
+- **The default appends one event at a time, in version order.** A bulk create leaves three different results on
+  conflict, so only a sequential append tells the default exactly which of its own events to delete.
+- **RavenDB's bulk create is already all-or-nothing**, so its override is a bulk append (decision 4, option 2).
+- **Cosmos DB's bulk create is not transactional.** Its override needs a transactional batch, which works only within
+  one partition, so its event container is partitioned by aggregate.
+- **Elasticsearch needs an override for read-your-writes** (a refresh on append). Without it, the current version reads
+  0 straight after an append.
+- **MongoDB:** its override uses a transaction when the server is a replica set. The Docker server is standalone, so the
+  default path runs there.
+
 **Step 1: `Birko.Data.EventSourcing` (generic, no backend references).**
 - `Models/EventRecord.cs`: an `AbstractModel` with `DomainEventModel`'s fields. Its `Guid` is
   `EventRecord.IdFor(aggregate, version)`, a name-based UUID (v5, RFC 9562) under a fixed Birko namespace. The event's
