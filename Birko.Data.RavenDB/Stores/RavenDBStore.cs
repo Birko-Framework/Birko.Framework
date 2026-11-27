@@ -209,7 +209,7 @@ public class RavenDBStore<T>
         session.Store(data, string.Empty, IdOf(data.Guid.Value));
         try
         {
-            session.SaveChanges();
+            RavenQueryRetry.Run(() => session.SaveChanges());
         }
         catch (Raven.Client.Exceptions.ConcurrencyException ex)
         {
@@ -281,19 +281,19 @@ public class RavenDBStore<T>
         {
             if (filter != null)
             {
-                return Session.Query<T>().FirstOrDefault(filter);
+                return RavenQueryRetry.Run(() => Session.Query<T>().FirstOrDefault(filter));
             }
-            return Session.Query<T>().FirstOrDefault();
+            return RavenQueryRetry.Run(() => Session.Query<T>().FirstOrDefault());
         }
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
 
         if (filter != null)
         {
-            return session.Query<T>().FirstOrDefault(filter);
+            return RavenQueryRetry.Run(() => session.Query<T>().FirstOrDefault(filter));
         }
 
-        return session.Query<T>().FirstOrDefault();
+        return RavenQueryRetry.Run(() => session.Query<T>().FirstOrDefault());
     }
 
     /// <inheritdoc />
@@ -323,7 +323,7 @@ public class RavenDBStore<T>
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
         RavenTrackedCopy.Into(data, existingItem);
-        session.SaveChanges();
+        RavenQueryRetry.Run(() => session.SaveChanges());
     }
 
     /// <inheritdoc />
@@ -339,7 +339,7 @@ public class RavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
         session.Delete(IdOf(data.Guid.Value));
-        session.SaveChanges();
+        RavenQueryRetry.Run(() => session.SaveChanges());
     }
 
     #endregion
@@ -357,19 +357,19 @@ public class RavenDBStore<T>
         {
             if (filter != null)
             {
-                return Session.Query<T>().Count(filter);
+                return RavenQueryRetry.Run(() => Session.Query<T>().Count(filter));
             }
-            return Session.Query<T>().Count();
+            return RavenQueryRetry.Run(() => Session.Query<T>().Count());
         }
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenSession());
 
         if (filter != null)
         {
-            return session.Query<T>().Count(filter);
+            return RavenQueryRetry.Run(() => session.Query<T>().Count(filter));
         }
 
-        return session.Query<T>().Count();
+        return RavenQueryRetry.Run(() => session.Query<T>().Count());
     }
 
     #endregion
@@ -426,7 +426,7 @@ public class RavenDBStore<T>
                 query = (IRavenQueryable<T>)query.Take(limit.Value);
             }
 
-            return query.ToList();
+            return RavenQueryRetry.Run(() => query.ToList());
         }
         finally
         {
@@ -469,7 +469,7 @@ public class RavenDBStore<T>
             }
             try
             {
-                session.SaveChanges();
+                RavenQueryRetry.Run(() => session.SaveChanges());
             }
             catch (Raven.Client.Exceptions.ConcurrencyException ex)
             {
@@ -515,7 +515,7 @@ public class RavenDBStore<T>
 
             if (Session == null)
             {
-                session.SaveChanges();
+                RavenQueryRetry.Run(() => session.SaveChanges());
             }
         }
         finally
@@ -548,7 +548,7 @@ public class RavenDBStore<T>
 
             if (Session == null)
             {
-                session.SaveChanges();
+                RavenQueryRetry.Run(() => session.SaveChanges());
             }
         }
         finally
@@ -633,7 +633,7 @@ public class RavenDBStore<T>
             session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
         try
         {
-            session.SaveChanges();
+            RavenQueryRetry.Run(() => session.SaveChanges());
         }
         catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
         {
@@ -675,7 +675,7 @@ public class RavenDBStore<T>
             if (filter != null)
                 q = q.Where(filter);
 
-            var data = q.ToList();
+            var data = RavenQueryRetry.Run(() => q.ToList());
             return AggregateHelper.LinqAggregate(data, query);
         }
         finally

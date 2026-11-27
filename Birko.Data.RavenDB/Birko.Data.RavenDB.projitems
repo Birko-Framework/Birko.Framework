@@ -26,6 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncRavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDatabaseBootstrap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenQueryRetry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDBStoreFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenTrackedCopy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IRavenConnectedStore.cs" />

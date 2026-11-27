@@ -68,6 +68,13 @@ qualified, because `Birko.Random` shadows it in consumers that import it (this b
 **Verified.** The regression test passes 3 runs in a row. The full live suite passes, 467 of 467, including under the
 load that showed the loading window. Symbio.Birko builds.
 
+## Follow-up 2026-11-27 (TASK-998)
+
+This fix covered start-up only. A create request from a client still starting makes the server unload and lock the
+database briefly, even while other stores already use it, so their next request failed with `DatabaseDisabledException`
+(the full suite failed these two tests once, after the fix). [[TASK-998]]'s `RavenQueryRetry` now retries that refusal on
+every query and save.
+
 ## Human test plan
 
 N/A — fully covered by automated tests (live suite).

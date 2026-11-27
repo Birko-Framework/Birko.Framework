@@ -216,7 +216,7 @@ public class AsyncRavenDBStore<T>
         await session.StoreAsync(data, string.Empty, IdOf(data.Guid.Value), ct);
         try
         {
-            await session.SaveChangesAsync(ct);
+            await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
         }
         catch (Raven.Client.Exceptions.ConcurrencyException ex)
         {
@@ -274,19 +274,19 @@ public class AsyncRavenDBStore<T>
         {
             if (filter != null)
             {
-                return await Session.Query<T>().Where(filter).FirstOrDefaultAsync(ct);
+                return await RavenQueryRetry.RunAsync(() => Session.Query<T>().Where(filter).FirstOrDefaultAsync(ct));
             }
-            return await Session.Query<T>().FirstOrDefaultAsync(ct);
+            return await RavenQueryRetry.RunAsync(() => Session.Query<T>().FirstOrDefaultAsync(ct));
         }
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
 
         if (filter != null)
         {
-            return await session.Query<T>().Where(filter).FirstOrDefaultAsync(ct);
+            return await RavenQueryRetry.RunAsync(() => session.Query<T>().Where(filter).FirstOrDefaultAsync(ct));
         }
 
-        return await session.Query<T>().FirstOrDefaultAsync(ct);
+        return await RavenQueryRetry.RunAsync(() => session.Query<T>().FirstOrDefaultAsync(ct));
     }
 
     /// <inheritdoc />
@@ -319,7 +319,7 @@ public class AsyncRavenDBStore<T>
             ?? throw new EntityNotFoundException(typeof(T), data.Guid);
         // TASK-702: onto the tracked document, which keeps the cluster guard index its load brought.
         RavenTrackedCopy.Into(data, existingItem);
-        await session.SaveChangesAsync(ct);
+        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -359,7 +359,7 @@ public class AsyncRavenDBStore<T>
             update(item);
             try
             {
-                await session.SaveChangesAsync(ct).ConfigureAwait(false);
+                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
                 return item;
             }
             catch (Raven.Client.Exceptions.ConcurrencyException)
@@ -389,7 +389,7 @@ public class AsyncRavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         session.Delete(IdOf(data.Guid.Value));
-        await session.SaveChangesAsync(ct);
+        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
     }
 
     #endregion
@@ -410,19 +410,19 @@ public class AsyncRavenDBStore<T>
         {
             if (filter != null)
             {
-                return await Session.Query<T>().CountAsync(filter, ct);
+                return await RavenQueryRetry.RunAsync(() => Session.Query<T>().CountAsync(filter, ct));
             }
-            return await Session.Query<T>().CountAsync(ct);
+            return await RavenQueryRetry.RunAsync(() => Session.Query<T>().CountAsync(ct));
         }
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
 
         if (filter != null)
         {
-            return await session.Query<T>().CountAsync(filter, ct);
+            return await RavenQueryRetry.RunAsync(() => session.Query<T>().CountAsync(filter, ct));
         }
 
-        return await session.Query<T>().CountAsync(ct);
+        return await RavenQueryRetry.RunAsync(() => session.Query<T>().CountAsync(ct));
     }
 
     #endregion
@@ -456,7 +456,7 @@ public class AsyncRavenDBStore<T>
 
         using var session = RavenIndexWait.Apply(_documentStore.OpenAsyncSession());
         await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
-        await session.SaveChangesAsync(ct);
+        await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
 
         return data.Guid.Value;
     }
@@ -524,7 +524,7 @@ public class AsyncRavenDBStore<T>
                 query = (IRavenQueryable<T>)query.Take(limit.Value);
             }
 
-            return await query.ToListAsync(ct);
+            return await RavenQueryRetry.RunAsync(() => query.ToListAsync(ct));
         }
         finally
         {
@@ -572,7 +572,7 @@ public class AsyncRavenDBStore<T>
             }
             try
             {
-                await session.SaveChangesAsync(ct);
+                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
             }
             catch (Raven.Client.Exceptions.ConcurrencyException ex)
             {
@@ -621,7 +621,7 @@ public class AsyncRavenDBStore<T>
 
             if (Session == null)
             {
-                await session.SaveChangesAsync(ct);
+                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
             }
         }
         finally
@@ -657,7 +657,7 @@ public class AsyncRavenDBStore<T>
 
             if (Session == null)
             {
-                await session.SaveChangesAsync(ct);
+                await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
             }
         }
         finally
@@ -813,7 +813,7 @@ public class AsyncRavenDBStore<T>
             session.Advanced.Defer(new Raven.Client.Documents.Commands.Batches.PatchCommandData(id, null, patch, null));
         try
         {
-            await session.SaveChangesAsync(ct).ConfigureAwait(false);
+            await RavenQueryRetry.RunAsync(() => session.SaveChangesAsync(ct)).ConfigureAwait(false);
         }
         catch (Exception e) when (e.Message.Contains(RavenPropertyUpdatePatch.OverflowMarker))
         {
@@ -849,7 +849,7 @@ public class AsyncRavenDBStore<T>
             if (filter != null)
                 q = q.Where(filter);
 
-            var data = await q.ToListAsync(ct);
+            var data = await RavenQueryRetry.RunAsync(() => q.ToListAsync(ct));
             return await AggregateHelper.LinqAggregateAsync(data, query, ct);
         }
         finally
