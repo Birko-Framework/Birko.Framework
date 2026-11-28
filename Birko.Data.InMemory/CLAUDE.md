@@ -57,6 +57,8 @@ but the supplied `Settings` are retained and otherwise ignored.
 ## Thread safety
 The backing store is a `ConcurrentDictionary`. Bulk reads materialize to a `List<T>` snapshot
 before returning so callers never enumerate a live, concurrently-mutating collection.
+`AsyncInMemoryStore` implements `IAsyncConditionalUpdateStore<T>` (TASK-1013): `UpdateIfAsync` runs under a per-store
+lock and writes with `TryUpdate` against the instance it checked, on copies like every other read.
 
 ## Usage
 

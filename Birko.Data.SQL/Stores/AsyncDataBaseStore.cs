@@ -25,6 +25,7 @@ namespace Birko.Data.SQL.Stores
         , IAsyncTransactionalStore<T, SqlTransactionContext>
         , Birko.Data.Stores.IRetryableWriteStore
         , ISqlConnectedStore
+        , IAsyncConditionalUpdateStore<T>
         where T : Models.AbstractModel
         where DB : AbstractConnector
     {
@@ -356,6 +357,49 @@ namespace Birko.Data.SQL.Stores
             {
                 throw new EntityNotFoundException(typeof(T), data.Guid);
             }
+        }
+
+        /// <summary>
+        /// TASK-1013 — a compare-and-set on one row: reads it by id, and when <paramref name="condition"/> holds applies
+        /// <paramref name="update"/> and writes it with <c>UPDATE … WHERE Guid = @g AND &lt;condition&gt;</c>. The entity is
+        /// returned only when that statement matched exactly one row, so of concurrent claims exactly one wins: every
+        /// provider re-evaluates the WHERE on the row as it stands once it holds the row's write lock.
+        /// </summary>
+        /// <remarks>
+        /// Allowed inside a transaction (<see cref="SetTransactionContext"/> or an ambient <c>SqlUnitOfWork</c>): the
+        /// statement runs on the transaction's connection and its matched-row count is known at once, and the row lock it
+        /// takes is held to the end of the transaction, so a competing claim waits and then matches nothing (or, under a
+        /// stricter isolation level, is refused by the server — never a second winner). A rollback undoes the claim with
+        /// the rest of the transaction.
+        /// <para>
+        /// The condition is translated to SQL before anything is read; a condition the translator cannot express is
+        /// refused, never evaluated in memory instead.
+        /// </para>
+        /// </remarks>
+        /// <inheritdoc cref="IAsyncConditionalUpdateStore{T}.UpdateIfAsync"/>
+        public async Task<T?> UpdateIfAsync(Guid guid, Expression<Func<T, bool>> condition, Action<T> update, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            ArgumentNullException.ThrowIfNull(update);
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (Connector == null || guid == Guid.Empty) return null;
+
+            Expression<Func<T, bool>> byId = x => x.Guid == guid;
+            var conditions = SQL.DataBase.ParseConditionExpression(
+                Birko.Data.Expressions.ExpressionParameterReplacer.AndAlso(byId, condition)).ToList();
+
+            var item = await ReadCoreAsync(byId, ct).ConfigureAwait(false);
+            if (item == null || !condition.Compile()(item)) return null;
+            update(item);
+            if (item.Guid != guid)
+                throw new InvalidOperationException($"UpdateIfAsync's update changed the id of {typeof(T).Name} {guid}; an update must not change it.");
+
+            using var _tx = EnterTransactionScope();
+            var matched = AsyncConnector != null
+                ? await AsyncConnector.UpdateAsync(typeof(T), item, conditions, ct).ConfigureAwait(false)
+                : await Task.Run(() => Connector!.Update(typeof(T), item, conditions), ct).ConfigureAwait(false);
+            return matched == 1 ? item : null;
         }
 
         protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)

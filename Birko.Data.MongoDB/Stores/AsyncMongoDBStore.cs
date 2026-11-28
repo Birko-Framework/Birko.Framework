@@ -25,6 +25,7 @@ namespace Birko.Data.MongoDB.Stores
         , Data.Stores.IAsyncTransactionalStore<T, IClientSessionHandle>
         , Data.Stores.IAsyncAggregatableStore<T>
         , IMongoConnectedStore
+        , Data.Stores.IAsyncConditionalUpdateStore<T>
         where T : Data.Models.AbstractModel
     {
         /// <summary>
@@ -252,6 +253,46 @@ namespace Birko.Data.MongoDB.Stores
                 ? await Collection!.ReplaceOneAsync(Session, filter, item, new ReplaceOptions { IsUpsert = false }, ct)
                 : await Collection!.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct);
             return !result.IsAcknowledged || result.MatchedCount > 0;
+        }
+
+        /// <summary>
+        /// TASK-1013 — a compare-and-set on one document: reads it by id, and when <paramref name="condition"/> holds
+        /// applies <paramref name="update"/> and replaces it with a filter on the id AND the condition. A single-document
+        /// write is atomic in MongoDB, so the replace matches only while the stored document still satisfies the condition:
+        /// of concurrent claims exactly one matches, and the entity is returned only when the replace matched one document.
+        /// </summary>
+        /// <remarks>
+        /// Allowed inside a session (<see cref="SetTransactionContext"/> or an ambient unit of work): the replace runs in
+        /// it and reports its match at once; a competing transaction that touched the document fails with a write
+        /// conflict rather than winning too. The driver translates the condition; one it cannot translate is refused.
+        /// An unacknowledged write concern reports no match count, so the claim cannot be decided and is refused.
+        /// </remarks>
+        /// <inheritdoc cref="Data.Stores.IAsyncConditionalUpdateStore{T}.UpdateIfAsync"/>
+        public async Task<T?> UpdateIfAsync(Guid guid, Expression<Func<T, bool>> condition, Action<T> update, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            ArgumentNullException.ThrowIfNull(update);
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (Collection == null || guid == Guid.Empty) return null;
+
+            // TASK-218 / TASK-867: the same rewrites every filter this store hands the driver gets.
+            var rewritten = Data.Expressions.NullOrderingFold.Rewrite(Data.Expressions.SpanContains.Rewrite(condition))!;
+            var filter = Data.Expressions.ExpressionParameterReplacer.AndAlso(new ModelByGuid<T>(guid).Filter(), rewritten);
+
+            var item = await FindIn(Collection, new ModelByGuid<T>(guid).Filter()).FirstOrDefaultAsync(ct).ConfigureAwait(false);
+            if (item == null || !condition.Compile()(item)) return null;
+            update(item);
+            if (item.Guid != guid)
+                throw new InvalidOperationException($"UpdateIfAsync's update changed the id of {typeof(T).Name} {guid}; an update must not change it.");
+
+            var result = Session != null
+                ? await Collection.ReplaceOneAsync(Session, filter, item, new ReplaceOptions { IsUpsert = false }, ct).ConfigureAwait(false)
+                : await Collection.ReplaceOneAsync(filter, item, new ReplaceOptions { IsUpsert = false }, ct).ConfigureAwait(false);
+            if (!result.IsAcknowledged)
+                throw new InvalidOperationException(
+                    "UpdateIfAsync needs the replace's match count; an unacknowledged write concern does not report it.");
+            return result.MatchedCount == 1 ? item : null;
         }
 
         /// <inheritdoc />

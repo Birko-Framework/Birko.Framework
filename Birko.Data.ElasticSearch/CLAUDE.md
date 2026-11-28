@@ -100,6 +100,8 @@ public class ProductStore : ElasticSearchStore<Product>
 `update` applied only where `condition` holds, and an index request with `if_seq_no` / `if_primary_term`; a 409
 re-reads and asks again, up to `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the
 written document, or `null` when missing or the condition fails.
+It also implements `IAsyncConditionalUpdateStore<T>` (TASK-1013) explicitly, with the expression compiled; the `Func`
+overload stays public (job queues call it, and a second public overload would make their lambdas ambiguous).
 
 ⚠ The filtered `UpdateAsync(filter, …)` is an `update_by_query`, which matches against the **search index**: a document
 written under a second ago is matched as it was. Use `UpdateIfAsync` (and `ReadRealtimeAsync`) where a condition must

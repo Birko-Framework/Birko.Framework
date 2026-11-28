@@ -27,6 +27,7 @@ public class AsyncRavenDBStore<T>
     , IAsyncAggregatableStore<T>
     , IAsyncRealtimeReadStore<T>
     , IRavenConnectedStore
+    , IAsyncConditionalUpdateStore<T>
     , IDisposable
     where T : AbstractModel
 {
@@ -373,6 +374,14 @@ public class AsyncRavenDBStore<T>
         throw new StoreConcurrencyException(
             $"Document {guid} of {typeof(T).Name} changed under {MaxConditionalUpdateAttempts} consecutive conditional updates.",
             applied: 0, conflicts: MaxConditionalUpdateAttempts);
+    }
+
+    /// <summary>TASK-1013: <see cref="IAsyncConditionalUpdateStore{T}"/> over the compare-and-set above, with the
+    /// condition compiled: this store decides on the document it read, under optimistic concurrency.</summary>
+    Task<T?> IAsyncConditionalUpdateStore<T>.UpdateIfAsync(Guid guid, Expression<Func<T, bool>> condition, Action<T> update, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        return UpdateIfAsync(guid, condition.Compile(), update, ct);
     }
 
     /// <inheritdoc />

@@ -32,6 +32,7 @@ Extends DataBaseStore with bulk operations.
 Base class for asynchronous SQL stores.
 - `DB Connector` - Database connection (protected set)
 - Async versions of all database operations
+- `UpdateIfAsync(guid, condition, update)` — `IAsyncConditionalUpdateStore<T>` (TASK-1013), for all four providers: read by id, check, then `UPDATE … WHERE Guid = @g AND <condition>`; the entity is returned only when one row matched, so of concurrent claims one wins. Allowed inside a transaction (the row lock holds to commit). The condition is translated before anything is read; an untranslatable one is refused
 
 ### AsyncDataBaseBulkStore\<DB,T\>
 Extends AsyncDataBaseStore with async bulk operations.

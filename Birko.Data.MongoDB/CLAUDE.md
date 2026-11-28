@@ -22,6 +22,7 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `MongoDBStore<T>` - Synchronous MongoDB store
 - `MongoDBBulkStore<T>` - Bulk operations store
 - `AsyncMongoDBStore<T>` - Asynchronous MongoDB store
+  - implements `IAsyncConditionalUpdateStore<T>` (TASK-1013): `UpdateIfAsync` reads by id, checks, and replaces with a filter on `_id` AND the condition, won when one document matched; allowed in a session; refused under an unacknowledged write concern (no match count)
 - `AsyncMongoDBBulkStore<T>` - Async bulk operations store
 
 ### Repositories

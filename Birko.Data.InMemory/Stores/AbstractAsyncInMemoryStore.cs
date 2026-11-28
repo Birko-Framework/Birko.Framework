@@ -19,7 +19,7 @@ namespace Birko.Data.InMemory.Stores
     /// completed tasks; cancellation is observed via the lazy-init gate in the base class.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public abstract class AbstractAsyncInMemoryStore<T> : AbstractAsyncBulkStore<T>, IAsyncAggregatableStore<T>
+    public abstract class AbstractAsyncInMemoryStore<T> : AbstractAsyncBulkStore<T>, IAsyncAggregatableStore<T>, IAsyncConditionalUpdateStore<T>
         where T : Models.AbstractModel
     {
         #region Fields and Properties
@@ -147,6 +147,42 @@ namespace Birko.Data.InMemory.Stores
                 _items.TryRemove(data.Guid.Value, out _);
             }
             return Task.CompletedTask;
+        }
+
+        private readonly object _conditionalUpdateLock = new();
+
+        /// <summary>
+        /// TASK-1013 — a compare-and-set on one entity. Conditional updates are serialised by a per-store lock, and the
+        /// write itself is a <c>TryUpdate</c> against the exact instance the condition was asked of, so an ordinary
+        /// update or delete that lands in between makes it ask again (or answer <c>null</c>) instead of being overwritten.
+        /// The condition and the update run on a copy, and a copy is returned, like every other read of this store.
+        /// </summary>
+        /// <inheritdoc cref="IAsyncConditionalUpdateStore{T}.UpdateIfAsync"/>
+        public async Task<T?> UpdateIfAsync(Guid guid, Expression<Func<T, bool>> condition, Action<T> update, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(condition);
+            ArgumentNullException.ThrowIfNull(update);
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (guid == Guid.Empty) return null;
+
+            var predicate = condition.Compile();
+            lock (_conditionalUpdateLock)
+            {
+                while (_items.TryGetValue(guid, out var current))
+                {
+                    var item = Snapshot(current);
+                    if (!predicate(item)) return null;
+                    update(item);
+                    if (item.Guid != guid)
+                        throw new InvalidOperationException($"UpdateIfAsync's update changed the id of {typeof(T).Name} {guid}; an update must not change it.");
+                    if (_items.TryUpdate(guid, Snapshot(item), current))
+                    {
+                        return Snapshot(item);
+                    }
+                }
+                return null;
+            }
         }
 
         #endregion

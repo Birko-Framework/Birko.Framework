@@ -62,6 +62,7 @@
     <Compile Include="..\Shared\StoreContract\CollapsedGroupContract.cs" Link="Shared\CollapsedGroupContract.cs" />
     <Compile Include="..\Shared\StoreContract\StringEqualityLeftoversContract.cs" Link="Shared\StringEqualityLeftoversContract.cs" />
     <Compile Include="..\Shared\StoreContract\BulkBindingContract.cs" Link="Shared\BulkBindingContract.cs" />
+    <Compile Include="..\Shared\StoreContract\ConditionalUpdateContract.cs" Link="Shared\ConditionalUpdateContract.cs" />
     <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
   </ItemGroup>
 

@@ -312,6 +312,8 @@ session.Advanced.UseOptimisticConcurrency = true;
 (never an index), apply only where `condition` holds, save with the change vector; a `ConcurrencyException` reloads
 and asks again, up to `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the written
 document, or `null` when missing or the condition fails. Refused inside a unit of work.
+It also implements `IAsyncConditionalUpdateStore<T>` (TASK-1013) explicitly, with the expression compiled; the `Func`
+overload stays public (job queues call it, and a second public overload would make their lambdas ambiguous).
 
 ⚠ The store has no native filtered update: `UpdateAsync(filter, PropertyUpdate)` / `UpdateAsync(filter, Action)` are
 the base implementation, an index query (possibly stale) followed by unconditional writes. Use `UpdateIfAsync` where a

@@ -299,6 +299,8 @@ Oracle as above, compared strictly (same CLR type, same value). Measured on the 
   only where `condition` holds, replace with `IfMatchEtag`; a 412 re-reads and asks again, up to
   `MaxConditionalUpdateAttempts` (16), then `StoreConcurrencyException`. Returns the written item, or `null` when the item
   is missing or the condition fails. Refused inside a transactional batch. Async store only.
+- It also implements `IAsyncConditionalUpdateStore<T>` (TASK-1013) explicitly, with the expression compiled; the `Func`
+  overload stays public (job queues call it, and a second public overload would make their lambdas ambiguous).
 
 ## Transaction boundary (TASK-240)
 

@@ -131,6 +131,31 @@ foreach (var row in results)
 
 **Key types:** `AggregateFunction` (enum), `AggregateField` (record), `AggregateQuery<T>`, `AggregateResult`, `AggregateHelper` (LINQ fallback), `TimeIntervalParser`, `OrderByHelper`.
 
+## Conditional update (TASK-1013)
+
+`IAsyncConditionalUpdateStore<T>` is a compare-and-set on one entity — the one-winner claim behind "redeem this code once"
+or "take this job":
+
+```csharp
+if (store is IAsyncConditionalUpdateStore<AuthorizationCode> cas)
+{
+    var redeemed = await cas.UpdateIfAsync(codeId, c => !c.Used, c => c.Used = true);
+    if (redeemed == null) { /* missing, or another caller redeemed it first */ }
+}
+```
+
+It reads the entity by id, answers `null` when it is missing or the condition does not hold, and otherwise applies the
+update and writes it only while the stored entity still matches the condition. Of concurrent callers whose update makes the
+condition false, exactly one gets the entity back.
+
+| Backend | How it decides | Inside a transaction |
+|---|---|---|
+| SQL (SQLite, PostgreSQL, MySQL, SQL Server) | `UPDATE … WHERE Guid = @g AND <condition>`, won on one matched row | allowed (the row lock holds to commit) |
+| MongoDB | replace filtered on `_id` and the condition, won on one matched document | allowed in a session |
+| RavenDB, Cosmos DB, Elasticsearch | optimistic concurrency on the document version, re-read on conflict | refused (Raven, Cosmos) |
+| InMemory | under a per-store lock | — |
+| JSON, XML | not implemented | — |
+
 ## Choosing the backend by configuration (TASK-990)
 
 `IStoreFactory` hands out async stores without the code naming its backend, SQL or not, so the same code runs on
