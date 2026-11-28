@@ -40,6 +40,9 @@ data is `oauth_clients` on SQL and `OAuthClientEntity` on MongoDB.
 The user approved filing this on 2026-11-28, as recommended: the BCL attribute (the NoSQL packages do not reference
 Birko.Data.SQL), an explicit name in settings keeps winning, RavenDB left out.
 
+DraCode (2026-11-28): it has no MongoDB, Cosmos DB or Elasticsearch data under class-named collections (its server runs
+on SQLite), so nothing on its side argues against on-by-default. Symbio's data was not checked; check it before deciding.
+
 ## Acceptance criteria
 
 - [ ] MongoDB, Cosmos DB and Elasticsearch use the BCL `TableAttribute`'s name for a type that carries it, when no
