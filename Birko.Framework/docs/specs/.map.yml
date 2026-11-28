@@ -493,7 +493,13 @@ areas:
       # DataBase*.cs, not DataBase.cs: the identifier resolution for both interpolated sinks lives in the
       # partials (DataBase_OrderBy.cs, DataBase_RuleField.cs), which the exact-file glob never covered.
       - ../Birko.Data.SQL/SQL/DataBase*.cs
-      - ../Birko.Data.SQL/SQL/Conditions/*.cs
+      # TASK-1008: the aggregate and view halves of SqlValueFragmentDialect moved to views-and-aggregation (the user)
+      - ../Birko.Data.SQL/SQL/Conditions/Condition.cs
+      - ../Birko.Data.SQL/SQL/Conditions/Join.cs
+      - ../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs
+      - ../Birko.Data.SQL/SQL/Conditions/SqlConversion.cs
+      - ../Birko.Data.SQL/SQL/Conditions/SqlStringMatch.cs
+      - ../Birko.Data.SQL/SQL/Conditions/SqlValueFragmentDialect.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
       - ../Birko.Data.SQL/SQL/Connectors/IConditionStrategy.cs
       - ../Birko.Data.SQL/SQL/Connectors/SqlBuilderContext.cs
@@ -542,6 +548,9 @@ areas:
       - ../Birko.Data.SQL.View/**/*.cs
       - ../Birko.Data.SQL.*.View/**/*.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Aggregate.cs
+      # TASK-1008: aggregate and view SQL fragments, moved from filter-expression-translation (the user)
+      - ../Birko.Data.SQL/SQL/Conditions/SqlValueFragmentDialect_Aggregate.cs
+      - ../Birko.Data.SQL/SQL/Conditions/SqlValueFragmentDialect_View.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Aggregate.cs
 
   - name: specifications-and-paging

@@ -1,12 +1,13 @@
 ---
 area: filter-expression-translation
-generated-at: 22cd73f3630d64bfb02524fa2b85dc025bf59474
-generated-on: 2026-11-07
+generated-at: 3ac6468af83a9f91ee9c0613ee9bd6fccda9840a
+generated-on: 2026-11-28
 sources:
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
   - ../Birko.Data.Core/Expressions/DateTruncation.cs
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
+  - ../Birko.Data.Core/Expressions/NullOrderingFold.cs
   - ../Birko.Data.Core/Expressions/PredicateScope.cs
   - ../Birko.Data.Core/Expressions/SpanContains.cs
   - ../Birko.Data.Core/Filters/IFilter.cs
@@ -17,13 +18,26 @@ sources:
   - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
   - ../Birko.Data.RavenDB/Expressions/RavenFilterRewriter.cs
   - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs
+  - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector_ColumnNames.cs
+  - ../Birko.Data.SQL.MSSql/Database/Connector/MSSqlValueFragmentDialect.cs
   - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector.cs
+  - ../Birko.Data.SQL.MySQL/Database/Connectors/MySQLConnector_ColumnNames.cs
+  - ../Birko.Data.SQL.MySQL/Database/Connectors/MySqlValueFragmentDialect.cs
   - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector.cs
+  - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSQLConnector_ColumnNames.cs
+  - ../Birko.Data.SQL.PostgreSQL/Database/Connectors/PostgreSqlValueFragmentDialect.cs
   - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector_ColumnNames.cs
   - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteDecimal.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteExactFunctions.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteStringMatch.cs
+  - ../Birko.Data.SQL.SqLite/Database/Connectors/SqLiteValueFragmentDialect.cs
   - ../Birko.Data.SQL/SQL/Conditions/Condition.cs
   - ../Birko.Data.SQL/SQL/Conditions/Join.cs
   - ../Birko.Data.SQL/SQL/Conditions/RuleConditionConverter.cs
+  - ../Birko.Data.SQL/SQL/Conditions/SqlConversion.cs
+  - ../Birko.Data.SQL/SQL/Conditions/SqlStringMatch.cs
+  - ../Birko.Data.SQL/SQL/Conditions/SqlValueFragmentDialect.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
   - ../Birko.Data.SQL/SQL/Connectors/IConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/Connectors/SqlBuilderContext.cs
@@ -33,6 +47,8 @@ sources:
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/LikeConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/NullConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/DataBase.cs
+  - ../Birko.Data.SQL/SQL/DataBase_BooleanPredicate.cs
+  - ../Birko.Data.SQL/SQL/DataBase_CallTranslation.cs
   - ../Birko.Data.SQL/SQL/DataBase_Field.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
@@ -41,14 +57,15 @@ sources:
   - ../Birko.Data.TimescaleDB/Database/Connectors/TimescaleDBConnector.cs
 # source-commits: omitted — every source is inside this repo, so `generated-at` covers them (regen step 5c).
 shaped-by: [FEATURE-014]
-# Evidence pass ran 2026-10-21 (TASK-696) over 376 feature-linked tasks: 117 resolved, 259 did not —
-# polyrepo-era `pr:` shas the history import rewrote, or no reachable commit whose subject leads with the
-# task id; 1 commit leads with the id of a task the state gate refuses. Earlier entries kept append-only.
+# Evidence pass ran 2026-11-28 over 439 feature-linked tasks: 187 resolved, 252 did not -
+# polyrepo-era `pr:` values that are not commits of this repo, or no reachable commit whose subject leads with the
+# task id; 2 tasks the state gate refuses have commits leading with their id. Earlier entries kept append-only.
 shaped-by-derived: true
-shaped-by-unresolved: 259
+shaped-by-unresolved: 252
 # 2026-11-15 (TASK-917): SqlValueFragmentDialect gained SqlValueFragmentDialect_View.cs (CreateOrReplaceViewSql,
 # ViewExistsSql) and each provider dialect overrides them. Their behaviour is specified in views-and-aggregation
-# ("Provider view DDL and existence"); this area was not re-harvested, so generated-at is unchanged.
+# ("Provider view DDL and existence"). TASK-1008 moved that file and SqlValueFragmentDialect_Aggregate.cs to
+# views-and-aggregation in the map, so neither is a source of this area.
 ---
 # LINQ filter expression translation to backend queries
 
@@ -69,7 +86,9 @@ translated differently — or, for shapes neither walker understands, not at all
 what each translator actually produces, including the shapes that are silently dropped or widened,
 because those are the cases where a filter returns the wrong rows rather than failing. A shared
 pre-pass, `ExpressionNormalizer` (in `Birko.Data.Core`), runs at the lambda boundary of both
-translators and is the only piece of this capability the two backends provably share.
+translators. It is not the only piece the two backends share: `PredicateScope` decides for both what an
+explicit all-rows filter is, and `NullOrderingFold`, which ElasticSearch runs at its lambda boundary, is what
+`PredicateScope` asks about an ordering against null (both in `Birko.Data.Core`, specified below).
 
 ## Requirements
 
@@ -191,6 +210,50 @@ rejecting it (TASK-222).
 - **When** the normalizer runs
 - **Then** the result is still an `OrElse` of two `AndAlso` nodes — SQL and ElasticSearch depend on receiving AND/OR/NOT here, so the reduction must not go further than the constants
 
+### Requirement: A lifted ordering against null is folded to false before a document-store translator sees it
+
+`Birko.Data.Expressions.NullOrderingFold.Fold` / `Rewrite` SHALL replace every lifted `<`, `<=`, `>` or `>=` one of
+whose operands is null — the null constant, or a subtree that does not read the entity and evaluates to null — with
+`Constant(false)`, the value C# defines it as, and SHALL then reduce the boolean constants that leaves (`&&`, `||`,
+`!`, a conditional whose test became constant, and `==` / `!=` / `^` of two constants). `IsNullOrdering` SHALL NOT
+claim `==` / `!=` against null (an ordinary filter on the null rows), an ordering that is not lifted or is lifted to
+null, or an operand whose evaluation throws. A filter with no null ordering SHALL be returned by reference.
+`MatchesNothing` SHALL be true only for a filter whose body is the constant `false`.
+
+It is the one producer of "which comparison is a null ordering": `PredicateScope` asks `IsNullOrdering` (TASK-865), and
+the translators that hand a tree to a backend whose null semantics differ call the fold (TASK-867) — RavenDB
+(`RavenFilterRewriter`), Cosmos DB, MongoDB and their views, and Elasticsearch (`ParseLambda`, which renders a
+folded constant as match-none / match-all). The stores apply it after their write guard, because a folded
+`!(x.Score > nul)` is the constant `true`, which `PredicateScope.IsExplicitAllRows` reads as the all-rows synonym.
+SQL does not use it: its parser represents the same comparison as the empty `IN` (§ *SQL null and HasValue
+translation*).
+
+#### Scenario: A null ordering folds to false and the filter still answers what C# answers
+
+- **Given** a captured `int? nul` that is null and the filters `x.Score > nul`, `nul < x.Score`, `x.Score <= (int?)null`,
+  `!(x.Score > nul)`, `x.Score > nul || x.A > 4` and `!(x.Score > nul || x.A > 3)`
+- **When** `NullOrderingFold.Rewrite` runs
+- **Then** the bodies are `False`, `False`, `False`, `True`, `(x.A > 4)` and `Not((x.A > 3))`, and each folded filter
+  selects the same rows as the original compiled delegate (`tests/Birko.Data.Core.Tests/NullOrderingFoldTests.cs`)
+
+#### Scenario: A filter with no null ordering is untouched
+
+- **Given** `x.Score == nul`, `x.Score != nul`, `x.Score > 3` or `x.Score > x.Score`
+- **When** the fold runs
+- **Then** the same lambda instance is returned
+
+#### Scenario: An operand that throws is not claimed null
+
+- **Given** `x => x.Score > boom()` where `boom` throws when invoked
+- **When** the fold runs
+- **Then** the filter is returned unchanged
+
+#### Scenario: Only a filter folded to false matches nothing
+
+- **Given** `x => x.Score > nul && x.A > 1` and `x => !(x.Score > nul)`
+- **When** each is folded and `MatchesNothing` asked
+- **Then** the first is `true` and the second (folded to `true`) is `false`; a `null` filter is `false`
+
 ### Requirement: A member reached through an interface is rebound to the concrete property
 
 `ExpressionNormalizer` SHALL rewrite a property access whose member is declared on an **interface** to an
@@ -248,8 +311,8 @@ an `InvocationExpression` — and SHALL return the right lambda unchanged when t
 ### Requirement: SQL predicate parsing starts at the lambda boundary
 
 `DataBase.ParseConditionExpression` SHALL, on encountering a `LambdaExpression`, take the first
-parameter's type as the column-resolution type, run `ExpressionNormalizer.Normalize` over the body, and
-then parse the normalized body.
+parameter's type as the column-resolution type, run `ExpressionNormalizer.Normalize` over the body, then
+`RewriteBooleanComparisons` over the result (TASK-863), and then parse that body.
 
 #### Scenario: Normalizer runs exactly once, at the boundary
 
@@ -267,9 +330,15 @@ then parse the normalized body.
 
 `DataBase.ParseConditionExpression` SHALL translate a predicate whose normalized body is
 `Constant(true)` into an EMPTY condition sequence (meaning "no filter"), and a body of
-`Constant(false)` into a single condition with `Name = "1"`, `Values = { 0 }` and
-`Type = ConditionType.Equal` (rendering an always-false `1 = @param(0)`). The same two outcomes SHALL be
-produced when an AND/OR tree short-circuits to a constant.
+`Constant(false)` into a single condition with `Name = "1"`, an empty `Values` and
+`Type = ConditionType.In` — the empty `IN`, rendered `1 = 0` (`MakeFalseCondition`). It is the one always-false leaf
+`AbstractConnectorBase.ConstantTruth` knows, so a negation the parser has already put on the condition reduces it to
+always-true (TASK-861). The same two outcomes SHALL be produced when an AND/OR tree short-circuits to a constant.
+
+When the always-true outcome is reached on a parent that carries an enclosing `Not` (`IsNot` set), it SHALL consume
+that negation and produce the always-false condition instead of the empty sequence (`AlwaysTrue(parent)`: NOT TRUE is
+FALSE, TASK-1012). Likewise `IsConstantBoolCondition` SHALL read an operand that was left untouched (no `Name`, no
+sub-conditions, no `Values`) as `true`, or `false` when it carries `IsNot`.
 
 #### Scenario: Always-true predicate produces no WHERE clause
 
@@ -280,8 +349,9 @@ produced when an AND/OR tree short-circuits to a constant.
 #### Scenario: Always-false predicate produces an impossible WHERE
 
 - **Given** the predicate `_ => false`
-- **When** the condition is rendered by `EqualConditionStrategy`
-- **Then** the SQL is `1 = @WHERE10_0` with the parameter bound to `0`
+- **When** the condition is rendered by `InConditionStrategy`
+- **Then** the SQL is `1 = 0` and no parameter is bound. Before TASK-861 it was `1 = @p` bound to `0`, which nothing
+  reduced, so under a negation it rendered a WHERE that is true of every row
 
 #### Scenario: AND with a false operand short-circuits
 
@@ -299,7 +369,17 @@ produced when an AND/OR tree short-circuits to a constant.
 
 - **Given** `x => true && x.Active`
 - **When** the left operand resolves to constant true
-- **Then** `ReturnSingleSubCondition` transfers the right condition's `Name`, `Values`, `Type`, `IsNot` and `SubConditions` onto the parent (or returns it standalone) so no redundant group is emitted
+- **Then** `ReturnSingleSubCondition` makes the parent the right condition's predicate (`BecomePredicateOf`: its `Name`, `Type`, `Values`, `SubConditions` and the other predicate properties), XORs the two `IsNot` flags and takes the survivor's own `IsOr` (or returns it standalone), so no redundant group is emitted
+
+#### Scenario: A negated always-true group matches no row
+
+- **Given** `x => !(x.A > 3 || true)`
+- **When** the `Not` branch toggles `IsNot` on the condition it hands down and the OR branch finds its right operand constant-true
+- **Then** `AlwaysTrue(parent)` clears the `IsNot` and returns the always-false condition, so the SQL is `1 = 0` and a read
+  returns no row, as C# does. Before TASK-1012 the empty sequence was returned whatever the parent carried, the NOT was
+  dropped and a read returned every row (measured on SQLite: 6 of 6, C# 0); destructive writes refused it
+- **And** `x => x.A > 0 && !(x.A > 3 || true)` reduces the same way to no row, and `x => x.A > 0 || !(x.A > 3 || true)`
+  to `A > 0` (`tests/Birko.Data.SQL.Tests/Task1002ScopeReductionCorpusTests.cs`)
 
 ### Requirement: SQL comparison operators
 
@@ -309,7 +389,9 @@ produced when an AND/OR tree short-circuits to a constant.
 strategies SHALL invert each comparison operator when `IsNot` is set. Because a condition is rendered
 `column op value` whichever side each operand came from, a comparison whose parameter-free operand is on
 the LEFT and parameter-bound operand on the right SHALL swap the operands and mirror the operator via
-`FlipComparison` before the condition is built (SH-M123, TASK-153).
+`FlipComparison` before the condition is built (SH-M123, TASK-153). A binary node that is none of the six
+comparisons and not AND/OR, or an AND/OR whose operands are not `bool`, SHALL be refused with
+`NotSupportedException` naming the operator when it references the parameter (`RefuseNode`, TASK-860).
 
 #### Scenario: Not-equal renders as `<>`
 
@@ -329,11 +411,12 @@ the LEFT and parameter-bound operand on the right SHALL swap the operands and mi
 - **When** the comparison branch assigns `ConditionType.Greather` from the node type, finds the left operand parameter-free and the right parameter-bound, swaps them and flips the type to `Less`
 - **Then** the rendered SQL is `Age < @param(5)`, meaning what C# means. Before TASK-153 the operands were swapped without flipping and `25 > x.Age` returned the ages 30–60 where C# selects 10 and 20; an equality is symmetric and is unaffected
 
-#### Scenario: A comparison the switch does not cover defaults to equality
+#### Scenario: A binary node the switch does not cover is refused when it reads the row
 
-- **Given** a binary node that is neither AND/OR nor one of the six comparison node types (for example `ExpressionType.Coalesce` reaching the comparison branch)
+- **Given** a binary node over the row that is neither AND/OR nor one of the six comparison node types — a `bool?` XOR, an array index, a shift — or an `&` / `|` over integers
 - **When** the condition type is chosen
-- **Then** it stays at its initialised value `ConditionType.Equal`
+- **Then** `NotSupportedException` naming the operator is thrown. Before TASK-860 it was parsed as an `==` of its operands
+- **And** a parameter-free node stays at the initialised `ConditionType.Equal` and is folded by parse-time evaluation
 
 ### Requirement: SQL parse-time evaluation of parameter-free comparisons
 
@@ -356,11 +439,35 @@ through to normal parsing.
 
 ### Requirement: SQL null and HasValue translation
 
-The SQL translator SHALL emit `ConditionType.IsNull` for a comparison against the literal `null`, for a
+The SQL translator SHALL emit `ConditionType.IsNull` for an equality (`==` / `!=`) against the literal `null`, for a
 closure operand that evaluates to `null`, and for `Nullable<T>.HasValue`; `HasValue` SHALL toggle
 `IsNot` so a bare `x.Prop.HasValue` becomes `IS NOT NULL` and `!x.Prop.HasValue` becomes `IS NULL`.
 `NullConditionStrategy` SHALL render `IsNull` as `Name IS NULL` or `Name IS NOT NULL` and SHALL never
 bind a parameter.
+
+A lifted ordering (`<`, `<=`, `>`, `>=`) against a `null` value — literal, closure or the constant side of a value
+comparison — SHALL become the empty `IN` (`ComparedWithNull`): `1 = 0`, because C# answers `false` for every row, and
+under a negation the always-true term that is reduced away (TASK-859). `AbstractConnectorBase.ConstantTruth` reduces
+the enclosing groups with it, so a filter that therefore means every row (`!(x.Score > nul)`) reads every row and is
+refused by a destructive statement. A negated group whose only child is that empty `IN` SHALL be folded into the leaf
+as an empty `NOT IN`.
+
+The translator SHALL make a filter answer what the C# predicate answers when an operand is NULL (TASK-859, always on,
+no flag). The parser records each comparison operand that can be NULL (`Condition.NullableOperands`, with
+`NullOperandMatches`): a plain column whose CLR type holds null and which is not declared NOT NULL or primary, a value
+fragment whose type holds null, or either side of a column-versus-column comparison. Once the whole tree is built,
+`ApplyCSharpNullSemantics` SHALL add a leg only where SQL's UNKNOWN and C# differ:
+
+- outside a negation, a comparison C# answers `true` on NULL (`!=`, a `NOT IN` whose list held no `null`, an `IN` whose
+  list held one) SHALL gain `OR operand IS NULL`;
+- inside a negation, a comparison C# answers `false` on NULL (`==`, an ordering, an `IN` whose list held no `null`)
+  SHALL gain `AND operand IS NOT NULL`.
+
+Every other comparison, a comparison over an operand that cannot be NULL, and a condition built by hand SHALL keep
+its SQL. A `null` in a `Contains` list SHALL be taken out of the bound `IN` and recorded as "a NULL operand matches"
+(`MarkNullableIn`); a list holding only `null` SHALL become the operand's `IS [NOT] NULL`; over an operand that cannot
+be NULL the `null` is simply dropped. The shared `tests/Shared/StoreContract/NullFilterContract.cs` asks these shapes
+of all four providers against C#.
 
 #### Scenario: Literal null equality becomes IS NULL
 
@@ -392,6 +499,46 @@ bind a parameter.
 - **When** the closure `HasValue` member is parsed under a parent condition
 - **Then** the evaluated bool is bound as the parent's single value rather than becoming a null check
 
+#### Scenario: A nullable not-equal gains its IS NULL leg
+
+- **Given** a nullable `Score` column and `x => x.Score != 5`
+- **When** the tree is built and `ApplyCSharpNullSemantics` runs
+- **Then** the clause is `(Score <> @p OR Score IS NULL)`, so the NULL rows match as they do in C#
+  (`tests/Birko.Data.SQL.SqLite.Tests/Task859NullComparisonTests.cs`: 59 of 60 rows)
+
+#### Scenario: A negated equality gains IS NOT NULL inside the negation
+
+- **Given** the same column and `x => !(x.Score == 5)`
+- **Then** the clause is `NOT ((Score = @p AND Score IS NOT NULL))`, which is true of the NULL rows, as C# is
+- **And** a plain `x => x.Score == 5` keeps `Score = @p`, since SQL and C# already agree there
+
+#### Scenario: A column that cannot be NULL keeps its SQL
+
+- **Given** a non-nullable `Amount` column and `x => x.Amount != 2` or `x => !(x.Amount == 2)`
+- **Then** the clauses are `Amount <> @p` and `NOT (Amount = @p)`, with no leg
+
+#### Scenario: An ordering against a null value matches no row
+
+- **Given** `x => x.Score > nul` or `x => x.Score <= nul`, where the captured `int? nul` is `null`
+- **When** the comparison is parsed
+- **Then** the condition is the empty `IN` and the SQL is `1 = 0`, matching no row as in C#. Before TASK-859 the closure's
+  `null` made the comparison `Score IS NULL`, which matched the NULL rows
+
+#### Scenario: The negation of an ordering against null matches every row
+
+- **Given** `x => !(x.Score > nul)` with `nul` null
+- **When** the negated group around the empty `IN` is folded into an empty `NOT IN`
+- **Then** no WHERE is rendered and a read returns every row, while `Delete` with that filter throws
+  `WholeTableWriteException` and leaves every row
+
+#### Scenario: A list holding null matches the NULL rows
+
+- **Given** a nullable `Score` column and `x => list.Contains(x.Score)` where `list` holds values and `null`
+- **When** the `Contains` arm builds the `In`
+- **Then** the `null` is removed from the bound values and the clause is `(Score IN (…) OR Score IS NULL)`; its negation
+  renders `Score NOT IN (…)` with no leg, and a list holding only `null` renders `Score IS NULL`. Before TASK-859 the
+  `null` was dropped (no NULL row matched) or bound (`NOT IN (5, NULL)` matched no row at all)
+
 ### Requirement: SQL bare boolean column access
 
 The SQL translator SHALL translate a `bool`-typed member accessed directly off the lambda parameter
@@ -410,12 +557,69 @@ column name resolved with the table qualifier.
 - **When** the condition name is assigned
 - **Then** the raw C# member name is used as the column name
 
+### Requirement: A boolean compared with a boolean is rewritten before the SQL parser sees it
+
+`DataBase.ParseConditionExpression` SHALL, once at the lambda boundary and after `ExpressionNormalizer`, run
+`RewriteBooleanComparisons` (TASK-863). It SHALL walk predicate positions only — `&&`, `||`, `&` and `|` over `bool`,
+and `!` — and SHALL rewrite each `==` / `!=` whose two operands are typed `bool` and which has no operator method:
+`e == true` and `e != false` (the constant on either side) into `e`; `e == false` and `e != true` into `!e`, a `!` over
+a `!` cancelling; a predicate compared with a predicate into `(a && b) || (!a && !b)` for `==` and
+`(a && !b) || (!a && b)` for `!=`. It SHALL rewrite `x.Opt.Value` of a `bool?` read from the row into the lifted
+`x.Opt == true`, `!x.Opt.Value` into `x.Opt == false`, and `x.Opt.Value == c` / `!= c` into `x.Opt == c` / `x.Opt == !c`,
+so a NULL row matches none of them. It SHALL leave alone a plain `bool` column (read straight off the parameter, through
+a `Convert` too) compared with a constant, which stays a column-against-value condition; two plain `bool` columns,
+which the column-comparison builder renders; two constants; and a lifted `bool?` comparison (`x.Opt != true`), whose
+NULL rows TASK-859's legs handle. The rewrite is exact because each rewritten operand is a non-nullable C# `bool`.
+
+#### Scenario: HasValue compared with false is IS NULL
+
+- **Given** `x => x.Score.HasValue == false` (or `!= true`, or `false == x.Score.HasValue`)
+- **When** the rewrite turns it into `!x.Score.HasValue`
+- **Then** the SQL is `Score IS NULL`. Before TASK-863 it rendered `Score IS NOT NULL`, the complement, so a delete
+  removed exactly the rows the caller meant to keep (measured on SQLite, PostgreSQL, MySQL and SQL Server)
+
+#### Scenario: A comparison or a group compared with false is negated
+
+- **Given** `x => (x.Score == x.Peer) == false` or `x => (x.Score == 5 && x.Amount > 1) == false`
+- **When** the rewrite turns each into `!(…)`
+- **Then** the negated condition is parsed, with TASK-859's NULL legs, and matches the rows C# matches. Before TASK-863
+  the bare comparison or group was rendered and the constant was lost
+
+#### Scenario: A translated method compared with a bool keeps its pattern
+
+- **Given** `x => x.Name.StartsWith("a") == true` or `x => x.Name.Contains("b") != true`
+- **When** the rewrite turns them into `x.Name.StartsWith("a")` and `!x.Name.Contains("b")`
+- **Then** the `LIKE` binds the search pattern. Before TASK-863 the bool was bound as the LIKE (or IN) value
+
+#### Scenario: The Value of a nullable bool is compared with true
+
+- **Given** `x => x.Opt.HasValue && x.Opt.Value` and `x => x.Opt.HasValue && !x.Opt.Value`
+- **When** `x.Opt.Value` becomes `x.Opt == true` and `!x.Opt.Value` becomes `x.Opt == false`
+- **Then** each returns the rows C# returns and a NULL row matches neither. Before TASK-863 `x.Opt.Value` resolved to
+  the column with no value and rendered `Opt = NULL`, which matched nothing
+
+#### Scenario: A plain bool column against a constant is unchanged
+
+- **Given** `x => x.Flag == false`
+- **When** the rewrite meets it
+- **Then** the node is left as it is and parsed as `Flag = @p` with `false` bound
+
+#### Scenario: Every shape agrees with C# on four providers
+
+- **Given** the 83 shapes of `tests/Shared/StoreContract/BoolComparisonContract.cs` (HasValue, comparisons, groups,
+  string and IN calls, `bool` and `bool?` columns, `.Value`, `??`, predicate against predicate)
+- **When** each is read, counted, deleted and updated on SQLite, PostgreSQL, MySQL and SQL Server
+- **Then** each touches exactly the rows `Compile()` matches. With the rewrite off, 80 of 166 cases failed per provider
+
 ### Requirement: SQL string pattern methods
 
 The SQL translator SHALL map `StartsWith` to `ConditionType.StartsWith`, `EndsWith` to
 `ConditionType.EndsWith`, and `String.Contains` to `ConditionType.Like`; SHALL take ONLY the first
-argument as the search pattern for those three methods, ignoring any `StringComparison`, `bool` or
-`CultureInfo` overload argument; and `SqlBuilderContext.FormatValue` SHALL wrap the bound value with
+argument as the search pattern for those three methods, a `char` pattern being rewritten to a
+one-character string first (TASK-860); SHALL honour or refuse an explicit `StringComparison` as
+§ *An explicit StringComparison on a SQL string call is translated exactly or refused* says, and refuse the
+`(string, bool, CultureInfo)` overload (TASK-869). Without a comparison the match follows the column's
+collation (TASK-869, the user's decision). For that form `SqlBuilderContext.FormatValue` SHALL wrap the bound value with
 `value%`, `%value%` and `%value` respectively, after `SqlBuilderContext.EscapeLikePattern` has prefixed
 each LIKE metacharacter in the value — `%`, `_`, `[` (SQL Server's character class) and the escape
 character itself — with `SqlBuilderContext.LikeEscapeCharacter` (`!`). `LikeConditionStrategy` SHALL render
@@ -424,13 +628,34 @@ backslash, because inside a MySQL string literal a backslash is itself an escape
 
 A `String.StartsWith` / `EndsWith` / `Contains` whose object AND pattern argument both reference the
 parameter (`x.Name.StartsWith(x.Code)`) SHALL be refused with `NotSupportedException`: a LIKE pattern built
-from a column needs string concatenation, which the providers do not spell alike (SH-M125).
+from a column needs string concatenation, which the providers do not spell alike (SH-M125). A call whose
+searched string is a value and whose pattern is a column (`"Abcdef".StartsWith(x.Code)`) SHALL be refused
+too: LIKE answers the reverse question (TASK-860).
 
-#### Scenario: Culture-aware Contains ignores the comparison argument
+Before anything runs, each escaped LIKE pattern SHALL pass the dialect's `RequireLikePattern`. Only SQL
+Server's refuses: a pattern longer than `MaxLikePatternLength` (4000 characters, the `%` wildcards and `!`
+escapes included) throws `NotSupportedException` (TASK-874).
 
-- **Given** `x => x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)`
-- **When** the arguments are processed
-- **Then** only `query` is parsed as the pattern, the enum argument is skipped, and the SQL is `Title LIKE @param ESCAPE '!'` with the parameter bound to `%query%`
+#### Scenario: A char pattern is a one-character string
+
+- **Given** `x => x.Code.Contains('b')`
+- **When** the predicate is parsed
+- **Then** the call is rewritten to `Contains("b")` and binds `%b%`. Before TASK-860 the char was bound as
+  itself, which no provider compares as text, and `Contains('b')` matched only `"B"` (measured)
+
+#### Scenario: A value searched for a column pattern is refused
+
+- **Given** `x => "Abcdef".StartsWith(x.Code)`
+- **Then** `NotSupportedException` is thrown. Before TASK-860 it rendered `Code LIKE 'Abcdef%'`, the reverse question
+
+#### Scenario: A LIKE term past SQL Server's limit is refused
+
+- **Given** `x => x.Code.Contains(term)` on SQL Server, where `term` is 3999 plain characters
+- **When** `LikeConditionStrategy` formats the pattern `%term%` (4001 characters)
+- **Then** `NotSupportedException` naming the 4000-character limit is thrown and nothing runs. Before TASK-874
+  a count, update or delete failed with Msg 8152 and a read returned 0 rows with the matching row stored.
+  SQLite, PostgreSQL and MySQL run the same term (`tests/Shared/StoreContract/StringComparisonFilterContract.cs`,
+  `tests/Birko.Data.SQL.MSSql.Tests/LikePatternLimitTests.cs`)
 
 #### Scenario: A metacharacter in the search term stays literal
 
@@ -460,15 +685,25 @@ from a column needs string concatenation, which the providers do not spell alike
 
 ### Requirement: SQL method calls outside the recognised set
 
-For a method call whose name is not one of `StartsWith`, `EndsWith`, `Contains`, `ToLower`,
-`ToLowerInvariant`, `ToUpper`, `ToUpperInvariant`, and which is not `string.IsNullOrEmpty` over a
-parameter-bound argument, `DataBase.ParseConditionExpression` SHALL leave the
+A method call that references the parameter SHALL be one the parser translates, or be refused with
+`NotSupportedException` naming the call before anything runs (`RequireTranslatableCall`, TASK-860). The
+translated calls in predicate position are: a string `StartsWith` / `EndsWith` / `Contains` on a column
+with a value pattern; the static `string.Equals(row, value, comparison)` (§ *An explicit StringComparison on
+a SQL string call is translated exactly or refused*); a set `Contains` whose collection reads no row (IN);
+a case fold (`ToLower` / `ToUpper` and their invariant forms, without a culture); and
+`string.IsNullOrEmpty` over a column. A comparison operand that reads the row SHALL likewise be a column, a
+nullable's `.Value` / `.HasValue`, a column's `.Date`, a case fold or a value fragment
+(`RequireTranslatableComparand`); any other call or member is refused by name (`RefuseCall`, `RefuseMember`).
+Before TASK-860 the parser parsed such a call's arguments into the condition and lost its operation.
+
+For a call that references no parameter and matches no case (a conversion operator inside a `Contains`),
+`DataBase.ParseConditionExpression` SHALL leave the
 condition type at its incoming value (`ConditionType.Equal` for a freshly created condition), parse each
 non-skipped argument into that condition, then parse the call's `Object` into it, and return the
 condition.
 
 `string.IsNullOrEmpty(arg)` over a parameter-bound argument SHALL be translated to the OR group
-`(Col IS NULL OR Col = @p)` with `@p` bound to the empty string, nested as a sub-condition of the incoming
+`(Col IS NULL OR Col = @p)` with `@p` bound to the empty string and compared exactly (TASK-873), nested as a sub-condition of the incoming
 condition so that an enclosing `!` negates the whole group; an argument that does not resolve to a single
 column SHALL be refused with `NotSupportedException` (SH-M127, TASK-153).
 
@@ -483,6 +718,93 @@ column SHALL be refused with `NotSupportedException` (SH-M127, TASK-153).
 - **Given** the `op_Implicit` array-to-span conversion .NET inserts as the source argument of `MemoryExtensions.Contains`
 - **When** the call reaches the method-call branch, matches no case, and its arguments are parsed
 - **Then** the wrapped array expression is reached and evaluated as the condition's values, so the `In` condition is still populated
+
+#### Scenario: A call over the row the parser does not translate is refused by name
+
+- **Given** `x => string.IsNullOrWhiteSpace(x.Name)`, `x => x.Code.Substring(1) == "bc"`, `x => string.Compare(x.Code, "b") > 0` or `x => x.At.Year == 2026`
+- **When** the predicate is parsed
+- **Then** `NotSupportedException` naming the call or member is thrown before any statement runs. Before
+  TASK-860 the first rendered `Name = NULL`, the second compared `Code` with `'bc'`, the third compared `Code`
+  with 0, and the fourth failed with an unrelated error (`tests/Shared/StoreContract/CallCastFilterContract.cs`)
+
+#### Scenario: A set Contains over a collection read from the row is refused
+
+- **Given** `x => x.Tags.Contains("a")` where `Tags` is a collection on the entity
+- **Then** `NotSupportedException` is thrown: only a list of values searched for a column is translated
+
+### Requirement: Translatable calls over the row are rewritten before the SQL parsers see them
+
+Both SQL parsers — the condition parser and the SET value parser — SHALL run `RewriteTranslatableCalls` on
+the lambda body before `ExpressionNormalizer`, touching only nodes that reference the parameter
+(TASK-860). It SHALL rewrite `x.Opt.GetValueOrDefault()` / `GetValueOrDefault(d)` into `x.Opt ?? default` /
+`x.Opt ?? d`; a typed `a.Equals(b)` into `a == b`; `Equals(object)` on a nullable or an enum whose boxed
+argument has the receiver's own type into `==` (an enum compared as its integer); the static
+`string.Equals(a, b)` into `a == b`; a string `Equals` with `StringComparison.Ordinal` into `a == b`
+(TASK-895), and with any other comparison into the static `string.Equals(row, value, comparison)` with the
+row's side first (TASK-869); a non-nullable `bool` XOR into `!=`; and a string `Contains` / `StartsWith` /
+`EndsWith` with a `char` into the overload with a one-character string. Any other `Equals(object)` and a
+lifted `bool?` XOR SHALL be left alone, and the parser refuses them.
+
+#### Scenario: GetValueOrDefault keeps the NULL rows
+
+- **Given** `x => x.Score.GetValueOrDefault() != 5` over rows whose `Score` is NULL
+- **When** the call is rewritten to `(x.Score ?? 0) != 5`
+- **Then** the NULL rows are returned, as C# returns them. Before TASK-860 the parser dropped the call and
+  compared the bare column, missing every NULL row (measured on all four providers)
+
+#### Scenario: Equals between two operands is equality
+
+- **Given** `x => x.Hits.Equals(x.Score.Value)`
+- **Then** it is parsed as `x.Hits == x.Score.Value`, a column-versus-column comparison. Before TASK-860 it matched nothing
+
+#### Scenario: An Ordinal string Equals is the exact ==
+
+- **Given** `x => x.Code.Equals(value, StringComparison.Ordinal)` or `string.Equals(x.Code, x.Other, StringComparison.Ordinal)`
+- **Then** it becomes `==` and renders through the exact string equality (§ *SQL string equality and IN compare
+  ordinally*), with no LIKE pattern limit, over a value or another column (TASK-895)
+
+### Requirement: An explicit StringComparison on a SQL string call is translated exactly or refused
+
+A string `Contains` / `StartsWith` / `EndsWith` over a column, and `string.Equals(row, value, comparison)`,
+with `StringComparison.Ordinal` or `StringComparison.OrdinalIgnoreCase` SHALL carry that comparison in
+`Condition.Comparison` and render through the provider dialect's `StringMatch`, matching exactly what C#
+matches (TASK-869). `string.Equals` SHALL become a `ConditionType.TextEqual` condition: a NULL column is
+not equal to a value, and a null value is the column's `IS NULL`. A negated match SHALL render
+`NOT (…)`. Every other comparison (`CurrentCulture*`, `InvariantCulture*`), a comparison read from the row, a
+null comparison, a null term, a column as the term, and `string.Equals` with `OrdinalIgnoreCase` between two
+columns SHALL be refused with `NotSupportedException` before anything runs. The base dialect's `StringMatch`
+refuses, so a provider without an exact form fails rather than matching by its collation.
+
+The provider forms are: SQLite, the registered C# function `birko_string_match`; PostgreSQL, `LIKE` under
+`COLLATE "C"` for Ordinal and a `~` regular expression of C#'s case classes under `COLLATE "C"` for
+OrdinalIgnoreCase; MySQL, `LIKE` under `utf8mb4_bin` and `REGEXP_LIKE(…, 'c')` of the case classes; SQL
+Server, `LIKE` under `Latin1_General_100_BIN2` with the escaped term or with bracket classes of C#'s case
+variants (`SqlStringMatch.LikeCaseClassPattern`). SQL Server SHALL refuse an OrdinalIgnoreCase term holding a
+cased letter outside the Basic Multilingual Plane, and any pattern past its 4000-character LIKE limit.
+
+#### Scenario: OrdinalIgnoreCase matches C#'s case classes
+
+- **Given** `x => x.Title.Contains(query, StringComparison.OrdinalIgnoreCase)`
+- **When** the statement is rendered on each provider
+- **Then** it returns the rows C# returns. Before TASK-869 the comparison was ignored and the column's
+  collation decided: 49, 5, 113 and 104 of 240 cases differed on SQLite, PostgreSQL, MySQL and SQL Server
+  (`tests/Shared/StoreContract/StringComparisonFilterContract.cs`)
+
+#### Scenario: A culture comparison is refused
+
+- **Given** `x => x.Title.StartsWith(t, StringComparison.CurrentCultureIgnoreCase)`, or `x.Title.StartsWith(t, true, culture)`
+- **Then** `NotSupportedException` is thrown: no SQL collation reproduces .NET's culture data
+
+#### Scenario: Equals with OrdinalIgnoreCase is a NULL-aware text equality
+
+- **Given** `x => !string.Equals(x.Code, "abc", StringComparison.OrdinalIgnoreCase)`
+- **When** it is parsed
+- **Then** the condition is `TextEqual` with `Comparison = OrdinalIgnoreCase`, and the negation includes the rows whose `Code` is NULL, as C# does
+
+#### Scenario: A non-BMP cased letter is refused on SQL Server
+
+- **Given** an OrdinalIgnoreCase term holding a Deseret letter, on SQL Server
+- **Then** `NotSupportedException` is thrown: a bracket class of surrogate pairs matched nothing (measured)
 
 ### Requirement: An unrecognised call in an UPDATE SET value is refused, never invoked
 
@@ -612,7 +934,7 @@ filter, and SHALL NOT be wired into any other backend. The full classification, 
 
 ### Requirement: RavenDB's rejected portable spellings are rewritten to its own operators
 
-`Birko.Data.RavenDB.Expressions.RavenSetMembership.Rewrite` SHALL be applied to the caller's filter at
+`Birko.Data.RavenDB.Expressions.RavenFilterRewriter.Rewrite` SHALL be applied to the caller's filter at
 each RavenDB store method that accepts one, and SHALL perform two rewrites, both because RavenDB's LINQ
 provider rejects a spelling every other backend accepts:
 
@@ -632,6 +954,19 @@ ternary or boolean `??` — it emits **no `where` clause at all**, or malformed 
 document (TASK-222). Five further shapes — `string.Contains`, `ToLower`, and the three computed-operand
 shapes (`?? `, `+`, `*` inside a comparison) — are **accepted refusals**: they need a Raven static index
 or an analyzer, not a tree rewrite, and each is recorded in the matrix suite's ledger with its reason.
+
+Before anything else it SHALL fold every lifted ordering against `null` to `false` (`NullOrderingFold.Rewrite`,
+TASK-867): RQL ranks null below every value, so `Score > null` matched every non-null `Score` where C# matches none
+(measured). A filter that folds to `false` entirely SHALL be reported by `RavenFilterRewriter.MatchesNothing`, and the
+store answers empty without a query, because RavenDB refuses a constant predicate; one that folds to `true` is the
+explicit all-rows predicate above and is dropped.
+
+#### Scenario: An ordering against null matches no document
+
+- **Given** `x => x.Score > nul || x.A > 4` with `nul` null
+- **When** the rewrite runs
+- **Then** the filter becomes `x => x.A > 4`, and RavenDB returns the documents C# selects rather than every non-null `Score`
+- **And** `x => x.Score > nul && x.A > 1` folds to `false`, `MatchesNothing` is true and the store issues no query
 
 #### Scenario: A boolean ternary produces a where clause instead of vanishing
 
@@ -685,7 +1020,9 @@ typed `StringComparison`, `CultureInfo`, non-generic `IEqualityComparer`/`ICompa
 
 - **Given** `set.Contains(x.Name, StringComparer.OrdinalIgnoreCase)`
 - **When** the arguments are iterated
-- **Then** the comparer is skipped and its comparison semantics are delegated to the column collation
+- **Then** the comparer is skipped, and the string list compares ordinally like any other the parser builds
+  (§ *SQL string equality and IN compare ordinally*, TASK-873), so the comparer's case-insensitivity is not
+  honoured (`tests/Birko.Data.SQL.Tests/Connectors/EnumParameterBindingTests.cs` pins only that the `In` is kept)
 
 ### Requirement: SQL IN translation and empty sets
 
@@ -693,9 +1030,16 @@ A non-`String` `Contains` SHALL produce `ConditionType.In`. `InConditionStrategy
 EMPTY value set as the constant `1 = 0` when not negated — never `Col IN ()`. An empty NEGATED set
 matches every row and SHALL NOT be rendered at all: it carries no SQL at this layer and is reduced
 away by the enclosing chain (`AbstractConnectorBase.IsAlwaysTrueCondition`), so no always-true
-constant is emitted anywhere in the framework's SQL. A collection operand whose materialised,
-null-filtered contents are empty SHALL leave the condition an `In` with an empty value array rather
-than degrading to `IsNull`.
+constant is emitted anywhere in the framework's SQL. A collection operand that evaluates to `null` or to
+an empty collection SHALL leave the condition an `In` with an empty value array rather than degrading to
+`IsNull`. A collection that holds `null` SHALL be kept whole and handled as § *SQL null and HasValue
+translation* says (TASK-859).
+
+The reduction is three-valued (`AbstractConnectorBase.ConstantTruth`, TASK-861; specified with the guard in
+§ *bulk-filter-operations*): the empty `IN` is false and its `IsNot` inverts it; a group reduces by Kleene logic and
+its own `IsNot` then inverts a constant. A group that reduces to always-false SHALL render `1 = 0` alone, an
+always-false child of an OR group SHALL be dropped, and a negated always-false group is always-true and SHALL be
+reduced away like any other always-true term.
 
 The two halves are deliberately asymmetric. An always-FALSE term cannot be dropped — `A AND FALSE` is
 `FALSE`, not `A` — and `1 = 0` carries no injection connotation, so it is rendered. An always-TRUE term
@@ -772,6 +1116,22 @@ exception and no log entry. An operand `RenderValueFragment` cannot express SHAL
 - **When** the always-true term is dropped, leaving one child
 - **Then** the group still renders as `NOT (…)` over the remaining condition, since `NOT (A AND TRUE)` is `NOT A`
 
+#### Scenario: A negated group holding an always-false term matches every row
+
+- **Given** `x => !(empty.Contains(x.A) && x.A > 0)` with `empty` empty, or `!(x.Score > nul && x.A > 0)` with `nul` null
+- **When** `ConstantTruth` reduces the AND group (`FALSE AND A` is FALSE) and the group's `IsNot` inverts it
+- **Then** the tree is always-true: no WHERE is rendered, a read returns every row and a destructive statement refuses
+  it. Before TASK-861 it rendered `NOT (1 = 0 AND …)`, a non-empty WHERE true of every row, and `Delete` / `Update`
+  wrote every row with no exception on all four providers (measured, 6 of 6;
+  `tests/Shared/StoreContract/AlwaysFalseGroupContract.cs`)
+
+#### Scenario: An always-false group renders the constant alone, and an always-false OR term is dropped
+
+- **Given** an AND group of a real term and the empty `IN`, and an OR group of the same two
+- **When** each is rendered
+- **Then** the AND group renders `1 = 0` and the OR group renders only the real term
+  (`tests/Birko.Data.SQL.Tests/AlwaysFalseGroupReductionTests.cs`)
+
 #### Scenario: An arithmetic operand becomes the condition's name
 
 - **Given** `x => ids.Contains(x.Amount + 1)` with `ids = { 1, 5 }`
@@ -814,11 +1174,12 @@ exception and no log entry. An operand `RenderValueFragment` cannot express SHAL
 - **And** on a `DELETE` / `UPDATE` it reaches the whole-table write refusal, which the fabricated
   subcondition had hidden from the guard entirely
 
-#### Scenario: All-null collection collapses to matches-nothing
+#### Scenario: An all-null collection matches the NULL rows, or nothing
 
 - **Given** `ids.Contains(x.Guid)` where `ids` yields only nulls
-- **When** `InvokeExpression` filters nulls and the materialised array is empty while `parent.Type == In`
-- **Then** `parent.Values` is set to `Array.Empty<object>()` and the clause renders `1 = 0` instead of `Col IS NULL`
+- **When** the constant branch keeps the list whole under the `In` parent and `MarkNullableIn` takes the nulls out
+- **Then** over a column that can be NULL the condition becomes `Guid IS NULL`, as C# matches the null rows (TASK-859);
+  over a column that cannot be NULL `parent.Values` is empty and the clause renders `1 = 0`
 
 #### Scenario: A NULL collection variable also matches nothing
 
@@ -838,6 +1199,46 @@ exception and no log entry. An operand `RenderValueFragment` cannot express SHAL
 - **When** `BuildInClause` runs
 - **Then** the SQL is `Name IN (@WHEREName0_n, @WHEREName1_n, @WHEREName2_n)` with one bound parameter per element
 
+### Requirement: SQL string equality and IN compare ordinally
+
+`DataBase.MarkOrdinalText` SHALL mark as `StringComparison.Ordinal` every string `Equal` or `In` leaf the
+condition parser builds — a column, case fold or value fragment compared with a value, two columns
+compared, a `Contains` on a list of strings, an `Equals` rewritten to `==`. `EqualConditionStrategy` and `InConditionStrategy` SHALL render a marked leaf through
+the dialect's `OrdinalTextEquality`: `(plain AND exact)`, where the plain `=` / `IN` keeps the index seek and
+the exact term compares UTF-16 code units, and a negation (`!=`, `NOT IN`) as `NOT (plain AND exact)`
+(TASK-873). The exact forms are: SQLite `(x) COLLATE BINARY`; PostgreSQL `(x)::text COLLATE "C"`; MySQL
+`CONVERT(x USING utf8mb4) COLLATE utf8mb4_0900_bin`; SQL Server `(x + N'|') COLLATE Latin1_General_100_BIN2`
+on both sides, the terminator defeating its padding of trailing spaces, with two row-read operands cast to
+`NVARCHAR(MAX)` and a value of 4000 characters or more offered a second time uncut. A condition built by hand
+SHALL keep the plain comparison, which follows the column's collation.
+
+A marked string `IN` list past the provider's parameter limit SHALL be split into chunks like any other
+splittable list (`InListChunkPlanner`, TASK-895): the chunks are disjoint, values are de-duplicated ordinally,
+and the NULL leg goes in the first chunk only. A hand-built string list, a `char` list and a `NOT IN` past the
+limit SHALL still be refused.
+
+#### Scenario: String equality is exact where the collation is not
+
+- **Given** `x => x.Code == "abc"` over rows `abc`, `ABC` and `abc ` on SQL Server
+- **When** the read is issued
+- **Then** only `abc` is returned. Before TASK-873 `=` followed the collation: SQL Server matched all three (and
+  `ß` for `"ss"`), MySQL also `cafe` for `café`; SQLite and PostgreSQL differed on none
+  (`tests/Shared/StoreContract/StringEqualityContract.cs`)
+
+#### Scenario: The exact form keeps the index
+
+- **Given** an indexed string column and `x => ids.Contains(x.Code)`
+- **When** it is rendered
+- **Then** the SQL is `(Code IN (…) AND exact(Code) IN (exact(…)))`, so the plain term is answered by the index
+  (a seek on all four providers, measured on 100,000 rows) and the exact term filters what it found
+
+#### Scenario: A long string IN list is split
+
+- **Given** `x => codes.Contains(x.Code)` with more strings than one command may bind
+- **When** the statement is planned
+- **Then** it runs as disjoint chunks whose union is C#'s answer. Before TASK-895 it was refused past the limit
+  (`tests/Birko.Data.SQL.SqLite.Tests/Task833InListChunkingTests.cs`)
+
 ### Requirement: SQL negated groups keep their negation
 
 `AbstractConnectorBase.AppendSubConditionsTo` SHALL join a condition's sub-conditions with the
@@ -850,6 +1251,19 @@ surviving operand and SHALL **combine** the two negations — `parent.IsNot ^ su
 assign the survivor's over the parent's. The `Not` branch has already toggled `IsNot` on the very object
 it hands down as the parent, so an assignment discards an enclosing negation. XOR rather than OR, because
 two negations cancel: `!(x.A != 1 && true)` is `x.A == 1`.
+
+The collapse SHALL keep the survivor's own separator — `parent.IsOr = surviving.IsOr` — never the collapsed operator's
+(TASK-866). On a group `IsOr` says how its children combine, and the children are now the survivor's; the collapsed
+`&&` / `||` joined two operands, one of which is gone.
+
+#### Scenario: A collapsed group keeps its own AND/OR
+
+- **Given** `x => !((x.A == 10 || x.A == 20) && t)` with `t` true
+- **When** the AND branch collapses onto the surviving OR group
+- **Then** the rendered SQL is `NOT (A = @p0 OR A = @p1)`. Before TASK-866 the survivor took the AND's flag, the SQL was
+  `NOT (A = @p0 AND A = @p1)`, and a `Delete` removed every row with no `WholeTableWriteException` (measured on SQLite,
+  PostgreSQL, MySQL and SQL Server; `tests/Birko.Data.SQL.Tests/DataBase/CollapsedGroupSeparatorTests.cs`,
+  `tests/Shared/StoreContract/CollapsedGroupContract.cs`)
 
 #### Scenario: A negation around a collapsed group survives the collapse
 
@@ -915,18 +1329,26 @@ files are specced rather than uncovered.
 In outline: `IsExplicitAllRows` is the one-node normalized-constant test (the `DeleteAll()` synonym) and
 `ReducesToAllRows` is the broader "covers every entity" reduction over `&&` / `||` / `!` and an empty
 negated `Contains`. It deliberately answers `false` when uncertain, because its consumers refuse writes.
+Its always-false leaves are an empty-set `Contains` — a span-bound `Contains` over a `null` array counts as empty,
+because C# converts it to an empty span (TASK-1011) — and a lifted ordering against `null`, which it asks of
+`NullOrderingFold.IsNullOrdering` (TASK-865, TASK-867). The SQL bulk stores ask the parsed condition tree instead
+(`DataBase.RequireBoundedFilter` over `AbstractConnectorBase.WouldTargetEveryRow`, TASK-861), and
+`tests/Birko.Data.SQL.Tests/Task1002ScopeReductionCorpusTests.cs` asks one corpus of both reductions.
 `BoundedFilterGuard.Require` is the single producer that composes those two answers into the refusal —
 explicit-door check first, then the reduction — so that every store hierarchy asks the question in exactly
 one way and supplies only its own all-rows door name.
 
 ### Requirement: SQL value-expression operands in predicates
 
-When either side of a comparison (after stripping `Convert`) is numeric arithmetic, a `Coalesce`, or a
-`ConditionalExpression`, `DataBase` SHALL render that side to a RAW SQL fragment — `(A + B)`,
+When either side of a comparison (after stripping `Convert`) is numeric arithmetic, a `Coalesce`, a
+`ConditionalExpression`, or a `Math` / `MathF` / `decimal` call or numeric unary operator over the row
+(§ *SQL Math calls and unary minus over the row*), `DataBase` SHALL render that side to a RAW SQL fragment — `(A + B)`,
 `COALESCE(a, b)`, `CASE WHEN … THEN … ELSE … END` — place it in the condition's `Name`, and compare it
 to the other side. The same rendering SHALL serve the value operand of a set `Contains` (§ *SQL IN
 translation and empty sets*), so a computed operand resolves identically whether it appears in a
-comparison or in an `IN` — one renderer, not one per operator. Constants inside such a fragment SHALL be inlined as portable SQL literals rather
+comparison or in an `IN` — one renderer, not one per operator. The condition SHALL also carry a re-render
+of the fragment for the provider's dialect (§ *A value fragment is re-rendered in the provider's dialect*).
+Constants inside such a fragment SHALL be inlined as portable SQL literals in the `Name`, rather
 than parameterised; a string constant containing a backslash SHALL be refused with
 `NotSupportedException`, because MySQL's default `sql_mode` reads `\'` as an escaped quote, so doubling `'`
 does not contain the literal there and the renderer has no dialect (SH-M139, TASK-153). When the value expression is on the LEFT and the constant on the right, the
@@ -1006,6 +1428,12 @@ SHALL be refused with `NotSupportedException`, since no date truncation is porta
 - **When** `MakeValueCondition` runs
 - **Then** it returns an `IsNull` condition with no values
 
+#### Scenario: An ordering against null inside a value comparison is constant
+
+- **Given** a value comparison whose evaluated constant side is `null` and whose type is an ordering, such as `(x.Score ?? 0) > nul`
+- **When** `MakeValueCondition` runs
+- **Then** `ComparedWithNull` makes it the empty `IN`, rendered `1 = 0` — false for every row, as C# answers (TASK-859)
+
 #### Scenario: Non-portable literal fails loud
 
 - **Given** a value fragment containing a `DateTime` or `Guid` constant
@@ -1014,7 +1442,7 @@ SHALL be refused with `NotSupportedException`, since no date truncation is porta
 
 #### Scenario: Untranslatable operand fails loud
 
-- **Given** a parameter-bearing operand inside a value fragment that is none of column access, arithmetic, coalesce, ternary or nullable `.Value`
+- **Given** a parameter-bearing operand inside a value fragment that is none of column access, arithmetic, coalesce, ternary, nullable `.Value`, a translated `Math` call, a unary minus or a conversion
 - **When** `RenderValueFragment` reaches its default branch
 - **Then** a `NotSupportedException` naming the operand is thrown instead of silently dropping it
 
@@ -1024,12 +1452,168 @@ SHALL be refused with `NotSupportedException`, since no date truncation is porta
 - **When** `RenderBoolFragment` reaches its default branch and the expression contains a parameter
 - **Then** a `NotSupportedException` is thrown
 
+### Requirement: A value fragment is re-rendered in the provider's dialect
+
+A condition whose `Name` is a value fragment SHALL carry a re-render (`Condition.NameFragment`, and
+`FieldFragment` for a fragment on the right) that the connector applies through its `FragmentDialect` when
+the statement is built; the portable form stays in `Name` (TASK-856). Every connector's dialect is not
+`Portable`, so every provider renders its own form. The re-render SHALL reuse the columns and constants the
+parse resolved (TASK-858). On SQLite, where a `decimal` is TEXT, a decimal fragment SHALL be computed in C#'s
+decimal through the registered `birko_decimal_add` / `_sub` / `_mul` / `_div` / `_mod` functions, a decimal
+constant SHALL be the TEXT a decimal parameter binds as, and a decimal comparison SHALL name
+`COLLATE BIRKO_DECIMAL`; a conversion of a decimal fragment to another type SHALL be refused there. Other
+providers render the portable operators, with the steps the next requirements name.
+
+#### Scenario: A decimal fragment compares as a decimal on SQLite
+
+- **Given** `x => small.Contains(x.Amount + 0m)` or `x => x.Amount + 0m == 10.10m` on SQLite
+- **When** the condition is rendered
+- **Then** the fragment is `birko_decimal_add(Table.Amount, …)` with the `0m` inlined as decimal TEXT, compared under
+  `COLLATE BIRKO_DECIMAL`, and the rows C# selects are returned. Before TASK-856 `Amount + 0` was a REAL, which SQLite orders below every TEXT:
+  `Contains` and `==` matched nothing, `<` every row, and `COALESCE` / `CASE` compared byte-wise
+  (`tests/Birko.Data.SQL.SqLite.Tests/DecimalValueFragmentComparisonTests.cs`)
+
+### Requirement: A conversion over the row is translated only when it is exact
+
+`SqlConversion.Classify` SHALL be the one classification of a C# conversion the SQL parsers meet (TASK-860):
+**transparent** — the same type, a nullable lift, an enum to its integer, a widening integer cast, `float` to
+`double`, a reference conversion to a base type or interface; **widening** — an integer to `decimal`, `double`
+or `float`; **lossy** — everything else (a narrowing integer, a fraction to an integer, `char`, `bool`, an
+unboxing). A lossy conversion over the row SHALL be refused with `NotSupportedException` naming both types,
+in a predicate, a comparison operand, a value fragment and a SET value (`RequireTranslatableConversion`); a
+parameter-free lossy one inside a fragment SHALL be computed by C#. Inside a fragment a widening SHALL be an
+explicit cast — `CAST(x AS DECIMAL(p,0))` with `p` the integer type's digits, `CAST(x AS DOUBLE PRECISION)` or
+`REAL` for a `float` (MySQL `DOUBLE` / `FLOAT`, SQLite `REAL`; SQLite's integer to decimal is `birko_decimal_add(x, '0.0')`) — and
+an integer widened to `int` or `long` SHALL be `CAST(x AS INTEGER)` / `CAST(x AS BIGINT)` on PostgreSQL and
+SQL Server, and nothing on MySQL and SQLite (`IntegerWidening`, TASK-890).
+
+The one exception is an update SET whose whole value is an integer narrowed to the column's own type
+(`SET Sh = (short)(Sh + 1)`): it SHALL be translated through `NarrowedInteger`, which keeps the value on the
+servers, whose store fails an overflow, and range-checks it through `birko_checked_int` on SQLite (TASK-890).
+
+#### Scenario: A narrowing cast in a filter is refused
+
+- **Given** `x => (int)x.Amount == 10`
+- **Then** `NotSupportedException` naming `Decimal` and `Int32` is thrown. Before TASK-860 the conversion was
+  dropped and the decimal compared
+
+#### Scenario: An integer widened to a fraction divides as a fraction
+
+- **Given** `x => x.Hits / 4.0 == 0.75` or `x => (decimal)x.Hits / 4m == 0.75m`
+- **When** the fragment is rendered
+- **Then** the integer is cast before the division and the row with `Hits = 3` is returned. Before TASK-860 the
+  cast was dropped and two integers were divided (measured on SQLite for `4.0`, on PostgreSQL and SQL Server for
+  `4m`; `tests/Shared/StoreContract/CallCastFilterContract.cs`)
+
+#### Scenario: Integer arithmetic is computed in C#'s type
+
+- **Given** `x => x.Sh * x.Sh > 1000` over a `short` column, or `(long)x.Hits * 2 > 0` at `int.MaxValue`
+- **When** it runs on PostgreSQL or SQL Server
+- **Then** the operands are cast to `INTEGER` / `BIGINT` and the rows C# selects are returned. Before TASK-890 the
+  servers computed in the column's type and failed with an overflow C# never has
+
+#### Scenario: A narrowing SET fails on overflow instead of storing
+
+- **Given** `SET Sh = (short)(Sh + 1)` on a row holding 32767
+- **Then** the statement fails on every provider (MySQL under its default strict `sql_mode`) and the row keeps
+  32767; an in-range row is updated. Before
+  TASK-890 SQLite was refused outright, and before TASK-860 it stored 32768 silently
+
+### Requirement: SQL arithmetic over the row computes what checked C# computes, or fails
+
+Arithmetic over the row, in a filter's value fragment and in an update's SET value alike, SHALL go through the
+dialect's `Arithmetic`, `Negate` and `Abs`, so that it answers what checked C# answers or fails the statement:
+
+- An integer `/` SHALL truncate toward zero: `/` on SQLite, PostgreSQL and SQL Server, `DIV` on MySQL (TASK-860).
+- The divisor of a `/` or `%` SHALL fail the statement when it is zero, for every numeric type and every provider
+  (TASK-888, the user's decision): PostgreSQL and SQL Server fail natively; SQLite wraps it in the registered
+  `birko_divisor`; MySQL in a `CASE` that raises error 1411 naming the cause. A NULL divisor stays NULL.
+- Integer arithmetic, negation and `Abs` SHALL fail on overflow of the C# type (TASK-890): natively on PostgreSQL and
+  SQL Server after `IntegerWidening`, through `birko_checked_int` on SQLite, and on MySQL by wrapping an `int`,
+  `short` or `sbyte` result as `((v * 2^(64-n)) DIV 2^(64-n))`, which raises error 1690 exactly on overflow.
+- A `decimal` division by a constant whose reciprocal terminates (`/ 2m`, `/ 4m`, `/ 2.5m`, `/ 100m`, at most 10
+  significant digits) SHALL be rewritten to the exact product (`x.Amount * 0.25m`) before parsing
+  (`TerminatingReciprocal`, TASK-870). Any other decimal division SHALL be refused with `NotSupportedException` by
+  the PostgreSQL, MySQL and SQL Server dialects, and computed in C#'s decimal on SQLite. In a SET, a `/` or `%` of an
+  integer converted to `decimal` SHALL be refused on every provider.
+- In a SET, `&`, `|`, `^`, the shifts, `~` and a `!` over the row SHALL be refused, as SET operators exist only for
+  numeric arithmetic, comparisons and `bool` AND / OR (`SetValueOperator`, TASK-860).
+
+#### Scenario: Integer division truncates on MySQL
+
+- **Given** `x => x.Hits / 4 == 0` on MySQL
+- **Then** the fragment divides with `DIV` and the rows with `Hits` below 4 are returned. Before TASK-860 MySQL's
+  `/` divided fractions and missed 4 of 5 rows
+
+#### Scenario: A division by zero fails on every provider
+
+- **Given** `x => 10 / x.Hits > 1` over a row whose `Hits` is 0, as a read, a count, a `Delete` or a SET
+- **Then** the statement fails and no row changes. Before TASK-888 SQLite answered NULL on every path (its
+  `Delete` and `Update` included) and MySQL on every read
+  (`tests/Birko.Data.SQL.Views.Tests/Task888DivideByZeroTests.cs`)
+
+#### Scenario: An integer overflow fails on MySQL
+
+- **Given** `x => x.Hits * 2 / 2 == x.Hits` over a row holding `int.MaxValue`, or `SET Hits = Hits * 2 / 2` on it
+- **Then** the statement fails, as checked C# throws. Before TASK-890 MySQL computed in `BIGINT`, matched the row and
+  the SET stored `int.MaxValue` (`tests/Birko.Data.SQL.Views.Tests/Task890ArithmeticOverflowTests.cs`)
+
+#### Scenario: A decimal division by a non-terminating constant is refused on the servers
+
+- **Given** `x => x.Amount / 3m > 1m`
+- **Then** PostgreSQL, MySQL and SQL Server refuse it before anything runs, each keeping its own scale of the
+  quotient (SQL Server as few as six decimals); SQLite computes it in C#'s decimal. `x => x.Amount / 2m == 5m` is
+  the exact product `x.Amount * 0.5m` on all four
+
+#### Scenario: A bitwise SET is refused
+
+- **Given** `SET Hits = Hits | 1`
+- **Then** `NotSupportedException` naming the operator is thrown. Before TASK-860 it rendered `Hits OR 1`, and
+  SQLite stored 1
+
+### Requirement: SQL Math calls and unary minus over the row
+
+A `Math` / `MathF` / `decimal` static call or a numeric unary operator over the row SHALL be a value fragment
+in a filter (TASK-857). `Math.Round` over a `decimal` with an explicit `MidpointRounding` SHALL render through the
+provider's computed-set rounding (`ComputedRound`; SQLite `birko_decimal_round`), and the `Portable` form
+SHALL be `BIRKO_ROUND_<MODE>(…)`, which no server knows. `Math.Abs` SHALL be `ABS(…)` — a `short` one cast
+back to `SMALLINT`, a decimal on SQLite `birko_decimal_abs`, an integer range-checked on SQLite and MySQL.
+A unary minus and `decimal.Negate` SHALL be `(-(…))` — on SQLite a decimal `birko_decimal_sub(0, …)` with the 0 as
+decimal TEXT, and an integer range-checked on SQLite and MySQL. A unary plus SHALL be transparent. A `Math.Round` over a binary floating-point value or
+without a mode, `~`, and every other `Math` / `MathF` / `decimal` call (`Floor`, `Ceiling`, `Truncate`, `Min`,
+`Max`, `Sign`, `Pow`, `Sqrt`) SHALL be refused with `NotSupportedException` naming it. In an update's SET value
+the unary minus and plus translate the same way, and a `Math` call over the row is refused like any other
+untranslated call.
+
+#### Scenario: Round with an explicit mode rounds as C# does
+
+- **Given** `x => Math.Round(x.Amount, 1, MidpointRounding.ToEven) == 10.1m`
+- **Then** the rows C# selects are returned on all four providers. Before TASK-857 the call was dropped and
+  `Amount = 10.1` compared, matching 1 of 3 (`tests/Shared/StoreContract/MathFilterContract.cs`)
+
+#### Scenario: Abs translates
+
+- **Given** `x => Math.Abs(x.Amount - 10m) < 0.2m`
+- **Then** the fragment is `ABS(…)` (SQLite `birko_decimal_abs(…)`), and the rows C# selects are returned. Before
+  TASK-857 it matched 0 of 5
+
+#### Scenario: An untranslated Math call is refused
+
+- **Given** `x => Math.Floor(x.Amount) == 2m` or `x => ~x.Hits == -3`
+- **Then** `NotSupportedException` naming the call or operator is thrown. Before TASK-857 `Floor` was dropped and
+  `~x.Hits == -3` became `NOT (Hits = -3)`
+
 ### Requirement: SQL case-normalisation and date truncation wrappers
 
 The SQL translator SHALL wrap a resolved column in `LOWER(...)` for `ToLower`/`ToLowerInvariant`,
 `UPPER(...)` for `ToUpper`/`ToUpperInvariant`, and `DATE(...)` for a `DateTime.Date` member access
-whose inner expression resolves to a column; a `DateTime.Date` access that does not resolve to a column
-SHALL be evaluated as a constant. The `DATE(...)` wrapper SHALL be reached only by a `.Date` comparison
+whose inner expression resolves to a column; a parameter-bound `DateTime.Date` whose inner expression does
+not resolve to a column SHALL be refused with `NotSupportedException` (TASK-860; it was evaluated as a
+constant from the row). `LOWER` / `UPPER` is the portable name: the condition SHALL also carry a re-render
+through the dialect's `CaseFold`, which is `LOWER` / `UPPER` on PostgreSQL, MySQL and SQL Server and, on
+SQLite, the registered C# function `birko_case_fold` — the current culture for `ToLower()` / `ToUpper()`, the
+invariant culture for the invariant forms (TASK-870). A fold of a plain column SHALL be recorded in
+`Condition.CaseFold` (`FoldColumn`, TASK-890). The `DATE(...)` wrapper SHALL be reached only by a `.Date` comparison
 that is not rewritten to a range (§ *A `.Date` comparison against a value is a half-open range on the raw
 column*) and is not column-versus-column: a value side that does not evaluate to a `DateTime`.
 
@@ -1038,6 +1622,14 @@ column*) and is not column-versus-column: a value side that does not evaluate to
 - **Given** `x => x.Name.ToLower() == "abc"`
 - **When** the `ToLower` case runs and the inner member resolves to `Table.Name`
 - **Then** the condition name becomes `LOWER(Table.Name)`
+
+#### Scenario: SQLite folds as C# does
+
+- **Given** `x => x.Name.ToUpperInvariant() == "ÄBC"` on SQLite
+- **When** the condition is rendered through SQLite's dialect
+- **Then** the fold is `birko_case_fold(Table.Name, …)` with the invariant culture, and the non-ASCII row is
+  matched. Before TASK-870 SQLite's `UPPER` folded ASCII only (12 to 35 of 34 to 68 cases off;
+  `tests/Shared/StoreContract/TranslationLeftoversContract.cs`)
 
 #### Scenario: Date truncation on both column sides is refused
 
@@ -1053,7 +1645,8 @@ column*) and is not column-versus-column: a value side that does not evaluate to
 - **When** it is parsed — the normalizer has already folded it to a constant at the lambda boundary, and the
   non-parameter member branch claims any parameter-free member before the `.Date` branch is consulted
 - **Then** the evaluated `DateTime` is bound as the parent's value like any other constant; the `.Date`
-  branch's constant arm is reached only when a parameter-bound `.Date`'s inner member resolves to no column
+  branch's constant arm is not reached, and a parameter-bound `.Date` whose inner member resolves to no
+  column is refused (TASK-860)
 
 ### Requirement: A `.Date` comparison against a value is a half-open range on the raw column
 
@@ -1107,11 +1700,14 @@ driver translates `.Date` as a JSON sub-property of the stored string and silent
 `EqualConditionStrategy`, `ComparisonConditionStrategy`, `LikeConditionStrategy`,
 `InConditionStrategy`, `NullConditionStrategy` — into a map keyed by `ConditionType`, SHALL throw
 `NotSupportedException` for a condition type with no strategy, and SHALL throw
-`InvalidOperationException` when a non-group condition has a null or empty `Name`.
+`InvalidOperationException` when a non-group condition has a null or empty `Name`. `LikeConditionStrategy` SHALL
+handle `Like`, `StartsWith`, `EndsWith` and `TextEqual` (TASK-869), and SHALL refuse a `TextEqual` condition that
+carries no `Comparison` with `InvalidOperationException`. Every `ConditionType` member has a strategy, so only a value
+outside the enum reaches the `NotSupportedException`.
 
 #### Scenario: Unmapped condition type
 
-- **Given** a condition whose `Type` has no registered strategy
+- **Given** a condition whose `Type` has no registered strategy (a value cast from outside `ConditionType`)
 - **When** `BuildSingleCondition` looks it up
 - **Then** a `NotSupportedException` naming the type is thrown
 
@@ -1130,10 +1726,13 @@ driver translates `.Date` as a JSON sub-property of the stored string and silent
 ### Requirement: SQL value binding and parameter naming
 
 `SqlBuilderContext.GenerateParameterName` SHALL produce `@WHERE{sanitizedFieldName}{index}_{parameterCount}`
-where the field name is stripped of every character outside `[a-zA-Z0-9_]`, and SHALL throw
-`ArgumentException` for an empty field name. Each strategy SHALL bind the value as a parameter only
-when `IsField` is false and the value is non-null; otherwise it SHALL emit the value's `ToString()` (or
-the literal `NULL`) directly into the SQL.
+where the field name is stripped of every character outside `[a-zA-Z0-9_]` and then cut to its first 64
+characters (TASK-857: a value fragment can run to hundreds of characters and SQL Server refuses a parameter name over
+128; the count suffix keeps a cut name unique), and SHALL throw `ArgumentException` for an empty field name. Each
+strategy SHALL bind the value as a parameter only when `IsField` is false and the value is non-null; otherwise it SHALL
+emit the value's `ToString()` (or the literal `NULL`) directly into the SQL. The parser turns a comparison with null
+into `IsNull` or the empty `IN` (§ *SQL null and HasValue translation*), so the `NULL` literal here is reached by a
+condition built by hand.
 
 #### Scenario: Raw fragment name is sanitised into the parameter name
 
@@ -1141,15 +1740,22 @@ the literal `NULL`) directly into the SQL.
 - **When** a parameter name is generated for index 0 on a command with no parameters
 - **Then** the name is `@WHERETableATableB0_0`
 
+#### Scenario: A long fragment name is cut and stays unique
+
+- **Given** a rounded `CASE` value fragment of several hundred characters as the field name
+- **When** a name is generated for it, a parameter is added, and a name is generated again
+- **Then** each name is at most 128 characters, the first starts `@WHERECASEWHENABSCASTTAmount` and ends `0_0`, and the
+  two differ (`tests/Birko.Data.SQL.Tests/Connectors/SqlBuilderContextTests.cs`)
+
 #### Scenario: Null value renders as the SQL literal NULL
 
-- **Given** an `Equal` condition whose first value is `null`
+- **Given** a hand-built `Equal` condition whose first value is `null`
 - **When** `EqualConditionStrategy.BuildValueExpression` runs
 - **Then** it returns the string `"NULL"` and binds no parameter, producing `Name = NULL`
 
 #### Scenario: Missing values collection renders as NULL
 
-- **Given** a `Less` condition with `Values = null`
+- **Given** a hand-built `Less` condition with `Values = null`
 - **When** `ComparisonConditionStrategy.BuildValueExpression` runs
 - **Then** it returns `"NULL"`, producing `Name < NULL`
 
@@ -1161,10 +1767,10 @@ the literal `NULL`) directly into the SQL.
 
 ### Requirement: Binding a generated parameter name skips the name lookup
 
-`AbstractConnectorBase.AddParameter` SHALL be non-virtual and SHALL overwrite the value of a name the command
-already holds rather than add it twice (the multi-row insert re-binds the same names per row); that check is a
-`Parameters.Contains(name)` lookup, a linear scan on SQLite's and SQL Server's collections. `SqlBuilderContext`
-SHALL remember the last name `GenerateParameterName` produced, the command it was produced for and that command's
+`AbstractConnectorBase.AddParameter` SHALL be non-virtual and SHALL replace a name the command already holds with a
+newly created parameter at the same position rather than add it twice (the multi-row insert re-binds the same names
+per row; TASK-852); that check is a `Parameters.IndexOf(name)` lookup, a linear scan on SQLite's and SQL Server's
+collections. `SqlBuilderContext` SHALL remember the last name `GenerateParameterName` produced, the command it was produced for and that command's
 parameter count at the time, and `SqlBuilderContext.AddParameter` SHALL add that name WITHOUT the lookup
 (`AddUniqueParameter`) only while all three still hold — same command, same name (ordinal), unchanged count — and
 then forget it. Every other name SHALL take the lookup path. Both paths SHALL apply the same provider conversion
@@ -1176,7 +1782,7 @@ then forget it. Every other name SHALL take the lookup path. Both paths SHALL ap
 - **Given** an `In` condition over `Id` with 100 values, rendered on a fresh command
 - **When** the clause is built
 - **Then** the SQL is `Id IN (@WHEREId0_0, @WHEREId1_1, … @WHEREId99_99)`, every value is bound once under a unique
-  name, and the collection's by-name `Contains` is called zero times
+  name, and the collection is looked up by name (`Contains` or `IndexOf`) zero times
 
 #### Scenario: The generated path keeps the value conversion
 
@@ -1198,7 +1804,7 @@ then forget it. Every other name SHALL take the lookup path. Both paths SHALL ap
 - **Given** a name generated for the command, after which another parameter was added, or a name generated for a
   different command
 - **When** the context adds it
-- **Then** it takes the `Contains` lookup, because the count moved or the command differs
+- **Then** it takes the by-name lookup, because the count moved or the command differs
 
 ### Requirement: The diagnostic SQL text is built in one linear pass
 
@@ -1207,17 +1813,36 @@ name, built eagerly by every SQL read for its diagnostics (the `InitException` c
 SHALL return the command text unchanged when the command has no parameters or no text; otherwise it SHALL scan the
 text once and, at each position where a parameter name can start, substitute the LONGEST parameter name matching
 there (names carry a `_{count}` suffix, so `@WHEREA0_5` prefixes `@WHEREA0_50`, and `@LIMIT` prefixes `@LIMITx`).
-A value of a string `DbType` SHALL be written in single quotes (its own quotes not escaped), any other as its
-`ToString()`; the first of two parameters with the same name wins. Text already substituted SHALL NOT be scanned
-again (TASK-832; measured before: one `StringBuilder.Replace` per parameter, 6.5 s of a 6.8 s SQLite read of 2,000
-ids).
+Each value SHALL be written by its CLR type, never by its `DbType` (TASK-853), in the invariant culture: `NULL` for
+null and `DBNull`; a string or `char` in single quotes, an inner quote doubled by `SqlLiteral.EscapeLiteral` (TASK-850);
+a `bool` as `1` / `0`; an enum as its underlying number; an integer or `decimal` unquoted; a `double` / `float`
+unquoted in its round-trip form, quoted when NaN or infinite; a `Guid`, `DateTime` and `DateTimeOffset` (ISO 8601),
+`DateOnly`, `TimeOnly` and `TimeSpan` quoted; a `byte[]` as a `0x` hex literal, cut after 32 bytes with the length
+noted; anything else quoted. The first of two parameters with the same name wins. Text already substituted SHALL NOT be
+scanned again (TASK-832; measured before: one `StringBuilder.Replace` per parameter, 6.5 s of a 6.8 s SQLite read of
+2,000 ids).
 
 #### Scenario: The longest name wins where one name prefixes another
 
-- **Given** `SELECT 1 WHERE A IN (@WHEREA0_5, @WHEREA0_50) LIMIT @LIMIT OFFSET @LIMITx` with string values `five`,
-  `fifty`, `10`, `20`
+- **Given** `SELECT 1 WHERE A IN (@WHEREA0_5, @WHEREA0_50) LIMIT @LIMIT OFFSET @LIMITx` with the string values `five`,
+  `fifty` and the integers `10`, `20`
 - **When** `GetGeneratedQuery` runs
-- **Then** it returns `SELECT 1 WHERE A IN ('five', 'fifty') LIMIT '10' OFFSET '20'`
+- **Then** it returns `SELECT 1 WHERE A IN ('five', 'fifty') LIMIT 10 OFFSET 20`
+
+#### Scenario: A quote inside a string value is doubled
+
+- **Given** `SELECT 1 WHERE A = @a AND B = @b` with `@a = "O'Brien"` and `@b = "''"`
+- **When** `GetGeneratedQuery` runs
+- **Then** it returns `SELECT 1 WHERE A = 'O''Brien' AND B = ''''''`. Before TASK-850 it rendered `'O'Brien'`
+
+#### Scenario: A value renders by its CLR type, whatever the parameter's DbType
+
+- **Given** a SQLite parameter (whose `DbType` defaults to `String`) rendered while the current culture is `sk-SK`
+- **When** its value is `null` (also with `DbType.Int32`), `1234.5m`, `true`, an enum member whose number is `3`, or
+  `{ 0x00, 0xAB, 0xFF }`
+- **Then** it renders `NULL`, `1234.5`, `1`, `3` and `0x00ABFF`. Before TASK-853 a null rendered `''` or nothing,
+  numbers were quoted on SQLite and written in the current culture (`1,5`), a bool as `True` and bytes as
+  `System.Byte[]` (`tests/Birko.Data.SQL.SqLite.Tests/Task853DiagnosticValueRenderingTests.cs`)
 
 #### Scenario: A value containing a parameter name is not rewritten
 
@@ -1272,7 +1897,7 @@ most-derived conversion; a provider types a new parameter by overriding `CreateP
 
 - **Given** `SqLiteConnector`, `MSSqlConnector`, `PostgreSQLConnector` and `MySQLConnector`
 - **When** a value is bound through the shared `AddParameter`
-- **Then** it passes through `NormalizeParameterValue` before the parameter is created or updated: SQLite and
+- **Then** it passes through `NormalizeParameterValue` before the parameter is created or replaced: SQLite and
   PostgreSQL override `ConvertParameterValue` and call the base first, SQL Server overrides only `CreateParameter`,
   MySQL overrides neither
 
@@ -1296,8 +1921,9 @@ most-derived conversion; a provider types a new parameter by overriding `CreateP
 - **When** the parameter is created by its `CreateParameter` override
 - **Then** its `SqlDbType` is set to `DateTime2`, so the value keeps every tick and a filter on the exact value
   matches the stored row. Before TASK-656 SqlClient inferred `DateTime` and rounded to ~3.33 ms (`...56.1234567`
-  bound as `...56.1233333`), and the filter matched nothing. A parameter that already exists has only its `Value`
-  replaced; its `SqlDbType` is not touched
+  bound as `...56.1233333`), and the filter matched nothing. A name the command already holds gets a new parameter
+  from the same override, so it is typed `DateTime2` too (TASK-852; before, only its `Value` was replaced and the first
+  value's inferred type was kept)
 
 #### Scenario: Null becomes DBNull
 
@@ -1338,8 +1964,9 @@ not exist*. The base SHALL match SQLite's `no such table`; `PostgreSQLConnector`
 SHALL require error `1146`; each SHALL walk the exception chain, and SHALL keep an untyped fallback
 narrowed to its own missing-**table** wording (`relation … does not exist`, `table … doesn't exist`).
 `MSSqlConnector` SHALL match SQL Server error `208` or the `Invalid object name` wording.
-`PostgreSQLConnector_OnException`, `MySQLConnector_OnException` and `MSSqlConnector_OnException` SHALL route
-through the shared `EnsureSchemaAndReport`, which consults that same predicate: a missing table runs
+Each provider's `ReportCommandException` override (SQLite, PostgreSQL, MySQL, SQL Server) SHALL route through the
+shared `EnsureSchemaAndReport`, which consults that same predicate; `InitException` runs it before any `OnException`
+subscriber, and every subscriber then receives the exception the caller receives (TASK-894): a missing table runs
 `DoInit()` (unless the connector is already initialising) and is then reported by **throwing**, never by
 returning, so a write against a missing table does not report success (TASK-277); any other error SHALL be
 rethrown as itself, its type and stack trace preserved and the statement text carried on `Exception.Data`.
@@ -1366,7 +1993,7 @@ seam bounds what any read can silently misreport.
 
 - **Given** a read against a table that has not been created yet
 - **When** the reader runs
-- **Then** it yields an empty sequence and no exception, and the write path's `OnException` runs `DoInit()`
+- **Then** it yields an empty sequence and no exception, and the write path's `ReportCommandException` runs `DoInit()`
   and then throws, so the failed write is reported rather than discarded — the lazy create-on-first-use and
   view-existence probing that this seam exists for
 
@@ -1531,20 +2158,27 @@ created without a join type SHALL be `Inner` when given conditions and `Cross` o
 
 ### Requirement: SQL value-position expression rendering
 
-`DataBase.ParseExpression` SHALL render an expression in VALUE position (an UPDATE SET right-hand side
-or a view field) as SQL text and SHALL collect every constant it meets into the supplied parameter
+`DataBase.ParseExpression` SHALL render an expression in VALUE position (an UPDATE SET right-hand side)
+as SQL text and SHALL collect every constant it meets into the supplied parameter
 dictionary under keys `@Const{count}`. It SHALL render a `ConditionalExpression` as
 `CASE WHEN … THEN … ELSE … END` — a test that is a bare `bool` column rendered `(column = '1')`, the same
 `BoolColumnTest` the WHERE-side renderer uses, qualified only when the caller asked for table names — a
 `Coalesce` as `COALESCE(left, right)`, an equality against a null
-constant as `(operand IS NULL)` / `(operand IS NOT NULL)`, arithmetic and comparison operators inside
-parentheses, `Replace` as `REPLACE(...)`, `ToLower`/`ToLowerInvariant` as `LOWER(...)`,
-`ToUpper`/`ToUpperInvariant` as `UPPER(...)`, and `DateTime.Date` on a column as `DATE(column)`. Any
+constant as `(operand IS NULL)` / `(operand IS NOT NULL)`, comparison operators inside parentheses, and
+the following through the connector's fragment dialect (TASK-860, TASK-870): numeric arithmetic through
+`Arithmetic` (§ *SQL arithmetic over the row computes what checked C# computes, or fails*), a unary minus
+through `Negate`, a conversion as § *A conversion over the row is translated only when it is exact* says,
+`ToLower`/`ToLowerInvariant`/`ToUpper`/`ToUpperInvariant` through `CaseFold`, and `DateTime.Date` on a column
+through `DateOf` — `CAST(column AS DATE)`, and on SQLite `(DATE(column) || ' 00:00:00')`. A unary plus SHALL be
+transparent. `string.Replace(old, new)` SHALL be rendered through `ParseReplace` and the dialect's `Replace`,
+matching ordinally as C# does (SQL Server under `COLLATE Latin1_General_100_BIN2`): an `old` that is null,
+empty or read from the row SHALL be refused, and a null `new` removes, as in C#. Any
 other parameter-free method call SHALL be evaluated and bound as a constant; a parameter-bound one is
 refused (§ *An unrecognised call in an UPDATE SET value is refused, never invoked*). A parameter-free
 member chain (`filter.Range.From`) SHALL be evaluated and bound as a constant; a parameter-bound member that
 is not a mapped column of the entity (`x.Sub.Count`) SHALL be refused with `NotSupportedException` (SH-M149,
-TASK-153).
+TASK-153). Any other node that references the parameter SHALL be refused by name (`RefuseNode`, TASK-860), and
+any other parameter-free node SHALL be evaluated and bound as a constant.
 
 #### Scenario: Ternary SET value
 
@@ -1574,17 +2208,35 @@ TASK-153).
 - **When** the constant `2` is reached
 - **Then** a key `@Const{n}` is added to the parameters dictionary and that key is emitted into the SQL
 
-#### Scenario: Convert wrappers are transparent
+#### Scenario: A Convert wrapper is rendered by its classification
 
-- **Given** a `Convert` unary node in value position
+- **Given** a `Convert` unary node over the row in value position
 - **When** `ParseExpression` handles it
-- **Then** it recurses into the operand and returns its rendering
+- **Then** a transparent conversion renders its operand (with `IntegerWidening`'s cast where it applies), a
+  widening one an explicit cast, and a lossy one (`SET Hits = (int)x.Amount`) is refused. Before TASK-860
+  every conversion was dropped, and MySQL stored 11 for `(int)10.5m`, which C# truncates to 10
 
-#### Scenario: An unhandled node type yields null
+#### Scenario: A node with no SET translation is refused
 
-- **Given** a node that is none of lambda, conditional, binary, method call, `Convert` unary, member or constant
+- **Given** a parameter-bound node that is none of lambda, conditional, binary, method call, unary minus or
+  plus, `Convert`, member or constant — or a `~` / `!` over the row
 - **When** `ParseExpression` runs
-- **Then** it returns `null` (and a `Convert`-less unary node also returns `null`)
+- **Then** `NotSupportedException` naming the operator is thrown. Before TASK-860 a unary minus, `~` or `!`
+  rendered nothing (`SET Hits = WHERE …`, a syntax error); a parameter-free node is bound as `@Const{n}`, and
+  only a null expression yields `null`
+
+#### Scenario: Replace follows C#
+
+- **Given** `SET Name = x.Name.Replace("A", null)`, or `x.Name.Replace("", "X")`
+- **Then** the first removes every `A`, as C# does, and the second is refused. Before TASK-870 the first stored
+  NULL and the second stored the text unchanged (measured on all four providers)
+
+#### Scenario: .Date as a SET value
+
+- **Given** `SET At = x.At.Date`
+- **Then** the column is set to midnight of its day on every provider. Before TASK-870 SQL Server failed (`DATE`
+  is no T-SQL function) and SQLite stored text no `DateTime` parameter equals
+  (`tests/Shared/StoreContract/TranslationLeftoversContract.cs`)
 
 ### Requirement: Rules-to-SQL condition conversion
 
@@ -1602,13 +2254,49 @@ OR group as an OR sub-condition (`Condition.OrSubCondition`) and an AND group as
 `SH-M128`, fixed by TASK-559 — a disabled tree used to convert to an empty sequence, and every OR group
 rendered as AND).
 
-Each leaf operator SHALL answer what `RuleEvaluator` answers for the same rule (TASK-153): `Between` SHALL be
-`>= lower AND <= upper`, negated by De Morgan to `< lower OR > upper`, and SHALL raise `ArgumentException`
-when either bound is null (SH-M129); `Equal` / `NotEqual` with a null value SHALL be `IS NULL` /
-`IS NOT NULL` (SH-M130); an `In` / `NotIn` whose value is a `string` SHALL bind that string as ONE value
-(SH-M131); and a `Like` whose value is a string SHALL read a `%` only at either end, mapping `%v%` to a
-substring match, `%v` to a suffix, `v%` to a prefix and anything else to equality, the rest of the pattern
-literal (SH-M132).
+Each leaf operator SHALL answer what `RuleEvaluator` answers for the same rule (TASK-153), and on a NULL row what
+the rule compiled to C# (`RuleExpressionConverter`) answers: `Between` SHALL be `>= lower AND <= upper`, negated by
+De Morgan to `NOT >= lower OR NOT <= upper`, each bound keeping its own negation (SH-M129, TASK-864); a null
+`Between` bound SHALL be C#'s lifted ordering, false, and true when negated (TASK-882 — it raised
+`ArgumentException`); `Equal` / `NotEqual` with a null value SHALL be `IS NULL` / `IS NOT NULL` (SH-M130), and an
+ordering against a null value SHALL be the empty `IN`, through `DataBase.ComparedWithNull`, the producer the lambda
+parser uses (TASK-864); an `In` / `NotIn` whose value is a `string` SHALL bind that string as ONE value (SH-M131);
+and a `Like` pattern SHALL be read by `RuleLikePattern.Parse`, the parser every rule runner uses: a `%` only at
+either end, `%v%` a substring match, `%v` a suffix, `v%` a prefix and anything else a `TextEqual`, the rest of the
+pattern literal (SH-M132, TASK-882). A `Like` with an interior `%` (`a%b`) SHALL raise `NotSupportedException`
+naming the field, never the pattern (TASK-882 — it ran here as the literal text). A null or empty `Like` pattern, a
+null `In` / `NotIn` set and a null needle for `Contains` / `NotContains` / `StartsWith` / `EndsWith` SHALL match
+nothing under any negation (TASK-156, SH-M296).
+
+A leaf over a column that can hold NULL SHALL record that column as a nullable operand, and each converted root (or
+`RuleSet` member) SHALL go through `DataBase.ApplyCSharpNullSemantics`, the one producer of `IS NULL` legs for a
+lambda and a rule alike (TASK-864). A column can hold NULL when its CLR type can and it is not declared NOT NULL or
+primary (`DataBase.RuleFieldCanBeNull`); a field with no entity type, or one resolved only through
+`ResolveFieldSelectName`, is taken as nullable. `In` / `NotIn` SHALL take a `null` out of the list through
+`MarkNullableIn`, so `In [null, 5]` matches the NULL row, `NotIn [null, 5]` no longer binds NULL into `NOT IN`, and
+a list of only `null` is the column's `IS [NOT] NULL`. A rule that negates an ordering against null therefore means
+every row: a read returns every row and a destructive statement refuses it as a whole-table write (TASK-861). The
+shared `tests/Shared/StoreContract/RuleNullContract.cs` asks these shapes of all four providers.
+
+Each value, and each `Between` bound, SHALL be bound in the column's stored form (TASK-882): read as a value of
+the property's type by `RuleValueConverter.TryConvert`, then through `AbstractField.ToStoredValue`, the producer an
+entity write and the lambda path bind through (`DataBase.TryRuleStoredValue`, rule 16). An enum given by name or
+number binds its stored number; a Guid or a date given as text binds the typed value. A fraction against an
+integral column, a null, and any value without column metadata (the type-less overloads) SHALL be bound as given.
+A value that has no form for the column (an unknown enum name, text that is no Guid) SHALL make the leaf match
+nothing under any negation, as the compiled rule does.
+
+The rule string operators SHALL compare as the compiled rule does (the user's decisions, TASK-882 and TASK-895).
+`Like`, `Contains`, `NotContains`, `StartsWith` and `EndsWith` SHALL carry `Comparison = OrdinalIgnoreCase` and
+render through the provider's exact `StringMatch` (see *An explicit StringComparison on a SQL string call is
+translated exactly or refused*), never the column's collation; on a column whose property is not a string they
+SHALL match nothing under any negation (`DataBase.RuleColumnHoldsText`). `Equal`, `NotEqual`, `In` and `NotIn`
+whose bound values are all strings, over a string column or a column nothing describes, SHALL be marked
+`StringComparison.Ordinal` through `DataBase.MarkRuleOrdinalText`, which calls `MarkOrdinalText`, so they render
+through `OrdinalTextEquality` (see *SQL string equality and IN compare ordinally*) and a long string `In` list is
+split like a parser-built one. A column of another type (a number, a Guid) keeps the plain `=`. The shared
+`tests/Shared/StoreContract/RuleLeftoversContract.cs` and `StringEqualityLeftoversContract.cs` ask these shapes of
+all four providers against C#.
 
 #### Scenario: Disabled rule matches nothing
 
@@ -1729,7 +2417,7 @@ it without registering anything process-wide (TASK-151, rule 36). Rule-field res
 
 - **Given** a rule with `Operator = NotIn`, `IsNegated = false` and a collection value
 - **When** `ConvertLeaf` runs
-- **Then** the condition is `Type = In`, `IsNot = true`, and the value is passed through as an `IEnumerable` rather than wrapped in a single-element array
+- **Then** the condition is `Type = In`, `IsNot = true`, and each element of the collection is bound as its own value, in the column's stored form, rather than the collection being wrapped in a single-element array
 
 #### Scenario: Double negation cancels
 
@@ -1764,9 +2452,12 @@ it without registering anything process-wide (TASK-151, rule 36). Rule-field res
 - **Given** a leaf rule with `Operator = ComparisonOperator.Between`, `Value = 15`, `UpperValue = 35`
 - **When** `ConvertLeaf` runs
 - **Then** it returns an AND sub-condition of `Field >= 15` and `Field <= 35`, and negated an OR
-  sub-condition of `Field < 15` and `Field > 35`. Before TASK-153 `MapOperator` returned a single `>=` with
+  sub-condition of `NOT Field >= 15` and `NOT Field <= 35`, each gaining its own `OR Field IS NULL` leg when the
+  column can hold NULL (TASK-864). Before TASK-153 `MapOperator` returned a single `>=` with
   no upper bound, and `Between Age 15..35` returned the ages 20–60
-- **And** a `Between` rule missing either bound raises `ArgumentException`
+- **And** a `Between` rule with a null bound matches nothing, and negated matches every row, as C#'s lifted
+  ordering does; before TASK-882 it raised `ArgumentException` while both in-memory runners answered
+  (`tests/Birko.Data.SQL.Tests/Task882RuleConditionTests.cs`)
 
 #### Scenario: A null-valued equality rule is a null test
 
@@ -1785,8 +2476,73 @@ it without registering anything process-wide (TASK-151, rule 36). Rule-field res
 
 - **Given** a rule `Like "FV2026%"`
 - **When** `ConvertLeaf` runs
-- **Then** the condition is a `StartsWith` on `FV2026`, so the bound pattern is `FV2026%` and `XFV2026` is
-  not matched; before TASK-153 the pattern was wrapped again as `%FV2026%%`
+- **Then** the condition is a `StartsWith` on `FV2026` with `Comparison = OrdinalIgnoreCase`, so `XFV2026` is
+  not matched and `fv2026-1` is; before TASK-153 the pattern was wrapped again as `%FV2026%%`
+- **And** `Like "a%%"` is a prefix search for `a` and `Like "abc"` a `TextEqual`; before TASK-882 the SQL rule
+  parsed the pattern itself and `a%%` searched for the literal prefix `a%`
+
+#### Scenario: A Like pattern with an interior wildcard is refused by name
+
+- **Given** a rule `Like "a%b"` (or `"%a%b%"`)
+- **When** conditions are requested through either the type-aware or the type-less overload
+- **Then** `NotSupportedException` naming the field is raised. Before TASK-882 the SQL rule compared the literal
+  text `a%b` while the in-memory runners matched nothing
+
+#### Scenario: A rule's string operator ignores case ordinally
+
+- **Given** a rule `Contains`, `NotContains`, `StartsWith` or `EndsWith` with the value `"Ab"` on a string column
+- **When** it is converted, with or without an entity type
+- **Then** the leaf carries `Comparison = OrdinalIgnoreCase` and renders through the provider's exact form, not
+  the collation's `LIKE`
+- **And** the same operator on a column whose property is not a string matches nothing, negated or not
+  (`tests/Birko.Data.SQL.Tests/Task882RuleConditionTests.cs`)
+
+#### Scenario: A rule's string equality is exact
+
+- **Given** a rule `Equal "abc"` on a string column, over rows `abc`, `ABC` and `abc `
+- **When** it is converted and read
+- **Then** the leaf is marked `StringComparison.Ordinal` and only `abc` is returned, on every provider. Before
+  TASK-895 it rendered a plain `=`, so on MySQL 30 and on SQL Server 36 of 42 string rule cases read other rows
+  than the compiled rule; SQLite and PostgreSQL were already exact
+- **And** an `Equal` on a number or Guid column is not marked
+  (`tests/Birko.Data.SQL.Tests/Task895StringEqualityLeftoversTests.cs`)
+
+#### Scenario: A negated comparison keeps the NULL rows C# keeps
+
+- **Given** a nullable `int? Score` and a rule `Score NotEqual 5`
+- **When** it is converted
+- **Then** the leaf gains `OR Score IS NULL`, so the NULL rows are returned as C# returns them; a rule C# answers
+  false on NULL (`Equal 5`) keeps its SQL, and a column that cannot hold NULL renders unchanged. Before
+  TASK-864, 53 of 117 reads of 39 rule shapes differed from the compiled rule, identically on all four providers
+  (`tests/Birko.Data.SQL.Tests/Task864RuleNullConditionTests.cs`, `tests/Shared/StoreContract/RuleNullContract.cs`)
+
+#### Scenario: A null in an In list is the column's NULL test
+
+- **Given** a rule `Score In [null, 5]`, and a rule `Score NotIn [null, 5]`
+- **When** they are converted
+- **Then** the first binds `IN (5)` and matches the NULL row too; the second binds `NOT IN (5)` and leaves the NULL
+  row out, as C# does. Before TASK-864 the first missed the NULL row and the second bound NULL into `NOT IN` and
+  returned nothing
+- **And** a list holding only `null` is the column's `IS NULL` (`IS NOT NULL` for `NotIn`)
+
+#### Scenario: A negated ordering against null means every row
+
+- **Given** a rule `Score GreaterThan null` with `IsNegated = true`, or inside a negated AND group with
+  `Amount GreaterThan 3`
+- **When** it is converted
+- **Then** the conversion is always true, so a read returns every row and a destructive statement refuses it as a
+  whole-table write; not negated it is the always-false empty `IN`
+
+#### Scenario: A rule value is bound in the column's stored form
+
+- **Given** an enum column and a rule `State Equal "active"` (or `Equal 1`), a Guid column and a rule with the Guid
+  as text, and a date column and a rule with `"2026-01-02"`
+- **When** they are converted with an entity type
+- **Then** they bind the enum's stored number, the `Guid` and the `DateTime`; before TASK-882 the raw value was
+  bound: on SQLite `State Equal "Active"` matched nothing and a Guid as text missed its row, PostgreSQL refused the
+  statement, and MySQL compared `'Active'` as 0 and matched the first member's rows
+- **And** `State Equal "Bogus"` or a non-Guid text matches nothing under any negation, and the type-less overload
+  binds `"Active"` as given (`tests/Birko.Data.SQL.Tests/Task882RuleConditionTests.cs`)
 
 #### Scenario: Negated group is pushed down to its leaves
 
@@ -1803,7 +2559,17 @@ returned `null` or threw, and SHALL pass an explicit `MatchNoneQuery` through un
 `ParseRequiredFilterQuery` SHALL additionally throw `ArgumentNullException` for a `null` filter. Every
 read/count/aggregate site in `ElasticSearchStore` and `AsyncElasticSearchStore` SHALL use
 `ParseFilterQuery`, and the four destructive by-query paths (`Delete(filter)`, `Update(filter, updates)`
-and their async counterparts) SHALL use `ParseRequiredFilterQuery`.
+and their async counterparts) SHALL use `ParseRequiredFilterQuery`. Both, and `ParseExpression`, take an
+optional `maxTermsCount`, the index's terms limit (§ *ElasticSearch collection membership*), and every store site
+passes its index's declared limit (TASK-851). A `maxTermsCount` below 1 SHALL throw `ArgumentOutOfRangeException`
+before translation, not wrapped as an untranslatable filter.
+
+#### Scenario: A terms limit below one is refused as itself
+
+- **Given** `ParseFilterQuery(filter, 0)` or `ParseExpression(filter, maxTermsCount: -1)`
+- **When** the limit is resolved
+- **Then** `ArgumentOutOfRangeException` is thrown, not `NotSupportedException`
+  (`tests/Birko.Data.ElasticSearch.Tests/Task851PerIndexTermsLimitTests.cs`)
 
 #### Scenario: Untranslatable filter throws instead of matching all documents
 
@@ -1953,7 +2719,8 @@ non-null `Field` and the value from whichever yielded a non-null `Value`, and SH
 it could not bound*), emit `TermQuery` for `==`, and a `BoolQuery.MustNot` wrapping a
 `TermQuery` for `!=`. When the field is known and the value is null it SHALL emit
 `BoolQuery.MustNot(ExistsQuery)` for `==` and `ExistsQuery` for `!=`, and `null` for any other
-operator, but only when the non-field operand refers to no parameter (a `null` literal, or a closure or
+operator — which a lifted ordering against a null constant no longer reaches from a lambda, because `ParseLambda`
+has folded it to `false` first (TASK-867) — but only when the non-field operand refers to no parameter (a `null` literal, or a closure or
 expression evaluating to null). An operand that still refers to the parameter did not translate, and SHALL
 yield `null` (TASK-644). It SHALL return `null` when either field or value is unavailable, and when BOTH operands yield a
 field (`x.A == x.B`), since a term or range query compares a field with a value (SH-M126). When the field
@@ -1978,11 +2745,14 @@ comes from the right operand and the left yielded none, it SHALL mirror an order
 - **When** the comparison is translated
 - **Then** an `ExistsQuery` on `deletedAt` is returned
 
-#### Scenario: Ordering comparison against null is untranslatable
+#### Scenario: Ordering comparison against null matches nothing
 
 - **Given** `x => x.Age > (int?)null`
-- **When** the null-value branch matches neither `Equal` nor `NotEqual`
-- **Then** `null` is returned, which `ParseFilterQuery` converts into a `NotSupportedException`
+- **When** `ParseLambda` runs `NullOrderingFold.Fold` over the normalized body
+- **Then** the body is the constant `false` and `ParseFilterQuery` returns a `MatchNoneQuery`, as C# matches no
+  document; `x => !((int?)null <= x.Age)` is a `MatchAllQuery`, and inside `||` / `&&` the comparison drops out as C# has
+  it (`tests/Birko.Data.ElasticSearch.Tests/Task867NullOrderingTranslationTests.cs`). Before TASK-867 the null-value
+  branch returned `null`, which `ParseFilterQuery` converted into a `NotSupportedException`
 
 #### Scenario: Constant on the left mirrors the operator
 
@@ -2020,9 +2790,9 @@ mapping attribute — dynamically mapped as `text` with a `keyword` sub-field �
 any other mapping (`[Text]`) a `NotSupportedException`, since it has no exact form (TASK-613). `ParseMember`
 and `TryScriptFieldName` SHALL use `ExactFieldName`; a bare `bool` member and `HasValue` SHALL use
 `StoredFieldName`. `ElasticSearch.Sorts(orderBy)` SHALL be the one producer of every store's sort clauses,
-resolving each key as a member name, then a stored field name, then a unique case-insensitive member name,
-naming the field through `ExactFieldName`, and throwing `ArgumentException` for a key that resolves to no
-member (TASK-615). `IsDirectMemberOfParameter` SHALL accept a member accessed off the parameter, off a
+resolving each key through `ResolveMember` — a member name, then a stored field name, then a unique
+case-insensitive member name, the one lookup the store aggregates also use (TASK-878) — naming the field through
+`ExactFieldName`, and throwing `ArgumentException` for a key that resolves to no member (TASK-615). `IsDirectMemberOfParameter` SHALL accept a member accessed off the parameter, off a
 `TypeAs`, or off a `Convert` of the parameter.
 
 #### Scenario: camelCase conversion
@@ -2172,11 +2942,15 @@ the parameter-free operand as the value(s), handling both the instance form `col
 and the static form `Enumerable.Contains(source, item)`; SHALL return `null` when both or neither
 operand references the parameter; SHALL emit `TermsQuery` for a non-empty collection value, a single
 `TermQuery` for a scalar value, and `MatchNoneQuery` for BOTH a null value and an empty (or all-null)
-collection. A non-null collection longer than `ElasticSearch.MaxTermsCount` (a process-wide static, default
-`65_536`, Elasticsearch's `index.max_terms_count`; setting it below 1 throws `ArgumentOutOfRangeException`) SHALL
+collection. A non-null collection longer than the translation's terms limit SHALL
 instead be one `BoolQuery { Should = [...], MinimumShouldMatch = 1 }` of `TermsQuery` parts on the same field, each
-of at most `MaxTermsCount` terms, keeping every term in order, in the same request, so it composes under `||` and `!`
-like a single terms query (`TermsWithin`, TASK-835; measured before: 65,537 ids gave HTTP 400).
+of at most that limit, keeping every term in order, in the same request, so it composes under `||` and `!`
+like a single terms query (`TermsWithin`, TASK-835; measured before: 65,537 ids gave HTTP 400). The limit SHALL be
+the `maxTermsCount` the translation was given — a store gives `IndexSettings.MaxTermsCount` of the index settings
+entry for its type, declared rather than read from the index — and otherwise `ElasticSearch.MaxTermsCount` (a
+process-wide default, `65_536`, Elasticsearch's `index.max_terms_count`; setting it below 1 throws
+`ArgumentOutOfRangeException`). The limit SHALL be passed down the recursion, never written to shared state per
+call (TASK-851).
 
 #### Scenario: IN pattern
 
@@ -2191,6 +2965,16 @@ like a single terms query (`TermsWithin`, TASK-835; measured before: 65,537 ids 
 - **Then** a `BoolQuery` with only `Should` clauses and `MinimumShouldMatch = 1` is produced, holding 2 (2; 3)
   `TermsQuery` parts on one field, each within the limit, whose terms concatenated equal `ids`; exactly 65,536 ids
   stay one `TermsQuery`
+
+#### Scenario: Each store splits at its own index's limit
+
+- **Given** a sync store whose `IndexSettings.MaxTermsCount` is 3 and an async store whose is 7, each counting
+  `x => ids.Contains(x.Guid!.Value)` over 20 ids, 50 times in parallel
+- **When** the request bodies are recorded
+- **Then** every sync body holds terms parts of 3, 3, 3, 3, 3, 3 and 2 and every async body 7, 7 and 6; a store with
+  no declaration splits 65,537 ids into 65,536 and 1; live, indexes created with `index.max_terms_count` 5 and 8 each
+  answer at their own limit, and a store on the small index that does not declare it is refused by the server
+  (`tests/Birko.Data.ElasticSearch.Tests/Task851PerIndexTermsLimitTests.cs`)
 
 #### Scenario: The split keeps every term and the order
 
@@ -2438,11 +3222,17 @@ TASK-153).
 - **When** `_expressionCache.GetOrAdd` is consulted
 - **Then** the delegate is compiled once and reused, keyed by reference (not by `ToString()`) so the cache cannot leak across differently-shaped trees with identical text
 
-### Requirement: SQL collection materialisation drops nulls
+### Requirement: SQL collection materialisation keeps an IN list whole
 
-`DataBase.InvokeExpression` SHALL return `null` for a null evaluated value, a single-element array for
+When the collection operand of an `In` condition (a constant or a parameter-free call) evaluates to an
+`IEnumerable` other than `string`, the condition parser SHALL take its elements as the condition's values
+whole, nulls included, without going through `InvokeExpression` (TASK-859); the nulls become the column's
+`IS NULL` leg (§ *SQL null and HasValue translation*). Every other constant or parameter-free call operand —
+a value under a non-`In` condition, or an `In` operand that evaluates to `null` or to no collection — SHALL
+go through `DataBase.InvokeExpression`, which SHALL return `null` for a null evaluated value, a single-element array for
 a `string`, the null-filtered elements for any other `IEnumerable`, and a single-element array
-otherwise.
+otherwise. The parser SHALL use its result as the values when it holds at least one element; otherwise an
+`In` condition gets an empty value list and any other condition is compared with null (`ComparedWithNull`).
 
 #### Scenario: String is not treated as a character collection
 
@@ -2450,9 +3240,16 @@ otherwise.
 - **When** `InvokeExpression` runs
 - **Then** it returns `new object[] { "abc" }`, not three characters
 
-#### Scenario: Nulls inside a collection are removed
+#### Scenario: An IN list keeps its nulls
 
-- **Given** an evaluated collection `[g1, null, g2]`
+- **Given** `x => ids.Contains(x.Guid)` with `ids = [g1, null, g2]`
+- **When** the collection operand is parsed under the `In` condition
+- **Then** the condition's values are `g1, null, g2`, and `MarkNullableIn` turns the null into the column's
+  `IS NULL` leg rather than binding or dropping it
+
+#### Scenario: InvokeExpression removes nulls
+
+- **Given** an evaluated collection `[g1, null, g2]` reaching `InvokeExpression` — no longer the case for an `In` list
 - **When** `InvokeExpression` runs
 - **Then** only `g1` and `g2` survive, and an all-null collection materialises empty
 
