@@ -13,11 +13,10 @@ namespace Birko.Security.OAuth.Server.Models.Persistence;
 /// <c>List&lt;string&gt;</c>, and one shape everywhere keeps SQL and document stores alike.
 /// </summary>
 /// <remarks>
-/// The table and column names are those of <c>Birko.Security.OAuth.Server.SqLite</c>'s entity of the same name
+/// The table and column names are those of the deleted <c>Birko.Security.OAuth.Server.SqLite</c>'s entity of the same name
 /// (<c>oauth_clients</c>, DraCode's original column names), so a database written by that package is read as is. The
 /// attributes are <c>System.ComponentModel.DataAnnotations</c> ones, which the SQL mapper reads too, so this package does
 /// not depend on Birko.Data.SQL. They carry no index: an existing table keeps the indexes it has.
-/// <para>A separate namespace from the SQLite package's <c>Models</c>, so a consumer importing both sees no clash.</para>
 /// </remarks>
 [Table("oauth_clients")]
 public sealed class OAuthClientEntity : AbstractLogModel

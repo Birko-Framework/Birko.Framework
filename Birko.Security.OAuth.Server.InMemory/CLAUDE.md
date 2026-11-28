@@ -7,7 +7,7 @@
 ## Overview
 In-memory implementations of the five `Birko.Security.OAuth.Server` store interfaces (TASK-518, from DraCode's
 `InMemoryOAuthStores.cs`), on `Birko.Data.InMemory`'s `AsyncInMemoryStore<T>`: thread-safe, hands out copies, keeps
-nothing across a restart. The default for development and tests; use `Birko.Security.OAuth.Server.SqLite` to persist.
+nothing across a restart. The default for development and tests; to persist, use `AddOAuthServerStores(factory)` in Birko.Security.OAuth.Server.
 
 ## Project Location
 `C:\Source\Birko\Framework\Birko.Security.OAuth.Server.InMemory\`

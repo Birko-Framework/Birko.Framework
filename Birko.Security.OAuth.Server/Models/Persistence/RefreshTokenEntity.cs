@@ -13,7 +13,7 @@ namespace Birko.Security.OAuth.Server.Models.Persistence;
 /// every other member under its own name.
 /// </summary>
 /// <remarks>
-/// Table and column names are those of <c>Birko.Security.OAuth.Server.SqLite</c>'s entity of the same name
+/// Table and column names are those of the deleted <c>Birko.Security.OAuth.Server.SqLite</c>'s entity of the same name
 /// (<c>oauth_refresh_tokens</c>), so a database written by that package is read as is. DataAnnotations attributes, as on
 /// <see cref="OAuthClientEntity"/>: no index is declared, an existing table keeps its own.
 /// </remarks>

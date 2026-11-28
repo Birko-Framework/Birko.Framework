@@ -120,14 +120,14 @@ services.AddOAuthServerStores(
   (`GetByClientIdAsync`, `GetByNameAsync`); one on `RedirectUris`, `AllowedGrantTypes`, `AllowedScopes` or `Claims` is
   refused.
 - Tables (`oauth_clients`, `oauth_refresh_tokens`, `oauth_auth_codes`, `oauth_device_codes`, `oauth_consents`) are
-  those of `Birko.Security.OAuth.Server.SqLite`, so a database it wrote is read as is.
+  those of the deleted `Birko.Security.OAuth.Server.SqLite`, so a database it wrote is read and written as is.
 - On Elasticsearch a search sees a write only after the next index refresh (~1 s), and the lookups are searches, so
   every OAuth write refreshes the store's index (`IAsyncRefreshableStore`): a code is found the moment it is issued.
   That costs the cluster one refresh per OAuth write.
 
 The same stores can be built one by one (`new FactoryOAuthClientStore(factory)`, …, in
-`Birko.Security.OAuth.Server.Stores.Factory`). `Birko.Security.OAuth.Server.InMemory` remains the test double;
-`Birko.Security.OAuth.Server.SqLite` is superseded by the factory stores and will be removed.
+`Birko.Security.OAuth.Server.Stores.Factory`). `Birko.Security.OAuth.Server.InMemory` remains the test double.
+`Birko.Security.OAuth.Server.SqLite` was replaced by the factory stores and deleted (TASK-1013).
 
 ## What's out of scope
 

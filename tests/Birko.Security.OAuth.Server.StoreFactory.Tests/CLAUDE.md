@@ -19,18 +19,17 @@ xUnit + FluentAssertions tests for TASK-1013: the five OAuth server stores built
   - **live**, skipped without the variable and failed under `BIRKO_REQUIRE_LIVE`: PostgreSQL, MySQL, SQL Server (the
     run database from `LiveDatabase`), MongoDB, Elasticsearch, RavenDB, Cosmos DB (one database / index prefix per
     run). A live backend's factory is built once per class and its five stores emptied before each test.
-  - **Elasticsearch** settles (refreshes `{prefix}_*`) between writes and searches, and skips the server-flow tests:
-    the server looks a code, client or refresh record up by search right after writing it, and a search sees a write
-    only after the next refresh.
+  - Nothing settles between the stores' writes and reads: on Elasticsearch the stores refresh after each write, and the
+    contract checks it (server flows included). Writes made by a test's setup outside the stores are settled.
 - `FactoryOAuthStoreTests`: JSON and XML refused by name (each store, and `AddOAuthServerStores`), the DI registration,
-  a database written by `Birko.Security.OAuth.Server.SqLite` read and written by the factory stores, and each stored
+  a database the deleted `Birko.Security.OAuth.Server.SqLite` wrote (`Fixtures/LegacySqLiteOAuthDatabase.sql`, a
+  `sqlite3 .dump` taken before the deletion) read and written by the factory stores, in the package's own columns, and each stored
   type's table name.
 
 ## Conventions
 - The namespace sits under `Birko.Security.OAuth.Server`, so `StoreFactory` there is this namespace: write
   `Birko.Data.Stores.StoreFactory` in full.
-- Imports `Birko.Security.OAuth.Server.SqLite` only for the legacy-database test; delete that test and the import with
-  the package (TASK-1013 step 6).
+- The legacy fixture is never regenerated: the package that wrote it is gone, and the point is that it does not change.
 - Run with `dotnet test --nologo` from this folder.
 
 ## Maintenance

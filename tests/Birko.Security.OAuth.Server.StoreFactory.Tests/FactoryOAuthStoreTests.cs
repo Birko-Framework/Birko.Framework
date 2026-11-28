@@ -5,7 +5,6 @@ using Birko.Data.SQL.SqLite.Stores;
 using Birko.Data.XML.Stores;
 using Birko.Security.OAuth.Server.Extensions;
 using Birko.Security.OAuth.Server.Models;
-using Birko.Security.OAuth.Server.SqLite.Stores;
 using Birko.Security.OAuth.Server.Stores;
 using Birko.Security.OAuth.Server.Stores.Factory;
 using FluentAssertions;
@@ -17,7 +16,7 @@ namespace Birko.Security.OAuth.Server.StoreFactory.Tests;
 
 /// <summary>
 /// TASK-1013: what the factory stores do besides the contract — refuse a backend that cannot claim atomically, register
-/// through DI, and read a database the SQLite OAuth package (TASK-518) wrote.
+/// through DI, and read a database the (deleted) SQLite OAuth package wrote.
 /// </summary>
 public sealed class FactoryOAuthStoreTests : IDisposable
 {
@@ -103,31 +102,24 @@ public sealed class FactoryOAuthStoreTests : IDisposable
 
     // ---- a database the SQLite OAuth package wrote -------------------------------------------------------------
 
+    /// <summary>
+    /// The package is deleted (TASK-1013 step 6); what it wrote is kept as a dump (Fixtures/LegacySqLiteOAuthDatabase.sql),
+    /// so this checks the databases it left behind, not a package that could change.
+    /// </summary>
     [Fact]
     public async Task A_database_written_by_the_SQLite_OAuth_package_is_read_and_written_by_the_factory_stores()
     {
-        var file = "legacy.db";
-        var settings = new SqLiteSettings(_dir, file);
+        var path = Path.Combine(_dir, "legacy.db");
         var expires = new DateTime(2026, 12, 1, 12, 0, 0, DateTimeKind.Utc);
-
-        IOAuthClientStore oldClients = new SqLiteOAuthClientStore(settings);
-        IAuthorizationCodeStore oldCodes = new SqLiteAuthorizationCodeStore(settings);
-        IRefreshTokenStore oldRefreshes = new SqLiteRefreshTokenStore(settings);
-        await oldClients.CreateAsync(new OAuthClient
+        using (var connection = new SqliteConnection($"Data Source={path}"))
         {
-            ClientId = "web", Name = "Web app", ClientType = OAuthClientType.Public, ClientSecretHash = null,
-            RedirectUris = { "https://app.test/cb" }, AllowedGrantTypes = { OAuthGrantTypes.AuthorizationCode }, AllowedScopes = { "read" },
-        });
-        await oldRefreshes.CreateAsync(new RefreshTokenRecord
-        {
-            TokenHash = "H", ClientId = "web", UserId = "u", Scope = "read", ExpiresAt = expires,
-            Claims = new Dictionary<string, string> { ["name"] = "octocat" },
-        });
-        await oldCodes.CreateAsync(new AuthorizationCode { Code = "c1", ClientId = "web", UserId = "u", ExpiresAt = expires });
-        await new SqLiteDeviceCodeStore(settings).CreateAsync(new DeviceCodeRecord { DeviceCode = "d1", UserCode = "AAAA-BBBB", ClientId = "web", ExpiresAt = expires });
-        await new SqLiteConsentStore(settings).CreateAsync(new ConsentRecord { UserId = "u", ClientId = "web", Scope = "read" });
+            connection.Open();
+            using var load = connection.CreateCommand();
+            load.CommandText = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "LegacySqLiteOAuthDatabase.sql"));
+            load.ExecuteNonQuery();
+        }
 
-        var factory = Create("SqLite", Path.Combine(_dir, file));
+        var factory = Create("SqLite", path);
         IOAuthClientStore clients = new FactoryOAuthClientStore(factory);
         IAuthorizationCodeStore codes = new FactoryAuthorizationCodeStore(factory);
         IRefreshTokenStore refreshes = new FactoryRefreshTokenStore(factory);
@@ -150,9 +142,23 @@ public sealed class FactoryOAuthStoreTests : IDisposable
         client.AllowedScopes.Add("write");
         await clients.UpdateAsync(client);
 
-        (await oldCodes.GetByCodeAsync("c1"))!.Used.Should().BeTrue("the old package reads what the factory stores wrote");
-        (await oldRefreshes.GetByHashAsync("H"))!.Revoked.Should().BeTrue();
-        (await oldClients.GetByClientIdAsync("web"))!.AllowedScopes.Should().Equal("read", "write");
+        // The writes land in the package's own columns, not in new ones.
+        using (var connection = new SqliteConnection($"Data Source={path}"))
+        {
+            connection.Open();
+            Scalar(connection, "SELECT Used FROM oauth_auth_codes WHERE Code = 'c1'").Should().Be(1L);
+            Scalar(connection, "SELECT Revoked FROM oauth_refresh_tokens WHERE TokenHash = 'H'").Should().Be(1L);
+            ((string)Scalar(connection, "SELECT CollectionsJson FROM oauth_clients WHERE ClientId = 'web'")!)
+                .Should().Contain("\"allowedScopes\":[\"read\",\"write\"]");
+            Scalar(connection, "SELECT COUNT(*) FROM oauth_clients").Should().Be(1L);
+        }
+    }
+
+    private static object? Scalar(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return command.ExecuteScalar();
     }
 
     [Theory]

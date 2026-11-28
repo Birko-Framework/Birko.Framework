@@ -12,7 +12,7 @@ ASP.NET Core endpoints for the Birko OAuth authorization server.
 ## Usage
 
 ```csharp
-builder.Services.AddOAuthServerSqLiteStores("data/oauth.db");
+builder.Services.AddOAuthServerStores(StoreFactory.Create("SqLite", "Data Source=data/oauth.db", p => p.AddSqLite()));
 builder.Services.AddSingleton(sp => new OAuthServer(settings, tokenProvider, tokenOptions, /* the five stores */ ...));
 
 app.UseAuthentication();

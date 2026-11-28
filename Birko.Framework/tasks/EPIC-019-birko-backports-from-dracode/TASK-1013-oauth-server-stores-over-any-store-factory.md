@@ -3,7 +3,7 @@ id: TASK-1013
 parent: EPIC-019
 feature: null
 # status — one of: todo, in-progress, verify (code done, sign-off pending), done, cancelled
-status: in-progress
+status: done
 # blocked: <reason> — set by /tasks block, never by hand; status stays as it is; /tasks unblock removes it
 priority: P2
 # assignee — one of: agent (default), unassigned, human, or an installed agent type's name; ai is read as agent, never written
@@ -45,7 +45,7 @@ its "no two clients share a name" check (DraCode TASK-194).
 - [x] The client store answers a lookup by name.
 - [x] Decide with the user what happens to the SQLite and InMemory store packages: the SQLite package is deleted, InMemory
   stays as the test double (the user, 2026-11-28). The deletion waits for DraCode's switch (step 6).
-- [ ] README, CLAUDE.md and docs updated; Symbio.Birko and DraCode's aggregator still build.
+- [x] README, CLAUDE.md and docs updated; Symbio.Birko and DraCode's aggregator still build.
 
 ## Decisions (the user, 2026-11-28)
 
@@ -114,6 +114,21 @@ database is read and written by the factory stores.
 
 **Not live in CI:** the new test project needs all nine backends at once, while `live-tests.yml` runs one job per
 backend; the TASK-990 store-factory tests are not in it either.
+
+## Evidence 2026-11-28 (step 6)
+
+DraCode reported its switch merged (DraCode a2db45f, PR #95: nothing references the SQLite or InMemory OAuth packages;
+its suite 774 passed, 90/90 live on PostgreSQL and MongoDB). Then:
+- `Birko.Security.OAuth.Server.SqLite` and its tests deleted; unregistered from the slnx, the workspace and Birko.Sandbox
+  (the framework aggregator never imported it).
+- The legacy-database test kept, without the package: `Fixtures/LegacySqLiteOAuthDatabase.sql` is a `sqlite3 .dump` of a
+  database the package wrote just before the deletion; the test loads it, reads every store through the factory, claims
+  a code and a refresh token, updates a client, and checks the writes landed in the package's columns. Red: with the
+  fixture's `CollectionsJson` column renamed it fails ("no such column").
+- Docs: root README, CLAUDE-projects, dependencies, security, the OAuth server, AspNetCore and InMemory docs; the test
+  project's CLAUDE.md also lost its stale "Elasticsearch settles and skips the server flows" line.
+- StoreFactory 264, OAuth.Server 68, InMemory 26, AspNetCore 13 pass; the solution, DraCode.Birko and Birko.Sandbox
+  build; spec-links clean.
 
 ## Out of scope
 

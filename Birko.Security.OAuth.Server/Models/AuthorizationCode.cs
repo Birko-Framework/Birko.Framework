@@ -7,7 +7,7 @@ namespace Birko.Security.OAuth.Server.Models;
 /// One-time authorization code issued by the /authorize endpoint and exchanged at /token.
 /// Per RFC 6749 §4.1.2 the code must be short-lived and single-use.
 /// </summary>
-/// <remarks>Stored in <c>oauth_auth_codes</c> on a SQL backend (TASK-1013), the name <c>Birko.Security.OAuth.Server.SqLite</c> registers, so its databases stay readable.</remarks>
+/// <remarks>Stored in <c>oauth_auth_codes</c> on a SQL backend (TASK-1013), the name the deleted <c>Birko.Security.OAuth.Server.SqLite</c> used, so its databases stay readable.</remarks>
 [System.ComponentModel.DataAnnotations.Schema.Table("oauth_auth_codes")]
 public class AuthorizationCode : AbstractModel
 {

@@ -298,7 +298,7 @@ immediately).
 ## Recent Updates
 ### OAuth server stores over any store factory, with a one-winner update on every backend (2026-11-28)
 [[TASK-1013]], asked for by DraCode. `services.AddOAuthServerStores(factory)` builds the five OAuth stores over any
-`IStoreFactory` backend; the SQLite OAuth package goes once DraCode has switched. Code redemption and refresh-token
+`IStoreFactory` backend; the SQLite OAuth package is deleted (DraCode switched; its databases are read as is). Code redemption and refresh-token
 rotation claim through a new store capability, `IAsyncConditionalUpdateStore<T>.UpdateIfAsync` (SQL, MongoDB, RavenDB,
 Cosmos DB, Elasticsearch, InMemory; JSON and XML are refused): of 16 concurrent claims exactly one wins, live on all nine
 backends (read-check-write let up to 14 of 16 win). Elasticsearch refreshes after each OAuth write

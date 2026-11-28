@@ -3,7 +3,7 @@
   <!-- TASK-1013: the OAuth server stores over IStoreFactory (Birko.Security.OAuth.Server, Stores/Factory). The shared
        OAuth store contract runs on InMemory and SQLite offline, and on PostgreSQL, MySQL, SQL Server, MongoDB,
        Elasticsearch, RavenDB and Cosmos DB when their BIRKO_* variable is set (failed, not skipped, under
-       BIRKO_REQUIRE_LIVE). Imports the SQLite OAuth package too, to read a database it wrote. -->
+       BIRKO_REQUIRE_LIVE). Fixtures/LegacySqLiteOAuthDatabase.sql is a database the deleted SQLite OAuth package wrote. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -29,6 +29,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\TestSupport\TestTempDirectory.cs" Link="Shared\TestTempDirectory.cs" />
     <Compile Include="..\Shared\OAuthServerStores\OAuthStoreContract.cs" Link="Shared\OAuthStoreContract.cs" />
+    <None Include="Fixtures\LegacySqLiteOAuthDatabase.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Import Project="..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
@@ -64,7 +65,6 @@
   <Import Project="..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
   <Import Project="..\..\Birko.Security.OAuth.Server\Birko.Security.OAuth.Server.projitems" Label="Shared" />
-  <Import Project="..\..\Birko.Security.OAuth.Server.SqLite\Birko.Security.OAuth.Server.SqLite.projitems" Label="Shared" />
 
   <Import Project="..\Shared\TestSupport\LiveDatabase.props" />
 

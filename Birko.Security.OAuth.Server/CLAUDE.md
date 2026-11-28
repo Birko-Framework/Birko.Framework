@@ -60,13 +60,12 @@ Birko.Security.OAuth.Server/
 `services.AddOAuthServerStores(StoreFactory.Create(backend, connectionString, p => …))` registers the five interfaces as
 singletons over `IStoreFactory.GetAsyncStore<T>()` (`Stores/Factory/FactoryOAuthStores.cs`):
 - `AuthorizationCode`, `DeviceCodeRecord`, `ConsentRecord` go through the factory's store as they are; they carry a
-  DataAnnotations `[Table]` with the SQLite package's names (`oauth_auth_codes`, `oauth_device_codes`,
+  DataAnnotations `[Table]` with the deleted SQLite package's names (`oauth_auth_codes`, `oauth_device_codes`,
   `oauth_consents`), which a SQL backend needs and which keeps that package's databases readable.
 - `OAuthClient` and `RefreshTokenRecord` go through `Models/Persistence/OAuthClientEntity` / `RefreshTokenEntity`, the
   same shape on every backend: lists and claims as one JSON text column, everything else under its own name, the
   SQLite package's tables and columns. DataAnnotations attributes only, so this project does not reference
-  Birko.Data.SQL; they declare no index (an existing table keeps its own). The namespace (`Models.Persistence`)
-  differs from the SQLite package's `SqLite.Models`, so a consumer importing both sees no clash.
+  Birko.Data.SQL; they declare no index (an existing table keeps its own; TASK-1023).
 - A predicate over the model is rewritten to the entity by `ModelPredicateTranslator`; a predicate on a member kept in
   the JSON column (`RedirectUris`, `AllowedGrantTypes`, `AllowedScopes`, `Claims`) throws `NotSupportedException`
   naming it — never dropped, never evaluated in memory.
