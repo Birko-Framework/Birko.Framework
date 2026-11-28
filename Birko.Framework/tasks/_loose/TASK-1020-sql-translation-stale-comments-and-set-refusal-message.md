@@ -11,7 +11,7 @@ assignee: agent
 created: 2026-11-28
 depends-on: []
 blocks: []
-related: [TASK-1008, TASK-869, TASK-873, TASK-857]
+related: [TASK-1008, TASK-869, TASK-873, TASK-857, TASK-211]
 findings: []
 pr: null
 github-issue: null
@@ -30,6 +30,8 @@ Found by [[TASK-1008]]'s pass 2 (method calls, casts and string matching) on 202
   (the comparer half is [[TASK-1017]]).
 - The SET refusal message (about line 379) lists `GetValueOrDefault`, which is rewritten to `??` before it can reach
   that point, and leaves out the Math calls a SET refuses (TASK-857).
+- Added by TASK-1008's pass 4: `Birko.Data.SQL/SQL/DataBase_RuleField.cs` lines 71-78 still say a bare table qualifier
+  fails on PostgreSQL with 42P01, "tracked separately"; TASK-211's FROM alias fixed that.
 
 ## Acceptance criteria
 
