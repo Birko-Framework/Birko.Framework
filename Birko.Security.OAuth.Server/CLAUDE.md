@@ -26,12 +26,16 @@ Birko.Security.OAuth.Server/
 │   ├── RefreshTokenRecord.cs       — hashed refresh token + revocation
 │   ├── DeviceCodeRecord.cs         — RFC 8628 in-flight state
 │   └── ConsentRecord.cs            — prior user consent per (client, scope)
+│   └── Persistence/                — OAuthClientEntity, RefreshTokenEntity: the stored forms (lists/claims as JSON)
 ├── Stores/                         — IAsyncStore<T> subinterfaces with named lookups
-│   ├── IOAuthClientStore.cs        — GetByClientIdAsync
+│   ├── IOAuthClientStore.cs        — GetByClientIdAsync, GetByNameAsync
 │   ├── IAuthorizationCodeStore.cs  — GetByCodeAsync, TryRedeemAsync (the single-use claim)
 │   ├── IRefreshTokenStore.cs       — GetByHashAsync, TryRevokeAsync (rotation's claim), RevokeFamilyAsync
 │   ├── IDeviceCodeStore.cs         — GetByDeviceCodeAsync / GetByUserCodeAsync
-│   └── IConsentStore.cs            — GetAsync(userId, clientId)
+│   ├── IConsentStore.cs            — GetAsync(userId, clientId)
+│   └── Factory/                    — the five stores over IStoreFactory (TASK-1013)
+├── Extensions/
+│   └── OAuthServerStoreFactoryServiceCollectionExtensions.cs — AddOAuthServerStores(IStoreFactory)
 ├── Endpoints/
 │   ├── Token/                      — /token (all four grant types)
 │   ├── Authorize/                  — /authorize (response_type=code only; OAuth 2.1 default)
@@ -49,6 +53,33 @@ Birko.Security.OAuth.Server/
 - `Birko.Data.Core` — AbstractModel
 - `Birko.Security` — ITokenProvider, TokenOptions (concrete token impl supplied by consumer, e.g. JwtTokenProvider from Birko.Security.Jwt)
 - `Birko.Time.Abstractions` — IDateTimeProvider (testability)
+- `Microsoft.Extensions.DependencyInjection.Abstractions` — only `AddOAuthServerStores`; consumer-supplied (every
+  importer already has it, through `Microsoft.Extensions.Logging.Abstractions` at least)
+
+## Stores over a store factory (TASK-1013)
+`services.AddOAuthServerStores(StoreFactory.Create(backend, connectionString, p => …))` registers the five interfaces as
+singletons over `IStoreFactory.GetAsyncStore<T>()` (`Stores/Factory/FactoryOAuthStores.cs`):
+- `AuthorizationCode`, `DeviceCodeRecord`, `ConsentRecord` go through the factory's store as they are; they carry a
+  DataAnnotations `[Table]` with the SQLite package's names (`oauth_auth_codes`, `oauth_device_codes`,
+  `oauth_consents`), which a SQL backend needs and which keeps that package's databases readable.
+- `OAuthClient` and `RefreshTokenRecord` go through `Models/Persistence/OAuthClientEntity` / `RefreshTokenEntity`, the
+  same shape on every backend: lists and claims as one JSON text column, everything else under its own name, the
+  SQLite package's tables and columns. DataAnnotations attributes only, so this project does not reference
+  Birko.Data.SQL; they declare no index (an existing table keeps its own). The namespace (`Models.Persistence`)
+  differs from the SQLite package's `SqLite.Models`, so a consumer importing both sees no clash.
+- A predicate over the model is rewritten to the entity by `ModelPredicateTranslator`; a predicate on a member kept in
+  the JSON column (`RedirectUris`, `AllowedGrantTypes`, `AllowedScopes`, `Claims`) throws `NotSupportedException`
+  naming it — never dropped, never evaluated in memory.
+- `TryRedeemAsync` / `TryRevokeAsync` are `IAsyncConditionalUpdateStore<T>.UpdateIfAsync(guid, x => !x.Used, …)`, so
+  of concurrent claims exactly one wins on every backend. `RevokeFamilyAsync` is one filtered `PropertyUpdate`.
+- Construction (and `AddOAuthServerStores`) refuses, with `ArgumentException` naming the backend, a factory whose store
+  does not implement `IAsyncConditionalUpdateStore<T>` (JSON, XML).
+- Elasticsearch: its searches (every lookup, and `ReadAsync(guid)`) see a write only after an index refresh (~1 s), so
+  every factory-store write calls `FactoryStoreSupport.MakeVisibleAsync`, which refreshes a store that implements
+  `IAsyncRefreshableStore` (the user's choice over refusing Elasticsearch, TASK-1013). The contract runs every test on
+  it, server flows included, with no refresh between the stores' own writes and reads.
+
+Tests: `tests/Birko.Security.OAuth.Server.StoreFactory.Tests` (the shared contract, live on nine backends).
 
 ## Grant types supported
 | Grant | Constant | Notes |
@@ -125,7 +156,8 @@ app.MapPost("/token", async (HttpRequest req) =>
 ## Patterns
 - Token endpoint dispatch is a `switch` on `grant_type` — each branch is `HandleXxxAsync(client, request, ct)` and any protocol violation throws `OAuthServerException(ErrorCodes.X, "…")`. The host maps the exception to RFC 6749 §5.2 JSON via `TokenErrorResponse.From(ex)`.
 - `IAsyncStore<T>` is the only persistence contract — any backend that implements it works. Tests use `InMemoryStore<T>`.
-  Shipped implementations live in companions: `Birko.Security.OAuth.Server.InMemory` and `.SqLite` (TASK-518).
+  Shipped implementations: the factory stores here (`AddOAuthServerStores`, TASK-1013), and the companions
+  `Birko.Security.OAuth.Server.InMemory` (the test double) and `.SqLite` (TASK-518; superseded, to be removed).
 - Single use is claimed by the store: `TryRedeemAsync` (codes) and `TryRevokeAsync` (refresh rotation). Their default
   implementations are read-check-write (a race between concurrent requests, measured red 3/3 at TASK-518 through the
   old handler path); the shipped stores override them atomically. A lost rotation fails only that request (`invalid_grant`, no family

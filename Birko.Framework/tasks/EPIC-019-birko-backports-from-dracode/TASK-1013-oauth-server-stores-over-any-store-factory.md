@@ -11,7 +11,7 @@ assignee: agent
 created: 2026-11-28
 depends-on: []
 blocks: []
-related: [TASK-988, TASK-990, TASK-995]
+related: [TASK-988, TASK-990, TASK-995, TASK-1023]
 findings: []
 pr: null
 github-issue: null
@@ -37,12 +37,12 @@ its "no two clients share a name" check (DraCode TASK-194).
 
 ## Acceptance criteria
 
-- [ ] The five store interfaces (`IOAuthClientStore`, `IAuthorizationCodeStore`, `IRefreshTokenStore`, `IDeviceCodeStore`,
+- [x] The five store interfaces (`IOAuthClientStore`, `IAuthorizationCodeStore`, `IRefreshTokenStore`, `IDeviceCodeStore`,
   `IConsentStore`) can be built from an `IStoreFactory`, for example `services.AddOAuthServerStores(factory)`.
-- [ ] Code redemption and the refresh-token revoke are atomic on every backend the factory offers: of two concurrent
+- [x] Code redemption and the refresh-token revoke are atomic on every backend the factory offers: of two concurrent
   claims, exactly one wins. A backend that cannot claim atomically is refused rather than given a racy claim.
-- [ ] One shared contract test, run live per backend, covers the five stores and the two concurrent claims.
-- [ ] The client store answers a lookup by name.
+- [x] One shared contract test, run live per backend, covers the five stores and the two concurrent claims.
+- [x] The client store answers a lookup by name.
 - [x] Decide with the user what happens to the SQLite and InMemory store packages: the SQLite package is deleted, InMemory
   stays as the test double (the user, 2026-11-28). The deletion waits for DraCode's switch (step 6).
 - [ ] README, CLAUDE.md and docs updated; Symbio.Birko and DraCode's aggregator still build.
@@ -54,6 +54,10 @@ its "no two clients share a name" check (DraCode TASK-194).
 2. **Lists and claims persist through one entity per model, with a JSON text column, on every backend**, so the shape is
    the same on SQL and documents and the client store answers predicates (the name lookup).
 3. **`Birko.Security.OAuth.Server.SqLite` is deleted; `.InMemory` stays** as the test double.
+4. **Elasticsearch: refresh after each OAuth write**, rather than refusing it or leaving the lag documented. Its searches
+   (every lookup) see a write only after an index refresh, so a code redeemed right after it was issued was not found.
+5. **Indexes on the lookup columns: a follow-up task**, [[TASK-1023]]. The entities live in the core package, which does
+   not reference Birko.Data.SQL, so a new table gets none (an existing one keeps the SQLite package's).
 
 ## Implementation plan
 
@@ -80,6 +84,36 @@ its "no two clients share a name" check (DraCode TASK-194).
 6. **Then, after DraCode switches (its TASK-230)**: delete `Birko.Security.OAuth.Server.SqLite` and its tests, unregister it
    (slnx, workspace, aggregator, Sandbox import), docs. Deleting it first breaks DraCode, which builds the Framework
    working tree and uses `SqliteOAuthStores.cs`.
+
+## Evidence 2026-11-28 (steps 1–5; step 6 waits for DraCode)
+
+**Step 1** (`7a13a8d9`): `IAsyncConditionalUpdateStore<T>` on SQL (all four), MongoDB, RavenDB, Cosmos DB, Elasticsearch and
+InMemory. `ConditionalUpdateContract` passes on all nine; red first with the condition out of the write (SQLite 14 of 16
+claims won).
+
+**Steps 2–5:**
+- Entities `OAuthClientEntity` / `RefreshTokenEntity` in `Birko.Security.OAuth.Server.Models.Persistence`, with the
+  SQLite package's table and column names; the three scalar models got their `[Table]` names.
+- Five factory stores (`Stores/Factory`); predicates over the model are translated to the entity, and one on a list or
+  claims member is refused by name. Claims go through `UpdateIfAsync`. Every write calls `MakeVisibleAsync`, which
+  refreshes an `IAsyncRefreshableStore` (new in Birko.Data.Stores, implemented by `AsyncElasticSearchStore`).
+- `IOAuthClientStore.GetByNameAsync`: a default method, overridden by the SQLite package (which refuses predicates).
+- `services.AddOAuthServerStores(IStoreFactory)` in the core package, building all five first, so a refused backend
+  (JSON, XML) registers nothing.
+
+**Tests:** `tests/Birko.Security.OAuth.Server.StoreFactory.Tests` 264/264. That is the shared OAuth contract (every store,
+lookups, lists and claims, claims under 2/8/16 callers, the server's code and refresh flows) on InMemory, SQLite and live
+PostgreSQL, MySQL, SQL Server, MongoDB, RavenDB, Cosmos DB and Elasticsearch, plus a test that an old SQLite OAuth
+database is read and written by the factory stores.
+- Red first: read-check-write claims failed 62 of 72 concurrency checks on every backend.
+- With the Elasticsearch refresh turned off, 26 of its 28 checks failed; nothing settles between the stores' writes and
+  reads now, and the server flows run there.
+- Also passing: OAuth.Server 68, AspNetCore 13, InMemory 26, SqLite 32, Elasticsearch 746 (one earlier run failed one
+  test, which passed on rerun: the known reindex timing flake).
+- No warning on a new file; DraCode.Birko and Symbio.Birko build.
+
+**Not live in CI:** the new test project needs all nine backends at once, while `live-tests.yml` runs one job per
+backend; the TASK-990 store-factory tests are not in it either.
 
 ## Out of scope
 

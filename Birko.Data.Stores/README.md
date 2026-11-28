@@ -156,6 +156,14 @@ condition false, exactly one gets the entity back.
 | InMemory | under a per-store lock | — |
 | JSON, XML | not implemented | — |
 
+## Read-your-writes on a search backend (TASK-1013)
+
+`IAsyncRefreshableStore.RefreshAsync()` makes every write so far visible to the store's filtered reads and counts. Only
+a store whose searches lag its writes implements it: Elasticsearch (a refresh of its index; searches otherwise see a write
+after about a second). A caller that must find a record by value straight after writing it refreshes after the write;
+everyone else leaves it alone, because each call costs the cluster a refresh. The OAuth factory stores do it after every
+write.
+
 ## Choosing the backend by configuration (TASK-990)
 
 `IStoreFactory` hands out async stores without the code naming its backend, SQL or not, so the same code runs on

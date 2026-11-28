@@ -379,6 +379,9 @@ areas:
     title: Store CRUD contract and template-method hierarchy
     sources:
       - ../Birko.Data.Stores/IRealtimeReadStore.cs
+      # TASK-1013: the one-winner conditional update, and read-your-writes on a search backend
+      - ../Birko.Data.Stores/IAsyncConditionalUpdateStore.cs
+      - ../Birko.Data.Stores/IAsyncRefreshableStore.cs
       - ../Birko.Data.Stores/IStore.cs
       - ../Birko.Data.Stores/IAsyncStore.cs
       - ../Birko.Data.Stores/AbstractStore.cs

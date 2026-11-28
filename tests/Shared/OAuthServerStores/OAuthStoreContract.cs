@@ -32,6 +32,17 @@ public abstract class OAuthStoreContract
     /// <summary>A fresh, empty store set.</summary>
     protected abstract OAuthStores NewStores();
 
+    /// <summary>False when the backend is not reachable (a live backend reports its own skip, or fails under
+    /// <c>BIRKO_REQUIRE_LIVE</c>). Every test returns at once when it is false.</summary>
+    protected virtual bool Ready() => true;
+
+    /// <summary>
+    /// Makes writes made OUTSIDE the OAuth stores (a test's setup) visible to searches; a no-op elsewhere. Never called
+    /// between the stores' own writes and reads: the factory stores make those visible themselves (TASK-1013), and the
+    /// contract checks it.
+    /// </summary>
+    protected virtual Task SettleAsync() => Task.CompletedTask;
+
     private const string Secret = "contract-secret-contract-secret-contract-secret";
 
     protected OAuthServer NewServer(OAuthStores stores, bool rotate = true)
@@ -74,6 +85,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task A_client_round_trips_with_its_collections()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var client = NewPublicClient("web", OAuthGrantTypes.AuthorizationCode, OAuthGrantTypes.RefreshToken);
         client.ClientSecretHash = "hash";
@@ -94,24 +106,30 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task A_client_updates_and_deletes()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var client = NewPublicClient("web", OAuthGrantTypes.RefreshToken);
         await stores.Clients.CreateAsync(client);
 
         client.Name = "renamed";
         client.AllowedScopes = new List<string> { "read" };
+        client.IsEnabled = false;
         await stores.Clients.UpdateAsync(client);
         var read = await stores.Clients.GetByClientIdAsync("web");
         read!.Name.Should().Be("renamed");
         read.AllowedScopes.Should().Equal("read");
+        read.IsEnabled.Should().BeFalse();
+        (await stores.Clients.ReadAsync(client.Guid!.Value))!.Name.Should().Be("renamed");
 
         await stores.Clients.DeleteAsync(read);
         (await stores.Clients.GetByClientIdAsync("web")).Should().BeNull();
+        (await stores.Clients.ReadAsync(client.Guid!.Value)).Should().BeNull();
     }
 
     [Fact]
     public async Task A_refresh_record_round_trips_with_its_claims()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var record = new RefreshTokenRecord
         {
@@ -134,6 +152,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task A_code_a_device_record_and_a_consent_round_trip()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         await stores.Codes.CreateAsync(new AuthorizationCode
         {
@@ -163,6 +182,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task Revoking_a_family_revokes_only_that_family()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         foreach (var (hash, client, user) in new[] { ("a", "web", "u1"), ("b", "web", "u1"), ("c", "web", "u2"), ("d", "cli", "u1") })
         {
@@ -180,14 +200,18 @@ public abstract class OAuthStoreContract
         (await stores.Refreshes.GetByHashAsync("d"))!.Revoked.Should().BeFalse();
     }
 
-    [Fact]
-    public async Task Of_concurrent_redemptions_of_one_code_exactly_one_succeeds()
+    [Theory]
+    [InlineData(2)]
+    [InlineData(8)]
+    [InlineData(16)]
+    public async Task Of_concurrent_redemptions_of_one_code_exactly_one_succeeds(int callers)
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var code = new AuthorizationCode { Code = "c1", ClientId = "web", UserId = "u", ExpiresAt = Clock.UtcNow.AddMinutes(1) };
         await stores.Codes.CreateAsync(code);
 
-        var attempts = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        var attempts = Enumerable.Range(0, callers).Select(_ => Task.Run(async () =>
         {
             var copy = await stores.Codes.GetByCodeAsync("c1");
             return await stores.Codes.TryRedeemAsync(copy!);
@@ -199,13 +223,17 @@ public abstract class OAuthStoreContract
         (await stores.Codes.TryRedeemAsync(code)).Should().BeFalse("a used code cannot be redeemed again");
     }
 
-    [Fact]
-    public async Task Of_concurrent_revocations_of_one_refresh_token_exactly_one_succeeds()
+    [Theory]
+    [InlineData(2)]
+    [InlineData(8)]
+    [InlineData(16)]
+    public async Task Of_concurrent_revocations_of_one_refresh_token_exactly_one_succeeds(int callers)
     {
+        if (!Ready()) return;
         var stores = NewStores();
         await stores.Refreshes.CreateAsync(new RefreshTokenRecord { TokenHash = "H", ClientId = "web", UserId = "u", ExpiresAt = Clock.UtcNow.AddDays(1) });
 
-        var attempts = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        var attempts = Enumerable.Range(0, callers).Select(_ => Task.Run(async () =>
         {
             var copy = await stores.Refreshes.GetByHashAsync("H");
             return await stores.Refreshes.TryRevokeAsync(copy!);
@@ -216,11 +244,163 @@ public abstract class OAuthStoreContract
         (await stores.Refreshes.GetByHashAsync("H"))!.Revoked.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task A_claim_on_a_record_with_no_id_or_a_missing_one_fails()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+
+        (await stores.Codes.TryRedeemAsync(new AuthorizationCode { Code = "nobody" })).Should().BeFalse();
+        (await stores.Codes.TryRedeemAsync(new AuthorizationCode { Guid = Guid.NewGuid(), Code = "gone" })).Should().BeFalse();
+        (await stores.Refreshes.TryRevokeAsync(new RefreshTokenRecord { TokenHash = "nobody" })).Should().BeFalse();
+        (await stores.Refreshes.TryRevokeAsync(new RefreshTokenRecord { Guid = Guid.NewGuid(), TokenHash = "gone" })).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_won_claim_sets_the_flag_on_the_passed_object_and_in_the_store()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var code = new AuthorizationCode { Code = "c1", ClientId = "web", UserId = "u", ExpiresAt = Clock.UtcNow.AddMinutes(1) };
+        await stores.Codes.CreateAsync(code);
+        var record = new RefreshTokenRecord
+        {
+            TokenHash = "H", ClientId = "web", UserId = "u", ExpiresAt = Clock.UtcNow.AddDays(1),
+            Claims = new Dictionary<string, string> { ["name"] = "octocat" },
+        };
+        await stores.Refreshes.CreateAsync(record);
+
+        (await stores.Codes.TryRedeemAsync(code)).Should().BeTrue();
+        (await stores.Refreshes.TryRevokeAsync(record)).Should().BeTrue();
+
+        code.Used.Should().BeTrue();
+        record.Revoked.Should().BeTrue();
+        (await stores.Codes.ReadAsync(code.Guid!.Value))!.Used.Should().BeTrue();
+        var stored = await stores.Refreshes.ReadAsync(record.Guid!.Value);
+        stored!.Revoked.Should().BeTrue();
+        stored.Claims.Should().Contain("name", "octocat");
+    }
+
+    [Fact]
+    public async Task A_client_is_found_by_its_name()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var web = NewPublicClient("web-id", OAuthGrantTypes.RefreshToken);
+        web.Name = "Web app";
+        var cli = NewPublicClient("cli-id", OAuthGrantTypes.DeviceCode);
+        cli.Name = "Command line";
+        await stores.Clients.CreateAsync(web);
+        await stores.Clients.CreateAsync(cli);
+
+        var found = await stores.Clients.GetByNameAsync("Command line");
+
+        found.Should().NotBeNull();
+        found!.ClientId.Should().Be("cli-id");
+        found.AllowedGrantTypes.Should().Equal(OAuthGrantTypes.DeviceCode);
+        (await stores.Clients.GetByNameAsync("Web app"))!.Guid.Should().Be(web.Guid);
+        (await stores.Clients.GetByNameAsync("nobody")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_code_updates_and_deletes()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var code = new AuthorizationCode { Code = "c1", ClientId = "web", UserId = "u", Scope = "read", ExpiresAt = Clock.UtcNow.AddMinutes(1) };
+        await stores.Codes.CreateAsync(code);
+
+        code.Scope = "read write";
+        await stores.Codes.UpdateAsync(code);
+        (await stores.Codes.GetByCodeAsync("c1"))!.Scope.Should().Be("read write");
+
+        await stores.Codes.DeleteAsync(code);
+        (await stores.Codes.GetByCodeAsync("c1")).Should().BeNull();
+        (await stores.Codes.ReadAsync(code.Guid!.Value)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_refresh_record_updates_and_deletes()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var record = new RefreshTokenRecord { TokenHash = "H1", ClientId = "web", UserId = "u", Scope = "read", ExpiresAt = Clock.UtcNow.AddDays(1) };
+        await stores.Refreshes.CreateAsync(record);
+
+        record.Scope = "read write";
+        record.Claims = new Dictionary<string, string> { ["roles"] = "admin" };
+        await stores.Refreshes.UpdateAsync(record);
+        var read = await stores.Refreshes.GetByHashAsync("H1");
+        read!.Scope.Should().Be("read write");
+        read.Claims.Should().BeEquivalentTo(new Dictionary<string, string> { ["roles"] = "admin" });
+
+        await stores.Refreshes.DeleteAsync(read);
+        (await stores.Refreshes.GetByHashAsync("H1")).Should().BeNull();
+        (await stores.Refreshes.ReadAsync(record.Guid!.Value)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_device_record_updates_and_deletes()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var device = new DeviceCodeRecord { DeviceCode = "d1", UserCode = "WXYZ-1234", ClientId = "tv", Scope = "read", ExpiresAt = Clock.UtcNow.AddMinutes(10) };
+        await stores.Devices.CreateAsync(device);
+        (await stores.Devices.GetByDeviceCodeAsync("d1"))!.Status.Should().Be(DeviceCodeStatus.Pending);
+
+        device.Status = DeviceCodeStatus.Denied;
+        device.LastPolledAt = Clock.UtcNow;
+        await stores.Devices.UpdateAsync(device);
+        var read = await stores.Devices.GetByUserCodeAsync("WXYZ-1234");
+        read!.Status.Should().Be(DeviceCodeStatus.Denied);
+        read.LastPolledAt.Should().NotBeNull();
+        read.UserId.Should().BeNull();
+
+        await stores.Devices.DeleteAsync(read);
+        (await stores.Devices.GetByDeviceCodeAsync("d1")).Should().BeNull();
+        (await stores.Devices.GetByUserCodeAsync("WXYZ-1234")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_consent_updates_and_deletes()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        var consent = new ConsentRecord { UserId = "u", ClientId = "web", Scope = "read" };
+        await stores.Consents.CreateAsync(consent);
+
+        consent.Scope = "read write";
+        await stores.Consents.UpdateAsync(consent);
+        (await stores.Consents.GetAsync("u", "web"))!.Scope.Should().Be("read write");
+        (await stores.Consents.GetAsync("other", "web")).Should().BeNull();
+
+        await stores.Consents.DeleteAsync(consent);
+        (await stores.Consents.GetAsync("u", "web")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Each_store_counts_what_it_holds()
+    {
+        if (!Ready()) return;
+        var stores = NewStores();
+        await stores.Clients.CreateAsync(NewPublicClient("a", OAuthGrantTypes.RefreshToken));
+        await stores.Clients.CreateAsync(NewPublicClient("b", OAuthGrantTypes.RefreshToken));
+        await stores.Codes.CreateAsync(new AuthorizationCode { Code = "c", ClientId = "a", UserId = "u", ExpiresAt = Clock.UtcNow.AddMinutes(1) });
+        await stores.Refreshes.CreateAsync(new RefreshTokenRecord { TokenHash = "h", ClientId = "a", UserId = "u", ExpiresAt = Clock.UtcNow.AddDays(1) });
+
+        (await stores.Clients.CountAsync()).Should().Be(2);
+        (await stores.Codes.CountAsync()).Should().Be(1);
+        (await stores.Refreshes.CountAsync()).Should().Be(1);
+        (await stores.Devices.CountAsync()).Should().Be(0);
+        (await stores.Consents.CountAsync()).Should().Be(0);
+    }
+
     // ---- the server over these stores ----------------------------------------------------------------------------
 
     [Fact]
     public async Task Authorization_code_with_PKCE_issues_once()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("web", OAuthGrantTypes.AuthorizationCode, OAuthGrantTypes.RefreshToken));
@@ -247,6 +427,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task Concurrent_redemptions_of_one_code_through_the_server_issue_one_pair()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("web", OAuthGrantTypes.AuthorizationCode, OAuthGrantTypes.RefreshToken));
@@ -281,6 +462,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task Device_code_flow_issues_after_approval()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("tv", OAuthGrantTypes.DeviceCode, OAuthGrantTypes.RefreshToken));
@@ -302,6 +484,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task Federated_claims_survive_rotation_and_reuse_revokes_the_family()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("web", OAuthGrantTypes.RefreshToken));
@@ -328,6 +511,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task Concurrent_refreshes_with_one_token_issue_one_pair()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("web", OAuthGrantTypes.RefreshToken));
@@ -355,6 +539,7 @@ public abstract class OAuthStoreContract
     [Fact]
     public async Task An_expired_code_or_refresh_token_is_refused()
     {
+        if (!Ready()) return;
         var stores = NewStores();
         var server = NewServer(stores);
         await stores.Clients.CreateAsync(NewPublicClient("web", OAuthGrantTypes.AuthorizationCode, OAuthGrantTypes.RefreshToken));

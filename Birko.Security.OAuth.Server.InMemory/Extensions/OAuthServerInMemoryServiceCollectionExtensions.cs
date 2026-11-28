@@ -10,7 +10,7 @@ public static class OAuthServerInMemoryServiceCollectionExtensions
     /// <summary>
     /// Registers one shared in-memory instance per OAuth store interface. Singletons on purpose: a device-code record
     /// is created in one request and read in later ones, and an authorization code is issued and redeemed in two.
-    /// Nothing survives a restart; use the SQLite stores (<c>Birko.Security.OAuth.Server.SqLite</c>) to persist.
+    /// Nothing survives a restart; to persist, use <c>AddOAuthServerStores(IStoreFactory)</c> over any store factory backend (TASK-1013).
     /// </summary>
     public static IServiceCollection AddOAuthServerInMemoryStores(this IServiceCollection services)
     {

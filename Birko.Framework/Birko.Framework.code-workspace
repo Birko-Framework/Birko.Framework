@@ -1381,6 +1381,10 @@
 			"path": "../tests/Birko.Security.OAuth.Server.SqLite.Tests"
 		},
 		{
+			"name": "Tests / Birko.Security.OAuth.Server.StoreFactory.Tests",
+			"path": "../tests/Birko.Security.OAuth.Server.StoreFactory.Tests"
+		},
+		{
 			"name": "Tests / Birko.Security.Vault.Tests",
 			"path": "../tests/Birko.Security.Vault.Tests"
 		},

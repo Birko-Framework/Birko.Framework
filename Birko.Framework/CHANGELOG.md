@@ -4,6 +4,15 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-11-25 — Tracked LLM providers can key usage and rate limits on a configured name
+
+[[TASK-984]], asked for by DraCode. `TrackedLlmProvider` keyed usage records, pricing and every rate-limiter call on the
+client's display name, so two vLLM providers both recorded under "vLLM (finstat)" and a limit configured under
+`finstat` never matched (never applied; seen in DraCode's test). New optional `ProviderName` (init) is what they key on
+when set; null keeps `Name`; blank throws. `Name` stays the display name.
+
+---
+
 ## 2026-11-19 — SQLite on plain PasswordSettings gets WAL too
 
 [[TASK-941]], reported by DraCode. TASK-296's WAL default was applied only when a store got `SqLiteSettings`; with

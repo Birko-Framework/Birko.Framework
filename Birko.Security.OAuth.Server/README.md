@@ -10,7 +10,8 @@ Companion to [`Birko.Communication.OAuth`](../Birko.Communication.OAuth) — tha
 - **PKCE enforced for public clients** by default (RFC 7636; OAuth 2.1 SHOULD).
 - **Refresh-token rotation** by default (RFC 6819 §5.2.2.3) — every refresh revokes the old token.
 - **Pure handlers** — no ASP.NET dependency. Plug into Minimal APIs, controllers, `Birko.Communication.REST.Server`, or anything that can route HTTP.
-- **Provider-agnostic persistence** — five `IAsyncStore<T>` interfaces, one for each entity.
+- **Provider-agnostic persistence** — five `IAsyncStore<T>` interfaces, one for each entity, and
+  `AddOAuthServerStores(IStoreFactory)` to put all five on any store-factory backend.
 - **Dynamic client registration** (RFC 7591) — register/read/update/delete from your admin panel.
 
 ## Quick start
@@ -99,11 +100,34 @@ You supply implementations of these five interfaces (any `IAsyncStore<T>` backen
 - `IDeviceCodeStore` — in-flight RFC 8628 device-code requests
 - `IConsentStore` — prior user-consent records
 
-The simplest setup is to use the same backend you already use for the rest of your app. For example, with `Birko.Data.SQL`:
+The simplest setup is the store factory you already use for the rest of your app (TASK-1013): one call registers
+all five, as singletons, on that backend.
 
 ```csharp
-public class SqlClientStore : Birko.Data.Stores.AbstractAsyncStore<OAuthClient>, IOAuthClientStore { /* … */ }
+using Birko.Security.OAuth.Server.Extensions;
+
+services.AddOAuthServerStores(
+    StoreFactory.Create(cfg.Backend, cfg.ConnectionString, p => p.AddSqLite().AddPostgreSQL().AddMongoDB()));
+// then build OAuthServer from the five registered interfaces
 ```
+
+- Works on every backend whose stores can claim atomically (`IAsyncConditionalUpdateStore<T>`): SQLite, PostgreSQL,
+  MySQL, SQL Server, MongoDB, RavenDB, Cosmos DB, Elasticsearch, InMemory. JSON and XML are refused, by name, at
+  registration: a code redeemed (or a refresh token rotated) by two concurrent requests could otherwise succeed twice.
+- A code is redeemed, and a refresh token rotated, exactly once under concurrent requests (one conditional update).
+- A client's lists and a refresh record's extra claims are stored as JSON text, the same shape on SQL and document
+  backends. A predicate on a client's or refresh record's scalar members is answered by the backend
+  (`GetByClientIdAsync`, `GetByNameAsync`); one on `RedirectUris`, `AllowedGrantTypes`, `AllowedScopes` or `Claims` is
+  refused.
+- Tables (`oauth_clients`, `oauth_refresh_tokens`, `oauth_auth_codes`, `oauth_device_codes`, `oauth_consents`) are
+  those of `Birko.Security.OAuth.Server.SqLite`, so a database it wrote is read as is.
+- On Elasticsearch a search sees a write only after the next index refresh (~1 s), and the lookups are searches, so
+  every OAuth write refreshes the store's index (`IAsyncRefreshableStore`): a code is found the moment it is issued.
+  That costs the cluster one refresh per OAuth write.
+
+The same stores can be built one by one (`new FactoryOAuthClientStore(factory)`, …, in
+`Birko.Security.OAuth.Server.Stores.Factory`). `Birko.Security.OAuth.Server.InMemory` remains the test double;
+`Birko.Security.OAuth.Server.SqLite` is superseded by the factory stores and will be removed.
 
 ## What's out of scope
 

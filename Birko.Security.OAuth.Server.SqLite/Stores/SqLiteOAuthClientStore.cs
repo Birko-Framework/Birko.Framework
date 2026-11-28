@@ -79,6 +79,16 @@ public sealed class SqLiteOAuthClientStore : IOAuthClientStore
         return entity == null ? null : ToModel(entity);
     }
 
+    /// <summary>
+    /// Looks up a client by name on the <c>Name</c> column (TASK-1013). The interface's default would pass a predicate,
+    /// which this store refuses.
+    /// </summary>
+    public async Task<OAuthClient?> GetByNameAsync(string name, CancellationToken ct = default)
+    {
+        var entity = await _entities.ReadAsync(e => e.Name == name, ct).ConfigureAwait(false);
+        return entity == null ? null : ToModel(entity);
+    }
+
     public Task InitAsync(CancellationToken ct = default) => _entities.InitAsync(ct);
 
     public Task DestroyAsync(CancellationToken ct = default) => _entities.DestroyAsync(ct);

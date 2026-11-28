@@ -7,6 +7,8 @@ namespace Birko.Security.OAuth.Server.Models;
 /// State of an RFC 8628 Device Authorization Grant request between
 /// /device_authorization and the eventual /token poll.
 /// </summary>
+/// <remarks>Stored in <c>oauth_device_codes</c> on a SQL backend (TASK-1013), the name <c>Birko.Security.OAuth.Server.SqLite</c> registers, so its databases stay readable.</remarks>
+[System.ComponentModel.DataAnnotations.Schema.Table("oauth_device_codes")]
 public class DeviceCodeRecord : AbstractModel
 {
     /// <summary>Long opaque code returned to the device. Used as the polling key at /token.</summary>

@@ -2,6 +2,10 @@
 
 SQLite stores for the Birko OAuth authorization server.
 
+> **Superseded (TASK-1013).** `services.AddOAuthServerStores(StoreFactory.Create("SqLite", path, p => p.AddSqLite()))`
+> in `Birko.Security.OAuth.Server` does the same on any store-factory backend, and reads a database this package wrote
+> (same tables and columns). This package will be removed once its consumers have switched.
+
 ## Features
 - All five store interfaces on one SQLite file; tables `oauth_*` created on first use
 - A code is redeemed, and a refresh token rotated, exactly once even under concurrent requests (conditional updates)

@@ -23,6 +23,7 @@ namespace Birko.Data.ElasticSearch.Stores
         , IAsyncAggregatableStore<T>
         , IAsyncRealtimeReadStore<T>
         , IAsyncConditionalUpdateStore<T>
+        , IAsyncRefreshableStore
         where T : Models.AbstractModel
     {
         /// <summary>
@@ -948,6 +949,25 @@ namespace Birko.Data.ElasticSearch.Stores
         {
             // CR-L113: index-name resolution + sanitization is shared with the sync store via the helper.
             return ElasticSearchStoreHelper.ResolveIndexName(_settings, typeof(T));
+        }
+
+        /// <summary>
+        /// TASK-1013: refreshes this store's index, so a search (every read but <see cref="ReadRealtimeAsync"/>) sees every
+        /// write made so far. Elasticsearch refreshes by itself about once a second; call this when a lookup by value must
+        /// find a record straight after it was written. Each call costs the cluster a refresh, so use it per write only where
+        /// that read-your-writes is needed.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The refresh failed.</exception>
+        public async Task RefreshAsync(CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            RequireConnector();
+            var index = GetIndexName();
+            var response = await Connector!.Indices.RefreshAsync(index, null, ct).ConfigureAwait(false);
+            if (response.IsValid) return;
+            throw new InvalidOperationException(
+                $"The refresh of index {index} failed, so searches may not see its latest writes yet. DebugInfo: {response.DebugInformation}",
+                response.OriginalException);
         }
 
         /// <summary>

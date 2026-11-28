@@ -296,6 +296,13 @@ immediately).
   fail rather than skip) per `.github/workflows/live-tests.yml`.
 
 ## Recent Updates
+### OAuth server stores over any store factory, with a one-winner update on every backend (2026-11-28)
+[[TASK-1013]], asked for by DraCode. `services.AddOAuthServerStores(factory)` builds the five OAuth stores over any
+`IStoreFactory` backend; the SQLite OAuth package goes once DraCode has switched. Code redemption and refresh-token
+rotation claim through a new store capability, `IAsyncConditionalUpdateStore<T>.UpdateIfAsync` (SQL, MongoDB, RavenDB,
+Cosmos DB, Elasticsearch, InMemory; JSON and XML are refused): of 16 concurrent claims exactly one wins, live on all nine
+backends (read-check-write let up to 14 of 16 win). Elasticsearch refreshes after each OAuth write
+(`IAsyncRefreshableStore`), so a code is found the moment it is issued. Clients answer a lookup by name.
 ### The two whole-table reductions are pinned to one corpus, which found two bugs (2026-11-27)
 [[TASK-1002]], with [[TASK-1011]] and [[TASK-1012]] it found. One corpus of 40 labelled filters is asked of both scope
 reductions (`PredicateScope` for portable stores, the parsed condition tree for SQL). **TASK-1011 (P1):** C# 14 binds an
@@ -369,11 +376,6 @@ Groq, DeepSeek, Mistral) and `OpenAiProvider` never asked for `stream_options.in
 usage chunk and every streamed call was missing from cost tracking and token rate limits. They now ask; Groq's
 `x_groq.usage` is read too; OpenRouter (deprecated option, always sends usage) opts out via `RequestStreamUsage`. Azure
 stays off: its pinned api-version predates the option.
-### Tracked LLM providers can key usage and rate limits on a configured name (2026-11-25)
-[[TASK-984]], asked for by DraCode. `TrackedLlmProvider` keyed usage records, pricing and every rate-limiter call on the
-client's display name, so two vLLM providers both recorded under "vLLM (finstat)" and a limit configured under
-`finstat` never matched (never applied; seen in DraCode's test). New optional `ProviderName` (init) is what they key on
-when set; null keeps `Name`; blank throws. `Name` stays the display name.
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; **roll the oldest into CHANGELOG.md whenever the ENTRIES exceed ~10 KB** — measure it, do not eyeball it:
 
 ```sh

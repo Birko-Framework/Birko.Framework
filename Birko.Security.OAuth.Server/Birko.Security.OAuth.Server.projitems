@@ -24,6 +24,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IRefreshTokenStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IDeviceCodeStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\IConsentStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Persistence\OAuthClientEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Persistence\RefreshTokenEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Factory\ModelPredicateTranslator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Factory\FactoryStoreSupport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Factory\FactoryOAuthStores.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\OAuthServerStoreFactoryServiceCollectionExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenRequest.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\Token\TokenErrorResponse.cs" />

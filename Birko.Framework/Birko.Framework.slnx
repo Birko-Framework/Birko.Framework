@@ -263,6 +263,7 @@
     <Project Path="../tests/Birko.Security.OAuth.Server.Tests/Birko.Security.OAuth.Server.Tests.csproj" />
     <Project Path="../tests/Birko.Security.OAuth.Server.InMemory.Tests/Birko.Security.OAuth.Server.InMemory.Tests.csproj" />
     <Project Path="../tests/Birko.Security.OAuth.Server.SqLite.Tests/Birko.Security.OAuth.Server.SqLite.Tests.csproj" />
+    <Project Path="../tests/Birko.Security.OAuth.Server.StoreFactory.Tests/Birko.Security.OAuth.Server.StoreFactory.Tests.csproj" />
     <Project Path="../tests/Birko.Security.OAuth.Server.AspNetCore.Tests/Birko.Security.OAuth.Server.AspNetCore.Tests.csproj" />
     <Project Path="../tests/Birko.Security.Grants.Tests/Birko.Security.Grants.Tests.csproj" />
     <Project Path="../tests/Birko.Security.Grants.SQL.Tests/Birko.Security.Grants.SQL.Tests.csproj" />

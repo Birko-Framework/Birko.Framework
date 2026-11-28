@@ -103,6 +103,10 @@ written document, or `null` when missing or the condition fails.
 It also implements `IAsyncConditionalUpdateStore<T>` (TASK-1013) explicitly, with the expression compiled; the `Func`
 overload stays public (job queues call it, and a second public overload would make their lambdas ambiguous).
 
+`AsyncElasticSearchStore` implements `IAsyncRefreshableStore` (TASK-1013): `RefreshAsync()` refreshes the store's index
+so a search sees every write so far. The OAuth factory stores call it after each write; use it only where a lookup by
+value must see a write at once, since each call is a cluster refresh.
+
 ⚠ The filtered `UpdateAsync(filter, …)` is an `update_by_query`, which matches against the **search index**: a document
 written under a second ago is matched as it was. Use `UpdateIfAsync` (and `ReadRealtimeAsync`) where a condition must
 hold at the moment of writing or a write must be read back.

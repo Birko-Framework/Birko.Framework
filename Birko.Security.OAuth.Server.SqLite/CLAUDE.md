@@ -4,6 +4,11 @@
 **Specs:** none yet. No area in the [spec map](../Birko.Framework/docs/specs/.map.yml) covers this project.
 <!-- /spec-links -->
 
+> **Superseded by the factory stores (TASK-1013), and to be removed** once DraCode has switched (TASK-1013 step 6):
+> `AddOAuthServerStores(IStoreFactory)` in `Birko.Security.OAuth.Server` uses the same tables and columns, so it reads a
+> database this package wrote. Do not extend this package; its behaviour is frozen. `SqLiteOAuthClientStore` answers
+> `GetByNameAsync` on the `Name` column (TASK-1013), since the interface's default passes a predicate it refuses.
+
 ## Overview
 SQLite implementations of the five `Birko.Security.OAuth.Server` store interfaces (TASK-518, from DraCode's
 `SqliteOAuthStores.cs`). Tables are created on first use (the stores' lazy schema-ensure), so nothing needs an init
