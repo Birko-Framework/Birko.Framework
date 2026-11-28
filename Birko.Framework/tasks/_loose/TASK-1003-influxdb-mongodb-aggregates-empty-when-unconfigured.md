@@ -41,8 +41,8 @@ So a misconfigured store reports "no data" from an aggregate, while its `Read` a
   answers empty today.
 - [x] Both refuse, as their other reads do in that state: the same exception type and message shape as TASK-812.
 - [x] Any other aggregate on these backends that answers empty for "not configured" is found and handled the same way.
-- [ ] The `backend-store-implementations` spec is regenerated. Not done here: it waits for the next scoped `/specs regen` of
-  that area, which also takes TASK-1007.
+- [x] The `backend-store-implementations` spec is regenerated: done 2026-11-28 in a scoped regen with TASK-1004 to
+  TASK-1007, which also updated `bulk-filter-operations`.
 
 ## Evidence 2026-11-27
 

@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
-generated-on: 2026-11-27
+generated-at: 6317c278f867a48eadd3f1690be4603d1ab0291d
+generated-on: 2026-11-28
 sources:
   - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.Core/Expressions/BoundedFilterGuard.cs
@@ -1391,7 +1391,12 @@ also refused is a wall rather than a door. Only a predicate that *happens* to co
 `PredicateScope` SHALL be narrow and answer `false` when uncertain, because a refusal that fires on a
 predicate which does constrain something breaks working code. Specifically it SHALL NOT treat as unbounded:
 a string `Contains` (a substring test, not set membership), a collection that references the entity (its
-emptiness varies per entity), a null collection, or a collection it cannot evaluate.
+emptiness varies per entity), a null collection whose `Contains` throws on null (`Enumerable.Contains`, an instance
+`List<T>.Contains`), or a collection it cannot evaluate. A null array under C# 14's span-bound `Contains`
+(`MemoryExtensions`) SHALL count as empty, because the conversion to `ReadOnlySpan<T>` makes it an empty span and the
+compiled predicate is then true of every row (TASK-1011: `Delete(x => !none.Contains(x.A))` with a null `none` removed 6
+of 6 rows on InMemory, measured). `Task1002ScopeReductionCorpusTests` asks the same labelled filters of this reduction
+and of the SQL one, and requires the two to agree.
 
 #### Scenario: The SQL bulk stores refuse it on the action overload, sync and async
 
@@ -1447,6 +1452,15 @@ emptiness varies per entity), a null collection, or a collection it cannot evalu
 - **Then** each throws `WholeTableWriteException` and all three rows survive unchanged — before the guard
   reached the base, the delete left **0 of 3** and the update rewrote **3 of 3**, in both cases with no
   exception and no log entry
+
+#### Scenario: A negated Contains over a null array is refused on a portable store (TASK-1011)
+
+- **Given** an InMemory store, sync or async, holding rows, and `x => !none.Contains(x.A)` with `int[] none = null`
+- **When** `Delete(filter)` or `Update(filter, action)` is called
+- **Then** each throws `WholeTableWriteException` and every row survives unchanged — the delete removed **6 of 6** with
+  no exception (measured)
+- **And** `Read(filter)` still returns every row, as the compiled predicate does in C#; a null `List<T>` is not counted
+  as empty, since its `Contains` throws in C# and the store then writes nothing
 
 #### Scenario: A backend that overrides none of the six gets every guard from the base
 
@@ -1697,7 +1711,10 @@ replaces a name the command already holds with a newly created `CreateParameter(
 position — never adding it twice, which the multi-row insert relies on, and so a re-bound value is typed as a new one is
 (TASK-852) — and otherwise adds `CreateParameter(command, name, value)` (`DBNull` for null). SQLite's conversion SHALL bind a Guid as
 its string, PostgreSQL's SHALL strip `DateTimeKind`, and SQL Server's `CreateParameter` SHALL type a `DateTime` as
-`DateTime2`; MySQL uses the base. A name `SqlBuilderContext` generated SHALL skip the lookup (`AddUniqueParameter`,
+`DateTime2`; MySQL uses the base. Every provider's native `BulkUpdate` / `BulkDelete` SHALL bind each row's SET and key
+values through `AddParameter` (SQL Server since TASK-854; MySQL, PostgreSQL and SQLite since TASK-1007, which assigned
+`.Value` to placeholders and skipped the conversion). PostgreSQL SHALL NOT prepare those statements, because Npgsql
+matched no row with a parameter replaced after `Prepare()` (measured); MySQL's sync ones are still prepared. A name `SqlBuilderContext` generated SHALL skip the lookup (`AddUniqueParameter`,
 internal), so rendering an `IN` list of n values costs no n linear `Contains` scans.
 
 #### Scenario: A long IN list renders without a lookup per value
@@ -1719,6 +1736,14 @@ internal), so rendering an `IN` list of n values costs no n linear `Contains` sc
   too (TASK-854), where they used to build `new SqlParameter(name, DBNull.Value)` placeholders and assign `.Value`:
   `BulkUpdate` stored `.1234567` as `.1233333`, and a `BulkDelete` on a composite key holding a `DateTime` deleted
   nothing (measured)
+
+#### Scenario: A bulk delete whose key holds an enum, on PostgreSQL (TASK-1007)
+
+- **Given** a PostgreSQL table whose composite key holds a `DateTime` and an enum
+- **When** `BulkDelete` runs over some of its rows
+- **Then** the enum is converted through `ConvertParameterValue` and exactly those rows are deleted, as a single
+  delete would — it threw `InvalidCastException`; the shared `BulkBindingContract` checks this, and a bulk update
+  setting a nullable `DateTime` and an enum, on all four providers
 
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 

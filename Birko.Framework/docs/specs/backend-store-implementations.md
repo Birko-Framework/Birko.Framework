@@ -1,7 +1,7 @@
 ---
 area: backend-store-implementations
-generated-at: 3fcf0271c9a70ced1d60886ae47ca3ad13ef1c6e
-generated-on: 2026-11-27
+generated-at: 6317c278f867a48eadd3f1690be4603d1ab0291d
+generated-on: 2026-11-28
 sources:
   - ../Birko.Data.CosmosDB/Repositories/AsyncCosmosDBModelRepository.cs
   - ../Birko.Data.CosmosDB/Repositories/CosmosDBModelRepository.cs
@@ -191,10 +191,11 @@ The system SHALL give the backends these optional surfaces, and no others:
 ### Requirement: An unconfigured store refuses every operation, reads included
 
 The system SHALL, on every backend but the in-memory one, refuse every public operation of a store that has no client
-because settings were never applied — create, update, delete, save, read and count — with `InvalidOperationException`
-naming `SetSettings`. The refusal is in `InitCore(Async)`, which every public operation reaches first (public overrides
-that answered without it — the sync JSON and XML `Read(Guid)`, MongoDB's `SaveAsync` and `ReadAllAsync` — now open the
-gate). Decided 2026-11-04 (the user) and measured by `tests/Shared/StoreContract/UnconfiguredContract.cs` on every
+because settings were never applied — create, update, delete, save, read, count and aggregate — with
+`InvalidOperationException` naming `SetSettings`. The refusal is in `InitCore(Async)`, which every public operation
+reaches first (public overrides that answered without it — the sync JSON and XML `Read(Guid)`, MongoDB's `SaveAsync` and
+`ReadAllAsync`, and `Aggregate` / `AggregateAsync` on InfluxDB, MongoDB and the async JSON and XML stores, which answered
+an empty list until TASK-1003 — now open the gate). Decided 2026-11-04 (the user) and measured by `tests/Shared/StoreContract/UnconfiguredContract.cs` on every
 provider: MongoDB, RavenDB, Cosmos DB and InfluxDB answered reads with `null` / empty / `0`, returned `Guid.Empty` from
 `Create` and returned silently from `Update` and `Delete`; JSON and XML refused writes but answered reads empty, which
 TASK-464 had kept on purpose (TASK-812 reverses it: an empty answer from a store that cannot look is as false as a write
@@ -207,6 +208,13 @@ store then refuses as unconfigured.
 - **Given** an `AsyncMongoDBStore<T>` whose `SetSettings` was never called
 - **When** `UpdateAsync(entity)` or `ReadAsync(guid)` is called
 - **Then** `InvalidOperationException` names `SetSettings` (it returned without writing, or answered `null`)
+
+#### Scenario: Aggregate on an unconfigured store (TASK-1003)
+
+- **Given** an `InfluxDBStore<T>`, a MongoDB store or an async JSON or XML store whose `SetSettings` was never called
+- **When** `Aggregate` / `AggregateAsync` runs with a `Count` aggregate
+- **Then** `InvalidOperationException` names `SetSettings` (it answered an empty list), as `UnconfiguredContract` checks
+  on every backend that runs it
 
 #### Scenario: Wrong settings type on Elasticsearch
 
@@ -262,11 +270,16 @@ The system SHALL make Elasticsearch initialization treat an index that exists, o
 its own included, wait until the index answers: a cluster health wait for yellow with a 30 s timeout, then a count
 retried every 50 ms while its only failure is `no_shard_available_action_exception`, until 30 s have passed; a health
 timeout, any other count failure, or the deadline throws `InvalidOperationException`, as any other create failure does
-(TASK-997). RavenDB initialization (`EnsureDatabaseExists`, through `RavenDatabaseBootstrap.EnsureReady`) SHALL, while the
-database is not listed, send a create and retry a refused one (any exception) after a pause of 50 ms, doubled while under 1 s,
-plus up to 50 ms of jitter; then send a statistics request, retried the same way while it throws
-`DatabaseDisabledException`; both within 30 s, after which the last failure is thrown (TASK-996: concurrent creates were
-refused, one with eight clients at once refusing them all, and a listed database could still be loading, measured).
+(TASK-997). RavenDB initialization (`RavenDatabaseBootstrap.EnsureReady`, sync, and `EnsureReadyAsync`, which the async
+store's `InitCoreAsync` awaits) SHALL, while the database is not listed, send a create and retry it only when refused with
+`DatabaseDisabledException` or `ConcurrencyException`, the two refusals a racing create gets (measured), after a pause of
+50 ms, doubled while under 1 s, plus up to 50 ms of jitter; then send a statistics request, retried the same way while it
+throws `DatabaseDisabledException`; both within 30 s, after which the last failure is thrown (TASK-996: concurrent creates
+were refused, one with eight clients at once refusing them all, and a listed database could still be loading, measured).
+Any other create failure SHALL be thrown at once (TASK-1004: every exception was retried, so a refused name took 31 s to
+fail). The async walk SHALL send asynchronously and wait with `Task.Delay`, holding no thread (TASK-1005: it ran the sync
+walk, and a first call on a disabled database returned after 31 s); init still runs under `CancellationToken.None`
+(TASK-324), so the caller's token does not stop it.
 
 #### Scenario: Two Elasticsearch stores initializing on a new index (TASK-997)
 
@@ -279,6 +292,18 @@ refused, one with eight clients at once refusing them all, and a listed database
 - **Given** several RavenDB stores initializing at once on a database that does not exist
 - **When** the server refuses their creates as "already exists" or "unloaded and locked"
 - **Then** each retries until the database is listed and answers a statistics request, and every store starts
+
+#### Scenario: A RavenDB database name the server refuses (TASK-1004)
+
+- **Given** a RavenDB store whose database name the server will never accept (`birko task1004 not permitted`)
+- **When** the store initializes, sync or async
+- **Then** the create's failure is thrown in under 5 s, without retrying (it took 31 s)
+
+#### Scenario: An async RavenDB store's first call on a disabled database (TASK-1005)
+
+- **Given** an `AsyncRavenDBStore<T>` on a database that exists and is disabled
+- **When** `CountAsync()` is called
+- **Then** it returns a pending `Task` within 2 s, while init waits for the database without holding the caller's thread
 
 ### Requirement: Read by identifier takes a backend fast path that may skip the lazy-initialization gate
 
@@ -923,8 +948,9 @@ ambient session, so they do not see a transaction's uncommitted writes.
 ### Requirement: Store aggregates answer as the in-memory aggregation, by backend
 
 The system SHALL run a store's `Aggregate` / `AggregateAsync` as follows:
-- Elasticsearch, RavenDB and Cosmos DB initialize the store first, as a read does (TASK-886: on a fresh store the
-  aggregate failed, or answered nothing on Cosmos DB).
+- Every store initializes first, as a read does (TASK-886: on a fresh Elasticsearch, RavenDB or Cosmos DB store the
+  aggregate failed, or answered nothing on Cosmos DB; TASK-1003: InfluxDB, MongoDB and the async JSON and XML stores
+  skipped the gate, so an unconfigured one answered an empty list).
 - MongoDB and Cosmos DB refuse a string `Min` / `Max` asked in a `StringComparison` other than `Ordinal` with
   `NotSupportedException` before reading anything (TASK-907); MongoDB runs the pipeline with the simple collation, whatever
   the collection's default (TASK-909).
@@ -1030,7 +1056,10 @@ driver's spellings, and SHALL refuse with `ArgumentException` any other key (nam
 mode other than required or preferred (PostgreSQL `Require` / `Prefer`, MySQL `Required` / `Preferred`, SQL Server
 `Encrypt=True` / `False`), a SQL Server named instance and `Persist Security Info=True`. SQLite SHALL take a file path, or
 `Data Source` / `Filename` with an optional `Password`, made absolute, and its factory creates the folder when
-constructed. The older per-provider factories (`SqLiteStoreFactory` and its peers, with their options and DI
+constructed; an in-memory source (`:memory:`, or one starting `file::memory:`, in any case) SHALL be refused with
+`ArgumentException` naming the InMemory backend and a file path, since the connector opens one connection per operation
+and an in-memory database lasts one connection (TASK-1006: it became the path `<working directory>/:memory:`, and the
+first operation failed with "unable to open database file", measured). The older per-provider factories (`SqLiteStoreFactory` and its peers, with their options and DI
 extensions) no longer exist (TASK-1001).
 
 #### Scenario: Getting stores from the SQLite factory (TASK-988)
@@ -1038,6 +1067,12 @@ extensions) no longer exist (TASK-1001).
 - **Given** `SqlStoreFactory.Create("SqLite", "data/app.db", p => p.AddSqLite())`
 - **When** `GetAsyncStore<T>()` is called twice
 - **Then** each call returns a new `AsyncSQLiteStore<T>` on the absolute path of `data/app.db`, whose folder exists
+
+#### Scenario: An in-memory SQLite source (TASK-1006)
+
+- **Given** the SQLite connection string `Data Source=:memory:` (or `:memory:`, or `file::memory:?cache=shared`)
+- **When** `SqlStoreFactory.Create("SqLite", …, p => p.AddSqLite())` runs
+- **Then** `ArgumentException` names the InMemory backend and a file path, and no factory is returned
 
 #### Scenario: A key the settings cannot carry (TASK-988)
 
